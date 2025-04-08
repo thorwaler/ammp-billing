@@ -13,6 +13,7 @@ import { toast } from "@/hooks/use-toast";
 
 const customers = [
   {
+    id: "cust-001",  // Added id property
     name: "Solar Universe Inc.",
     location: "California, USA",
     contractValue: "$45,000/MWp",
@@ -21,6 +22,7 @@ const customers = [
     addOns: ["Monitoring", "Analytics"],
   },
   {
+    id: "cust-002",  // Added id property
     name: "GreenPower Systems",
     location: "Texas, USA",
     contractValue: "$42,500/MWp",
