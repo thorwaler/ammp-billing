@@ -1,5 +1,6 @@
 
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -12,7 +13,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { FileText, Download, Search } from "lucide-react";
+import { FileText, Download, Search, MoreHorizontal } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import ContractForm from "@/components/contracts/ContractForm";
+import { toast } from "@/hooks/use-toast";
 
 interface Contract {
   id: string;
@@ -60,12 +65,27 @@ const contracts: Contract[] = [
 
 export function ContractList() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  const navigate = useNavigate();
 
   const filteredContracts = contracts.filter(
     (contract) =>
       contract.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contract.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleEdit = (contract: Contract) => {
+    setSelectedContract(contract);
+    setShowEditForm(true);
+  };
+
+  const handleDownload = (contractId: string) => {
+    toast({
+      title: "Download started",
+      description: `Downloading contract ${contractId}`,
+    });
+  };
 
   return (
     <Card>
@@ -100,7 +120,9 @@ export function ContractList() {
             <TableBody>
               {filteredContracts.map((contract) => (
                 <TableRow key={contract.id}>
-                  <TableCell className="font-medium">{contract.id}</TableCell>
+                  <TableCell className="font-medium cursor-pointer hover:text-ammp-blue" onClick={() => navigate(`/contracts/${contract.id}`)}>
+                    {contract.id}
+                  </TableCell>
                   <TableCell>{contract.customer}</TableCell>
                   <TableCell>{contract.contractValue}</TableCell>
                   <TableCell>
@@ -126,15 +148,41 @@ export function ContractList() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">
-                      <Download className="h-4 w-4" />
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => handleDownload(contract.id)}>
+                        <Download className="h-4 w-4" />
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEdit(contract)}>
+                            Edit Contract
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => navigate(`/contracts/${contract.id}`)}>
+                            View Details
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </div>
+
+        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+          <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Contract - {selectedContract?.customer}</DialogTitle>
+            </DialogHeader>
+            <ContractForm />
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

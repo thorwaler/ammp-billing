@@ -13,21 +13,25 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Link2, Check } from "lucide-react";
+import { Loader2, Link2, Check, AlertCircle, ExternalLink } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 
 const XeroIntegration = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
+  const [tenantId, setTenantId] = useState("");
+  const [refreshToken, setRefreshToken] = useState("");
   const [invoiceTemplate, setInvoiceTemplate] = useState("standard");
   const [isEnabled, setIsEnabled] = useState(false);
 
   const handleConnect = () => {
-    if (!clientId || !clientSecret) {
+    if (!clientId || !clientSecret || !tenantId) {
       toast({
         title: "Missing Credentials",
-        description: "Please enter your Xero client ID and client secret to connect.",
+        description: "Please enter your Xero client ID, client secret and tenant ID to connect.",
         variant: "destructive",
       });
       return;
@@ -63,6 +67,10 @@ const XeroIntegration = () => {
         : "Xero integration has been disabled.",
     });
   };
+  
+  const openXeroDeveloperPortal = () => {
+    window.open("https://developer.xero.com/app/manage", "_blank");
+  };
 
   return (
     <Card className="w-full">
@@ -84,6 +92,26 @@ const XeroIntegration = () => {
       </CardHeader>
       
       <CardContent className="space-y-6">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>API Credentials Required</AlertTitle>
+          <AlertDescription>
+            To set up this integration, you'll need to create a Xero app in the Xero Developer Portal and obtain the following credentials:
+            <ul className="mt-2 ml-6 list-disc text-sm">
+              <li>Client ID</li>
+              <li>Client Secret</li>
+              <li>Tenant ID (Organization ID)</li>
+            </ul>
+            <Button 
+              variant="link" 
+              className="p-0 h-auto mt-2 text-sm font-normal"
+              onClick={openXeroDeveloperPortal}
+            >
+              Go to Xero Developer Portal <ExternalLink className="ml-1 h-3 w-3" />
+            </Button>
+          </AlertDescription>
+        </Alert>
+
         {!isConnected ? (
           <div className="space-y-4">
             <div className="space-y-2">
@@ -105,9 +133,30 @@ const XeroIntegration = () => {
                 value={clientSecret}
                 onChange={(e) => setClientSecret(e.target.value)}
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="tenant-id">Xero Tenant ID (Organization ID)</Label>
+              <Input 
+                id="tenant-id" 
+                placeholder="Enter your Xero tenant ID" 
+                value={tenantId}
+                onChange={(e) => setTenantId(e.target.value)}
+              />
               <p className="text-sm text-muted-foreground">
-                You can find these credentials in the Xero Developer portal.
+                The Tenant ID identifies the specific Xero organization you want to connect to.
               </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="refresh-token">Refresh Token (Optional)</Label>
+              <Input 
+                id="refresh-token" 
+                type="password" 
+                placeholder="Enter your refresh token if available" 
+                value={refreshToken}
+                onChange={(e) => setRefreshToken(e.target.value)}
+              />
             </div>
             
             <Button 
@@ -127,6 +176,15 @@ const XeroIntegration = () => {
                 </>
               )}
             </Button>
+            
+            <div className="text-center">
+              <Badge variant="outline" className="mt-2">
+                OAuth 2.0 Authentication
+              </Badge>
+              <p className="text-xs text-muted-foreground mt-1">
+                This integration uses OAuth 2.0 to securely connect to your Xero account.
+              </p>
+            </div>
           </div>
         ) : (
           <div className="space-y-6">

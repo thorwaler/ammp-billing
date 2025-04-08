@@ -1,11 +1,11 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calculator, Send, ArrowRight } from "lucide-react";
+import { Calculator, Send, ArrowRight, CalendarIcon } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
@@ -15,6 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
 interface Module {
   id: string;
@@ -231,6 +234,8 @@ export function InvoiceCalculator() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [billingFrequency, setBillingFrequency] = useState<"quarterly" | "biannual" | "annual">("annual");
+  const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(new Date());
 
   // Update modules and addons when a customer is selected
   useEffect(() => {
@@ -268,6 +273,16 @@ export function InvoiceCalculator() {
     }
   }, [customer]);
 
+  // Calculate frequency multiplier for billing
+  const getFrequencyMultiplier = () => {
+    switch (billingFrequency) {
+      case "quarterly": return 0.25;
+      case "biannual": return 0.5;
+      case "annual": return 1;
+      default: return 1;
+    }
+  };
+
   const handleCalculate = () => {
     if (!customer || newSystems === "" || mwManaged === "") {
       toast({
@@ -279,6 +294,8 @@ export function InvoiceCalculator() {
     }
 
     if (!selectedCustomer) return;
+    
+    const frequencyMultiplier = getFrequencyMultiplier();
 
     // Update calculation logic based on new pricing structure
     const totalMW = Number(mwManaged) + Number(newSystems);
@@ -293,7 +310,8 @@ export function InvoiceCalculator() {
     
     // Calculate costs based on package
     if (selectedCustomer.package === 'starter') {
-      calculationResult.starterPackageCost = 3000; // Flat fee for Starter
+      // Starter package - flat fee of $3000 per year
+      calculationResult.starterPackageCost = 3000 * frequencyMultiplier;
       
       // Only Technical Monitoring included
       // No module-based charges for Starter package
@@ -314,7 +332,7 @@ export function InvoiceCalculator() {
         return {
           moduleId: module.id,
           moduleName: module.name,
-          cost: price * totalMW
+          cost: price * totalMW * frequencyMultiplier
         };
       });
       
@@ -323,8 +341,8 @@ export function InvoiceCalculator() {
       calculationResult.totalMWCost = moduleTotalCost;
       
       // Ensure minimum $5000 for Pro package
-      if (selectedCustomer.package === 'pro' && moduleTotalCost < 5000) {
-        calculationResult.totalMWCost = 5000;
+      if (selectedCustomer.package === 'pro' && moduleTotalCost < 5000 * frequencyMultiplier) {
+        calculationResult.totalMWCost = 5000 * frequencyMultiplier;
       }
     }
     
@@ -346,17 +364,18 @@ export function InvoiceCalculator() {
         addonPrice = addon.price;
       }
       
+      // Apply frequency multiplier to addon costs
       return {
         addonId: addon.id,
         addonName: addon.name,
-        cost: addonPrice
+        cost: addonPrice * frequencyMultiplier
       };
     });
     
     // Calculate minimum charges if applicable
     let minimumCharges = 0;
     if (selectedCustomer.minimumCharge && sitesUnderThreshold) {
-      minimumCharges = Number(selectedCustomer.minimumCharge) * Number(sitesUnderThreshold);
+      minimumCharges = Number(selectedCustomer.minimumCharge) * Number(sitesUnderThreshold) * frequencyMultiplier;
     }
     
     calculationResult.minimumCharges = minimumCharges;
@@ -392,6 +411,8 @@ export function InvoiceCalculator() {
       setSelectedCustomer(null);
       setResult(null);
       setShowResult(false);
+      setInvoiceDate(new Date());
+      setBillingFrequency("annual");
     }, 2000);
   };
 
@@ -443,6 +464,26 @@ export function InvoiceCalculator() {
 
   const isProPackage = selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'custom';
 
+  const getInvoicePeriodText = () => {
+    if (!invoiceDate) return "";
+    
+    const startDate = new Date(invoiceDate);
+    const endDate = new Date(invoiceDate);
+    
+    if (billingFrequency === "quarterly") {
+      endDate.setMonth(endDate.getMonth() + 3);
+    } else if (billingFrequency === "biannual") {
+      endDate.setMonth(endDate.getMonth() + 6);
+    } else {
+      endDate.setFullYear(endDate.getFullYear() + 1);
+    }
+    
+    // Subtract one day from end date to make it inclusive
+    endDate.setDate(endDate.getDate() - 1);
+    
+    return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -469,15 +510,53 @@ export function InvoiceCalculator() {
           
           {selectedCustomer && (
             <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="invoice-date">Invoice Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className="w-full justify-start text-left font-normal"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {invoiceDate ? format(invoiceDate, "PPP") : "Select date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={invoiceDate}
+                        onSelect={setInvoiceDate}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="billing-frequency">Billing Frequency</Label>
+                  <Select value={billingFrequency} onValueChange={(value: "quarterly" | "biannual" | "annual") => setBillingFrequency(value)}>
+                    <SelectTrigger id="billing-frequency">
+                      <SelectValue placeholder="Select frequency" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="biannual">Bi-annual</SelectItem>
+                      <SelectItem value="annual">Annual</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="new-systems">New Systems (MWp)</Label>
+                  <Label htmlFor="new-systems">New Systems</Label>
                   <Input
                     id="new-systems"
                     type="number"
-                    placeholder="Enter MWp value"
+                    placeholder="Enter number value"
                     min={0}
-                    step={0.1}
+                    step={1}
                     value={newSystems}
                     onChange={(e) => setNewSystems(e.target.value ? Number(e.target.value) : "")}
                   />
@@ -627,7 +706,7 @@ export function InvoiceCalculator() {
           <Button 
             className="w-full" 
             onClick={handleCalculate}
-            disabled={!customer || newSystems === "" || mwManaged === ""}
+            disabled={!customer || newSystems === "" || mwManaged === "" || !invoiceDate}
           >
             <Calculator className="mr-2 h-4 w-4" />
             Calculate Invoice
@@ -636,7 +715,10 @@ export function InvoiceCalculator() {
         
         {showResult && result && (
           <div className="mt-6 border rounded-lg p-4">
-            <h3 className="font-medium text-lg mb-4">Invoice Calculation Result</h3>
+            <h3 className="font-medium text-lg mb-2">Invoice Calculation Result</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              <span className="font-medium">Billing period:</span> {getInvoicePeriodText()}
+            </p>
             
             {selectedCustomer?.package === 'starter' && (
               <div className="space-y-1 text-sm mb-3">
@@ -659,10 +741,10 @@ export function InvoiceCalculator() {
                   ))}
                 </div>
                 
-                {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < 5000 && (
+                {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < 5000 * getFrequencyMultiplier() && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Package Cost Applied:</span>
-                    <span>$5,000</span>
+                    <span>${(5000 * getFrequencyMultiplier()).toLocaleString()}</span>
                   </div>
                 )}
               </div>
