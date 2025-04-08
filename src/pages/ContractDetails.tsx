@@ -1,0 +1,379 @@
+
+import { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import Layout from "@/components/layout/Layout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { FileText, Download, Edit, Clock } from "lucide-react";
+import ContractForm from "@/components/contracts/ContractForm";
+import { toast } from "@/hooks/use-toast";
+
+// Mock data for contracts
+const mockContracts = [
+  {
+    id: "1",
+    companyName: "Solar Universe Inc.",
+    createdAt: "2023-05-15T10:30:00Z",
+    updatedAt: "2023-09-10T14:20:00Z",
+    package: "pro",
+    initialMW: 35,
+    currentMW: 42.5,
+    modules: ["technicalMonitoring", "energySavingsHub"],
+    addons: ["customKPIs", "tmCustomDashboards"],
+    contractFile: "solar_universe_contract.pdf",
+    status: "active",
+    expiresAt: "2024-05-15T10:30:00Z",
+    minimumCharge: 100
+  },
+  {
+    id: "2",
+    companyName: "GreenPower Systems",
+    createdAt: "2023-06-20T09:15:00Z",
+    updatedAt: "2023-06-20T09:15:00Z",
+    package: "starter",
+    initialMW: 4.8,
+    currentMW: 4.8,
+    modules: ["technicalMonitoring"],
+    addons: [],
+    contractFile: "greenpower_contract.pdf",
+    status: "active",
+    expiresAt: "2024-06-20T09:15:00Z",
+    minimumCharge: null
+  }
+];
+
+// Helper function to map module IDs to names
+const moduleNames: {[key: string]: string} = {
+  technicalMonitoring: "Technical Monitoring",
+  energySavingsHub: "Energy Savings Hub",
+  stakeholderPortal: "Stakeholder Portal",
+  control: "Control"
+};
+
+// Helper function to map addon IDs to names
+const addonNames: {[key: string]: string} = {
+  customKPIs: "Custom KPIs",
+  customAPIIntegration: "Custom API Integration",
+  satelliteDataAPI: "Satellite Data API Access",
+  dataLoggerSetup: "Data Logger Setup",
+  tmCustomDashboards: "Custom Dashboards",
+  tmCustomReports: "Custom Reports",
+  tmCustomAlerts: "Custom Alerts",
+  eshCustomDashboard: "Custom Dashboard",
+  eshCustomReport: "Custom Report",
+  eshCustomKPIs: "Custom KPIs",
+  spCustomDashboard: "Custom Dashboard",
+  spCustomReport: "Custom Report"
+};
+
+// Helper function to format date
+const formatDate = (dateString: string) => {
+  try {
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+  } catch (e) {
+    return dateString;
+  }
+};
+
+const ContractDetails = () => {
+  const { id } = useParams();
+  const [contract, setContract] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showExtendDialog, setShowExtendDialog] = useState(false);
+
+  useEffect(() => {
+    // Simulate API call to fetch contract details
+    setLoading(true);
+    try {
+      const foundContract = mockContracts.find(c => c.id === id);
+      
+      if (foundContract) {
+        setContract(foundContract);
+      } else {
+        setError("Contract not found");
+      }
+    } catch (err) {
+      setError("Failed to load contract details");
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
+  const handleDownloadContract = () => {
+    // Simulating contract download
+    toast({
+      title: "Download started",
+      description: `Downloading ${contract?.contractFile}`,
+    });
+  };
+
+  const handleExtendContract = () => {
+    // Would handle contract extension logic
+    setShowExtendDialog(false);
+    toast({
+      title: "Contract extended",
+      description: `${contract?.companyName}'s contract has been extended`,
+    });
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center h-[50vh]">
+          <div className="text-center">
+            <Clock className="animate-spin h-8 w-8 mx-auto text-muted-foreground" />
+            <p className="mt-2">Loading contract details...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error || !contract) {
+    return (
+      <Layout>
+        <div className="text-center py-10">
+          <h2 className="text-2xl font-bold text-destructive">Error</h2>
+          <p className="text-muted-foreground mt-2">{error || "Contract not found"}</p>
+          <Button className="mt-4" onClick={() => window.history.back()}>
+            Go Back
+          </Button>
+        </div>
+      </Layout>
+    );
+  }
+
+  const daysUntilExpiration = () => {
+    const today = new Date();
+    const expiration = new Date(contract.expiresAt);
+    const diffTime = expiration.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const expirationStatus = () => {
+    const days = daysUntilExpiration();
+    if (days < 0) return { label: "Expired", variant: "destructive" };
+    if (days < 30) return { label: `Expires in ${days} days`, variant: "destructive" };
+    if (days < 90) return { label: `Expires in ${days} days`, variant: "warning" };
+    return { label: `Expires in ${days} days`, variant: "default" };
+  };
+
+  return (
+    <Layout>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="flex items-center">
+              <FileText className="h-8 w-8 mr-2 text-ammp-blue" />
+              <h1 className="text-3xl font-bold tracking-tight">{contract.companyName}</h1>
+            </div>
+            <p className="text-muted-foreground mt-1">
+              Contract ID: {contract.id}
+            </p>
+          </div>
+          
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleDownloadContract}>
+              <Download className="mr-2 h-4 w-4" />
+              Download PDF
+            </Button>
+            
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Edit Contract - {contract.companyName}</DialogTitle>
+                </DialogHeader>
+                <ContractForm />
+              </DialogContent>
+            </Dialog>
+            
+            <Dialog open={showExtendDialog} onOpenChange={setShowExtendDialog}>
+              <DialogTrigger asChild>
+                <Button>
+                  Extend Contract
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Extend Contract - {contract.companyName}</DialogTitle>
+                </DialogHeader>
+                <ContractForm />
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle>Contract Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4">
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Package</p>
+                  <p className="font-medium">
+                    {contract.package === "starter" ? "AMMP OS Starter" : 
+                     contract.package === "pro" ? "AMMP OS Pro" : "Custom/Legacy"}
+                  </p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Status</p>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant={contract.status === "active" ? "default" : "secondary"}>
+                      {contract.status}
+                    </Badge>
+                    <Badge 
+                      variant={expirationStatus().variant as any}
+                      className={expirationStatus().variant === "warning" ? "bg-orange-500" : ""}
+                    >
+                      {expirationStatus().label}
+                    </Badge>
+                  </div>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Initial MW</p>
+                  <p className="font-medium">{contract.initialMW} MWp</p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Current MW</p>
+                  <p className="font-medium">{contract.currentMW} MWp</p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Created Date</p>
+                  <p className="font-medium">{formatDate(contract.createdAt)}</p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Last Updated</p>
+                  <p className="font-medium">{formatDate(contract.updatedAt)}</p>
+                </div>
+                
+                {contract.minimumCharge && (
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Minimum Charge per Site</p>
+                    <p className="font-medium">${contract.minimumCharge}</p>
+                  </div>
+                )}
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <h3 className="font-medium mb-3">Modules</h3>
+                <div className="flex flex-wrap gap-2">
+                  {contract.modules.map((moduleId: string) => (
+                    <Badge key={moduleId} variant="outline" className="bg-blue-50">
+                      {moduleNames[moduleId] || moduleId}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+              
+              {contract.addons.length > 0 && (
+                <div>
+                  <h3 className="font-medium mb-3">Add-ons</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {contract.addons.map((addonId: string) => (
+                      <Badge key={addonId} variant="outline" className="bg-green-50">
+                        {addonNames[addonId] || addonId}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Financial Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {contract.package === "starter" ? (
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Annual Package Fee</p>
+                  <p className="font-medium">$3,000</p>
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Per MWp Cost</p>
+                    <div className="space-y-2">
+                      {contract.modules.map((moduleId: string) => (
+                        <div key={moduleId} className="flex justify-between">
+                          <span className="text-sm">{moduleNames[moduleId] || moduleId}:</span>
+                          <span className="font-medium">
+                            ${moduleId === "technicalMonitoring" ? "1,000" : 
+                             moduleId === "energySavingsHub" ? "500" : 
+                             moduleId === "stakeholderPortal" ? "250" : "500"}/MWp/year
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
+                    {contract.package === "pro" ? (
+                      <p className="font-medium">
+                        ${Math.max(5000, contract.currentMW * contract.modules.reduce((sum: number, moduleId: string) => {
+                          const modulePrices: {[key: string]: number} = {
+                            technicalMonitoring: 1000,
+                            energySavingsHub: 500,
+                            stakeholderPortal: 250,
+                            control: 500
+                          };
+                          return sum + (modulePrices[moduleId] || 0);
+                        }, 0)).toLocaleString()}
+                      </p>
+                    ) : (
+                      <p className="font-medium">Custom pricing</p>
+                    )}
+                  </div>
+                </>
+              )}
+              
+              {contract.addons.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Add-on Costs</p>
+                    <p className="font-medium">Varies based on complexity and usage</p>
+                  </div>
+                </>
+              )}
+              
+              <div className="pt-4">
+                <Button variant="outline" className="w-full" onClick={() => window.location.href = "/calculator"}>
+                  <Calculator className="mr-2 h-4 w-4" />
+                  Calculate Invoice
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </Layout>
+  );
+};
+
+export default ContractDetails;

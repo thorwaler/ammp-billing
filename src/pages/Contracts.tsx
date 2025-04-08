@@ -1,11 +1,15 @@
 
+import { useState } from "react";
 import Layout from "@/components/layout/Layout";
 import ContractList from "@/components/contracts/ContractList";
-import ContractUploader from "@/components/dashboard/ContractUploader";
+import ContractForm from "@/components/contracts/ContractForm";
 import { Button } from "@/components/ui/button";
 import { FileText, PlusCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const Contracts = () => {
+  const [showContractForm, setShowContractForm] = useState(false);
+
   return (
     <Layout>
       <div className="flex flex-col gap-6">
@@ -19,19 +23,24 @@ const Contracts = () => {
               Manage customer contracts and extract key data
             </p>
           </div>
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Add Contract
-          </Button>
+          <Dialog open={showContractForm} onOpenChange={setShowContractForm}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add Contract
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Create Contract</DialogTitle>
+              </DialogHeader>
+              <ContractForm />
+            </DialogContent>
+          </Dialog>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-1">
-            <ContractUploader />
-          </div>
-          <div className="lg:col-span-2">
-            <ContractList />
-          </div>
+        <div>
+          <ContractList />
         </div>
       </div>
     </Layout>
