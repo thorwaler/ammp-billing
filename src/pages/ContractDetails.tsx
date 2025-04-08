@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Download, Edit, Clock } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
 import { toast } from "@/hooks/use-toast";
 

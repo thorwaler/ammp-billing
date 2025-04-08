@@ -254,8 +254,8 @@ export function InvoiceCalculator() {
         const updatedAddons = defaultAddons.map(addon => ({
           ...addon,
           selected: customerData.addons.includes(addon.id),
-          // Set default complexity to 'low'
-          complexity: customerData.addons.includes(addon.id) && addon.complexityPricing ? 'low' : undefined
+          // Set default complexity to 'low' (as a valid enum value, not a string)
+          complexity: customerData.addons.includes(addon.id) && addon.complexityPricing ? 'low' as const : undefined
         }));
         setAddons(updatedAddons);
       }
