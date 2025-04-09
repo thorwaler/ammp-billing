@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,18 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, Link2, Check } from "lucide-react";
+import { Loader2, Link2, Check, Edit, Save } from "lucide-react";
+
+// This will be replaced with actual Supabase client after integration
+// For now, we'll use localStorage as a temporary solution
+const saveToStorage = (data) => {
+  localStorage.setItem('hubspot_integration', JSON.stringify(data));
+};
+
+const loadFromStorage = () => {
+  const data = localStorage.getItem('hubspot_integration');
+  return data ? JSON.parse(data) : null;
+};
 
 const HubspotIntegration = () => {
   const [isConnected, setIsConnected] = useState(false);
@@ -21,6 +32,18 @@ const HubspotIntegration = () => {
   const [apiKey, setApiKey] = useState("");
   const [dealStage, setDealStage] = useState("closedwon");
   const [isEnabled, setIsEnabled] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Load saved integration data on component mount
+  useEffect(() => {
+    const savedData = loadFromStorage();
+    if (savedData) {
+      setIsConnected(true);
+      setApiKey(savedData.apiKey || "");
+      setDealStage(savedData.dealStage || "closedwon");
+      setIsEnabled(savedData.isEnabled || false);
+    }
+  }, []);
 
   const handleConnect = () => {
     if (!apiKey) {
@@ -38,6 +61,14 @@ const HubspotIntegration = () => {
     setTimeout(() => {
       setIsConnected(true);
       setIsConnecting(false);
+      
+      // Save integration data
+      saveToStorage({
+        apiKey,
+        dealStage,
+        isEnabled
+      });
+      
       toast({
         title: "Connected to HubSpot",
         description: "Your HubSpot account has been successfully connected.",
@@ -46,6 +77,15 @@ const HubspotIntegration = () => {
   };
 
   const handleSaveSettings = () => {
+    // Save updated settings
+    saveToStorage({
+      apiKey,
+      dealStage,
+      isEnabled
+    });
+    
+    setIsEditing(false);
+    
     toast({
       title: "Settings Saved",
       description: "Your HubSpot integration settings have been saved.",
@@ -55,11 +95,32 @@ const HubspotIntegration = () => {
   const handleEnableIntegration = (enabled: boolean) => {
     setIsEnabled(enabled);
     
+    // Save updated enabled state
+    saveToStorage({
+      apiKey,
+      dealStage,
+      isEnabled: enabled
+    });
+    
     toast({
       title: enabled ? "Integration Enabled" : "Integration Disabled",
       description: enabled 
         ? "HubSpot integration is now active. New deals will create customers automatically." 
         : "HubSpot integration has been disabled.",
+    });
+  };
+  
+  const handleDisconnect = () => {
+    // Clear storage and reset state
+    localStorage.removeItem('hubspot_integration');
+    setIsConnected(false);
+    setApiKey("");
+    setDealStage("closedwon");
+    setIsEnabled(false);
+    
+    toast({
+      title: "Disconnected from HubSpot",
+      description: "Your HubSpot account has been disconnected.",
     });
   };
 
@@ -124,35 +185,69 @@ const HubspotIntegration = () => {
                 <div className="h-2 w-2 rounded-full bg-green-500" />
                 <span className="text-sm font-medium">Connected to HubSpot</span>
               </div>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => setIsConnected(false)}
-              >
-                Disconnect
-              </Button>
+              <div className="flex items-center space-x-2">
+                {!isEditing ? (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsEditing(false)}
+                  >
+                    Cancel
+                  </Button>
+                )}
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleDisconnect}
+                >
+                  Disconnect
+                </Button>
+              </div>
             </div>
             
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="enable-integration" className="cursor-pointer">Enable Integration</Label>
-                <Switch 
-                  id="enable-integration" 
-                  checked={isEnabled}
-                  onCheckedChange={handleEnableIntegration}
-                />
+            {isEditing ? (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-api-key">API Key</Label>
+                  <Input 
+                    id="edit-api-key" 
+                    type="password" 
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                </div>
               </div>
-              <p className="text-sm text-muted-foreground">
-                When enabled, new customers will be created automatically when deals reach the specified stage.
-              </p>
-            </div>
+            ) : (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="enable-integration" className="cursor-pointer">Enable Integration</Label>
+                  <Switch 
+                    id="enable-integration" 
+                    checked={isEnabled}
+                    onCheckedChange={handleEnableIntegration}
+                  />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  When enabled, new customers will be created automatically when deals reach the specified stage.
+                </p>
+              </div>
+            )}
             
             <div className="space-y-2">
               <Label htmlFor="deal-stage">Deal Stage Trigger</Label>
               <Select 
                 value={dealStage} 
                 onValueChange={setDealStage}
-                disabled={!isEnabled}
+                disabled={!isEnabled || isEditing}
               >
                 <SelectTrigger id="deal-stage">
                   <SelectValue placeholder="Select deal stage" />
@@ -192,14 +287,24 @@ const HubspotIntegration = () => {
               </Card>
             </div>
             
-            <Button 
-              onClick={handleSaveSettings} 
-              disabled={!isEnabled}
-              className="w-full"
-            >
-              <Check className="mr-2 h-4 w-4" />
-              Save Integration Settings
-            </Button>
+            {isEditing ? (
+              <Button 
+                onClick={handleSaveSettings}
+                className="w-full"
+              >
+                <Save className="mr-2 h-4 w-4" />
+                Save Changes
+              </Button>
+            ) : (
+              <Button 
+                onClick={handleSaveSettings} 
+                disabled={!isEnabled}
+                className="w-full"
+              >
+                <Check className="mr-2 h-4 w-4" />
+                Save Settings
+              </Button>
+            )}
           </div>
         )}
       </CardContent>
