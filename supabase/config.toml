@@ -1,1 +1,13 @@
 project_id = "bxogdlfdgudllafzhusn"
+
+[functions.xero-oauth-init]
+verify_jwt = true
+
+[functions.xero-oauth-callback]
+verify_jwt = true
+
+[functions.xero-refresh-token]
+verify_jwt = true
+
+[functions.xero-send-invoice]
+verify_jwt = true

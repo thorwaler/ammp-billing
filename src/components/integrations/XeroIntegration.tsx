@@ -1,151 +1,221 @@
-
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { 
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { toast } from "@/hooks/use-toast";
-import { Loader2, Link2, Check, AlertCircle, ExternalLink, Edit, Save } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/use-toast";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { Label } from "@/components/ui/label";
 
-// This will be replaced with actual Supabase client after integration
-// For now, we'll use localStorage as a temporary solution
-const saveToStorage = (data) => {
-  localStorage.setItem('xero_integration', JSON.stringify(data));
-};
+interface XeroSettings {
+  invoiceTemplate: string;
+  isEnabled: boolean;
+}
 
-const loadFromStorage = () => {
-  const data = localStorage.getItem('xero_integration');
-  return data ? JSON.parse(data) : null;
-};
+interface XeroConnection {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  tenant_name: string | null;
+  access_token: string;
+  refresh_token: string;
+  expires_at: string;
+  invoice_template: string | null;
+  is_enabled: boolean | null;
+  created_at: string;
+  updated_at: string;
+}
 
 const XeroIntegration = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [tenantId, setTenantId] = useState("");
-  const [refreshToken, setRefreshToken] = useState("");
-  const [invoiceTemplate, setInvoiceTemplate] = useState("standard");
-  const [isEnabled, setIsEnabled] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [tenantName, setTenantName] = useState<string>('');
+  
+  const [settings, setSettings] = useState<XeroSettings>({
+    invoiceTemplate: 'standard',
+    isEnabled: true,
+  });
 
-  // Load saved integration data on component mount
+  // Load connection status on mount
   useEffect(() => {
-    const savedData = loadFromStorage();
-    if (savedData) {
-      setIsConnected(true);
-      setClientId(savedData.clientId || "");
-      setClientSecret(savedData.clientSecret || "");
-      setTenantId(savedData.tenantId || "");
-      setRefreshToken(savedData.refreshToken || "");
-      setInvoiceTemplate(savedData.invoiceTemplate || "standard");
-      setIsEnabled(savedData.isEnabled || false);
+    loadConnection();
+  }, [user]);
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('xero_callback') === 'true') {
+      const code = params.get('code');
+      const state = params.get('state');
+      
+      if (code && state) {
+        handleOAuthCallback(code, state);
+      }
     }
   }, []);
 
-  const handleConnect = () => {
-    if (!clientId || !clientSecret || !tenantId) {
-      toast({
-        title: "Missing Credentials",
-        description: "Please enter your Xero client ID, client secret and tenant ID to connect.",
-        variant: "destructive",
-      });
-      return;
+  const loadConnection = async () => {
+    if (!user) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('xero_connections' as any)
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (data && !error) {
+        const connection = data as unknown as XeroConnection;
+        setIsConnected(connection.is_enabled || false);
+        setTenantName(connection.tenant_name || '');
+        setSettings({
+          invoiceTemplate: connection.invoice_template || 'standard',
+          isEnabled: connection.is_enabled || false,
+        });
+      }
+    } catch (error) {
+      console.error('Error loading connection:', error);
     }
-    
-    setIsConnecting(true);
-    
-    // Simulate API connection
-    setTimeout(() => {
-      setIsConnected(true);
-      setIsConnecting(false);
-      
-      // Save integration data
-      saveToStorage({
-        clientId,
-        clientSecret,
-        tenantId,
-        refreshToken,
-        invoiceTemplate,
-        isEnabled
+  };
+
+  const handleOAuthCallback = async (code: string, state: string) => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('xero-oauth-callback', {
+        body: { code, state },
       });
+
+      if (error) throw error;
+
+      setIsConnected(true);
+      setTenantName(data.tenant);
+      
+      // Clean up URL
+      window.history.replaceState({}, '', '/integrations');
       
       toast({
         title: "Connected to Xero",
-        description: "Your Xero account has been successfully connected.",
+        description: `Successfully connected to ${data.tenant}`,
       });
-    }, 2000);
+
+      await loadConnection();
+    } catch (error: any) {
+      toast({
+        title: "Connection failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSaveSettings = () => {
-    // Save updated settings
-    saveToStorage({
-      clientId,
-      clientSecret,
-      tenantId,
-      refreshToken,
-      invoiceTemplate,
-      isEnabled
-    });
+  const handleConnect = async () => {
+    setIsLoading(true);
     
-    setIsEditing(false);
-    
-    toast({
-      title: "Settings Saved",
-      description: "Your Xero integration settings have been saved.",
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('xero-oauth-init');
+
+      if (error) throw error;
+
+      // Redirect to Xero OAuth
+      window.location.href = data.authUrl;
+    } catch (error: any) {
+      setIsLoading(false);
+      toast({
+        title: "Connection failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleEnableIntegration = (enabled: boolean) => {
-    setIsEnabled(enabled);
-    
-    // Save updated enabled state
-    saveToStorage({
-      clientId,
-      clientSecret,
-      tenantId,
-      refreshToken,
-      invoiceTemplate,
-      isEnabled: enabled
-    });
-    
-    toast({
-      title: enabled ? "Integration Enabled" : "Integration Disabled",
-      description: enabled 
-        ? "Xero integration is now active. Invoices can be sent directly to Xero." 
-        : "Xero integration has been disabled.",
-    });
+  const handleSaveSettings = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('xero_connections' as any)
+        .update({
+          invoice_template: settings.invoiceTemplate,
+          is_enabled: settings.isEnabled,
+        })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Settings saved",
+        description: "Your Xero integration settings have been updated.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Save failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
-  
-  const handleDisconnect = () => {
-    // Clear storage and reset state
-    localStorage.removeItem('xero_integration');
-    setIsConnected(false);
-    setClientId("");
-    setClientSecret("");
-    setTenantId("");
-    setRefreshToken("");
-    setInvoiceTemplate("standard");
-    setIsEnabled(false);
-    
-    toast({
-      title: "Disconnected from Xero",
-      description: "Your Xero account has been disconnected.",
-    });
+
+  const handleEnableIntegration = async (enabled: boolean) => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('xero_connections' as any)
+        .update({ is_enabled: enabled })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setSettings({ ...settings, isEnabled: enabled });
+      
+      toast({
+        title: enabled ? "Integration enabled" : "Integration disabled",
+        description: enabled 
+          ? "Xero integration is now active" 
+          : "Xero integration has been paused",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Update failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
-  
-  const openXeroDeveloperPortal = () => {
-    window.open("https://developer.xero.com/app/manage", "_blank");
+
+  const handleDisconnect = async () => {
+    if (!user) return;
+
+    try {
+      const { error } = await supabase
+        .from('xero_connections' as any)
+        .delete()
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setIsConnected(false);
+      setTenantName('');
+      setSettings({ invoiceTemplate: 'standard', isEnabled: true });
+      
+      toast({
+        title: "Disconnected from Xero",
+        description: "Your Xero integration has been removed.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Disconnect failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -163,264 +233,94 @@ const XeroIntegration = () => {
           Xero Integration
         </CardTitle>
         <CardDescription>
-          Send invoices directly to Xero to streamline your billing process
+          Connect your Xero account to automatically sync invoices and customer data
         </CardDescription>
       </CardHeader>
-      
       <CardContent className="space-y-6">
         {!isConnected ? (
-          <div className="space-y-4">
+          <>
             <Alert>
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>API Credentials Required</AlertTitle>
-              <AlertDescription>
-                To set up this integration, you'll need to create a Xero app in the Xero Developer Portal and obtain the following credentials:
-                <ul className="mt-2 ml-6 list-disc text-sm">
-                  <li>Client ID</li>
-                  <li>Client Secret</li>
-                  <li>Tenant ID (Organization ID)</li>
-                </ul>
-                <div className="mt-3 p-3 bg-muted rounded-md">
-                  <p className="text-sm font-medium mb-1">How to find your Tenant ID:</p>
-                  <ol className="ml-4 list-decimal text-xs space-y-1">
-                    <li>Go to the Xero Developer Portal and create/select your app</li>
-                    <li>After authentication, make a GET request to: <code className="bg-background px-1 py-0.5 rounded">https://api.xero.com/connections</code></li>
-                    <li>The response will include your <code className="bg-background px-1 py-0.5 rounded">tenantId</code> for each connected organization</li>
-                    <li>Alternatively, use the OAuth 2.0 flow and the tenant ID will be in the connection response</li>
-                  </ol>
-                </div>
-                <Button 
-                  variant="link" 
-                  className="p-0 h-auto mt-2 text-sm font-normal"
-                  onClick={openXeroDeveloperPortal}
-                >
-                  Go to Xero Developer Portal <ExternalLink className="ml-1 h-3 w-3" />
-                </Button>
+              <AlertDescription className="space-y-2">
+                <p className="font-medium">Ready to connect Xero?</p>
+                <p className="text-sm">Click the button below to securely connect your Xero account using OAuth 2.0.</p>
               </AlertDescription>
             </Alert>
 
-            <div className="space-y-2">
-              <Label htmlFor="client-id">Xero Client ID</Label>
-              <Input 
-                id="client-id" 
-                placeholder="Enter your Xero client ID" 
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="client-secret">Xero Client Secret</Label>
-              <Input 
-                id="client-secret" 
-                type="password" 
-                placeholder="Enter your Xero client secret" 
-                value={clientSecret}
-                onChange={(e) => setClientSecret(e.target.value)}
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="tenant-id">Xero Tenant ID (Organization ID)</Label>
-              <Input 
-                id="tenant-id" 
-                placeholder="Enter your Xero tenant ID" 
-                value={tenantId}
-                onChange={(e) => setTenantId(e.target.value)}
-              />
-              <p className="text-sm text-muted-foreground">
-                The Tenant ID identifies the specific Xero organization you want to connect to.
-              </p>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="refresh-token">Refresh Token (Optional)</Label>
-              <Input 
-                id="refresh-token" 
-                type="password" 
-                placeholder="Enter your refresh token if available" 
-                value={refreshToken}
-                onChange={(e) => setRefreshToken(e.target.value)}
-              />
-            </div>
-            
             <Button 
               onClick={handleConnect} 
-              disabled={isConnecting} 
+              disabled={isLoading}
               className="w-full"
             >
-              {isConnecting ? (
+              {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Connecting...
                 </>
               ) : (
-                <>
-                  <Link2 className="mr-2 h-4 w-4" />
-                  Connect to Xero
-                </>
+                'Connect to Xero'
               )}
             </Button>
-            
-            <div className="text-center">
-              <Badge variant="outline" className="mt-2">
-                OAuth 2.0 Authentication
-              </Badge>
-              <p className="text-xs text-muted-foreground mt-1">
-                This integration uses OAuth 2.0 to securely connect to your Xero account.
-              </p>
-            </div>
-          </div>
+          </>
         ) : (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                <span className="text-sm font-medium">Connected to Xero</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                {!isEditing ? (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit
-                  </Button>
-                ) : (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setIsEditing(false)}
-                  >
-                    Cancel
-                  </Button>
-                )}
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleDisconnect}
-                >
-                  Disconnect
-                </Button>
+          <>
+            <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                <div>
+                  <p className="font-medium text-green-900 dark:text-green-100">Connected to Xero</p>
+                  <p className="text-sm text-green-700 dark:text-green-300">
+                    {tenantName || 'Your Xero account is connected'}
+                  </p>
+                </div>
               </div>
             </div>
-            
-            {isEditing ? (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-client-id">Client ID</Label>
-                  <Input 
-                    id="edit-client-id" 
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="edit-client-secret">Client Secret</Label>
-                  <Input 
-                    id="edit-client-secret" 
-                    type="password" 
-                    value={clientSecret}
-                    onChange={(e) => setClientSecret(e.target.value)}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="edit-tenant-id">Tenant ID</Label>
-                  <Input 
-                    id="edit-tenant-id" 
-                    value={tenantId}
-                    onChange={(e) => setTenantId(e.target.value)}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="edit-refresh-token">Refresh Token</Label>
-                  <Input 
-                    id="edit-refresh-token" 
-                    type="password" 
-                    value={refreshToken}
-                    onChange={(e) => setRefreshToken(e.target.value)}
-                  />
-                </div>
-              </div>
-            ) : (
+
+            <div className="space-y-4">
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="enable-xero" className="cursor-pointer">Enable Integration</Label>
-                  <Switch 
-                    id="enable-xero" 
-                    checked={isEnabled}
-                    onCheckedChange={handleEnableIntegration}
-                  />
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  When enabled, invoices can be sent directly to Xero from the calculator.
-                </p>
+                <Label htmlFor="invoiceTemplate">Invoice Template</Label>
+                <Select
+                  value={settings.invoiceTemplate}
+                  onValueChange={(value) => setSettings({ ...settings, invoiceTemplate: value })}
+                >
+                  <SelectTrigger id="invoiceTemplate">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="standard">Standard Invoice</SelectItem>
+                    <SelectItem value="detailed">Detailed Invoice</SelectItem>
+                    <SelectItem value="summary">Summary Invoice</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
-            
-            <div className="space-y-2">
-              <Label htmlFor="invoice-template">Invoice Template</Label>
-              <Select 
-                value={invoiceTemplate} 
-                onValueChange={setInvoiceTemplate}
-                disabled={!isEnabled || isEditing}
-              >
-                <SelectTrigger id="invoice-template">
-                  <SelectValue placeholder="Select invoice template" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="standard">Standard Invoice</SelectItem>
-                  <SelectItem value="detailed">Detailed Invoice</SelectItem>
-                  <SelectItem value="summary">Summary Invoice</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2">
-              <Label>Mapping</Label>
-              <Card className="border border-muted">
-                <CardContent className="p-4 space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="text-sm font-medium">AMMP Field</div>
-                    <div className="text-sm font-medium">Xero Field</div>
-                    
-                    <div className="text-sm">Company Name</div>
-                    <div className="text-sm">Contact Name</div>
-                    
-                    <div className="text-sm">Module Costs</div>
-                    <div className="text-sm">Line Items</div>
-                    
-                    <div className="text-sm">Add-on Costs</div>
-                    <div className="text-sm">Line Items</div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-            
-            {isEditing ? (
-              <Button 
-                onClick={handleSaveSettings}
-                className="w-full"
-              >
-                <Save className="mr-2 h-4 w-4" />
-                Save Changes
-              </Button>
-            ) : (
-              <Button 
-                onClick={handleSaveSettings} 
-                disabled={!isEnabled}
-                className="w-full"
-              >
-                <Check className="mr-2 h-4 w-4" />
+
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label>Enable Integration</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Allow Contract Compass to send invoices to Xero
+                  </p>
+                </div>
+                <Switch
+                  checked={settings.isEnabled}
+                  onCheckedChange={handleEnableIntegration}
+                />
+              </div>
+
+              <Button onClick={handleSaveSettings} className="w-full">
                 Save Settings
               </Button>
-            )}
-          </div>
+            </div>
+
+            <div className="pt-4 border-t">
+              <Button 
+                variant="destructive" 
+                onClick={handleDisconnect}
+                className="w-full"
+              >
+                Disconnect Xero
+              </Button>
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
