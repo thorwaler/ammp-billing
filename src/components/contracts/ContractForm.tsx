@@ -41,6 +41,15 @@ const contractFormSchema = z.object({
     stakeholderPortal: z.coerce.number().optional(),
     control: z.coerce.number().optional(),
   }).optional(),
+  volumeDiscounts: z.object({
+    annualUpfrontDiscount: z.coerce.number().optional(),
+    siteSizeThreshold: z.coerce.number().optional(),
+    siteSizeDiscount: z.coerce.number().optional(),
+    portfolio50MW: z.coerce.number().optional(),
+    portfolio100MW: z.coerce.number().optional(),
+    portfolio150MW: z.coerce.number().optional(),
+    portfolio200MW: z.coerce.number().optional(),
+  }).optional(),
   minimumCharge: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
@@ -166,6 +175,15 @@ export function ContractForm() {
         stakeholderPortal: undefined,
         control: undefined,
       },
+      volumeDiscounts: {
+        annualUpfrontDiscount: 5,
+        siteSizeThreshold: 3,
+        siteSizeDiscount: 0,
+        portfolio50MW: 5,
+        portfolio100MW: 10,
+        portfolio150MW: 15,
+        portfolio200MW: 20,
+      },
       minimumCharge: 0,
       notes: "",
     },
@@ -290,10 +308,130 @@ export function ContractForm() {
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
-              />
-              
-              <FormField
+            )}
+            />
+            
+            {/* Volume Discounts Section */}
+            <div className="border rounded-md p-4">
+              <h3 className="font-semibold mb-4">Volume Discounts</h3>
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="volumeDiscounts.annualUpfrontDiscount"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Annual Upfront Payment Discount (%)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.1" min="0" max="100" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Discount applied when customer pays annually upfront (default: 5%)
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="volumeDiscounts.siteSizeThreshold"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Site Size Threshold (MW)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" min="0" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Minimum site size for discount (default: 3MW)
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="volumeDiscounts.siteSizeDiscount"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Site Size Discount (%)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" min="0" max="100" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Discount for sites above threshold
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                
+                <div>
+                  <Label className="mb-2 block">Portfolio Size Discounts (%)</Label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="volumeDiscounts.portfolio50MW"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">50MW+</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" min="0" max="100" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="volumeDiscounts.portfolio100MW"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">100MW+</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" min="0" max="100" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="volumeDiscounts.portfolio150MW"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">150MW+</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" min="0" max="100" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    
+                    <FormField
+                      control={form.control}
+                      name="volumeDiscounts.portfolio200MW"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">200MW+</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="0.1" min="0" max="100" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <FormField
                 control={form.control}
                 name="initialMW"
                 render={({ field }) => (

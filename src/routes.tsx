@@ -9,7 +9,6 @@ import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/UserManagement";
 import ContractDetails from "./pages/ContractDetails";
 import Integrations from "./pages/Integrations";
-import VolumeDiscounts from "./pages/VolumeDiscounts";
 
 const AppRoutes = () => (
   <BrowserRouter>
@@ -23,7 +22,6 @@ const AppRoutes = () => (
       <Route path="/reports" element={<Reports />} />
       <Route path="/users" element={<UserManagement />} />
       <Route path="/integrations" element={<Integrations />} />
-      <Route path="/volume-discounts" element={<VolumeDiscounts />} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </BrowserRouter>
