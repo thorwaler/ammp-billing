@@ -1,5 +1,7 @@
 
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import Customers from "./pages/Customers";
 import Contracts from "./pages/Contracts";
@@ -13,15 +15,16 @@ import Integrations from "./pages/Integrations";
 const AppRoutes = () => (
   <BrowserRouter>
     <Routes>
-      <Route path="/" element={<Index />} />
-      <Route path="/customers" element={<Customers />} />
-      <Route path="/customers/:id" element={<ContractDetails />} />
-      <Route path="/contracts" element={<Contracts />} />
-      <Route path="/contracts/:id" element={<ContractDetails />} />
-      <Route path="/calculator" element={<Calculator />} />
-      <Route path="/reports" element={<Reports />} />
-      <Route path="/users" element={<UserManagement />} />
-      <Route path="/integrations" element={<Integrations />} />
+      <Route path="/auth" element={<Auth />} />
+      <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+      <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+      <Route path="/customers/:id" element={<ProtectedRoute><ContractDetails /></ProtectedRoute>} />
+      <Route path="/contracts" element={<ProtectedRoute><Contracts /></ProtectedRoute>} />
+      <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetails /></ProtectedRoute>} />
+      <Route path="/calculator" element={<ProtectedRoute><Calculator /></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+      <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
+      <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </BrowserRouter>

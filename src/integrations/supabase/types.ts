@@ -14,16 +14,206 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      contracts: {
+        Row: {
+          addons: Json | null
+          billing_frequency: string | null
+          company_name: string
+          contract_status: string | null
+          created_at: string
+          custom_pricing: Json | null
+          customer_id: string
+          id: string
+          initial_mw: number
+          minimum_charge: number | null
+          modules: Json | null
+          next_invoice_date: string | null
+          notes: string | null
+          package: string
+          updated_at: string
+          user_id: string
+          volume_discounts: Json | null
+        }
+        Insert: {
+          addons?: Json | null
+          billing_frequency?: string | null
+          company_name: string
+          contract_status?: string | null
+          created_at?: string
+          custom_pricing?: Json | null
+          customer_id: string
+          id?: string
+          initial_mw: number
+          minimum_charge?: number | null
+          modules?: Json | null
+          next_invoice_date?: string | null
+          notes?: string | null
+          package: string
+          updated_at?: string
+          user_id: string
+          volume_discounts?: Json | null
+        }
+        Update: {
+          addons?: Json | null
+          billing_frequency?: string | null
+          company_name?: string
+          contract_status?: string | null
+          created_at?: string
+          custom_pricing?: Json | null
+          customer_id?: string
+          id?: string
+          initial_mw?: number
+          minimum_charge?: number | null
+          modules?: Json | null
+          next_invoice_date?: string | null
+          notes?: string | null
+          package?: string
+          updated_at?: string
+          user_id?: string
+          volume_discounts?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contracts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      currency_settings: {
+        Row: {
+          created_at: string
+          currency: string | null
+          exchange_rate: number | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency?: string | null
+          exchange_rate?: number | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency?: string | null
+          exchange_rate?: number | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      customers: {
+        Row: {
+          created_at: string
+          id: string
+          join_date: string | null
+          last_invoiced: string | null
+          location: string | null
+          mwp_managed: number | null
+          name: string
+          status: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          join_date?: string | null
+          last_invoiced?: string | null
+          location?: string | null
+          mwp_managed?: number | null
+          name: string
+          status?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          join_date?: string | null
+          last_invoiced?: string | null
+          location?: string | null
+          mwp_managed?: number | null
+          name?: string
+          status?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          company: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          company?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "manager" | "viewer"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +340,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "manager", "viewer"],
+    },
   },
 } as const

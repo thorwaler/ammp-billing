@@ -1,4 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "./AuthContext";
 
 interface CurrencyContextType {
   currency: "EUR" | "USD";
@@ -7,32 +9,76 @@ interface CurrencyContextType {
   setExchangeRate: (rate: number) => void;
   formatCurrency: (amount: number) => string;
   convertToDisplayCurrency: (usdAmount: number) => number;
+  loading: boolean;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
 
-const STORAGE_KEY_CURRENCY = "app_currency";
-const STORAGE_KEY_EXCHANGE_RATE = "app_exchange_rate";
 const DEFAULT_EXCHANGE_RATE = 0.92; // Default USD to EUR rate
 
 export function CurrencyProvider({ children }: { children: ReactNode }) {
-  const [currency, setCurrencyState] = useState<"EUR" | "USD">(() => {
-    const stored = localStorage.getItem(STORAGE_KEY_CURRENCY);
-    return (stored as "EUR" | "USD") || "EUR";
-  });
+  const { user } = useAuth();
+  const [currency, setCurrencyState] = useState<"EUR" | "USD">("EUR");
+  const [exchangeRate, setExchangeRateState] = useState<number>(DEFAULT_EXCHANGE_RATE);
+  const [loading, setLoading] = useState(true);
 
-  const [exchangeRate, setExchangeRateState] = useState<number>(() => {
-    const stored = localStorage.getItem(STORAGE_KEY_EXCHANGE_RATE);
-    return stored ? parseFloat(stored) : DEFAULT_EXCHANGE_RATE;
-  });
-
+  // Load currency settings from database
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_CURRENCY, currency);
-  }, [currency]);
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
+    const loadSettings = async () => {
+      const { data, error } = await supabase
+        .from("currency_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      if (data && !error) {
+        setCurrencyState(data.currency as "EUR" | "USD");
+        setExchangeRateState(data.exchange_rate);
+      }
+      setLoading(false);
+    };
+
+    loadSettings();
+  }, [user]);
+
+  // Save currency to database
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_EXCHANGE_RATE, exchangeRate.toString());
-  }, [exchangeRate]);
+    if (!user || loading) return;
+
+    const saveSettings = async () => {
+      await supabase
+        .from("currency_settings")
+        .update({ 
+          currency,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+    };
+
+    saveSettings();
+  }, [currency, user, loading]);
+
+  // Save exchange rate to database
+  useEffect(() => {
+    if (!user || loading) return;
+
+    const saveSettings = async () => {
+      await supabase
+        .from("currency_settings")
+        .update({ 
+          exchange_rate: exchangeRate,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user.id);
+    };
+
+    saveSettings();
+  }, [exchangeRate, user, loading]);
 
   const setCurrency = (newCurrency: "EUR" | "USD") => {
     setCurrencyState(newCurrency);
@@ -70,6 +116,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         setExchangeRate,
         formatCurrency,
         convertToDisplayCurrency,
+        loading,
       }}
     >
       {children}
