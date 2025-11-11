@@ -180,6 +180,15 @@ const XeroIntegration = () => {
                   <li>Client Secret</li>
                   <li>Tenant ID (Organization ID)</li>
                 </ul>
+                <div className="mt-3 p-3 bg-muted rounded-md">
+                  <p className="text-sm font-medium mb-1">How to find your Tenant ID:</p>
+                  <ol className="ml-4 list-decimal text-xs space-y-1">
+                    <li>Go to the Xero Developer Portal and create/select your app</li>
+                    <li>After authentication, make a GET request to: <code className="bg-background px-1 py-0.5 rounded">https://api.xero.com/connections</code></li>
+                    <li>The response will include your <code className="bg-background px-1 py-0.5 rounded">tenantId</code> for each connected organization</li>
+                    <li>Alternatively, use the OAuth 2.0 flow and the tenant ID will be in the connection response</li>
+                  </ol>
+                </div>
                 <Button 
                   variant="link" 
                   className="p-0 h-auto mt-2 text-sm font-normal"

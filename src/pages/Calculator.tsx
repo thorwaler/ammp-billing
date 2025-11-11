@@ -3,8 +3,11 @@ import Layout from "@/components/layout/Layout";
 import InvoiceCalculator from "@/components/dashboard/InvoiceCalculator";
 import { Calculator as CalculatorIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const Calculator = () => {
+  const { formatCurrency } = useCurrency();
+  
   return (
     <Layout>
       <div className="flex flex-col gap-6">
@@ -38,15 +41,15 @@ const Calculator = () => {
                 <div className="space-y-2 text-sm">
                   <p className="flex justify-between">
                     <span>Base price per MWp:</span>
-                    <span className="font-medium">$500</span>
+                    <span className="font-medium">{formatCurrency(500)}</span>
                   </p>
                   <p className="flex justify-between">
                     <span>Add-on price per service:</span>
-                    <span className="font-medium">$250</span>
+                    <span className="font-medium">{formatCurrency(250)}</span>
                   </p>
                   <p className="flex justify-between">
                     <span>MW management fee per MW:</span>
-                    <span className="font-medium">$100</span>
+                    <span className="font-medium">{formatCurrency(100)}</span>
                   </p>
                 </div>
                 

@@ -10,13 +10,14 @@ import { Users, FileText, BarChart4, DollarSign, PlusCircle } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const customers = [
   {
     id: "cust-001",  // Added id property
     name: "Solar Universe Inc.",
     location: "California, USA",
-    contractValue: "$45,000/MWp",
+    contractValueUSD: 45000,
     mwpManaged: 42.5,
     status: "active" as const,
     addOns: ["Monitoring", "Analytics"],
@@ -25,7 +26,7 @@ const customers = [
     id: "cust-002",  // Added id property
     name: "GreenPower Systems",
     location: "Texas, USA",
-    contractValue: "$42,500/MWp",
+    contractValueUSD: 42500,
     mwpManaged: 35.2,
     status: "active" as const,
     addOns: ["Monitoring", "Maintenance"],
@@ -59,6 +60,7 @@ const getCurrentQuarterRange = () => {
 const Index = () => {
   const navigate = useNavigate();
   const quarterRange = getCurrentQuarterRange();
+  const { formatCurrency, convertToDisplayCurrency } = useCurrency();
   
   const handleAddContract = () => {
     navigate("/contracts");
@@ -103,7 +105,7 @@ const Index = () => {
           />
           <StatCard
             title="Quarterly Revenue"
-            value="$32,450"
+            value={formatCurrency(convertToDisplayCurrency(32450))}
             icon={DollarSign}
             trend="up"
             trendValue="+8% vs last quarter"
@@ -155,7 +157,11 @@ const Index = () => {
               <h2 className="text-xl font-semibold mb-4">Key Customers</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {customers.map((customer) => (
-                  <CustomerCard key={customer.name} {...customer} />
+                  <CustomerCard 
+                    key={customer.name} 
+                    {...customer}
+                    contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValueUSD))}/MWp`}
+                  />
                 ))}
               </div>
             </div>

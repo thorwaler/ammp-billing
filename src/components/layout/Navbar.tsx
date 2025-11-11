@@ -3,6 +3,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Sun, Moon, Menu } from 'lucide-react';
+import { CurrencySwitcher } from "@/components/ui/currency-switcher";
 
 interface NavbarProps {
   toggleSidebar: () => void;
@@ -23,6 +24,7 @@ const Navbar = ({ toggleSidebar }: NavbarProps) => {
           </Link>
         </div>
         <div className="flex items-center gap-4">
+          <CurrencySwitcher />
           <Button variant="outline" size="icon" className="rounded-full">
             <Sun className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all" />
             <Moon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all" />
@@ -35,3 +37,4 @@ const Navbar = ({ toggleSidebar }: NavbarProps) => {
 };
 
 export default Navbar;
+

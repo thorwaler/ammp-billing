@@ -24,34 +24,48 @@ import {
   Pie,
   Cell
 } from 'recharts';
-
-const monthlyData = [
-  { name: 'Jan', revenue: 12000 },
-  { name: 'Feb', revenue: 15000 },
-  { name: 'Mar', revenue: 18000 },
-  { name: 'Apr', revenue: 16500 },
-  { name: 'May', revenue: 22000 },
-  { name: 'Jun', revenue: 28000 },
-  { name: 'Jul', revenue: 32000 },
-];
-
-const customerGrowthData = [
-  { name: 'Q1', customers: 6 },
-  { name: 'Q2', customers: 8 },
-  { name: 'Q3', customers: 10 },
-  { name: 'Q4', customers: 12 },
-];
-
-const addOnDistributionData = [
-  { name: 'Monitoring', value: 12 },
-  { name: 'Analytics', value: 8 },
-  { name: 'Reporting', value: 6 },
-  { name: 'Maintenance', value: 4 },
-];
-
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const Reports = () => {
+  const { formatCurrency, convertToDisplayCurrency } = useCurrency();
+  
+  const monthlyData = [
+    { name: 'Jan', revenue: convertToDisplayCurrency(12000) },
+    { name: 'Feb', revenue: convertToDisplayCurrency(15000) },
+    { name: 'Mar', revenue: convertToDisplayCurrency(18000) },
+    { name: 'Apr', revenue: convertToDisplayCurrency(16500) },
+    { name: 'May', revenue: convertToDisplayCurrency(22000) },
+    { name: 'Jun', revenue: convertToDisplayCurrency(28000) },
+    { name: 'Jul', revenue: convertToDisplayCurrency(32000) },
+  ];
+  
+  const customerGrowthData = [
+    { name: 'Q1', customers: 6 },
+    { name: 'Q2', customers: 8 },
+    { name: 'Q3', customers: 10 },
+    { name: 'Q4', customers: 12 },
+  ];
+  
+  const addOnDistributionData = [
+    { name: 'Monitoring', value: 12 },
+    { name: 'Analytics', value: 8 },
+    { name: 'Reporting', value: 6 },
+    { name: 'Maintenance', value: 4 },
+  ];
+  
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+  
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-background border rounded p-2">
+          <p className="text-sm">{`${payload[0].name}: ${formatCurrency(payload[0].value)}`}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <Layout>
       <div className="flex flex-col gap-6">
@@ -92,9 +106,7 @@ const Reports = () => {
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
-                    <Tooltip 
-                      formatter={(value) => [`$${value}`, 'Revenue']}
-                    />
+                    <Tooltip content={<CustomTooltip />} />
                     <Legend />
                     <Bar dataKey="revenue" fill="#0F4C81" />
                   </BarChart>

@@ -18,6 +18,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 interface Module {
   id: string;
@@ -236,6 +237,7 @@ export function InvoiceCalculator() {
   const [showResult, setShowResult] = useState(false);
   const [billingFrequency, setBillingFrequency] = useState<"quarterly" | "biannual" | "annual">("annual");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(new Date());
+  const { formatCurrency } = useCurrency();
 
   // Update modules and addons when a customer is selected
   useEffect(() => {
@@ -627,7 +629,7 @@ export function InvoiceCalculator() {
                         >
                           {module.name}
                         </Label>
-                        <span className="text-sm">
+                         <span className="text-sm">
                           ${selectedCustomer.customPricing?.[module.id] || module.price}/MWp
                         </span>
                       </div>
@@ -724,7 +726,7 @@ export function InvoiceCalculator() {
               <div className="space-y-1 text-sm mb-3">
                 <div className="flex justify-between">
                   <span>AMMP OS Starter Package:</span>
-                  <span>${result.starterPackageCost.toLocaleString()}</span>
+                  <span>{formatCurrency(result.starterPackageCost)}</span>
                 </div>
               </div>
             )}
@@ -736,7 +738,7 @@ export function InvoiceCalculator() {
                   {result.moduleCosts.map((item) => (
                     <div key={item.moduleId} className="flex justify-between">
                       <span>{item.moduleName}:</span>
-                      <span>${item.cost.toLocaleString()}</span>
+                      <span>{formatCurrency(item.cost)}</span>
                     </div>
                   ))}
                 </div>
@@ -744,7 +746,7 @@ export function InvoiceCalculator() {
                 {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < 5000 * getFrequencyMultiplier() && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Package Cost Applied:</span>
-                    <span>${(5000 * getFrequencyMultiplier()).toLocaleString()}</span>
+                    <span>{formatCurrency(5000 * getFrequencyMultiplier())}</span>
                   </div>
                 )}
               </div>
@@ -757,7 +759,7 @@ export function InvoiceCalculator() {
                   {result.addonCosts.map((item) => (
                     <div key={item.addonId} className="flex justify-between">
                       <span>{item.addonName}:</span>
-                      <span>${item.cost.toLocaleString()}</span>
+                      <span>{formatCurrency(item.cost)}</span>
                     </div>
                   ))}
                 </div>
@@ -768,7 +770,7 @@ export function InvoiceCalculator() {
               <div className="space-y-1 text-sm mb-3">
                 <div className="flex justify-between">
                   <span>Minimum Charges ({sitesUnderThreshold} sites):</span>
-                  <span>${result.minimumCharges.toLocaleString()}</span>
+                  <span>{formatCurrency(result.minimumCharges)}</span>
                 </div>
               </div>
             )}
@@ -777,7 +779,7 @@ export function InvoiceCalculator() {
             
             <div className="flex justify-between font-medium">
               <span>Total Invoice Amount:</span>
-              <span>${result.totalPrice.toLocaleString()}</span>
+              <span>{formatCurrency(result.totalPrice)}</span>
             </div>
             
             <Button 

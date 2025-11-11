@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { PlusCircle, Search, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import CustomerForm from "@/components/customers/CustomerForm";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const customersData = [
   {
     id: "cust-001",
     name: "Solar Universe Inc.",
     location: "California, USA",
-    contractValue: "$45,000/MWp",
+    contractValueUSD: 45000,
     mwpManaged: 42.5,
     status: "active" as const,
     addOns: ["Monitoring", "Analytics"],
@@ -26,7 +27,7 @@ const customersData = [
     id: "cust-002",
     name: "GreenPower Systems",
     location: "Texas, USA",
-    contractValue: "$42,500/MWp",
+    contractValueUSD: 42500,
     mwpManaged: 35.2,
     status: "active" as const,
     addOns: ["Monitoring", "Maintenance"],
@@ -38,7 +39,7 @@ const customersData = [
     id: "cust-003",
     name: "Solaris Energy",
     location: "Arizona, USA",
-    contractValue: "$48,000/MWp",
+    contractValueUSD: 48000,
     mwpManaged: 28.7,
     status: "pending" as const,
     addOns: ["Monitoring", "Analytics", "Reporting"],
@@ -50,7 +51,7 @@ const customersData = [
     id: "cust-004",
     name: "SunPeak Solar",
     location: "Nevada, USA",
-    contractValue: "$40,000/MWp",
+    contractValueUSD: 40000,
     mwpManaged: 22.3,
     status: "active" as const,
     addOns: ["Monitoring"],
@@ -62,7 +63,7 @@ const customersData = [
     id: "cust-005",
     name: "EcoSun Power",
     location: "New Mexico, USA",
-    contractValue: "$43,500/MWp",
+    contractValueUSD: 43500,
     mwpManaged: 18.9,
     status: "inactive" as const,
     addOns: ["Monitoring"],
@@ -74,7 +75,7 @@ const customersData = [
     id: "cust-006",
     name: "EnergySun Group",
     location: "Florida, USA",
-    contractValue: "$46,000/MWp",
+    contractValueUSD: 46000,
     mwpManaged: 15.4,
     status: "active" as const,
     addOns: ["Monitoring", "Analytics", "Maintenance"],
@@ -88,6 +89,7 @@ const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
   const navigate = useNavigate();
+  const { formatCurrency, convertToDisplayCurrency } = useCurrency();
 
   const filteredCustomers = customersData.filter(
     (customer) =>
@@ -138,7 +140,8 @@ const Customers = () => {
           {filteredCustomers.map((customer) => (
             <CustomerCard 
               key={customer.id} 
-              {...customer} 
+              {...customer}
+              contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValueUSD))}/MWp`}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)} 
               onViewDetails={() => navigate(`/customers/${customer.id}`)} 
             />
