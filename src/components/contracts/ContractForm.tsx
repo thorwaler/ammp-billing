@@ -373,12 +373,15 @@ export function ContractForm() {
                       </span>
                     </div>
                     
-                    {showCustomPricing && watchModules?.includes(module.id) && (
+                    {watchModules?.includes(module.id) && (
                       <div className="mt-2 pl-6">
-                        <Label htmlFor={`custom-${module.id}`} className="text-xs">Custom Price ($/MWp/year)</Label>
+                        <Label htmlFor={`custom-${module.id}`} className="text-xs">
+                          {showCustomPricing ? "Custom Price ($/MWp/year)" : "Override Price ($/MWp/year)"}
+                        </Label>
                         <Input 
                           id={`custom-${module.id}`} 
                           type="number" 
+                          placeholder={`Default: $${module.price}`}
                           className="mt-1 h-8"
                           {...form.register(`customPricing.${module.id}` as any, { valueAsNumber: true })}
                         />
