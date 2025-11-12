@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calculator, Send, ArrowRight, CalendarIcon } from "lucide-react";
+import { Calculator, Send, ArrowRight, CalendarIcon, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
@@ -19,6 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface Module {
   id: string;
@@ -237,6 +238,7 @@ export function InvoiceCalculator() {
   const [showResult, setShowResult] = useState(false);
   const [billingFrequency, setBillingFrequency] = useState<"quarterly" | "biannual" | "annual">("annual");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(new Date());
+  const [isSending, setIsSending] = useState(false);
   const { formatCurrency } = useCurrency();
 
   // Update modules and addons when a customer is selected
@@ -393,29 +395,92 @@ export function InvoiceCalculator() {
     setShowResult(true);
   };
 
-  const handleSendToXero = () => {
-    if (!result) return;
+  const handleSendToXero = async () => {
+    if (!result || !selectedCustomer || !invoiceDate) return;
     
-    toast({
-      title: "Invoice data sent to Xero",
-      description: "The invoice data has been sent to Xero for processing.",
-    });
+    setIsSending(true);
     
-    // Reset form after "sending"
-    setTimeout(() => {
-      setCustomer("");
-      setNewSystems("");
-      setMwManaged("");
-      setSites("");
-      setSitesUnderThreshold("");
-      setModules(defaultModules);
-      setAddons(defaultAddons);
-      setSelectedCustomer(null);
-      setResult(null);
-      setShowResult(false);
-      setInvoiceDate(new Date());
-      setBillingFrequency("annual");
-    }, 2000);
+    try {
+      // Format invoice data for Xero API
+      const lineItems = [
+        ...result.moduleCosts.map(mc => ({
+          Description: mc.moduleName,
+          Quantity: 1,
+          UnitAmount: mc.cost,
+          AccountCode: "200" // Revenue account
+        })),
+        ...result.addonCosts.map(ac => ({
+          Description: ac.addonName,
+          Quantity: 1,
+          UnitAmount: ac.cost,
+          AccountCode: "200"
+        }))
+      ];
+      
+      if (result.starterPackageCost > 0) {
+        lineItems.unshift({
+          Description: "AMMP OS Starter Package",
+          Quantity: 1,
+          UnitAmount: result.starterPackageCost,
+          AccountCode: "200"
+        });
+      }
+      
+      if (result.minimumCharges > 0) {
+        lineItems.push({
+          Description: `Minimum Charges (${sitesUnderThreshold} sites)`,
+          Quantity: 1,
+          UnitAmount: result.minimumCharges,
+          AccountCode: "200"
+        });
+      }
+      
+      const xeroInvoice = {
+        Type: "ACCREC",
+        Contact: { Name: selectedCustomer.name },
+        Date: format(invoiceDate, "yyyy-MM-dd"),
+        DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), // 30 days from invoice date
+        LineItems: lineItems,
+        Reference: `${billingFrequency.toUpperCase()}-${format(invoiceDate, "yyyyMMdd")}`,
+        Status: "DRAFT"
+      };
+      
+      const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
+        body: { invoice: xeroInvoice }
+      });
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Invoice sent to Xero",
+        description: "The invoice has been created in Xero as a draft.",
+      });
+      
+      // Reset form
+      setTimeout(() => {
+        setCustomer("");
+        setNewSystems("");
+        setMwManaged("");
+        setSites("");
+        setSitesUnderThreshold("");
+        setModules(defaultModules);
+        setAddons(defaultAddons);
+        setSelectedCustomer(null);
+        setResult(null);
+        setShowResult(false);
+        setInvoiceDate(new Date());
+        setBillingFrequency("annual");
+      }, 2000);
+    } catch (error) {
+      console.error('Error sending invoice to Xero:', error);
+      toast({
+        title: "Failed to send invoice",
+        description: error instanceof Error ? error.message : "Please check your Xero connection and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleModuleToggle = (moduleId: string) => {
@@ -785,9 +850,19 @@ export function InvoiceCalculator() {
             <Button 
               className="w-full mt-4" 
               onClick={handleSendToXero}
+              disabled={isSending}
             >
-              <Send className="mr-2 h-4 w-4" />
-              Send to Xero
+              {isSending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="mr-2 h-4 w-4" />
+                  Send to Xero
+                </>
+              )}
             </Button>
           </div>
         )}

@@ -30,18 +30,8 @@ Deno.serve(async (req) => {
     const clientId = Deno.env.get('XERO_CLIENT_ID');
     const redirectUri = `${req.headers.get('origin')}/integrations?xero_callback=true`;
     
-    // Store state in session to verify callback
+    // Generate state for OAuth security
     const state = crypto.randomUUID();
-    
-    // Store state temporarily (you might want to use a more robust solution)
-    await supabase.from('xero_connections').upsert({
-      user_id: user.id,
-      tenant_id: state, // Temporary storage of state
-      access_token: '',
-      refresh_token: '',
-      expires_at: new Date(Date.now() + 3600000).toISOString(),
-      is_enabled: false,
-    }, { onConflict: 'user_id' });
 
     const authUrl = `https://login.xero.com/identity/connect/authorize?` +
       `response_type=code&` +
@@ -49,6 +39,8 @@ Deno.serve(async (req) => {
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
       `scope=offline_access accounting.transactions accounting.contacts&` +
       `state=${state}`;
+
+    console.log('Xero OAuth init for user:', user.id);
 
     return new Response(
       JSON.stringify({ authUrl, state }),

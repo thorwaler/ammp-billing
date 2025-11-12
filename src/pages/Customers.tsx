@@ -5,10 +5,12 @@ import Layout from "@/components/layout/Layout";
 import CustomerCard from "@/components/customers/CustomerCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Search, Users } from "lucide-react";
+import { PlusCircle, Search, Users, RefreshCw, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import CustomerForm from "@/components/customers/CustomerForm";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 const customersData = [
   {
@@ -88,8 +90,38 @@ const customersData = [
 const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const navigate = useNavigate();
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
+  
+  const handleSyncFromXero = async () => {
+    setIsSyncing(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('xero-sync-customers');
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Sync complete",
+        description: `Successfully synced ${data.syncedCount} customers from Xero.`,
+      });
+      
+      // Reload the page to show updated customers
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error('Error syncing customers:', error);
+      toast({
+        title: "Sync failed",
+        description: error instanceof Error ? error.message : "Please check your Xero connection and try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const filteredCustomers = customersData.filter(
     (customer) =>
@@ -110,20 +142,35 @@ const Customers = () => {
               Manage your customer portfolio and contracts
             </p>
           </div>
-          <Dialog open={showAddCustomerForm} onOpenChange={setShowAddCustomerForm}>
-            <DialogTrigger asChild>
-              <Button>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add Customer
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Add New Customer</DialogTitle>
-              </DialogHeader>
-              <CustomerForm onComplete={() => setShowAddCustomerForm(false)} />
-            </DialogContent>
-          </Dialog>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleSyncFromXero} disabled={isSyncing}>
+              {isSyncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Sync from Xero
+                </>
+              )}
+            </Button>
+            <Dialog open={showAddCustomerForm} onOpenChange={setShowAddCustomerForm}>
+              <DialogTrigger asChild>
+                <Button>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add Customer
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Add New Customer</DialogTitle>
+                </DialogHeader>
+                <CustomerForm onComplete={() => setShowAddCustomerForm(false)} />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <div className="relative">
