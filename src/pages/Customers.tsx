@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PlusCircle, Search, Users, RefreshCw, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import CustomerForm from "@/components/customers/CustomerForm";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +31,7 @@ const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [customersData, setCustomersData] = useState<CustomerData[]>([]);
   const navigate = useNavigate();
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
@@ -88,6 +90,39 @@ const Customers = () => {
     loadCustomers();
   }, []);
   
+  const handleClearAllCustomers = async () => {
+    setIsClearing(true);
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('customers')
+        .delete()
+        .eq('user_id', user.id);
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Customers cleared",
+        description: "All customers have been removed from your database.",
+      });
+      
+      // Reload customers
+      setCustomersData([]);
+    } catch (error) {
+      console.error('Error clearing customers:', error);
+      toast({
+        title: "Clear failed",
+        description: error instanceof Error ? error.message : "Failed to clear customers.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const handleSyncFromXero = async () => {
     setIsSyncing(true);
     
@@ -98,7 +133,7 @@ const Customers = () => {
       
       toast({
         title: "Sync complete",
-        description: `Successfully synced ${data.syncedCount} customers from Xero.`,
+        description: `Successfully synced ${data.syncedCount} customers from Xero. ${data.skippedCount ? `Skipped ${data.skippedCount} suppliers.` : ''}`,
       });
       
       // Reload the page to show updated customers
@@ -137,6 +172,35 @@ const Customers = () => {
             </p>
           </div>
           <div className="flex gap-2">
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" disabled={isClearing || customersData.length === 0}>
+                  {isClearing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Clearing...
+                    </>
+                  ) : (
+                    'Clear All Customers'
+                  )}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete all {customersData.length} customers from your database. 
+                    This action cannot be undone. You can re-sync from Xero afterwards.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleClearAllCustomers}>
+                    Delete All Customers
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
             <Button variant="outline" onClick={handleSyncFromXero} disabled={isSyncing}>
               {isSyncing ? (
                 <>
