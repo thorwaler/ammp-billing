@@ -5,6 +5,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Helper function to parse Xero's .NET JSON date format
+function parseXeroDate(dateString: string | null | undefined): string {
+  if (!dateString) return new Date().toISOString();
+  
+  // Xero returns dates in format: "/Date(1762202102240+0000)/"
+  const match = dateString.match(/\/Date\((\d+)([\+\-]\d{4})?\)\//);
+  if (match) {
+    const timestamp = parseInt(match[1]);
+    return new Date(timestamp).toISOString();
+  }
+  
+  // If not in expected format, try parsing as regular date or return current date
+  try {
+    return new Date(dateString).toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 async function getValidAccessToken(supabase: any, userId: string) {
   const { data: connection } = await supabase
     .from('xero_connections')
@@ -113,7 +132,7 @@ Deno.serve(async (req) => {
           location: contact.Addresses?.[0]?.City || null,
           mwp_managed: 0, // Default value, can be updated manually
           status: contact.ContactStatus === 'ACTIVE' ? 'active' : 'inactive',
-          join_date: contact.UpdatedDateUTC || new Date().toISOString(),
+          join_date: parseXeroDate(contact.UpdatedDateUTC),
         };
 
         // Check if customer already exists by name
