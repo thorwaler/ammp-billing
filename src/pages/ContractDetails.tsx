@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,40 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { FileText, Download, Edit, Clock, Calculator } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
 import { toast } from "@/hooks/use-toast";
-
-// Mock data for contracts
-const mockContracts = [
-  {
-    id: "1",
-    companyName: "Solar Universe Inc.",
-    createdAt: "2023-05-15T10:30:00Z",
-    updatedAt: "2023-09-10T14:20:00Z",
-    package: "pro",
-    initialMW: 35,
-    currentMW: 42.5,
-    modules: ["technicalMonitoring", "energySavingsHub"],
-    addons: ["customKPIs", "tmCustomDashboards"],
-    contractFile: "solar_universe_contract.pdf",
-    status: "active",
-    expiresAt: "2024-05-15T10:30:00Z",
-    minimumCharge: 100
-  },
-  {
-    id: "2",
-    companyName: "GreenPower Systems",
-    createdAt: "2023-06-20T09:15:00Z",
-    updatedAt: "2023-06-20T09:15:00Z",
-    package: "starter",
-    initialMW: 4.8,
-    currentMW: 4.8,
-    modules: ["technicalMonitoring"],
-    addons: [],
-    contractFile: "greenpower_contract.pdf",
-    status: "active",
-    expiresAt: "2024-06-20T09:15:00Z",
-    minimumCharge: null
-  }
-];
+import { supabase } from "@/integrations/supabase/client";
 
 // Helper function to map module IDs to names
 const moduleNames: {[key: string]: string} = {
@@ -81,27 +48,82 @@ const formatDate = (dateString: string) => {
 
 const ContractDetails = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [contract, setContract] = useState<any>(null);
+  const [customer, setCustomer] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
 
   useEffect(() => {
-    // Simulate API call to fetch contract details
-    setLoading(true);
-    try {
-      const foundContract = mockContracts.find(c => c.id === id);
+    const loadContractDetails = async () => {
+      setLoading(true);
+      setError(null);
       
-      if (foundContract) {
-        setContract(foundContract);
-      } else {
-        setError("Contract not found");
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          setError("Please log in to view contract details");
+          setLoading(false);
+          return;
+        }
+
+        // First, try to fetch as a contract ID
+        const { data: contractData, error: contractError } = await supabase
+          .from('contracts')
+          .select(`
+            *,
+            customers (
+              id,
+              name,
+              location,
+              mwp_managed,
+              status
+            )
+          `)
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .single();
+
+        if (contractData && !contractError) {
+          setContract(contractData);
+          setCustomer(contractData.customers);
+          setLoading(false);
+          return;
+        }
+
+        // If not found as contract, try as customer ID
+        const { data: customerData, error: customerError } = await supabase
+          .from('customers')
+          .select(`
+            *,
+            contracts (*)
+          `)
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .single();
+
+        if (customerData && !customerError) {
+          setCustomer(customerData);
+          const contractRecord = customerData.contracts?.[0];
+          
+          if (contractRecord) {
+            setContract(contractRecord);
+          } else {
+            setError("This customer doesn't have a contract yet. Please set up a contract first.");
+          }
+        } else {
+          setError("Contract or customer not found");
+        }
+      } catch (err) {
+        console.error('Error loading contract details:', err);
+        setError("Failed to load contract details");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      setError("Failed to load contract details");
-    } finally {
-      setLoading(false);
-    }
+    };
+
+    loadContractDetails();
   }, [id]);
 
   const handleDownloadContract = () => {
@@ -140,17 +162,25 @@ const ContractDetails = () => {
         <div className="text-center py-10">
           <h2 className="text-2xl font-bold text-destructive">Error</h2>
           <p className="text-muted-foreground mt-2">{error || "Contract not found"}</p>
-          <Button className="mt-4" onClick={() => window.history.back()}>
-            Go Back
-          </Button>
+          <div className="flex gap-2 justify-center mt-4">
+            <Button variant="outline" onClick={() => navigate('/customers')}>
+              Back to Customers
+            </Button>
+            {customer && !contract && (
+              <Button onClick={() => navigate('/customers')}>
+                Setup Contract
+              </Button>
+            )}
+          </div>
         </div>
       </Layout>
     );
   }
 
   const daysUntilExpiration = () => {
+    if (!contract.next_invoice_date) return null;
     const today = new Date();
-    const expiration = new Date(contract.expiresAt);
+    const expiration = new Date(contract.next_invoice_date);
     const diffTime = expiration.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -158,11 +188,14 @@ const ContractDetails = () => {
 
   const expirationStatus = () => {
     const days = daysUntilExpiration();
+    if (days === null) return { label: "No expiration set", variant: "secondary" };
     if (days < 0) return { label: "Expired", variant: "destructive" };
     if (days < 30) return { label: `Expires in ${days} days`, variant: "destructive" };
     if (days < 90) return { label: `Expires in ${days} days`, variant: "warning" };
     return { label: `Expires in ${days} days`, variant: "default" };
   };
+
+  const companyName = customer?.name || contract.company_name || "Unknown Company";
 
   return (
     <Layout>
@@ -171,10 +204,11 @@ const ContractDetails = () => {
           <div>
             <div className="flex items-center">
               <FileText className="h-8 w-8 mr-2 text-ammp-blue" />
-              <h1 className="text-3xl font-bold tracking-tight">{contract.companyName}</h1>
+              <h1 className="text-3xl font-bold tracking-tight">{companyName}</h1>
             </div>
             <p className="text-muted-foreground mt-1">
-              Contract ID: {contract.id}
+              {customer?.location && <span>{customer.location} • </span>}
+              Contract ID: {contract.id.substring(0, 8)}
             </p>
           </div>
           
@@ -191,11 +225,22 @@ const ContractDetails = () => {
                   Edit
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Edit Contract - {contract.companyName}</DialogTitle>
+                  <DialogTitle>Edit Contract - {companyName}</DialogTitle>
                 </DialogHeader>
-                <ContractForm />
+                <ContractForm 
+                  existingCustomer={customer ? {
+                    id: customer.id,
+                    name: customer.name,
+                    location: customer.location,
+                    mwpManaged: customer.mwp_managed
+                  } : undefined}
+                  existingContractId={contract.id}
+                  onComplete={() => {
+                    window.location.reload();
+                  }}
+                />
               </DialogContent>
             </Dialog>
             
@@ -247,28 +292,28 @@ const ContractDetails = () => {
                 
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Initial MW</p>
-                  <p className="font-medium">{contract.initialMW} MWp</p>
+                  <p className="font-medium">{contract.initial_mw} MWp</p>
                 </div>
                 
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Current MW</p>
-                  <p className="font-medium">{contract.currentMW} MWp</p>
+                  <p className="font-medium">{customer?.mwp_managed || contract.initial_mw} MWp</p>
                 </div>
                 
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Created Date</p>
-                  <p className="font-medium">{formatDate(contract.createdAt)}</p>
+                  <p className="font-medium">{formatDate(contract.created_at)}</p>
                 </div>
                 
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Last Updated</p>
-                  <p className="font-medium">{formatDate(contract.updatedAt)}</p>
+                  <p className="font-medium">{formatDate(contract.updated_at)}</p>
                 </div>
                 
-                {contract.minimumCharge && (
+                {contract.minimum_charge && contract.minimum_charge > 0 && (
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Minimum Charge per Site</p>
-                    <p className="font-medium">${contract.minimumCharge}</p>
+                    <p className="font-medium">${contract.minimum_charge}</p>
                   </div>
                 )}
               </div>
@@ -278,7 +323,7 @@ const ContractDetails = () => {
               <div>
                 <h3 className="font-medium mb-3">Modules</h3>
                 <div className="flex flex-wrap gap-2">
-                  {contract.modules.map((moduleId: string) => (
+                  {(contract.modules || []).map((moduleId: string) => (
                     <Badge key={moduleId} variant="outline" className="bg-blue-50">
                       {moduleNames[moduleId] || moduleId}
                     </Badge>
@@ -286,15 +331,19 @@ const ContractDetails = () => {
                 </div>
               </div>
               
-              {contract.addons.length > 0 && (
+              {contract.addons && contract.addons.length > 0 && (
                 <div>
                   <h3 className="font-medium mb-3">Add-ons</h3>
                   <div className="flex flex-wrap gap-2">
-                    {contract.addons.map((addonId: string) => (
-                      <Badge key={addonId} variant="outline" className="bg-green-50">
-                        {addonNames[addonId] || addonId}
-                      </Badge>
-                    ))}
+                    {contract.addons.map((addon: any) => {
+                      const addonId = typeof addon === 'string' ? addon : addon.id;
+                      return (
+                        <Badge key={addonId} variant="outline" className="bg-green-50">
+                          {addonNames[addonId] || addonId}
+                          {addon.complexity && <span className="ml-1 text-xs">({addon.complexity})</span>}
+                        </Badge>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -316,16 +365,25 @@ const ContractDetails = () => {
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Per MWp Cost</p>
                     <div className="space-y-2">
-                      {contract.modules.map((moduleId: string) => (
-                        <div key={moduleId} className="flex justify-between">
-                          <span className="text-sm">{moduleNames[moduleId] || moduleId}:</span>
-                          <span className="font-medium">
-                            ${moduleId === "technicalMonitoring" ? "1,000" : 
-                             moduleId === "energySavingsHub" ? "500" : 
-                             moduleId === "stakeholderPortal" ? "250" : "500"}/MWp/year
-                          </span>
-                        </div>
-                      ))}
+                      {(contract.modules || []).map((moduleId: string) => {
+                        const customPrice = contract.custom_pricing?.[moduleId];
+                        const defaultPrices: {[key: string]: number} = {
+                          technicalMonitoring: 1000,
+                          energySavingsHub: 500,
+                          stakeholderPortal: 250,
+                          control: 500
+                        };
+                        const price = customPrice || defaultPrices[moduleId] || 0;
+                        
+                        return (
+                          <div key={moduleId} className="flex justify-between">
+                            <span className="text-sm">{moduleNames[moduleId] || moduleId}:</span>
+                            <span className="font-medium">
+                              ${price.toLocaleString()}/MWp/year
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                   
@@ -335,14 +393,15 @@ const ContractDetails = () => {
                     <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
                     {contract.package === "pro" ? (
                       <p className="font-medium">
-                        ${Math.max(5000, contract.currentMW * contract.modules.reduce((sum: number, moduleId: string) => {
-                          const modulePrices: {[key: string]: number} = {
+                        ${Math.max(5000, (customer?.mwp_managed || contract.initial_mw) * (contract.modules || []).reduce((sum: number, moduleId: string) => {
+                          const customPrice = contract.custom_pricing?.[moduleId];
+                          const defaultPrices: {[key: string]: number} = {
                             technicalMonitoring: 1000,
                             energySavingsHub: 500,
                             stakeholderPortal: 250,
                             control: 500
                           };
-                          return sum + (modulePrices[moduleId] || 0);
+                          return sum + (customPrice || defaultPrices[moduleId] || 0);
                         }, 0)).toLocaleString()}
                       </p>
                     ) : (
