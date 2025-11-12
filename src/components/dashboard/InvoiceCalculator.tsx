@@ -71,48 +71,6 @@ interface CalculationResult {
   totalPrice: number;
 }
 
-const mockCustomers: Customer[] = [
-  {
-    id: "solar-universe",
-    name: "Solar Universe Inc.",
-    package: 'pro',
-    mwManaged: 42.5,
-    sites: 15,
-    modules: ["technicalMonitoring", "energySavingsHub"],
-    addons: ["customKPIs", "tmCustomDashboards"]
-  },
-  {
-    id: "green-power",
-    name: "GreenPower Systems",
-    package: 'starter',
-    mwManaged: 4.8,
-    sites: 12,
-    modules: ["technicalMonitoring"],
-    addons: []
-  },
-  {
-    id: "solaris",
-    name: "Solaris Energy",
-    package: 'pro',
-    mwManaged: 28.7,
-    sites: 8,
-    modules: ["technicalMonitoring", "stakeholderPortal", "control"],
-    addons: ["customAPIIntegration", "spCustomDashboard"]
-  },
-  {
-    id: "ecosun",
-    name: "EcoSun Power",
-    package: 'custom',
-    mwManaged: 18.9,
-    sites: 6,
-    modules: ["technicalMonitoring", "energySavingsHub"],
-    addons: ["customKPIs", "eshCustomReport"],
-    customPricing: {
-      technicalMonitoring: 850,
-      energySavingsHub: 400
-    }
-  }
-];
 
 const defaultModules: Module[] = [
   { id: "technicalMonitoring", name: "Technical Monitoring", price: 1000, selected: false },
@@ -226,6 +184,7 @@ const defaultAddons: Addon[] = [
 ];
 
 export function InvoiceCalculator() {
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [customer, setCustomer] = useState("");
   const [newSystems, setNewSystems] = useState<number | "">("");
   const [mwManaged, setMwManaged] = useState<number | "">("");
@@ -241,10 +200,67 @@ export function InvoiceCalculator() {
   const [isSending, setIsSending] = useState(false);
   const { formatCurrency } = useCurrency();
 
+  // Load customers from database on mount
+  useEffect(() => {
+    const loadCustomers = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('customers')
+        .select(`
+          id,
+          name,
+          mwp_managed,
+          contracts (
+            id,
+            package,
+            modules,
+            addons,
+            custom_pricing,
+            minimum_charge
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('status', 'active');
+
+      if (error) {
+        console.error('Error loading customers:', error);
+        return;
+      }
+
+      // Transform to Customer format
+      const transformedCustomers: Customer[] = (data || [])
+        .filter(c => c.contracts && c.contracts.length > 0)
+        .map(c => {
+          const contract = c.contracts[0];
+          const modules = Array.isArray(contract.modules) ? contract.modules as string[] : [];
+          const addons = Array.isArray(contract.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
+          const customPricing = typeof contract.custom_pricing === 'object' && contract.custom_pricing !== null ? contract.custom_pricing as {[key: string]: number} : {};
+          
+          return {
+            id: c.id,
+            name: c.name,
+            package: contract.package as 'starter' | 'pro' | 'custom',
+            mwManaged: Number(c.mwp_managed) || 0,
+            sites: 0,
+            modules,
+            addons,
+            minimumCharge: Number(contract.minimum_charge) || 0,
+            customPricing
+          };
+        });
+
+      setCustomers(transformedCustomers);
+    };
+
+    loadCustomers();
+  }, []);
+
   // Update modules and addons when a customer is selected
   useEffect(() => {
     if (customer) {
-      const customerData = mockCustomers.find((c) => c.id === customer) || null;
+      const customerData = customers.find((c) => c.id === customer) || null;
       setSelectedCustomer(customerData);
       
       if (customerData) {
@@ -252,18 +268,21 @@ export function InvoiceCalculator() {
         setMwManaged(customerData.mwManaged);
         setSites(customerData.sites);
         
-        // Update modules based on customer selection
-        const updatedModules = defaultModules.map(module => ({
-          ...module,
-          selected: customerData.modules.includes(module.id)
-        }));
+        // Apply custom pricing to modules if available
+        const updatedModules = defaultModules.map(module => {
+          const customPrice = customerData.customPricing?.[module.id];
+          return {
+            ...module,
+            price: customPrice !== undefined ? customPrice : module.price,
+            selected: customerData.modules.includes(module.id)
+          };
+        });
         setModules(updatedModules);
         
         // Update addons based on customer selection
         const updatedAddons = defaultAddons.map(addon => ({
           ...addon,
           selected: customerData.addons.includes(addon.id),
-          // Set default complexity to 'low' (as a valid enum value, not a string)
           complexity: customerData.addons.includes(addon.id) && addon.complexityPricing ? 'low' as const : undefined
         }));
         setAddons(updatedAddons);
@@ -275,7 +294,7 @@ export function InvoiceCalculator() {
       setMwManaged("");
       setSites("");
     }
-  }, [customer]);
+  }, [customer, customers]);
 
   // Calculate frequency multiplier for billing
   const getFrequencyMultiplier = () => {
@@ -568,7 +587,7 @@ export function InvoiceCalculator() {
                 <SelectValue placeholder="Select customer" />
               </SelectTrigger>
               <SelectContent>
-                {mockCustomers.map((c) => (
+                {customers.map((c) => (
                   <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                 ))}
               </SelectContent>

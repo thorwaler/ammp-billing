@@ -135,43 +135,19 @@ Deno.serve(async (req) => {
           join_date: parseXeroDate(contact.UpdatedDateUTC),
         };
 
-        // Check if customer already exists by name
-        const { data: existingCustomer } = await supabase
+        // Upsert customer (create or update by name)
+        const { error: upsertError } = await supabase
           .from('customers')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('name', customerData.name)
-          .single();
+          .upsert(customerData, {
+            onConflict: 'name,user_id',
+            ignoreDuplicates: false
+          });
 
-        if (existingCustomer) {
-          // Update existing customer
-          const { error: updateError } = await supabase
-            .from('customers')
-            .update({
-              location: customerData.location,
-              status: customerData.status,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existingCustomer.id);
-
-          if (updateError) {
-            console.error(`Failed to update customer ${customerData.name}:`, updateError);
-            errorCount++;
-          } else {
-            syncedCount++;
-          }
+        if (upsertError) {
+          console.error(`Error upserting customer ${contact.Name}:`, upsertError);
+          errorCount++;
         } else {
-          // Insert new customer
-          const { error: insertError } = await supabase
-            .from('customers')
-            .insert(customerData);
-
-          if (insertError) {
-            console.error(`Failed to insert customer ${customerData.name}:`, insertError);
-            errorCount++;
-          } else {
-            syncedCount++;
-          }
+          syncedCount++;
         }
       } catch (err) {
         console.error('Error processing contact:', err);

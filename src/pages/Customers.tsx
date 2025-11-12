@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import CustomerCard from "@/components/customers/CustomerCard";
@@ -12,87 +12,81 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 
-const customersData = [
-  {
-    id: "cust-001",
-    name: "Solar Universe Inc.",
-    location: "California, USA",
-    contractValueUSD: 45000,
-    mwpManaged: 42.5,
-    status: "active" as const,
-    addOns: ["Monitoring", "Analytics"],
-    joinDate: "2023-05-15",
-    lastInvoiced: "2023-09-10",
-    contractId: "1"
-  },
-  {
-    id: "cust-002",
-    name: "GreenPower Systems",
-    location: "Texas, USA",
-    contractValueUSD: 42500,
-    mwpManaged: 35.2,
-    status: "active" as const,
-    addOns: ["Monitoring", "Maintenance"],
-    joinDate: "2023-06-20",
-    lastInvoiced: "2023-09-15",
-    contractId: "2"
-  },
-  {
-    id: "cust-003",
-    name: "Solaris Energy",
-    location: "Arizona, USA",
-    contractValueUSD: 48000,
-    mwpManaged: 28.7,
-    status: "pending" as const,
-    addOns: ["Monitoring", "Analytics", "Reporting"],
-    joinDate: "2023-07-08",
-    lastInvoiced: "2023-09-01",
-    contractId: "3"
-  },
-  {
-    id: "cust-004",
-    name: "SunPeak Solar",
-    location: "Nevada, USA",
-    contractValueUSD: 40000,
-    mwpManaged: 22.3,
-    status: "active" as const,
-    addOns: ["Monitoring"],
-    joinDate: "2023-04-30",
-    lastInvoiced: "2023-08-15",
-    contractId: "4"
-  },
-  {
-    id: "cust-005",
-    name: "EcoSun Power",
-    location: "New Mexico, USA",
-    contractValueUSD: 43500,
-    mwpManaged: 18.9,
-    status: "inactive" as const,
-    addOns: ["Monitoring"],
-    joinDate: "2022-11-10",
-    lastInvoiced: "2023-07-31",
-    contractId: "5"
-  },
-  {
-    id: "cust-006",
-    name: "EnergySun Group",
-    location: "Florida, USA",
-    contractValueUSD: 46000,
-    mwpManaged: 15.4,
-    status: "active" as const,
-    addOns: ["Monitoring", "Analytics", "Maintenance"],
-    joinDate: "2023-02-28",
-    lastInvoiced: "2023-08-28",
-    contractId: "6"
-  },
-];
+interface CustomerData {
+  id: string;
+  name: string;
+  location: string;
+  contractValueUSD: number;
+  mwpManaged: number;
+  status: "active" | "pending" | "inactive";
+  addOns: string[];
+  joinDate: string;
+  lastInvoiced: string;
+  contractId: string;
+}
+
 
 const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [customersData, setCustomersData] = useState<CustomerData[]>([]);
   const navigate = useNavigate();
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
+
+  // Load customers from database
+  useEffect(() => {
+    const loadCustomers = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('customers')
+        .select(`
+          id,
+          name,
+          location,
+          mwp_managed,
+          status,
+          join_date,
+          last_invoiced,
+          contracts (
+            id,
+            modules,
+            addons
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error loading customers:', error);
+        return;
+      }
+
+      const transformed: CustomerData[] = (data || []).map(c => {
+        const contract = c.contracts?.[0];
+        const modules = Array.isArray(contract?.modules) ? contract.modules as string[] : [];
+        const addons = Array.isArray(contract?.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
+        
+        return {
+          id: c.id,
+          name: c.name,
+          location: c.location || 'N/A',
+          contractValueUSD: 0, // Calculate from contract
+          mwpManaged: Number(c.mwp_managed) || 0,
+          status: (c.status || 'active') as "active" | "pending" | "inactive",
+          addOns: [...modules, ...addons],
+          joinDate: c.join_date || new Date().toISOString(),
+          lastInvoiced: c.last_invoiced || new Date().toISOString(),
+          contractId: contract?.id || ''
+        };
+      });
+
+      setCustomersData(transformed);
+    };
+
+    loadCustomers();
+  }, []);
   
   const handleSyncFromXero = async () => {
     setIsSyncing(true);

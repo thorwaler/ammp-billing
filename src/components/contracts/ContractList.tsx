@@ -1,6 +1,7 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Table,
   TableBody,
@@ -28,46 +29,59 @@ interface Contract {
   status: "active" | "pending" | "expired";
 }
 
-const contracts: Contract[] = [
-  {
-    id: "CON-001",
-    customer: "Solar Universe Inc.",
-    contractValue: "$45,000/MWp",
-    addOns: ["Monitoring", "Analytics"],
-    uploadDate: "2023-03-15",
-    status: "active",
-  },
-  {
-    id: "CON-002",
-    customer: "GreenPower Systems",
-    contractValue: "$42,500/MWp",
-    addOns: ["Monitoring", "Maintenance"],
-    uploadDate: "2023-04-02",
-    status: "active",
-  },
-  {
-    id: "CON-003",
-    customer: "Solaris Energy",
-    contractValue: "$48,000/MWp",
-    addOns: ["Monitoring", "Analytics", "Reporting"],
-    uploadDate: "2023-05-10",
-    status: "pending",
-  },
-  {
-    id: "CON-004",
-    customer: "SunPeak Solar",
-    contractValue: "$40,000/MWp",
-    addOns: ["Monitoring"],
-    uploadDate: "2022-11-20",
-    status: "expired",
-  },
-];
 
 export function ContractList() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showEditForm, setShowEditForm] = useState(false);
   const [selectedContract, setSelectedContract] = useState<Contract | null>(null);
+  const [contracts, setContracts] = useState<Contract[]>([]);
   const navigate = useNavigate();
+
+  // Load contracts from database
+  useEffect(() => {
+    const loadContracts = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('contracts')
+        .select(`
+          id,
+          company_name,
+          created_at,
+          contract_status,
+          modules,
+          addons,
+          customers (
+            name
+          )
+        `)
+        .eq('user_id', user.id);
+
+      if (error) {
+        console.error('Error loading contracts:', error);
+        return;
+      }
+
+      const transformed: Contract[] = (data || []).map(c => {
+        const modules = Array.isArray(c.modules) ? c.modules as string[] : [];
+        const addons = Array.isArray(c.addons) ? (c.addons as any[]).map((a: any) => a.id || a) : [];
+        
+        return {
+          id: c.id,
+          customer: c.company_name,
+          contractValue: "$0/MWp", // Calculate from modules
+          addOns: [...modules, ...addons],
+          uploadDate: c.created_at || new Date().toISOString(),
+          status: (c.contract_status || 'active') as "active" | "pending" | "expired"
+        };
+      });
+
+      setContracts(transformed);
+    };
+
+    loadContracts();
+  }, []);
 
   const filteredContracts = contracts.filter(
     (contract) =>

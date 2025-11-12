@@ -27,6 +27,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "@/hooks/use-toast";
 import { FileUp, Save } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 // Define the form schema
 const contractFormSchema = z.object({
@@ -266,26 +267,82 @@ export function ContractForm() {
     });
   };
 
-  const onSubmit = (data: ContractFormValues) => {
-    console.log("Form submitted", data);
-    
-    // Include complexity data in the submission
-    const enhancedData = {
-      ...data,
-      addonComplexity: selectedComplexityItems,
-    };
-    
-    toast({
-      title: "Contract created",
-      description: `Created contract for ${data.companyName}`,
-    });
-    
-    // Reset form
-    form.reset();
-    setSelectedComplexityItems({});
-    setSelectedPackage("");
-    setSelectedModules([]);
-    setShowCustomPricing(false);
+  const onSubmit = async (data: ContractFormValues) => {
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "Please log in to create contracts.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // 1. Create or update customer record
+      const { data: customer, error: customerError } = await supabase
+        .from('customers')
+        .upsert({
+          name: data.companyName,
+          mwp_managed: data.initialMW,
+          status: 'active',
+          user_id: user.id
+        })
+        .select()
+        .single();
+
+      if (customerError) throw customerError;
+
+      // 2. Prepare addons with complexity data
+      const enhancedAddons = (data.addons || []).map(addonId => {
+        const addon = addons.find(a => a.id === addonId);
+        return {
+          id: addonId,
+          complexity: addon?.complexityPricing ? selectedComplexityItems[addonId] || 'low' : undefined
+        };
+      });
+
+      // 3. Create contract record
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .upsert({
+          customer_id: customer.id,
+          company_name: data.companyName,
+          package: data.package,
+          initial_mw: data.initialMW,
+          modules: data.modules || [],
+          addons: enhancedAddons,
+          custom_pricing: data.customPricing || {},
+          volume_discounts: data.volumeDiscounts || {},
+          minimum_charge: data.minimumCharge || 0,
+          notes: data.notes || '',
+          billing_frequency: 'annual',
+          contract_status: 'active',
+          user_id: user.id
+        });
+
+      if (contractError) throw contractError;
+
+      toast({
+        title: "Contract created",
+        description: `Successfully created contract for ${data.companyName}`,
+      });
+
+      // Reset form
+      form.reset();
+      setSelectedComplexityItems({});
+      setSelectedPackage("");
+      setSelectedModules([]);
+      setShowCustomPricing(false);
+    } catch (error) {
+      console.error('Error creating contract:', error);
+      toast({
+        title: "Failed to create contract",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
