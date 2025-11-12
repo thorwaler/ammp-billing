@@ -21,6 +21,7 @@ const customers = [
     mwpManaged: 42.5,
     status: "active" as const,
     addOns: ["Monitoring", "Analytics"],
+    hasContract: true,
   },
   {
     id: "cust-002",  // Added id property
@@ -30,6 +31,7 @@ const customers = [
     mwpManaged: 35.2,
     status: "active" as const,
     addOns: ["Monitoring", "Maintenance"],
+    hasContract: true,
   },
 ];
 

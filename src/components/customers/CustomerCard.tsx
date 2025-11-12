@@ -2,11 +2,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, ExternalLink, BarChart, MoreHorizontal } from "lucide-react";
+import { FileText, BarChart, MoreHorizontal, CheckCircle2, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CustomerForm from "./CustomerForm";
+import ContractForm from "../contracts/ContractForm";
 
 interface CustomerCardProps {
   id: string;
@@ -19,8 +19,10 @@ interface CustomerCardProps {
   joinDate?: string;
   lastInvoiced?: string;
   contractId?: string;
+  hasContract: boolean;
   onViewContract?: () => void;
   onViewDetails?: () => void;
+  onContractCreated?: () => void;
 }
 
 export function CustomerCard({
@@ -34,10 +36,13 @@ export function CustomerCard({
   joinDate,
   lastInvoiced,
   contractId,
+  hasContract,
   onViewContract,
   onViewDetails,
+  onContractCreated,
 }: CustomerCardProps) {
   const [showEditForm, setShowEditForm] = useState(false);
+  const [showContractForm, setShowContractForm] = useState(false);
 
   const formattedJoinDate = joinDate 
     ? new Date(joinDate).toLocaleDateString() 
@@ -53,6 +58,17 @@ export function CustomerCard({
         <div className="flex items-start justify-between">
           <CardTitle className="text-lg">{name}</CardTitle>
           <div className="flex items-center space-x-2">
+            {hasContract ? (
+              <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                <CheckCircle2 className="mr-1 h-3 w-3" />
+                Active Contract
+              </Badge>
+            ) : (
+              <Badge variant="destructive">
+                <AlertCircle className="mr-1 h-3 w-3" />
+                No Contract
+              </Badge>
+            )}
             <Badge
               variant={
                 status === "active"
@@ -120,15 +136,65 @@ export function CustomerCard({
             </div>
           )}
           <div className="flex gap-2 mt-2">
-            <Button 
-              size="sm" 
-              variant="outline" 
-              className="w-full"
-              onClick={onViewContract}
-            >
-              <FileText className="mr-2 h-4 w-4" />
-              Contract
-            </Button>
+            {hasContract ? (
+              <>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="w-full"
+                  onClick={onViewContract}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  View Contract
+                </Button>
+                <Dialog open={showContractForm} onOpenChange={setShowContractForm}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full"
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Edit Contract: {name}</DialogTitle>
+                    </DialogHeader>
+                    <ContractForm 
+                      existingCustomer={{ id, name, location, mwpManaged }}
+                      existingContractId={contractId}
+                      onComplete={() => {
+                        setShowContractForm(false);
+                        onContractCreated?.();
+                      }}
+                    />
+                  </DialogContent>
+                </Dialog>
+              </>
+            ) : (
+              <Dialog open={showContractForm} onOpenChange={setShowContractForm}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="w-full">
+                    <FileText className="mr-2 h-4 w-4" />
+                    Setup Contract
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Create Contract: {name}</DialogTitle>
+                  </DialogHeader>
+                  <ContractForm 
+                    existingCustomer={{ id, name, location, mwpManaged }}
+                    onComplete={() => {
+                      setShowContractForm(false);
+                      onContractCreated?.();
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
             <Button 
               size="sm" 
               variant="outline" 

@@ -54,19 +54,6 @@ export function Sidebar({ className, isOpen, closeSidebar }: SidebarProps) {
             Customers
           </NavLink>
           <NavLink 
-            to="/contracts" 
-            className={({ isActive }) => 
-              cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                isActive 
-                  ? "bg-sidebar-primary text-sidebar-primary-foreground" 
-                  : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              )
-            }
-          >
-            <FileText className="h-5 w-5" />
-            Contracts
-          </NavLink>
-          <NavLink 
             to="/calculator" 
             className={({ isActive }) => 
               cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",

@@ -5,10 +5,13 @@ import Layout from "@/components/layout/Layout";
 import CustomerCard from "@/components/customers/CustomerCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Search, Users, RefreshCw, Loader2 } from "lucide-react";
+import { PlusCircle, Search, Users, RefreshCw, Loader2, AlertCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CustomerForm from "@/components/customers/CustomerForm";
+import ContractForm from "@/components/contracts/ContractForm";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
@@ -30,63 +33,65 @@ interface CustomerData {
 const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
+  const [showBulkContractForm, setShowBulkContractForm] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [customersData, setCustomersData] = useState<CustomerData[]>([]);
+  const [filterTab, setFilterTab] = useState("all");
   const navigate = useNavigate();
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
 
   // Load customers from database
-  useEffect(() => {
-    const loadCustomers = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+  const loadCustomers = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
-      const { data, error } = await supabase
-        .from('customers')
-        .select(`
+    const { data, error } = await supabase
+      .from('customers')
+      .select(`
+        id,
+        name,
+        location,
+        mwp_managed,
+        status,
+        join_date,
+        last_invoiced,
+        contracts (
           id,
-          name,
-          location,
-          mwp_managed,
-          status,
-          join_date,
-          last_invoiced,
-          contracts (
-            id,
-            modules,
-            addons
-          )
-        `)
-        .eq('user_id', user.id);
+          modules,
+          addons
+        )
+      `)
+      .eq('user_id', user.id);
 
-      if (error) {
-        console.error('Error loading customers:', error);
-        return;
-      }
+    if (error) {
+      console.error('Error loading customers:', error);
+      return;
+    }
 
-      const transformed: CustomerData[] = (data || []).map(c => {
-        const contract = c.contracts?.[0];
-        const modules = Array.isArray(contract?.modules) ? contract.modules as string[] : [];
-        const addons = Array.isArray(contract?.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
-        
-        return {
-          id: c.id,
-          name: c.name,
-          location: c.location || 'N/A',
-          contractValueUSD: 0, // Calculate from contract
-          mwpManaged: Number(c.mwp_managed) || 0,
-          status: (c.status || 'active') as "active" | "pending" | "inactive",
-          addOns: [...modules, ...addons],
-          joinDate: c.join_date || new Date().toISOString(),
-          lastInvoiced: c.last_invoiced || new Date().toISOString(),
-          contractId: contract?.id || ''
-        };
-      });
+    const transformed: CustomerData[] = (data || []).map(c => {
+      const contract = c.contracts?.[0];
+      const modules = Array.isArray(contract?.modules) ? contract.modules as string[] : [];
+      const addons = Array.isArray(contract?.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
+      
+      return {
+        id: c.id,
+        name: c.name,
+        location: c.location || 'N/A',
+        contractValueUSD: 0, // Calculate from contract
+        mwpManaged: Number(c.mwp_managed) || 0,
+        status: (c.status || 'active') as "active" | "pending" | "inactive",
+        addOns: [...modules, ...addons],
+        joinDate: c.join_date || new Date().toISOString(),
+        lastInvoiced: c.last_invoiced || new Date().toISOString(),
+        contractId: contract?.id || ''
+      };
+    });
 
-      setCustomersData(transformed);
-    };
+    setCustomersData(transformed);
+  };
 
+  useEffect(() => {
     loadCustomers();
   }, []);
   
@@ -110,7 +115,7 @@ const Customers = () => {
       });
       
       // Reload customers
-      setCustomersData([]);
+      await loadCustomers();
     } catch (error) {
       console.error('Error clearing customers:', error);
       toast({
@@ -136,10 +141,8 @@ const Customers = () => {
         description: `Successfully synced ${data.syncedCount} customers from Xero. ${data.skippedCount ? `Skipped ${data.skippedCount} suppliers.` : ''}`,
       });
       
-      // Reload the page to show updated customers
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+      // Reload customers
+      await loadCustomers();
     } catch (error) {
       console.error('Error syncing customers:', error);
       toast({
@@ -152,11 +155,38 @@ const Customers = () => {
     }
   };
 
-  const filteredCustomers = customersData.filter(
-    (customer) =>
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const getFilteredCustomers = () => {
+    let filtered = customersData;
+    
+    // Apply tab filter
+    switch (filterTab) {
+      case "with-contract":
+        filtered = filtered.filter(c => c.contractId);
+        break;
+      case "needs-setup":
+        filtered = filtered.filter(c => !c.contractId);
+        break;
+      case "inactive":
+        filtered = filtered.filter(c => c.status === "inactive");
+        break;
+      default:
+        // "all" - no filter
+        break;
+    }
+    
+    // Apply search filter
+    if (searchTerm) {
+      filtered = filtered.filter((customer) =>
+        customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.location.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    return filtered;
+  };
+
+  const filteredCustomers = getFilteredCustomers();
+  const customersWithoutContracts = customersData.filter(c => !c.contractId);
 
   return (
     <Layout>
@@ -165,10 +195,10 @@ const Customers = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight flex items-center">
               <Users className="h-8 w-8 mr-2 text-ammp-blue" />
-              Customers
+              Customer & Contract Management
             </h1>
             <p className="text-muted-foreground mt-1">
-              Manage your customer portfolio and contracts
+              Manage customers and their contracts in one place
             </p>
           </div>
           <div className="flex gap-2">
@@ -225,17 +255,94 @@ const Customers = () => {
                 <DialogHeader>
                   <DialogTitle>Add New Customer</DialogTitle>
                 </DialogHeader>
-                <CustomerForm onComplete={() => setShowAddCustomerForm(false)} />
+                <CustomerForm onComplete={() => {
+                  setShowAddCustomerForm(false);
+                  loadCustomers();
+                }} />
               </DialogContent>
             </Dialog>
           </div>
         </div>
 
+        {/* Banner for customers without contracts */}
+        {customersWithoutContracts.length > 0 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>
+                {customersWithoutContracts.length} {customersWithoutContracts.length === 1 ? 'customer needs' : 'customers need'} contract setup
+              </span>
+              <Dialog open={showBulkContractForm} onOpenChange={setShowBulkContractForm}>
+                <DialogTrigger asChild>
+                  <Button size="sm" variant="outline">
+                    Setup Contracts
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Bulk Contract Setup</DialogTitle>
+                  </DialogHeader>
+                  <div className="text-sm text-muted-foreground mb-4">
+                    Set up contracts for customers one by one. Click on each customer to configure their contract.
+                  </div>
+                  <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+                    {customersWithoutContracts.map((customer) => (
+                      <Dialog key={customer.id}>
+                        <DialogTrigger asChild>
+                          <Button variant="outline" className="w-full justify-start">
+                            <Users className="mr-2 h-4 w-4" />
+                            {customer.name} - {customer.mwpManaged} MWp
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+                          <DialogHeader>
+                            <DialogTitle>Setup Contract: {customer.name}</DialogTitle>
+                          </DialogHeader>
+                          <ContractForm 
+                            existingCustomer={{ 
+                              id: customer.id, 
+                              name: customer.name, 
+                              location: customer.location, 
+                              mwpManaged: customer.mwpManaged 
+                            }}
+                            onComplete={() => {
+                              loadCustomers();
+                            }}
+                          />
+                        </DialogContent>
+                      </Dialog>
+                    ))}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Tabs for filtering */}
+        <Tabs value={filterTab} onValueChange={setFilterTab}>
+          <TabsList>
+            <TabsTrigger value="all">
+              All Customers ({customersData.length})
+            </TabsTrigger>
+            <TabsTrigger value="with-contract">
+              With Contracts ({customersData.filter(c => c.contractId).length})
+            </TabsTrigger>
+            <TabsTrigger value="needs-setup">
+              Needs Setup ({customersWithoutContracts.length})
+            </TabsTrigger>
+            <TabsTrigger value="inactive">
+              Inactive ({customersData.filter(c => c.status === "inactive").length})
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Search */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
-            placeholder="Search customers..."
-            className="pl-8 max-w-md"
+            placeholder="Search customers by name or location..."
+            className="pl-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -247,8 +354,10 @@ const Customers = () => {
               key={customer.id} 
               {...customer}
               contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValueUSD))}/MWp`}
+              hasContract={!!customer.contractId}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)} 
               onViewDetails={() => navigate(`/customers/${customer.id}`)} 
+              onContractCreated={loadCustomers}
             />
           ))}
         </div>

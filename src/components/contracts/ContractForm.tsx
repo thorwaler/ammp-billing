@@ -57,6 +57,17 @@ const contractFormSchema = z.object({
 
 type ContractFormValues = z.infer<typeof contractFormSchema>;
 
+interface ContractFormProps {
+  existingCustomer?: {
+    id: string;
+    name: string;
+    location?: string;
+    mwpManaged: number;
+  };
+  existingContractId?: string;
+  onComplete?: () => void;
+}
+
 const modules = [
   { id: "technicalMonitoring", name: "Technical Monitoring", price: 1000, available: true },
   { id: "energySavingsHub", name: "Energy Savings Hub", price: 500, available: true, trial: true },
@@ -156,7 +167,7 @@ const addons = [
   },
 ];
 
-export function ContractForm() {
+export function ContractForm({ existingCustomer, existingContractId, onComplete }: ContractFormProps = {}) {
   const [selectedPackage, setSelectedPackage] = useState("");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
@@ -165,8 +176,8 @@ export function ContractForm() {
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractFormSchema),
     defaultValues: {
-      companyName: "",
-      initialMW: 0,
+      companyName: existingCustomer?.name || "",
+      initialMW: existingCustomer?.mwpManaged || 0,
       package: "pro" as const,
       modules: ["technicalMonitoring"],
       addons: [],
@@ -325,16 +336,20 @@ export function ContractForm() {
       if (contractError) throw contractError;
 
       toast({
-        title: "Contract created",
-        description: `Successfully created contract for ${data.companyName}`,
+        title: existingContractId ? "Contract updated" : "Contract created",
+        description: `Successfully ${existingContractId ? "updated" : "created"} contract for ${data.companyName}`,
       });
 
-      // Reset form
-      form.reset();
-      setSelectedComplexityItems({});
-      setSelectedPackage("");
-      setSelectedModules([]);
-      setShowCustomPricing(false);
+      // Reset form or call onComplete
+      if (onComplete) {
+        onComplete();
+      } else {
+        form.reset();
+        setSelectedComplexityItems({});
+        setSelectedPackage("");
+        setSelectedModules([]);
+        setShowCustomPricing(false);
+      }
     } catch (error) {
       console.error('Error creating contract:', error);
       toast({
@@ -361,7 +376,12 @@ export function ContractForm() {
                   <FormItem>
                     <FormLabel>Company Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter company name" {...field} />
+                      <Input 
+                        placeholder="Enter company name" 
+                        {...field} 
+                        disabled={!!existingCustomer}
+                        className={existingCustomer ? "bg-muted" : ""}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
