@@ -133,15 +133,9 @@ const XeroIntegration = () => {
         throw new Error('No auth URL returned from server');
       }
 
-      console.log('Opening Xero OAuth in new window:', data.authUrl);
-      // Open OAuth in new window to avoid iframe CSP restrictions
-      window.open(data.authUrl, '_blank');
-      setIsLoading(false);
-      
-      toast({
-        title: "Opening Xero login",
-        description: "Complete the authorization in the new window",
-      });
+      console.log('Redirecting to Xero OAuth:', data.authUrl);
+      // Redirect to Xero OAuth (standard OAuth flow)
+      window.location.href = data.authUrl;
     } catch (error: any) {
       console.error('Connection error:', error);
       setIsLoading(false);
