@@ -37,6 +37,12 @@ async function getValidAccessToken(supabase: any, userId: string) {
       }),
     });
 
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error('Xero token refresh failed:', errorText);
+      throw new Error(`Failed to refresh Xero token: ${tokenResponse.status} ${errorText}`);
+    }
+
     const tokens = await tokenResponse.json();
     const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
