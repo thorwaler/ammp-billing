@@ -21,6 +21,7 @@ export type Database = {
           company_name: string
           contract_status: string | null
           created_at: string
+          currency: string | null
           custom_pricing: Json | null
           customer_id: string
           id: string
@@ -40,6 +41,7 @@ export type Database = {
           company_name: string
           contract_status?: string | null
           created_at?: string
+          currency?: string | null
           custom_pricing?: Json | null
           customer_id: string
           id?: string
@@ -59,6 +61,7 @@ export type Database = {
           company_name?: string
           contract_status?: string | null
           created_at?: string
+          currency?: string | null
           custom_pricing?: Json | null
           customer_id?: string
           id?: string

@@ -10,6 +10,7 @@ interface UpcomingInvoice {
   customerName: string;
   nextInvoiceDate: string;
   billingFrequency: string;
+  currency: string;
   packageType: string;
   mwpManaged: number;
   modules: any[];
@@ -43,6 +44,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           customer_id,
           next_invoice_date,
           billing_frequency,
+          currency,
           package,
           modules,
           addons,
@@ -71,6 +73,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             customerName: customer.name,
             nextInvoiceDate: c.next_invoice_date!,
             billingFrequency: c.billing_frequency || 'annual',
+            currency: c.currency || 'USD',
             packageType: c.package,
             mwpManaged: Number(customer.mwp_managed) || 0,
             modules: Array.isArray(c.modules) ? c.modules : [],
@@ -95,6 +98,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
 
   const calculateEstimatedAmount = (invoice: UpcomingInvoice): number => {
     const frequencyMultipliers = {
+      monthly: 1/12,
       quarterly: 0.25,
       biannual: 0.5,
       annual: 1
@@ -139,6 +143,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           customerName={invoice.customerName}
           nextInvoiceDate={invoice.nextInvoiceDate}
           billingFrequency={invoice.billingFrequency}
+          currency={invoice.currency}
           packageType={invoice.packageType}
           estimatedAmount={calculateEstimatedAmount(invoice)}
           onCreateInvoice={() => onCreateInvoice(invoice)}

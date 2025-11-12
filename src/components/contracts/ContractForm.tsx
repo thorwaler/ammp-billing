@@ -26,13 +26,16 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "@/hooks/use-toast";
-import { FileUp, Save } from "lucide-react";
+import { FileUp, Save, DollarSign, Calendar as CalendarIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 // Define the form schema
 const contractFormSchema = z.object({
   companyName: z.string().min(2, { message: "Company name is required" }),
   initialMW: z.coerce.number().min(0, { message: "Initial MW is required" }),
+  currency: z.enum(["USD", "EUR"]),
+  billingFrequency: z.enum(["monthly", "quarterly", "biannual", "annual"]),
   package: z.enum(["starter", "pro", "custom"]),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -172,12 +175,15 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
   const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: string}>({});
+  const { currency: userCurrency } = useCurrency();
 
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractFormSchema),
     defaultValues: {
       companyName: existingCustomer?.name || "",
       initialMW: existingCustomer?.mwpManaged || 0,
+      currency: userCurrency || "USD",
+      billingFrequency: "annual",
       package: "pro" as const,
       modules: ["technicalMonitoring"],
       addons: [],
@@ -322,13 +328,14 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
           company_name: data.companyName,
           package: data.package,
           initial_mw: data.initialMW,
+          currency: data.currency,
+          billing_frequency: data.billingFrequency,
           modules: data.modules || [],
           addons: enhancedAddons,
           custom_pricing: data.customPricing || {},
           volume_discounts: data.volumeDiscounts || {},
           minimum_charge: data.minimumCharge || 0,
           notes: data.notes || '',
-          billing_frequency: 'annual',
           contract_status: 'active',
           user_id: user.id
         });
@@ -397,6 +404,66 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                     <FormControl>
                       <Input type="number" step="0.1" min="0" {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <FormField
+                control={form.control}
+                name="currency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Contract Currency
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select currency" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="USD">USD ($)</SelectItem>
+                        <SelectItem value="EUR">EUR (€)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Currency for this contract's invoices
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="billingFrequency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex items-center gap-2">
+                      <CalendarIcon className="h-4 w-4" />
+                      Billing Frequency
+                    </FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="quarterly">Quarterly</SelectItem>
+                        <SelectItem value="biannual">Bi-annual</SelectItem>
+                        <SelectItem value="annual">Annual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      How often invoices will be generated
+                    </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}

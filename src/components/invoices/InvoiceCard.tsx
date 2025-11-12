@@ -10,6 +10,7 @@ interface InvoiceCardProps {
   customerName: string;
   nextInvoiceDate: string;
   billingFrequency: string;
+  currency?: string;
   packageType: string;
   estimatedAmount: number;
   onCreateInvoice: () => void;
@@ -19,11 +20,13 @@ export function InvoiceCard({
   customerName,
   nextInvoiceDate,
   billingFrequency,
+  currency = 'USD',
   packageType,
   estimatedAmount,
   onCreateInvoice,
 }: InvoiceCardProps) {
   const { formatCurrency } = useCurrency();
+  const currencySymbol = currency === 'EUR' ? '€' : '$';
   const invoiceDate = new Date(nextInvoiceDate);
   const daysUntil = differenceInDays(invoiceDate, new Date());
   
@@ -60,14 +63,15 @@ export function InvoiceCard({
           {getUrgencyBadge()}
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Badge variant="outline">{packageType}</Badge>
           <Badge variant="outline" className="capitalize">{billingFrequency}</Badge>
+          <Badge variant="secondary">{currency}</Badge>
         </div>
         
         <div className="flex items-center gap-2 text-lg font-semibold">
-          <DollarSign className="h-5 w-5 text-muted-foreground" />
-          <span>{formatCurrency(estimatedAmount)}</span>
+          <span className="text-muted-foreground">{currencySymbol}</span>
+          <span>{estimatedAmount.toLocaleString()}</span>
           <span className="text-sm text-muted-foreground font-normal">estimated</span>
         </div>
         

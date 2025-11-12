@@ -52,6 +52,8 @@ interface Customer {
   addons: string[];
   minimumCharge?: number;
   customPricing?: {[key: string]: number};
+  currency: 'USD' | 'EUR';
+  billingFrequency: 'monthly' | 'quarterly' | 'biannual' | 'annual';
 }
 
 interface CalculationResult {
@@ -205,7 +207,7 @@ export function InvoiceCalculator({
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [showResult, setShowResult] = useState(false);
-  const [billingFrequency, setBillingFrequency] = useState<"quarterly" | "biannual" | "annual">("annual");
+  const [billingFrequency, setBillingFrequency] = useState<"monthly" | "quarterly" | "biannual" | "annual">("annual");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(prefilledDate || new Date());
   const [isSending, setIsSending] = useState(false);
   const { formatCurrency } = useCurrency();
@@ -228,7 +230,9 @@ export function InvoiceCalculator({
             modules,
             addons,
             custom_pricing,
-            minimum_charge
+            minimum_charge,
+            currency,
+            billing_frequency
           )
         `)
         .eq('user_id', user.id)
@@ -257,7 +261,9 @@ export function InvoiceCalculator({
             modules,
             addons,
             minimumCharge: Number(contract.minimum_charge) || 0,
-            customPricing
+            customPricing,
+            currency: (contract.currency as 'USD' | 'EUR') || 'USD',
+            billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual'
           };
         });
 
@@ -282,6 +288,9 @@ export function InvoiceCalculator({
         // Set initial MW managed
         setMwManaged(customerData.mwManaged);
         setSites(customerData.sites);
+        
+        // Pre-fill billing frequency from contract
+        setBillingFrequency(customerData.billingFrequency);
         
         // Apply custom pricing to modules if available
         const updatedModules = defaultModules.map(module => {
@@ -314,6 +323,7 @@ export function InvoiceCalculator({
   // Calculate frequency multiplier for billing
   const getFrequencyMultiplier = () => {
     switch (billingFrequency) {
+      case "monthly": return 1/12;
       case "quarterly": return 0.25;
       case "biannual": return 0.5;
       case "annual": return 1;
@@ -476,6 +486,7 @@ export function InvoiceCalculator({
         DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), // 30 days from invoice date
         LineItems: lineItems,
         Reference: `${billingFrequency.toUpperCase()}-${format(invoiceDate, "yyyyMMdd")}`,
+        Currency: selectedCustomer.currency,
         Status: "DRAFT"
       };
       
@@ -574,7 +585,9 @@ export function InvoiceCalculator({
     const startDate = new Date(invoiceDate);
     const endDate = new Date(invoiceDate);
     
-    if (billingFrequency === "quarterly") {
+    if (billingFrequency === "monthly") {
+      endDate.setMonth(endDate.getMonth() + 1);
+    } else if (billingFrequency === "quarterly") {
       endDate.setMonth(endDate.getMonth() + 3);
     } else if (billingFrequency === "biannual") {
       endDate.setMonth(endDate.getMonth() + 6);
@@ -614,6 +627,11 @@ export function InvoiceCalculator({
           
           {selectedCustomer && (
             <>
+              <div className="flex items-center gap-2 mb-4 text-sm">
+                <Label>Contract Currency:</Label>
+                <span className="font-medium">{selectedCustomer.currency === 'USD' ? '$ USD' : '€ EUR'}</span>
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="invoice-date">Invoice Date</Label>
@@ -639,11 +657,12 @@ export function InvoiceCalculator({
                 
                 <div className="space-y-2">
                   <Label htmlFor="billing-frequency">Billing Frequency</Label>
-                  <Select value={billingFrequency} onValueChange={(value: "quarterly" | "biannual" | "annual") => setBillingFrequency(value)}>
+                  <Select value={billingFrequency} onValueChange={(value: "monthly" | "quarterly" | "biannual" | "annual") => setBillingFrequency(value)}>
                     <SelectTrigger id="billing-frequency">
                       <SelectValue placeholder="Select frequency" />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
                       <SelectItem value="quarterly">Quarterly</SelectItem>
                       <SelectItem value="biannual">Bi-annual</SelectItem>
                       <SelectItem value="annual">Annual</SelectItem>
