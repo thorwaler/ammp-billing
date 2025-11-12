@@ -4,7 +4,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import Customers from "./pages/Customers";
-import Calculator from "./pages/Calculator";
+import InvoiceCreator from "./pages/InvoiceCreator";
 import Reports from "./pages/Reports";
 import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/UserManagement";
@@ -19,7 +19,7 @@ const AppRoutes = () => (
       <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
       <Route path="/customers/:id" element={<ProtectedRoute><ContractDetails /></ProtectedRoute>} />
       <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetails /></ProtectedRoute>} />
-      <Route path="/calculator" element={<ProtectedRoute><Calculator /></ProtectedRoute>} />
+      <Route path="/invoices" element={<ProtectedRoute><InvoiceCreator /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />

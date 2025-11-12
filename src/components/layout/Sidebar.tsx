@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { NavLink } from "react-router-dom";
-import { Home, Users, FileText, Calculator, BarChart, Link2, UserCircle, X } from "lucide-react";
+import { Home, Users, FileText, BarChart, Link2, UserCircle, X } from "lucide-react";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   isOpen: boolean;
@@ -54,7 +54,7 @@ export function Sidebar({ className, isOpen, closeSidebar }: SidebarProps) {
             Customers
           </NavLink>
           <NavLink 
-            to="/calculator" 
+            to="/invoices" 
             className={({ isActive }) => 
               cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                 isActive 
@@ -63,8 +63,8 @@ export function Sidebar({ className, isOpen, closeSidebar }: SidebarProps) {
               )
             }
           >
-            <Calculator className="h-5 w-5" />
-            Calculator
+            <FileText className="h-5 w-5" />
+            Invoices
           </NavLink>
           <NavLink 
             to="/reports" 

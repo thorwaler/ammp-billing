@@ -183,7 +183,17 @@ const defaultAddons: Addon[] = [
   },
 ];
 
-export function InvoiceCalculator() {
+interface InvoiceCalculatorProps {
+  preselectedCustomerId?: string;
+  prefilledDate?: Date;
+  onInvoiceCreated?: () => void;
+}
+
+export function InvoiceCalculator({ 
+  preselectedCustomerId, 
+  prefilledDate,
+  onInvoiceCreated 
+}: InvoiceCalculatorProps = {}) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customer, setCustomer] = useState("");
   const [newSystems, setNewSystems] = useState<number | "">("");
@@ -196,7 +206,7 @@ export function InvoiceCalculator() {
   const [result, setResult] = useState<CalculationResult | null>(null);
   const [showResult, setShowResult] = useState(false);
   const [billingFrequency, setBillingFrequency] = useState<"quarterly" | "biannual" | "annual">("annual");
-  const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(new Date());
+  const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(prefilledDate || new Date());
   const [isSending, setIsSending] = useState(false);
   const { formatCurrency } = useCurrency();
 
@@ -252,10 +262,15 @@ export function InvoiceCalculator() {
         });
 
       setCustomers(transformedCustomers);
+      
+      // Pre-select customer if provided
+      if (preselectedCustomerId) {
+        setCustomer(preselectedCustomerId);
+      }
     };
 
     loadCustomers();
-  }, []);
+  }, [preselectedCustomerId]);
 
   // Update modules and addons when a customer is selected
   useEffect(() => {
@@ -474,6 +489,9 @@ export function InvoiceCalculator() {
         title: "Invoice sent to Xero",
         description: "The invoice has been created in Xero as a draft.",
       });
+      
+      // Notify parent if callback provided
+      onInvoiceCreated?.();
       
       // Reset form
       setTimeout(() => {

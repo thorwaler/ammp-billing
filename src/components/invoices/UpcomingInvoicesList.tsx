@@ -1,0 +1,149 @@
+import { useState, useEffect } from "react";
+import { InvoiceCard } from "./InvoiceCard";
+import { supabase } from "@/integrations/supabase/client";
+import { Loader2 } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+
+interface UpcomingInvoice {
+  contractId: string;
+  customerId: string;
+  customerName: string;
+  nextInvoiceDate: string;
+  billingFrequency: string;
+  packageType: string;
+  mwpManaged: number;
+  modules: any[];
+  addons: any[];
+  minimumCharge: number;
+  customPricing: any;
+}
+
+interface UpcomingInvoicesListProps {
+  onCreateInvoice: (invoice: UpcomingInvoice) => void;
+  refreshTrigger?: number;
+}
+
+export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: UpcomingInvoicesListProps) {
+  const [invoices, setInvoices] = useState<UpcomingInvoice[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadUpcomingInvoices();
+  }, [refreshTrigger]);
+
+  const loadUpcomingInvoices = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('contracts')
+        .select(`
+          id,
+          customer_id,
+          next_invoice_date,
+          billing_frequency,
+          package,
+          modules,
+          addons,
+          minimum_charge,
+          custom_pricing,
+          customers (
+            id,
+            name,
+            mwp_managed
+          )
+        `)
+        .eq('user_id', user.id)
+        .eq('contract_status', 'active')
+        .not('next_invoice_date', 'is', null)
+        .order('next_invoice_date', { ascending: true });
+
+      if (error) throw error;
+
+      const transformedInvoices: UpcomingInvoice[] = (data || [])
+        .filter(c => c.customers)
+        .map(c => {
+          const customer = Array.isArray(c.customers) ? c.customers[0] : c.customers;
+          return {
+            contractId: c.id,
+            customerId: customer.id,
+            customerName: customer.name,
+            nextInvoiceDate: c.next_invoice_date!,
+            billingFrequency: c.billing_frequency || 'annual',
+            packageType: c.package,
+            mwpManaged: Number(customer.mwp_managed) || 0,
+            modules: Array.isArray(c.modules) ? c.modules : [],
+            addons: Array.isArray(c.addons) ? c.addons : [],
+            minimumCharge: Number(c.minimum_charge) || 0,
+            customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {}
+          };
+        });
+
+      setInvoices(transformedInvoices);
+    } catch (error) {
+      console.error('Error loading upcoming invoices:', error);
+      toast({
+        title: "Error loading invoices",
+        description: "Failed to load upcoming invoices. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const calculateEstimatedAmount = (invoice: UpcomingInvoice): number => {
+    const frequencyMultipliers = {
+      quarterly: 0.25,
+      biannual: 0.5,
+      annual: 1
+    };
+    
+    const multiplier = frequencyMultipliers[invoice.billingFrequency as keyof typeof frequencyMultipliers] || 1;
+    
+    if (invoice.packageType === 'starter') {
+      return 3000 * multiplier;
+    }
+    
+    // Simplified estimation for Pro/Custom packages
+    const moduleCount = Array.isArray(invoice.modules) ? invoice.modules.length : 0;
+    const baseAmount = Math.max(5000, moduleCount * 1000 * invoice.mwpManaged);
+    
+    return baseAmount * multiplier;
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (invoices.length === 0) {
+    return (
+      <div className="text-center py-12 text-muted-foreground">
+        <p className="text-lg">No upcoming invoices found</p>
+        <p className="text-sm mt-2">Create contracts with invoice dates to see them here</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {invoices.map((invoice) => (
+        <InvoiceCard
+          key={invoice.contractId}
+          contractId={invoice.contractId}
+          customerName={invoice.customerName}
+          nextInvoiceDate={invoice.nextInvoiceDate}
+          billingFrequency={invoice.billingFrequency}
+          packageType={invoice.packageType}
+          estimatedAmount={calculateEstimatedAmount(invoice)}
+          onCreateInvoice={() => onCreateInvoice(invoice)}
+        />
+      ))}
+    </div>
+  );
+}
