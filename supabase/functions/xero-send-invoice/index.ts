@@ -43,7 +43,17 @@ async function getValidAccessToken(supabase: any, userId: string) {
       throw new Error(`Failed to refresh Xero token: ${tokenResponse.status} ${errorText}`);
     }
 
-    const tokens = await tokenResponse.json();
+    let tokens;
+    try {
+      const responseText = await tokenResponse.text();
+      console.log('Token response status:', tokenResponse.status);
+      console.log('Token response content-type:', tokenResponse.headers.get('content-type'));
+      console.log('Token response (first 200 chars):', responseText.substring(0, 200));
+      tokens = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse token response as JSON:', parseError);
+      throw new Error('Xero returned invalid response format. Please reconnect your Xero account in Settings > Integrations.');
+    }
     const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
     await supabase.from('xero_connections').update({
@@ -85,6 +95,9 @@ Deno.serve(async (req) => {
     // Get valid access token
     const { accessToken, tenantId } = await getValidAccessToken(supabase, user.id);
 
+    console.log('Attempting to send invoice to Xero for user:', user.id);
+    console.log('Invoice data:', JSON.stringify(invoice, null, 2));
+    
     // Send invoice to Xero
     const xeroResponse = await fetch('https://api.xero.com/api.xro/2.0/Invoices', {
       method: 'POST',
@@ -96,13 +109,25 @@ Deno.serve(async (req) => {
       body: JSON.stringify(invoice),
     });
 
+    console.log('Xero response status:', xeroResponse.status);
+    console.log('Xero response content-type:', xeroResponse.headers.get('content-type'));
+
     if (!xeroResponse.ok) {
       const errorText = await xeroResponse.text();
-      console.error('Xero API error:', errorText);
-      throw new Error(`Xero API error: ${errorText}`);
+      console.error('Xero API error response:', errorText);
+      throw new Error(`Xero API error (${xeroResponse.status}): ${errorText.substring(0, 200)}`);
     }
 
-    const result = await xeroResponse.json();
+    let result;
+    try {
+      const responseText = await xeroResponse.text();
+      console.log('Xero success response (first 200 chars):', responseText.substring(0, 200));
+      result = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse Xero response as JSON:', parseError);
+      throw new Error('Xero returned invalid response format. The invoice may have been created - please check Xero directly.');
+    }
+    
     console.log('Invoice sent successfully for user:', user.id);
 
     return new Response(
