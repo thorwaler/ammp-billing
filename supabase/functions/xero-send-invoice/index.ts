@@ -105,6 +105,7 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${accessToken}`,
         'Xero-tenant-id': tenantId,
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
       body: JSON.stringify(invoice),
     });
