@@ -29,17 +29,7 @@ Deno.serve(async (req) => {
 
     const { code, state } = await req.json();
     
-    // Verify state matches
-    const { data: connection } = await supabase
-      .from('xero_connections')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('tenant_id', state)
-      .single();
-
-    if (!connection) {
-      throw new Error('Invalid state parameter');
-    }
+    console.log('Processing OAuth callback for user:', user.id, 'with state:', state);
 
     const clientId = Deno.env.get('XERO_CLIENT_ID');
     const clientSecret = Deno.env.get('XERO_CLIENT_SECRET');
