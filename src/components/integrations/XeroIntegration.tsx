@@ -119,17 +119,29 @@ const XeroIntegration = () => {
     setIsLoading(true);
     
     try {
+      console.log('Starting Xero OAuth connection...');
       const { data, error } = await supabase.functions.invoke('xero-oauth-init');
 
-      if (error) throw error;
+      console.log('OAuth init response:', { data, error });
 
+      if (error) {
+        console.error('OAuth init error:', error);
+        throw error;
+      }
+
+      if (!data?.authUrl) {
+        throw new Error('No auth URL returned from server');
+      }
+
+      console.log('Redirecting to Xero OAuth:', data.authUrl);
       // Redirect to Xero OAuth
       window.location.href = data.authUrl;
     } catch (error: any) {
+      console.error('Connection error:', error);
       setIsLoading(false);
       toast({
         title: "Connection failed",
-        description: error.message,
+        description: error.message || 'Failed to initialize OAuth',
         variant: "destructive",
       });
     }
