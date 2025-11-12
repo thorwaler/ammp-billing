@@ -55,6 +55,7 @@ const contractFormSchema = z.object({
     portfolio200MW: z.coerce.number().optional(),
   }).optional(),
   minimumCharge: z.coerce.number().optional(),
+  minimumAnnualValue: z.coerce.number().optional(),
   notes: z.string().optional(),
 });
 
@@ -182,7 +183,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
     defaultValues: {
       companyName: existingCustomer?.name || "",
       initialMW: existingCustomer?.mwpManaged || 0,
-      currency: userCurrency || "USD",
+      currency: userCurrency || "EUR",
       billingFrequency: "annual",
       package: "pro" as const,
       modules: ["technicalMonitoring"],
@@ -203,6 +204,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
         portfolio200MW: 20,
       },
       minimumCharge: 0,
+      minimumAnnualValue: 0,
       notes: "",
     },
   });
@@ -218,6 +220,10 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
     if (value === "starter") {
       // Starter package only includes Technical Monitoring
       form.setValue("modules", ["technicalMonitoring"]);
+      form.setValue("minimumAnnualValue", 3000);
+    } else if (value === "pro") {
+      form.setValue("minimumAnnualValue", 5000);
+      setShowCustomPricing(false);
     } else if (value === "custom") {
       setShowCustomPricing(true);
     } else {
@@ -305,6 +311,8 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
           mwp_managed: data.initialMW,
           status: 'active',
           user_id: user.id
+        }, {
+          onConflict: 'name,user_id'
         })
         .select()
         .single();
@@ -335,6 +343,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
           custom_pricing: data.customPricing || {},
           volume_discounts: data.volumeDiscounts || {},
           minimum_charge: data.minimumCharge || 0,
+          minimum_annual_value: data.minimumAnnualValue || 0,
           notes: data.notes || '',
           contract_status: 'active',
           user_id: user.id
@@ -489,16 +498,16 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="starter">AMMP OS Starter (Max 5MW, 20 sites, $3000/year)</SelectItem>
-                      <SelectItem value="pro">AMMP OS Pro (Per MW pricing, min $5000/year)</SelectItem>
+                      <SelectItem value="starter">AMMP OS Starter (Max 5MW, 20 sites, €3000/year)</SelectItem>
+                      <SelectItem value="pro">AMMP OS Pro (Per MW pricing, min €5000/year)</SelectItem>
                       <SelectItem value="custom">Custom/Legacy</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
                     {watchPackage === "starter" ? 
-                      "AMMP OS Starter: Max 5MW, max 20 sites, $3000 per year flat fee. Only have access to Technical Monitoring Module." :
+                      "AMMP OS Starter: Max 5MW, max 20 sites, €3000 per year flat fee. Only have access to Technical Monitoring Module." :
                       watchPackage === "pro" ? 
-                      "AMMP OS Pro: Pricing per MW based on modules chosen, with a minimum of $5,000 per year." :
+                      "AMMP OS Pro: Pricing per MW based on modules chosen, with a minimum of €5,000 per year." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -530,7 +539,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                         {module.name}
                       </label>
                       <span className="text-sm">
-                        ${module.price}/MWp/year
+                        €{module.price}/MWp/year
                         {module.trial && " (6 months free trial)"}
                       </span>
                     </div>
@@ -538,12 +547,12 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                     {watchModules?.includes(module.id) && (
                       <div className="mt-2 pl-6">
                         <Label htmlFor={`custom-${module.id}`} className="text-xs">
-                          {showCustomPricing ? "Custom Price ($/MWp/year)" : "Override Price ($/MWp/year)"}
+                          {showCustomPricing ? "Custom Price (€/MWp/year)" : "Override Price (€/MWp/year)"}
                         </Label>
                         <Input 
                           id={`custom-${module.id}`} 
                           type="number" 
-                          placeholder={`Default: $${module.price}`}
+                          placeholder={`Default: €${module.price}`}
                           className="mt-1 h-8"
                           {...form.register(`customPricing.${module.id}` as any, { valueAsNumber: true })}
                         />
@@ -588,8 +597,8 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                                 </label>
                                 <span className="text-sm">
                                   {addon.complexityPricing ? 
-                                    `$${addon.lowPrice} - $${addon.highPrice}` : 
-                                    `$${addon.price}`}
+                                    `€${addon.lowPrice} - €${addon.highPrice}` : 
+                                    `€${addon.price}`}
                                 </span>
                               </div>
                               
@@ -605,9 +614,9 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                                       <SelectValue placeholder="Select complexity" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      <SelectItem value="low">Low (${addon.lowPrice})</SelectItem>
-                                      <SelectItem value="medium">Medium (${addon.mediumPrice})</SelectItem>
-                                      <SelectItem value="high">High (${addon.highPrice})</SelectItem>
+                                      <SelectItem value="low">Low (€{addon.lowPrice})</SelectItem>
+                                      <SelectItem value="medium">Medium (€{addon.mediumPrice})</SelectItem>
+                                      <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
                                     </SelectContent>
                                   </Select>
                                 </div>
@@ -633,6 +642,24 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                   </FormControl>
                   <FormDescription>
                     Minimum charge to be applied per site (if applicable)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            
+            <FormField
+              control={form.control}
+              name="minimumAnnualValue"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Minimum Annual Contract Value</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" min="0" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Minimum annual value for this contract (e.g., €5,000 for Pro). 
+                    Will be pro-rated based on billing frequency.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

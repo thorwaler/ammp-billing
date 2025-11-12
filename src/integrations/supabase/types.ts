@@ -26,6 +26,7 @@ export type Database = {
           customer_id: string
           id: string
           initial_mw: number
+          minimum_annual_value: number | null
           minimum_charge: number | null
           modules: Json | null
           next_invoice_date: string | null
@@ -46,6 +47,7 @@ export type Database = {
           customer_id: string
           id?: string
           initial_mw: number
+          minimum_annual_value?: number | null
           minimum_charge?: number | null
           modules?: Json | null
           next_invoice_date?: string | null
@@ -66,6 +68,7 @@ export type Database = {
           customer_id?: string
           id?: string
           initial_mw?: number
+          minimum_annual_value?: number | null
           minimum_charge?: number | null
           modules?: Json | null
           next_invoice_date?: string | null

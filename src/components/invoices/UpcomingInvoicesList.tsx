@@ -16,6 +16,7 @@ interface UpcomingInvoice {
   modules: any[];
   addons: any[];
   minimumCharge: number;
+  minimumAnnualValue: number;
   customPricing: any;
 }
 
@@ -49,6 +50,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           modules,
           addons,
           minimum_charge,
+          minimum_annual_value,
           custom_pricing,
           customers (
             id,
@@ -73,12 +75,13 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             customerName: customer.name,
             nextInvoiceDate: c.next_invoice_date!,
             billingFrequency: c.billing_frequency || 'annual',
-            currency: c.currency || 'USD',
+            currency: c.currency || 'EUR',
             packageType: c.package,
             mwpManaged: Number(customer.mwp_managed) || 0,
             modules: Array.isArray(c.modules) ? c.modules : [],
             addons: Array.isArray(c.addons) ? c.addons : [],
             minimumCharge: Number(c.minimum_charge) || 0,
+            minimumAnnualValue: Number(c.minimum_annual_value) || 0,
             customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {}
           };
         });
@@ -107,12 +110,14 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
     const multiplier = frequencyMultipliers[invoice.billingFrequency as keyof typeof frequencyMultipliers] || 1;
     
     if (invoice.packageType === 'starter') {
-      return 3000 * multiplier;
+      const minimumValue = invoice.minimumAnnualValue || 3000;
+      return minimumValue * multiplier;
     }
     
     // Simplified estimation for Pro/Custom packages
     const moduleCount = Array.isArray(invoice.modules) ? invoice.modules.length : 0;
-    const baseAmount = Math.max(5000, moduleCount * 1000 * invoice.mwpManaged);
+    const proMinimum = invoice.minimumAnnualValue || 5000;
+    const baseAmount = Math.max(proMinimum, moduleCount * 1000 * invoice.mwpManaged);
     
     return baseAmount * multiplier;
   };

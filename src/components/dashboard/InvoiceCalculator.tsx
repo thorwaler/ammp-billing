@@ -51,6 +51,7 @@ interface Customer {
   modules: string[];
   addons: string[];
   minimumCharge?: number;
+  minimumAnnualValue?: number;
   customPricing?: {[key: string]: number};
   currency: 'USD' | 'EUR';
   billingFrequency: 'monthly' | 'quarterly' | 'biannual' | 'annual';
@@ -231,6 +232,7 @@ export function InvoiceCalculator({
             addons,
             custom_pricing,
             minimum_charge,
+            minimum_annual_value,
             currency,
             billing_frequency
           )
@@ -261,8 +263,9 @@ export function InvoiceCalculator({
             modules,
             addons,
             minimumCharge: Number(contract.minimum_charge) || 0,
+            minimumAnnualValue: Number(contract.minimum_annual_value) || 0,
             customPricing,
-            currency: (contract.currency as 'USD' | 'EUR') || 'USD',
+            currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
             billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual'
           };
         });
@@ -358,8 +361,9 @@ export function InvoiceCalculator({
     
     // Calculate costs based on package
     if (selectedCustomer.package === 'starter') {
-      // Starter package - flat fee of $3000 per year
-      calculationResult.starterPackageCost = 3000 * frequencyMultiplier;
+      // Starter package - use contract's minimum annual value (default: €3000)
+      const minimumValue = selectedCustomer.minimumAnnualValue || 3000;
+      calculationResult.starterPackageCost = minimumValue * frequencyMultiplier;
       
       // Only Technical Monitoring included
       // No module-based charges for Starter package
@@ -388,9 +392,10 @@ export function InvoiceCalculator({
       const moduleTotalCost = calculationResult.moduleCosts.reduce((sum, item) => sum + item.cost, 0);
       calculationResult.totalMWCost = moduleTotalCost;
       
-      // Ensure minimum $5000 for Pro package
-      if (selectedCustomer.package === 'pro' && moduleTotalCost < 5000 * frequencyMultiplier) {
-        calculationResult.totalMWCost = 5000 * frequencyMultiplier;
+      // Ensure minimum annual contract value for Pro package
+      const proMinimum = selectedCustomer.minimumAnnualValue || 5000;
+      if (selectedCustomer.package === 'pro' && moduleTotalCost < proMinimum * frequencyMultiplier) {
+        calculationResult.totalMWCost = proMinimum * frequencyMultiplier;
       }
     }
     
@@ -751,7 +756,7 @@ export function InvoiceCalculator({
                           {module.name}
                         </Label>
                          <span className="text-sm">
-                          ${selectedCustomer.customPricing?.[module.id] || module.price}/MWp
+                          €{selectedCustomer.customPricing?.[module.id] || module.price}/MWp
                         </span>
                       </div>
                     </div>
@@ -790,8 +795,8 @@ export function InvoiceCalculator({
                                   </Label>
                                   <span className="text-sm">
                                     {addon.complexityPricing 
-                                      ? `$${addon.lowPrice}-${addon.highPrice}` 
-                                      : `$${addon.price}`
+                                      ? `€${addon.lowPrice}-€${addon.highPrice}` 
+                                      : `€${addon.price}`
                                     }
                                   </span>
                                 </div>
@@ -807,9 +812,9 @@ export function InvoiceCalculator({
                                         <SelectValue placeholder="Select complexity" />
                                       </SelectTrigger>
                                       <SelectContent>
-                                        <SelectItem value="low">Low (${addon.lowPrice})</SelectItem>
-                                        <SelectItem value="medium">Medium (${addon.mediumPrice})</SelectItem>
-                                        <SelectItem value="high">High (${addon.highPrice})</SelectItem>
+                                        <SelectItem value="low">Low (€{addon.lowPrice})</SelectItem>
+                                        <SelectItem value="medium">Medium (€{addon.mediumPrice})</SelectItem>
+                                        <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
                                       </SelectContent>
                                     </Select>
                                   </div>
@@ -864,10 +869,10 @@ export function InvoiceCalculator({
                   ))}
                 </div>
                 
-                {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < 5000 * getFrequencyMultiplier() && (
+                {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier() && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
-                    <span>Minimum Package Cost Applied:</span>
-                    <span>{formatCurrency(5000 * getFrequencyMultiplier())}</span>
+                    <span>Minimum Contract Value Applied:</span>
+                    <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier())}</span>
                   </div>
                 )}
               </div>
