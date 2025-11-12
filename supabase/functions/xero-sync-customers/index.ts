@@ -98,8 +98,8 @@ Deno.serve(async (req) => {
     // Get valid access token
     const { accessToken, tenantId } = await getValidAccessToken(supabase, user.id);
 
-    // Fetch contacts from Xero
-    const xeroResponse = await fetch('https://api.xero.com/api.xro/2.0/Contacts', {
+    // Fetch only customers from Xero (exclude suppliers)
+    const xeroResponse = await fetch('https://api.xero.com/api.xro/2.0/Contacts?where=IsCustomer==true', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -122,9 +122,17 @@ Deno.serve(async (req) => {
     // Sync contacts to local database
     let syncedCount = 0;
     let errorCount = 0;
+    let skippedCount = 0;
 
     for (const contact of contacts) {
       try {
+        // Additional validation: skip if not a customer
+        if (contact.IsCustomer !== true) {
+          console.log(`Skipping contact ${contact.Name} - not a customer`);
+          skippedCount++;
+          continue;
+        }
+
         // Map Xero contact to our customers table structure
         const customerData = {
           user_id: user.id,
@@ -155,13 +163,14 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Customer sync complete. Synced: ${syncedCount}, Errors: ${errorCount}`);
+    console.log(`Customer sync complete. Synced: ${syncedCount}, Errors: ${errorCount}, Skipped: ${skippedCount}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         syncedCount,
         errorCount,
+        skippedCount,
         totalContacts: contacts.length 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
