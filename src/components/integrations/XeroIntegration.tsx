@@ -67,7 +67,7 @@ const XeroIntegration = () => {
         .from('xero_connections' as any)
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle();
 
       if (data && !error) {
         const connection = data as unknown as XeroConnection;
