@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     // Store tokens and tenant info
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
     
-    await supabase.from('xero_connections').upsert({
+    const { error: upsertError } = await supabase.from('xero_connections').upsert({
       user_id: user.id,
       tenant_id: tenant.tenantId,
       tenant_name: tenant.tenantName,
@@ -78,6 +78,11 @@ Deno.serve(async (req) => {
       expires_at: expiresAt,
       is_enabled: true,
     }, { onConflict: 'user_id' });
+
+    if (upsertError) {
+      console.error('Failed to save Xero connection:', upsertError);
+      throw new Error(`Database error: ${upsertError.message}`);
+    }
 
     console.log('Xero OAuth successful for user:', user.id);
 

@@ -199,6 +199,48 @@ export type Database = {
         }
         Relationships: []
       }
+      xero_connections: {
+        Row: {
+          access_token: string
+          created_at: string
+          expires_at: string
+          id: string
+          invoice_template: string | null
+          is_enabled: boolean | null
+          refresh_token: string
+          tenant_id: string
+          tenant_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string
+          expires_at: string
+          id?: string
+          invoice_template?: string | null
+          is_enabled?: boolean | null
+          refresh_token: string
+          tenant_id: string
+          tenant_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string
+          expires_at?: string
+          id?: string
+          invoice_template?: string | null
+          is_enabled?: boolean | null
+          refresh_token?: string
+          tenant_id?: string
+          tenant_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
