@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { FileText, Calculator, Plus } from "lucide-react";
 
 interface UpcomingInvoice {
-  contractId: string;
   customerId: string;
   customerName: string;
   nextInvoiceDate: string;

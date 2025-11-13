@@ -72,7 +72,6 @@ interface ContractFormProps {
     location?: string;
     mwpManaged: number;
   };
-  existingContractId?: string;
   onComplete?: () => void;
 }
 
@@ -175,13 +174,14 @@ const addons = [
   },
 ];
 
-export function ContractForm({ existingCustomer, existingContractId, onComplete }: ContractFormProps = {}) {
+export function ContractForm({ existingCustomer, onComplete }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
   const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: string}>({});
   const [loadingContract, setLoadingContract] = useState(false);
-  const { currency: userCurrency } = useCurrency();
+  const [existingContractId, setExistingContractId] = useState<string | null>(null);
+  const { currency: userCurrency} = useCurrency();
 
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractFormSchema),
@@ -221,22 +221,27 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
   // Load existing contract data if editing
   useEffect(() => {
     const loadExistingContract = async () => {
-      if (!existingContractId) return;
+      if (!existingCustomer?.id) return;
       
       setLoadingContract(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) throw new Error("Not authenticated");
+        if (!user) return;
 
+        // Load active contract by customer_id
         const { data: contract, error } = await supabase
           .from('contracts')
           .select('*')
-          .eq('id', existingContractId)
+          .eq('customer_id', existingCustomer.id)
           .eq('user_id', user.id)
+          .eq('contract_status', 'active')
           .maybeSingle();
 
         if (error) throw error;
-        if (!contract) throw new Error("Contract not found");
+        if (!contract) return;  // No existing contract, that's fine
+        
+        // Store contract ID for update
+        setExistingContractId(contract.id);
 
         // Populate all form fields
         form.setValue('companyName', contract.company_name);
@@ -294,7 +299,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
     };
 
     loadExistingContract();
-  }, [existingContractId, form]);
+  }, [existingCustomer]);
 
   const watchPackage = form.watch("package");
   const watchModules = form.watch("modules");
@@ -390,23 +395,22 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
         return;
       }
 
-      // 1. Create or update customer record
+      // 1. Upsert customer
       const { data: customer, error: customerError } = await supabase
         .from('customers')
         .upsert({
+          ...(existingCustomer?.id && { id: existingCustomer.id }),
           name: data.companyName,
           mwp_managed: data.initialMW,
           status: 'active',
           user_id: user.id
-        }, {
-          onConflict: 'name,user_id'
         })
         .select()
         .single();
 
       if (customerError) throw customerError;
 
-      // 2. Prepare addons with complexity data
+      // 2. Prepare addons with complexity
       const enhancedAddons = (data.addons || []).map(addonId => {
         const addon = addons.find(a => a.id === addonId);
         return {
@@ -415,7 +419,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
         };
       });
 
-      // 3. Create contract record
+      // 3. Upsert contract (update if exists, create if not)
       const { error: contractError } = await supabase
         .from('contracts')
         .upsert({

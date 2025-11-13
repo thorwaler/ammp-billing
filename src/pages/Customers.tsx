@@ -69,7 +69,8 @@ const Customers = () => {
             currency
           )
         `)
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .eq('contracts.contract_status', 'active');
 
     if (error) {
       console.error('Error loading customers:', error);

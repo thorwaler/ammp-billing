@@ -236,7 +236,6 @@ const ContractDetails = () => {
                     location: customer.location,
                     mwpManaged: customer.mwp_managed
                   } : undefined}
-                  existingContractId={contract.id}
                   onComplete={() => {
                     window.location.reload();
                   }}
