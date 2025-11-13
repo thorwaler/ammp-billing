@@ -41,6 +41,8 @@ interface Addon {
   selected: boolean;
   requiresPro?: boolean;
   solcastSiteCount?: number;
+  quantity?: number;
+  customPrice?: number;
 }
 
 interface Customer {
@@ -110,7 +112,10 @@ const defaultAddons: Addon[] = [
     id: "satelliteDataAPI", 
     name: "Satellite Data API Access", 
     module: "technicalMonitoring", 
-    price: 6,
+    complexityPricing: true,
+    lowPrice: 1,
+    mediumPrice: 2,
+    highPrice: 3,
     selected: false
   },
   { 
@@ -420,7 +425,10 @@ export function InvoiceCalculator({
     calculationResult.addonCosts = selectedAddons.map(addon => {
       let addonPrice = 0;
       
-      if (addon.complexityPricing && addon.complexity) {
+      // Check for custom price override first
+      if (addon.customPrice != null) {
+        addonPrice = addon.customPrice;
+      } else if (addon.complexityPricing && addon.complexity) {
         if (addon.complexity === 'low' && addon.lowPrice) {
           addonPrice = addon.lowPrice;
         } else if (addon.complexity === 'medium' && addon.mediumPrice) {
@@ -428,27 +436,17 @@ export function InvoiceCalculator({
         } else if (addon.complexity === 'high' && addon.highPrice) {
           addonPrice = addon.highPrice;
         }
-      } else if (addon.id === 'satelliteDataAPI' && addon.solcastSiteCount) {
-        // Tiered pricing for Satellite Data API based on site count
-        const siteCount = addon.solcastSiteCount;
-        if (siteCount <= 100) {
-          addonPrice = siteCount * 3;
-        } else if (siteCount <= 500) {
-          addonPrice = (100 * 3) + ((siteCount - 100) * 2);
-        } else if (siteCount <= 1000) {
-          addonPrice = (100 * 3) + (400 * 2) + ((siteCount - 500) * 1.5);
-        } else {
-          addonPrice = (100 * 3) + (400 * 2) + (500 * 1.5) + ((siteCount - 1000) * 1);
-        }
       } else if (addon.price) {
         addonPrice = addon.price;
       }
+      
+      const quantity = addon.quantity || 1;
       
       // Apply frequency multiplier to addon costs
       return {
         addonId: addon.id,
         addonName: addon.name,
-        cost: addonPrice * frequencyMultiplier
+        cost: addonPrice * quantity * frequencyMultiplier
       };
     });
     
@@ -740,7 +738,9 @@ export function InvoiceCalculator({
                 </div>
               </div>
               
-              {selectedCustomer?.minimumCharge != null && (
+              {(selectedCustomer?.minimumCharge != null && 
+                (selectedCustomer?.volumeDiscounts?.siteSizeThreshold != null || 
+                 selectedCustomer?.volumeDiscounts?.siteSizeDiscount != null)) && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="sites">Total Sites</Label>
@@ -873,8 +873,58 @@ export function InvoiceCalculator({
                                   </div>
                                 )}
                                 
-                                {/* Solcast API Site Count for Satellite Data API */}
-                                {addon.selected && addon.id === 'satelliteDataAPI' && (
+                                {/* Price and Quantity inputs for all selected addons */}
+                                {addon.selected && (
+                                  <div className="pl-6 space-y-2">
+                                    <div className="flex items-center gap-4">
+                                      <div className="flex items-center gap-2">
+                                        <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
+                                          Price:
+                                        </Label>
+                                        <Input
+                                          id={`price-${addon.id}`}
+                                          type="number"
+                                          placeholder={addon.complexityPricing 
+                                            ? `${addon.lowPrice}-${addon.highPrice}` 
+                                            : String(addon.price)}
+                                          min={0}
+                                          step={0.01}
+                                          className="w-28 h-8"
+                                          value={addon.customPrice ?? ''}
+                                          onChange={(e) => {
+                                            const value = e.target.value ? Number(e.target.value) : undefined;
+                                            setAddons(prev => prev.map(a => 
+                                              a.id === addon.id ? { ...a, customPrice: value } : a
+                                            ));
+                                          }}
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Label htmlFor={`quantity-${addon.id}`} className="text-sm whitespace-nowrap">
+                                          Quantity:
+                                        </Label>
+                                        <Input
+                                          id={`quantity-${addon.id}`}
+                                          type="number"
+                                          placeholder="1"
+                                          min={1}
+                                          step={1}
+                                          className="w-20 h-8"
+                                          value={addon.quantity || 1}
+                                          onChange={(e) => {
+                                            const value = Math.max(1, Number(e.target.value) || 1);
+                                            setAddons(prev => prev.map(a => 
+                                              a.id === addon.id ? { ...a, quantity: value } : a
+                                            ));
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Solcast API Site Count for Satellite Data API - REMOVED */}
+                                {addon.selected && addon.id === 'satelliteDataAPI_OLD' && (
                                   <div className="pl-6 space-y-2">
                                     <Label htmlFor={`solcast-sites-${addon.id}`} className="text-sm">
                                       Sites Using Solcast API
@@ -957,12 +1007,19 @@ export function InvoiceCalculator({
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Add-on Costs:</h4>
                 <div className="space-y-1 text-sm pl-2">
-                  {result.addonCosts.map((item) => (
-                    <div key={item.addonId} className="flex justify-between">
-                      <span>{item.addonName}:</span>
-                      <span>{formatCurrency(item.cost)}</span>
-                    </div>
-                  ))}
+                  {result.addonCosts.map((item) => {
+                    const addon = addons.find(a => a.id === item.addonId);
+                    const quantity = addon?.quantity || 1;
+                    return (
+                      <div key={item.addonId} className="flex justify-between">
+                        <span>
+                          {item.addonName}
+                          {quantity > 1 && <span className="text-muted-foreground"> (×{quantity})</span>}:
+                        </span>
+                        <span>{formatCurrency(item.cost)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
