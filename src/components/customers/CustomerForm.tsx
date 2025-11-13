@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface CustomerFormProps {
   onComplete: () => void;
@@ -31,7 +32,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name || !formData.location) {
@@ -45,15 +46,49 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     
     setIsSubmitting(true);
     
-    // Simulate API call
-    setTimeout(() => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const customerData = {
+        name: formData.name,
+        location: formData.location,
+        mwp_managed: formData.mwpManaged ? parseFloat(formData.mwpManaged) : 0,
+        status: formData.status,
+        user_id: user.id,
+      };
+
+      if (existingCustomer) {
+        const { error } = await supabase
+          .from('customers')
+          .update(customerData)
+          .eq('id', existingCustomer.id)
+          .eq('user_id', user.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from('customers')
+          .insert([customerData]);
+
+        if (error) throw error;
+      }
+
       toast({
         title: existingCustomer ? "Customer Updated" : "Customer Created",
         description: `${formData.name} has been successfully ${existingCustomer ? "updated" : "added"}.`,
       });
-      setIsSubmitting(false);
       onComplete();
-    }, 1000);
+    } catch (error) {
+      console.error('Error saving customer:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save customer. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
