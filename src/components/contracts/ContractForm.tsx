@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +26,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "@/hooks/use-toast";
-import { FileUp, Save, DollarSign, Calendar as CalendarIcon } from "lucide-react";
+import { FileUp, Save, DollarSign, Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
@@ -176,6 +176,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
   const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: string}>({});
+  const [loadingContract, setLoadingContract] = useState(false);
   const { currency: userCurrency } = useCurrency();
 
   const form = useForm<ContractFormValues>({
@@ -208,6 +209,80 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
       notes: "",
     },
   });
+
+  // Load existing contract data if editing
+  useEffect(() => {
+    const loadExistingContract = async () => {
+      if (!existingContractId) return;
+      
+      setLoadingContract(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("Not authenticated");
+
+        const { data: contract, error } = await supabase
+          .from('contracts')
+          .select('*')
+          .eq('id', existingContractId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!contract) throw new Error("Contract not found");
+
+        // Populate all form fields
+        form.setValue('companyName', contract.company_name);
+        form.setValue('initialMW', contract.initial_mw);
+        form.setValue('currency', contract.currency as "USD" | "EUR");
+        form.setValue('billingFrequency', contract.billing_frequency as "monthly" | "quarterly" | "biannual" | "annual");
+        form.setValue('package', contract.package as "starter" | "pro" | "custom");
+        form.setValue('modules', (contract.modules || []) as string[]);
+        form.setValue('customPricing', (contract.custom_pricing || {}) as any);
+        form.setValue('volumeDiscounts', (contract.volume_discounts || {
+          annualUpfrontDiscount: 5,
+          siteSizeThreshold: 3,
+          siteSizeDiscount: 0,
+          portfolio50MW: 5,
+          portfolio100MW: 10,
+          portfolio150MW: 15,
+          portfolio200MW: 20,
+        }) as any);
+        form.setValue('minimumCharge', contract.minimum_charge || 0);
+        form.setValue('minimumAnnualValue', contract.minimum_annual_value || 0);
+        form.setValue('notes', contract.notes || '');
+
+        // Set component state
+        setSelectedPackage(contract.package);
+        setSelectedModules((contract.modules || []) as string[]);
+        setShowCustomPricing(contract.package === 'custom');
+
+        // Handle addons with complexity
+        const addonIds = ((contract.addons || []) as any[]).map((a: any) => a.id || a);
+        form.setValue('addons', addonIds);
+
+        // Restore complexity selections
+        const complexityMap: {[key: string]: string} = {};
+        ((contract.addons || []) as any[]).forEach((addon: any) => {
+          if (addon.complexity) {
+            complexityMap[addon.id] = addon.complexity;
+          }
+        });
+        setSelectedComplexityItems(complexityMap);
+
+      } catch (error) {
+        console.error('Error loading contract:', error);
+        toast({
+          title: "Error loading contract",
+          description: error instanceof Error ? error.message : "Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoadingContract(false);
+      }
+    };
+
+    loadExistingContract();
+  }, [existingContractId, form]);
 
   const watchPackage = form.watch("package");
   const watchModules = form.watch("modules");
@@ -332,6 +407,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
       const { error: contractError } = await supabase
         .from('contracts')
         .upsert({
+          ...(existingContractId && { id: existingContractId }),
           customer_id: customer.id,
           company_name: data.companyName,
           package: data.package,
@@ -379,9 +455,14 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
   return (
     <Card className="w-full">
       <CardHeader>
-        <CardTitle className="text-xl">Create New Contract</CardTitle>
+        <CardTitle className="text-xl">{existingContractId ? 'Edit Contract' : 'Create New Contract'}</CardTitle>
       </CardHeader>
       <CardContent>
+        {loadingContract ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -820,7 +901,8 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
               </Button>
             </div>
           </form>
-        </Form>
+          </Form>
+        )}
       </CardContent>
     </Card>
   );

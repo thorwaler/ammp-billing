@@ -53,6 +53,10 @@ interface Customer {
   minimumCharge?: number;
   minimumAnnualValue?: number;
   customPricing?: {[key: string]: number};
+  volumeDiscounts?: {
+    siteSizeThreshold?: number;
+    [key: string]: any;
+  };
   currency: 'USD' | 'EUR';
   billingFrequency: 'monthly' | 'quarterly' | 'biannual' | 'annual';
 }
@@ -233,6 +237,7 @@ export function InvoiceCalculator({
             custom_pricing,
             minimum_charge,
             minimum_annual_value,
+            volume_discounts,
             currency,
             billing_frequency
           )
@@ -253,6 +258,7 @@ export function InvoiceCalculator({
           const modules = Array.isArray(contract.modules) ? contract.modules as string[] : [];
           const addons = Array.isArray(contract.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
           const customPricing = typeof contract.custom_pricing === 'object' && contract.custom_pricing !== null ? contract.custom_pricing as {[key: string]: number} : {};
+          const volumeDiscounts = typeof contract.volume_discounts === 'object' && contract.volume_discounts !== null ? contract.volume_discounts as any : {};
           
           return {
             id: c.id,
@@ -265,6 +271,7 @@ export function InvoiceCalculator({
             minimumCharge: Number(contract.minimum_charge) || 0,
             minimumAnnualValue: Number(contract.minimum_annual_value) || 0,
             customPricing,
+            volumeDiscounts,
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
             billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual'
           };
@@ -288,6 +295,11 @@ export function InvoiceCalculator({
       setSelectedCustomer(customerData);
       
       if (customerData) {
+        // Reset site values if customer has no minimum charge
+        if (!customerData.minimumCharge) {
+          setSites("");
+          setSitesUnderThreshold("");
+        }
         // Set initial MW managed
         setMwManaged(customerData.mwManaged);
         setSites(customerData.sites);
@@ -703,21 +715,26 @@ export function InvoiceCalculator({
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="sites">Total Sites</Label>
-                  <Input
-                    id="sites"
-                    type="number"
-                    placeholder="Number of sites"
-                    min={0}
-                    value={sites}
-                    onChange={(e) => setSites(e.target.value ? Number(e.target.value) : "")}
-                  />
-                </div>
-                {selectedCustomer.minimumCharge && (
+              {selectedCustomer?.minimumCharge && (
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="sites-threshold">Sites Under Threshold</Label>
+                    <Label htmlFor="sites">Total Sites</Label>
+                    <Input
+                      id="sites"
+                      type="number"
+                      placeholder="Number of sites"
+                      min={0}
+                      value={sites}
+                      onChange={(e) => setSites(e.target.value ? Number(e.target.value) : "")}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="sites-threshold">
+                      Sites Under Threshold
+                      <span className="text-xs text-muted-foreground ml-1">
+                        (Sites below {selectedCustomer.volumeDiscounts?.siteSizeThreshold || 3} MW)
+                      </span>
+                    </Label>
                     <Input
                       id="sites-threshold"
                       type="number"
@@ -725,11 +742,22 @@ export function InvoiceCalculator({
                       min={0}
                       max={sites || 0}
                       value={sitesUnderThreshold}
-                      onChange={(e) => setSitesUnderThreshold(e.target.value ? Number(e.target.value) : "")}
+                      onChange={(e) => {
+                        const value = e.target.value ? Number(e.target.value) : "";
+                        if (value && sites && value > sites) {
+                          toast({
+                            title: "Invalid value",
+                            description: "Sites under threshold cannot exceed total sites",
+                            variant: "destructive",
+                          });
+                          return;
+                        }
+                        setSitesUnderThreshold(value);
+                      }}
                     />
                   </div>
-                )}
-              </div>
+                </div>
+              )}
               
               <div className="space-y-2">
                 <Label>Modules</Label>
