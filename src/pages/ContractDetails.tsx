@@ -56,9 +56,9 @@ const ContractDetails = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
 
-  useEffect(() => {
-    const loadContractDetails = async () => {
+  const loadContractData = async () => {
       setLoading(true);
       setError(null);
       
@@ -125,8 +125,37 @@ const ContractDetails = () => {
       }
     };
 
-    loadContractDetails();
+  useEffect(() => {
+    loadContractData();
   }, [id]);
+
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('contracts')
+        .update({ contract_status: newStatus })
+        .eq('id', contract.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Contract status updated",
+        description: `Contract marked as ${newStatus}.`,
+      });
+
+      loadContractData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to update contract status",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleDownloadContract = () => {
     // Simulating contract download
