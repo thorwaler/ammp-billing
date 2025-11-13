@@ -46,59 +46,91 @@ const Customers = () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { data, error } = await supabase
-      .from('customers')
-      .select(`
-        id,
-        name,
-        location,
-        mwp_managed,
-        status,
-        join_date,
-        last_invoiced,
-        contracts (
+      const { data, error } = await supabase
+        .from('customers')
+        .select(`
           id,
-          modules,
-          addons,
-          package,
-          custom_pricing,
-          minimum_annual_value
-        )
-      `)
-      .eq('user_id', user.id);
+          name,
+          location,
+          mwp_managed,
+          status,
+          join_date,
+          last_invoiced,
+          contracts (
+            id,
+            package,
+            modules,
+            addons,
+            custom_pricing,
+            minimum_annual_value,
+            minimum_charge,
+            volume_discounts
+          )
+        `)
+        .eq('user_id', user.id);
 
     if (error) {
       console.error('Error loading customers:', error);
       return;
     }
 
-    const calculateContractValue = (contract: any, mwpManaged: number) => {
-      if (!contract) return 0;
-      
-      if (contract.package === 'starter') {
-        return 3000;
-      }
-      
-      if (contract.package === 'pro') {
-        const defaultPrices: {[key: string]: number} = {
-          technicalMonitoring: 1000,
-          energySavingsHub: 500,
-          stakeholderPortal: 250,
-          control: 500
+        const calculateContractValue = (contract: any, mwpManaged: number) => {
+          if (!contract) return 0;
+          
+          let annualValue = 0;
+          
+          if (contract.package === 'starter') {
+            // Starter package fixed annual cost
+            annualValue = contract.minimum_annual_value || 3000;
+          } else {
+            // Pro or Custom package - calculate module costs (annual)
+            const defaultPrices: {[key: string]: number} = {
+              technicalMonitoring: 1000,
+              energySavingsHub: 500,
+              stakeholderPortal: 250,
+              control: 500
+            };
+            
+            const modules = Array.isArray(contract.modules) ? contract.modules : [];
+            const totalPerMwp = modules.reduce((sum: number, moduleId: string) => {
+              const customPrice = contract.custom_pricing?.[moduleId];
+              return sum + (customPrice || defaultPrices[moduleId] || 0);
+            }, 0);
+            
+            annualValue = totalPerMwp * mwpManaged;
+            
+            // Add recurring addons (annual cost)
+            const addons = Array.isArray(contract.addons) ? contract.addons : [];
+            const recurringAddons = [
+              { id: 'satelliteDataAPI', pricePerMW: 6 }, // €6/MW/year
+              { id: 'tmCustomDashboards', price: 1000 },
+              { id: 'tmCustomReports', price: 1500 },
+              { id: 'tmCustomAlerts', price: 150 },
+              { id: 'eshCustomDashboard', price: 1000 },
+              { id: 'eshCustomReport', price: 1500 },
+              { id: 'spCustomDashboard', price: 1000 },
+              { id: 'spCustomReport', price: 1500 }
+            ];
+            
+            addons.forEach((addon: any) => {
+              const addonId = typeof addon === 'string' ? addon : addon.id;
+              const addonConfig = recurringAddons.find(a => a.id === addonId);
+              if (addonConfig) {
+                if ('pricePerMW' in addonConfig) {
+                  annualValue += addonConfig.pricePerMW * mwpManaged;
+                } else {
+                  annualValue += addonConfig.price;
+                }
+              }
+            });
+            
+            // Compare with minimum annual value and use the higher
+            const minimumValue = contract.minimum_annual_value || (contract.package === 'pro' ? 5000 : 0);
+            annualValue = Math.max(annualValue, minimumValue);
+          }
+          
+          return annualValue;
         };
-        
-        const modules = Array.isArray(contract.modules) ? contract.modules : [];
-        const totalPerMwp = modules.reduce((sum: number, moduleId: string) => {
-          const customPrice = contract.custom_pricing?.[moduleId];
-          return sum + (customPrice || defaultPrices[moduleId] || 0);
-        }, 0);
-        
-        return Math.max(contract.minimum_annual_value || 5000, totalPerMwp * mwpManaged);
-      }
-      
-      // For custom package
-      return contract.minimum_annual_value || 0;
-    };
 
     const transformed: CustomerData[] = (data || []).map(c => {
       const contract = c.contracts?.[0];

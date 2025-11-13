@@ -305,6 +305,31 @@ const ContractDetails = () => {
                     {contract.billing_frequency || 'Annual'}
                   </p>
                 </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Contract Signed</p>
+                  <p className="font-medium">
+                    {contract.signed_date 
+                      ? formatDate(contract.signed_date)
+                      : "Not set"}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Current Period</p>
+                  <p className="font-medium">
+                    {contract.period_start && contract.period_end
+                      ? `${formatDate(contract.period_start)} - ${formatDate(contract.period_end)}`
+                      : "Not set"}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Billing Frequency</p>
+                  <p className="font-medium capitalize">
+                    {contract.billing_frequency || 'Annual'}
+                  </p>
+                </div>
                 
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Initial MW</p>
