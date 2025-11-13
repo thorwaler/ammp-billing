@@ -8,7 +8,7 @@ interface CurrencyContextType {
   setCurrency: (currency: "EUR" | "USD") => void;
   setExchangeRate: (rate: number) => void;
   formatCurrency: (amount: number) => string;
-  convertToDisplayCurrency: (usdAmount: number) => number;
+  convertToDisplayCurrency: (amount: number, sourceCurrency?: string) => number;
   loading: boolean;
 }
 
@@ -88,11 +88,23 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     setExchangeRateState(rate);
   };
 
-  const convertToDisplayCurrency = (usdAmount: number): number => {
-    if (currency === "USD") {
-      return usdAmount;
+  const convertToDisplayCurrency = (amount: number, sourceCurrency: string = "USD"): number => {
+    // If source and display currency are the same, no conversion needed
+    if (sourceCurrency === currency) {
+      return amount;
     }
-    return usdAmount * exchangeRate;
+    
+    // If displaying in USD and source is EUR, divide by exchange rate
+    if (currency === "USD" && sourceCurrency === "EUR") {
+      return amount / exchangeRate;
+    }
+    
+    // If displaying in EUR and source is USD, multiply by exchange rate
+    if (currency === "EUR" && sourceCurrency === "USD") {
+      return amount * exchangeRate;
+    }
+    
+    return amount;
   };
 
   const formatCurrency = (amount: number): string => {
