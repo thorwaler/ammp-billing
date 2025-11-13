@@ -227,19 +227,13 @@ const Customers = () => {
     let filtered = customersData;
     
     // Apply tab filter
-    switch (filterTab) {
-      case "with-contract":
-        filtered = filtered.filter(c => c.contractId);
-        break;
-      case "needs-setup":
-        filtered = filtered.filter(c => !c.contractId);
-        break;
-      case "inactive":
-        filtered = filtered.filter(c => c.status === "inactive");
-        break;
-      default:
-        // "all" - no filter
-        break;
+    if (filterTab === "active") {
+      filtered = filtered.filter(c => c.status === "active" && c.contractId);
+    } else if (filterTab === "inactive") {
+      // Show customers that are inactive OR have no active contract
+      filtered = filtered.filter(c => c.status === "inactive" || !c.contractId);
+    } else if (filterTab === "no-contracts") {
+      filtered = filtered.filter(c => !c.contractId);
     }
     
     // Apply search filter

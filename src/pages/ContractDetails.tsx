@@ -7,7 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { FileText, Download, Edit, Clock, Calculator } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -202,9 +204,25 @@ const ContractDetails = () => {
       <div className="flex flex-col gap-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <div className="flex items-center">
-              <FileText className="h-8 w-8 mr-2 text-ammp-blue" />
+            <div className="flex items-center gap-2">
+              <FileText className="h-8 w-8 text-primary" />
               <h1 className="text-3xl font-bold tracking-tight">{companyName}</h1>
+              <Badge 
+                variant={
+                  contract.contract_status === 'active' ? 'default' : 
+                  contract.contract_status === 'pending' ? 'secondary' : 
+                  contract.contract_status === 'cancelled' ? 'destructive' : 
+                  'outline'
+                }
+                className={
+                  contract.contract_status === 'active' ? 'bg-green-600 hover:bg-green-700' : 
+                  contract.contract_status === 'pending' ? 'bg-yellow-600 hover:bg-yellow-700' : 
+                  contract.contract_status === 'expired' ? 'bg-gray-600 hover:bg-gray-700' : 
+                  ''
+                }
+              >
+                {contract.contract_status?.charAt(0).toUpperCase() + contract.contract_status?.slice(1) || 'Active'}
+              </Badge>
             </div>
             <p className="text-muted-foreground mt-1">
               {customer?.location && <span>{customer.location} • </span>}
@@ -218,7 +236,7 @@ const ContractDetails = () => {
               Download PDF
             </Button>
             
-            <Dialog>
+            <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <Edit className="mr-2 h-4 w-4" />
@@ -237,7 +255,8 @@ const ContractDetails = () => {
                     mwpManaged: customer.mwp_managed
                   } : undefined}
                   onComplete={() => {
-                    window.location.reload();
+                    setShowEditDialog(false);
+                    loadContractData();
                   }}
                 />
               </DialogContent>
@@ -256,6 +275,85 @@ const ContractDetails = () => {
                 <ContractForm />
               </DialogContent>
             </Dialog>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-background">
+                {contract.contract_status === 'active' && (
+                  <>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          Mark as Expired
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Mark Contract as Expired</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will stop generating invoices for this contract. You can reactivate it later if needed.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleStatusChange('expired')}>
+                            Confirm
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                          Mark as Cancelled
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Mark Contract as Cancelled</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will cancel the contract and stop generating invoices. You can reactivate it later if needed.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleStatusChange('cancelled')}>
+                            Confirm
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
+                {(contract.contract_status === 'expired' || contract.contract_status === 'cancelled') && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        Reactivate Contract
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reactivate Contract</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will reactivate the contract and resume generating invoices. Make sure to update the next invoice date.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleStatusChange('active')}>
+                          Confirm
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

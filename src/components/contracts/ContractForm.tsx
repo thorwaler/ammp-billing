@@ -61,6 +61,7 @@ const contractFormSchema = z.object({
   minimumCharge: z.coerce.number().optional(),
   minimumAnnualValue: z.coerce.number().optional(),
   notes: z.string().optional(),
+  contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
 
 type ContractFormValues = z.infer<typeof contractFormSchema>;
@@ -267,6 +268,7 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
         form.setValue('minimumCharge', contract.minimum_charge || 0);
         form.setValue('minimumAnnualValue', contract.minimum_annual_value || 0);
         form.setValue('notes', contract.notes || '');
+        form.setValue('contractStatus', (contract.contract_status || 'active') as "active" | "pending" | "expired" | "cancelled");
 
         // Set component state
         setSelectedPackage(contract.package);

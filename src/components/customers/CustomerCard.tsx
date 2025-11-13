@@ -5,8 +5,12 @@ import { Button } from "@/components/ui/button";
 import { FileText, BarChart, MoreHorizontal, CheckCircle2, AlertCircle } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CustomerForm from "./CustomerForm";
 import ContractForm from "../contracts/ContractForm";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface CustomerCardProps {
   id: string;
@@ -44,6 +48,75 @@ export function CustomerCard({
   const [showEditForm, setShowEditForm] = useState(false);
   const [showContractForm, setShowContractForm] = useState(false);
 
+  const handleMarkInactive = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Update customer status
+      const { error: customerError } = await supabase
+        .from('customers')
+        .update({ status: 'inactive' })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (customerError) throw customerError;
+
+      // Expire active contract (CASCADE)
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .update({ contract_status: 'expired' })
+        .eq('customer_id', id)
+        .eq('user_id', user.id)
+        .eq('contract_status', 'active');
+
+      if (contractError) throw contractError;
+
+      toast({
+        title: "Customer marked inactive",
+        description: "Customer and their active contract have been marked inactive.",
+      });
+
+      onContractCreated?.();
+    } catch (error) {
+      console.error('Error marking customer inactive:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update customer status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleReactivate = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('customers')
+        .update({ status: 'active' })
+        .eq('id', id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Customer reactivated",
+        description: "Customer is now active. Contract remains expired and must be reactivated separately.",
+      });
+
+      onContractCreated?.();
+    } catch (error) {
+      console.error('Error reactivating customer:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reactivate customer",
+        variant: "destructive",
+      });
+    }
+  };
+
   const formattedJoinDate = joinDate 
     ? new Date(joinDate).toLocaleDateString() 
     : undefined;
@@ -58,39 +131,109 @@ export function CustomerCard({
         <div className="flex items-start justify-between">
           <CardTitle className="text-lg">{name}</CardTitle>
           <div className="flex items-center space-x-2">
-            {hasContract ? (
-              <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                <CheckCircle2 className="mr-1 h-3 w-3" />
-                Active Contract
+            <div className="flex flex-col gap-1">
+              {hasContract ? (
+                <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Active Contract
+                </Badge>
+              ) : (
+                <Badge variant="destructive">
+                  <AlertCircle className="mr-1 h-3 w-3" />
+                  No Contract
+                </Badge>
+              )}
+              <Badge 
+                variant={status === 'active' ? 'default' : status === 'pending' ? 'secondary' : 'outline'}
+                className={
+                  status === 'active' ? 'bg-green-600 hover:bg-green-700' : 
+                  status === 'pending' ? 'bg-yellow-600 hover:bg-yellow-700' : 
+                  'bg-gray-600 hover:bg-gray-700'
+                }
+              >
+                {status?.charAt(0).toUpperCase() + status?.slice(1)}
               </Badge>
-            ) : (
-              <Badge variant="destructive">
-                <AlertCircle className="mr-1 h-3 w-3" />
-                No Contract
-              </Badge>
-            )}
-            <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
-              <DialogTrigger asChild>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Edit Customer: {name}</DialogTitle>
-                </DialogHeader>
-                <CustomerForm 
-                  onComplete={() => setShowEditForm(false)} 
-                  existingCustomer={{
-                    id,
-                    name,
-                    location,
-                    mwpManaged,
-                    status
-                  }}
-                />
-              </DialogContent>
-            </Dialog>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-background">
+                <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+                  <DialogTrigger asChild>
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      Edit Customer
+                    </DropdownMenuItem>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Edit Customer: {name}</DialogTitle>
+                    </DialogHeader>
+                    <CustomerForm 
+                      onComplete={() => {
+                        setShowEditForm(false);
+                        onContractCreated?.();
+                      }} 
+                      existingCustomer={{
+                        id,
+                        name,
+                        location,
+                        mwpManaged,
+                        status
+                      }}
+                    />
+                  </DialogContent>
+                </Dialog>
+                <DropdownMenuSeparator />
+                {status === 'active' ? (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        Mark as Inactive
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Mark Customer as Inactive</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will mark the customer inactive and expire their active contract. No more invoices will be generated.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleMarkInactive}>
+                          Confirm
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                        Reactivate Customer
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reactivate Customer</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will reactivate the customer. Their contract will remain expired and must be reactivated separately.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleReactivate}>
+                          Confirm
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         <p className="text-sm text-muted-foreground">{location}</p>
