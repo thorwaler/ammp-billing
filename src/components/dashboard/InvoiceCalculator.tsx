@@ -738,9 +738,8 @@ export function InvoiceCalculator({
                 </div>
               </div>
               
-              {(selectedCustomer?.minimumCharge != null && 
-                (selectedCustomer?.volumeDiscounts?.siteSizeThreshold != null || 
-                 selectedCustomer?.volumeDiscounts?.siteSizeDiscount != null)) && (
+              {(selectedCustomer?.volumeDiscounts?.siteSizeDiscount != null && 
+                selectedCustomer?.volumeDiscounts?.siteSizeDiscount > 0) && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="sites">Total Sites</Label>
