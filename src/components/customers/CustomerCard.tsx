@@ -153,7 +153,6 @@ export function CustomerCard({
                     </DialogHeader>
                     <ContractForm 
                       existingCustomer={{ id, name, location, mwpManaged }}
-                      existingContractId={contractId}
                       onComplete={() => {
                         setShowContractForm(false);
                         onContractCreated?.();

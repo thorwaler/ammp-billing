@@ -46,7 +46,7 @@ interface Addon {
 }
 
 interface Customer {
-  id: string;
+  id: string;  // customer_id
   name: string;
   mwManaged: number;
   lastInvoiced?: string;
@@ -605,7 +605,8 @@ export function InvoiceCalculator({
             period_end: nextPeriodEnd.toISOString(),
             next_invoice_date: nextPeriodEnd.toISOString()
           })
-          .eq('customer_id', selectedCustomer.id);
+          .eq('customer_id', selectedCustomer.id)
+          .eq('contract_status', 'active');
       }
       
       // Notify parent if callback provided

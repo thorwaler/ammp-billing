@@ -5,7 +5,6 @@ import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 interface UpcomingInvoice {
-  contractId: string;
   customerId: string;
   customerName: string;
   nextInvoiceDate: string;
@@ -70,7 +69,6 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
         .map(c => {
           const customer = Array.isArray(c.customers) ? c.customers[0] : c.customers;
           return {
-            contractId: c.id,
             customerId: customer.id,
             customerName: customer.name,
             nextInvoiceDate: c.next_invoice_date!,
@@ -143,8 +141,8 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {invoices.map((invoice) => (
         <InvoiceCard
-          key={invoice.contractId}
-          contractId={invoice.contractId}
+          key={invoice.customerId}
+          contractId={invoice.customerId}
           customerName={invoice.customerName}
           nextInvoiceDate={invoice.nextInvoiceDate}
           billingFrequency={invoice.billingFrequency}
