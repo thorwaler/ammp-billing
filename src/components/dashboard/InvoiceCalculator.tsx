@@ -40,6 +40,7 @@ interface Addon {
   complexity?: 'low' | 'medium' | 'high';
   selected: boolean;
   requiresPro?: boolean;
+  solcastSiteCount?: number;
 }
 
 interface Customer {
@@ -47,7 +48,7 @@ interface Customer {
   name: string;
   package: 'starter' | 'pro' | 'custom';
   mwManaged: number;
-  sites: number;
+  sites?: number;
   modules: string[];
   addons: string[];
   minimumCharge?: number;
@@ -207,6 +208,7 @@ export function InvoiceCalculator({
   const [mwManaged, setMwManaged] = useState<number | "">("");
   const [sites, setSites] = useState<number | "">("");
   const [sitesUnderThreshold, setSitesUnderThreshold] = useState<number | "">("");
+  const [solcastSites, setSolcastSites] = useState<number | "">("");
   const [modules, setModules] = useState<Module[]>(defaultModules);
   const [addons, setAddons] = useState<Addon[]>(defaultAddons);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -265,7 +267,6 @@ export function InvoiceCalculator({
             name: c.name,
             package: contract.package as 'starter' | 'pro' | 'custom',
             mwManaged: Number(c.mwp_managed) || 0,
-            sites: 0,
             modules,
             addons,
             minimumCharge: Number(contract.minimum_charge) || 0,
@@ -424,6 +425,18 @@ export function InvoiceCalculator({
           addonPrice = addon.mediumPrice;
         } else if (addon.complexity === 'high' && addon.highPrice) {
           addonPrice = addon.highPrice;
+        }
+      } else if (addon.id === 'satelliteDataAPI' && addon.solcastSiteCount) {
+        // Tiered pricing for Satellite Data API based on site count
+        const siteCount = addon.solcastSiteCount;
+        if (siteCount <= 100) {
+          addonPrice = siteCount * 3;
+        } else if (siteCount <= 500) {
+          addonPrice = (100 * 3) + ((siteCount - 100) * 2);
+        } else if (siteCount <= 1000) {
+          addonPrice = (100 * 3) + (400 * 2) + ((siteCount - 500) * 1.5);
+        } else {
+          addonPrice = (100 * 3) + (400 * 2) + (500 * 1.5) + ((siteCount - 1000) * 1);
         }
       } else if (addon.price) {
         addonPrice = addon.price;
@@ -589,6 +602,16 @@ export function InvoiceCalculator({
     );
   };
 
+  const handleSolcastSitesChange = (addonId: string, siteCount: number) => {
+    setAddons(prevAddons => 
+      prevAddons.map(a => 
+        a.id === addonId 
+          ? { ...a, solcastSiteCount: siteCount } 
+          : a
+      )
+    );
+  };
+
   // Filter addons to only show those related to selected modules
   const getAddonsByModule = (moduleId: string) => {
     return addons.filter(a => a.module === moduleId);
@@ -690,13 +713,13 @@ export function InvoiceCalculator({
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="new-systems">New Systems</Label>
+                  <Label htmlFor="new-systems">New MW Added</Label>
                   <Input
                     id="new-systems"
                     type="number"
-                    placeholder="Enter number value"
+                    placeholder="Enter MW value"
                     min={0}
-                    step={1}
+                    step={0.1}
                     value={newSystems}
                     onChange={(e) => setNewSystems(e.target.value ? Number(e.target.value) : "")}
                   />
@@ -845,6 +868,28 @@ export function InvoiceCalculator({
                                         <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
                                       </SelectContent>
                                     </Select>
+                                  </div>
+                                )}
+                                
+                                {/* Solcast API Site Count for Satellite Data API */}
+                                {addon.selected && addon.id === 'satelliteDataAPI' && (
+                                  <div className="pl-6 space-y-2">
+                                    <Label htmlFor={`solcast-sites-${addon.id}`} className="text-sm">
+                                      Sites Using Solcast API
+                                    </Label>
+                                    <Input
+                                      id={`solcast-sites-${addon.id}`}
+                                      type="number"
+                                      placeholder="Enter number of sites"
+                                      min={0}
+                                      step={1}
+                                      value={addon.solcastSiteCount || ""}
+                                      onChange={(e) => handleSolcastSitesChange(addon.id, e.target.value ? Number(e.target.value) : 0)}
+                                      className="h-8"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                      Tiered pricing: €3/site (0-100), €2/site (101-500), €1.5/site (501-1000), €1/site (1000+)
+                                    </p>
                                   </div>
                                 )}
                               </div>
