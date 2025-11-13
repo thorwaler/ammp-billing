@@ -244,9 +244,9 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
         form.setValue('currency', contract.currency as "USD" | "EUR");
         form.setValue('billingFrequency', contract.billing_frequency as "monthly" | "quarterly" | "biannual" | "annual");
         form.setValue('nextInvoiceDate', contract.next_invoice_date ? contract.next_invoice_date.split('T')[0] : '');
-        form.setValue('signedDate', contract.signed_date ? contract.signed_date.split('T')[0] : '');
-        form.setValue('periodStart', contract.period_start ? contract.period_start.split('T')[0] : '');
-        form.setValue('periodEnd', contract.period_end ? contract.period_end.split('T')[0] : '');
+        form.setValue('signedDate', (contract as any).signed_date ? (contract as any).signed_date.split('T')[0] : '');
+        form.setValue('periodStart', (contract as any).period_start ? (contract as any).period_start.split('T')[0] : '');
+        form.setValue('periodEnd', (contract as any).period_end ? (contract as any).period_end.split('T')[0] : '');
         form.setValue('package', contract.package as "starter" | "pro" | "custom");
         form.setValue('modules', (contract.modules || []) as string[]);
         form.setValue('customPricing', (contract.custom_pricing || {}) as any);

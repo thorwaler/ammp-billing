@@ -20,7 +20,8 @@ interface CustomerData {
   id: string;
   name: string;
   location: string;
-  contractValueUSD: number;
+  contractValue: number;
+  contractCurrency: string;
   mwpManaged: number;
   status: "active" | "pending" | "inactive";
   addOns: string[];
@@ -64,7 +65,8 @@ const Customers = () => {
             custom_pricing,
             minimum_annual_value,
             minimum_charge,
-            volume_discounts
+            volume_discounts,
+            currency
           )
         `)
         .eq('user_id', user.id);
@@ -142,7 +144,8 @@ const Customers = () => {
         id: c.id,
         name: c.name,
         location: c.location || 'N/A',
-        contractValueUSD: calculateContractValue(contract, mwpManaged),
+        contractValue: calculateContractValue(contract, mwpManaged),
+        contractCurrency: contract?.currency || 'USD',
         mwpManaged,
         status: (c.status || 'active') as "active" | "pending" | "inactive",
         addOns: [...modules, ...addons],
@@ -417,7 +420,7 @@ const Customers = () => {
             <CustomerCard 
               key={customer.id} 
               {...customer}
-              contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValueUSD))}/MWp`}
+              contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValue, customer.contractCurrency))}/year`}
               hasContract={!!customer.contractId}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)} 
               onViewDetails={() => navigate(`/customers/${customer.id}`)} 
