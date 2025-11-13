@@ -303,7 +303,9 @@ export function InvoiceCalculator({
         }
         // Set initial MW managed
         setMwManaged(customerData.mwManaged);
-        setSites(customerData.sites);
+        if (customerData.sites !== undefined) {
+          setSites(customerData.sites);
+        }
         
         // Pre-fill billing frequency from contract
         setBillingFrequency(customerData.billingFrequency);
