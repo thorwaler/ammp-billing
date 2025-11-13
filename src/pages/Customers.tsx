@@ -59,7 +59,10 @@ const Customers = () => {
         contracts (
           id,
           modules,
-          addons
+          addons,
+          package,
+          custom_pricing,
+          minimum_annual_value
         )
       `)
       .eq('user_id', user.id);
@@ -69,17 +72,46 @@ const Customers = () => {
       return;
     }
 
+    const calculateContractValue = (contract: any, mwpManaged: number) => {
+      if (!contract) return 0;
+      
+      if (contract.package === 'starter') {
+        return 3000;
+      }
+      
+      if (contract.package === 'pro') {
+        const defaultPrices: {[key: string]: number} = {
+          technicalMonitoring: 1000,
+          energySavingsHub: 500,
+          stakeholderPortal: 250,
+          control: 500
+        };
+        
+        const modules = Array.isArray(contract.modules) ? contract.modules : [];
+        const totalPerMwp = modules.reduce((sum: number, moduleId: string) => {
+          const customPrice = contract.custom_pricing?.[moduleId];
+          return sum + (customPrice || defaultPrices[moduleId] || 0);
+        }, 0);
+        
+        return Math.max(contract.minimum_annual_value || 5000, totalPerMwp * mwpManaged);
+      }
+      
+      // For custom package
+      return contract.minimum_annual_value || 0;
+    };
+
     const transformed: CustomerData[] = (data || []).map(c => {
       const contract = c.contracts?.[0];
       const modules = Array.isArray(contract?.modules) ? contract.modules as string[] : [];
       const addons = Array.isArray(contract?.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
+      const mwpManaged = Number(c.mwp_managed) || 0;
       
       return {
         id: c.id,
         name: c.name,
         location: c.location || 'N/A',
-        contractValueUSD: 0, // Calculate from contract
-        mwpManaged: Number(c.mwp_managed) || 0,
+        contractValueUSD: calculateContractValue(contract, mwpManaged),
+        mwpManaged,
         status: (c.status || 'active') as "active" | "pending" | "inactive",
         addOns: [...modules, ...addons],
         joinDate: c.join_date || new Date().toISOString(),
