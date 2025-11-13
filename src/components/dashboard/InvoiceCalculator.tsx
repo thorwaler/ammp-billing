@@ -48,20 +48,22 @@ interface Addon {
 interface Customer {
   id: string;
   name: string;
-  package: 'starter' | 'pro' | 'custom';
   mwManaged: number;
-  sites?: number;
+  lastInvoiced?: string;
+  signedDate?: string;
+  periodStart?: string;
+  periodEnd?: string;
+  billingFrequency: string;
+  nextInvoiceDate?: string;
+  package: string;
   modules: string[];
-  addons: string[];
+  addons: any[];
   minimumCharge?: number;
+  customPricing?: any;
   minimumAnnualValue?: number;
-  customPricing?: {[key: string]: number};
-  volumeDiscounts?: {
-    siteSizeThreshold?: number;
-    [key: string]: any;
-  };
+  volumeDiscounts?: any;
   currency: 'USD' | 'EUR';
-  billingFrequency: 'monthly' | 'quarterly' | 'biannual' | 'annual';
+  sites?: number;
 }
 
 interface CalculationResult {
@@ -79,6 +81,7 @@ interface CalculationResult {
   minimumCharges: number;
   totalMWCost: number;
   totalPrice: number;
+  invoicePeriod?: string;
 }
 
 
@@ -313,7 +316,7 @@ export function InvoiceCalculator({
         }
         
         // Pre-fill billing frequency from contract
-        setBillingFrequency(customerData.billingFrequency);
+        setBillingFrequency(customerData.billingFrequency as 'monthly' | 'quarterly' | 'biannual' | 'annual');
         
         // Apply custom pricing to modules if available
         const updatedModules = defaultModules.map(module => {
@@ -343,6 +346,28 @@ export function InvoiceCalculator({
     }
   }, [customer, customers]);
 
+  // Calculate the number of days between two dates for prorating
+  const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
+    const oneDay = 24 * 60 * 60 * 1000; // milliseconds in a day
+    return Math.round(Math.abs((endDate.getTime() - startDate.getTime()) / oneDay));
+  };
+
+  // Calculate proration multiplier based on days
+  const calculateProrationMultiplier = (startDate: Date, endDate: Date, frequency: string): number => {
+    const days = calculateDaysBetween(startDate, endDate);
+    
+    // Standard period lengths in days
+    const periodDays: { [key: string]: number } = {
+      monthly: 30,
+      quarterly: 91,
+      biannual: 182,
+      annual: 365
+    };
+    
+    const standardDays = periodDays[frequency] || 365;
+    return days / standardDays;
+  };
+
   // Calculate frequency multiplier for billing
   const getFrequencyMultiplier = () => {
     switch (billingFrequency) {
@@ -365,8 +390,27 @@ export function InvoiceCalculator({
     }
 
     if (!selectedCustomer) return;
+
+    // Check if this is the first invoice
+    const isFirstInvoice = selectedCustomer.signedDate && 
+                           !selectedCustomer.lastInvoiced &&
+                           selectedCustomer.periodStart &&
+                           invoiceDate;
     
-    const frequencyMultiplier = getFrequencyMultiplier();
+    let frequencyMultiplier = getFrequencyMultiplier();
+    let invoicePeriodDisplay = getInvoicePeriodText();
+    
+    // For first invoice, calculate based on initial period (signed to first invoice)
+    if (isFirstInvoice) {
+      const signedDate = new Date(selectedCustomer.signedDate);
+      const firstInvoiceDate = new Date(invoiceDate);
+      frequencyMultiplier = calculateProrationMultiplier(
+        signedDate, 
+        firstInvoiceDate, 
+        billingFrequency
+      );
+      invoicePeriodDisplay = `${new Date(selectedCustomer.signedDate).toLocaleDateString()} - ${firstInvoiceDate.toLocaleDateString()}`;
+    }
 
     // Update calculation logic based on new pricing structure
     const totalMW = Number(mwManaged) + Number(newSystems);
@@ -376,7 +420,8 @@ export function InvoiceCalculator({
       starterPackageCost: 0,
       minimumCharges: 0,
       totalMWCost: 0,
-      totalPrice: 0
+      totalPrice: 0,
+      invoicePeriod: invoicePeriodDisplay,
     };
     
     // Calculate costs based on package
@@ -530,6 +575,38 @@ export function InvoiceCalculator({
         title: "Invoice sent to Xero",
         description: "The invoice has been created in Xero as a draft.",
       });
+      
+      // Update period dates for next invoice
+      if (selectedCustomer) {
+        const currentPeriodEnd = invoiceDate ? new Date(invoiceDate) : new Date();
+        const nextPeriodStart = new Date(currentPeriodEnd);
+        nextPeriodStart.setDate(nextPeriodStart.getDate() + 1);
+        
+        let nextPeriodEnd = new Date(nextPeriodStart);
+        switch (billingFrequency) {
+          case 'monthly':
+            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
+            break;
+          case 'quarterly':
+            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 3);
+            break;
+          case 'biannual':
+            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 6);
+            break;
+          case 'annual':
+            nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
+            break;
+        }
+        
+        await supabase
+          .from('contracts')
+          .update({
+            period_start: nextPeriodStart.toISOString(),
+            period_end: nextPeriodEnd.toISOString(),
+            next_invoice_date: nextPeriodEnd.toISOString()
+          })
+          .eq('customer_id', selectedCustomer.id);
+      }
       
       // Notify parent if callback provided
       onInvoiceCreated?.();
@@ -969,7 +1046,7 @@ export function InvoiceCalculator({
           <div className="mt-6 border rounded-lg p-4">
             <h3 className="font-medium text-lg mb-2">Invoice Calculation Result</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              <span className="font-medium">Billing period:</span> {getInvoicePeriodText()}
+              <span className="font-medium">Invoice Period:</span> {result.invoicePeriod || getInvoicePeriodText()}
             </p>
             
             {selectedCustomer?.package === 'starter' && (
