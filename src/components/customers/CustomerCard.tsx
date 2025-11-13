@@ -131,29 +131,41 @@ export function CustomerCard({
         <div className="flex items-start justify-between">
           <CardTitle className="text-lg">{name}</CardTitle>
           <div className="flex items-center space-x-2">
-            <div className="flex flex-col gap-1">
-              {hasContract ? (
-                <Badge variant="default" className="bg-green-600 hover:bg-green-700">
-                  <CheckCircle2 className="mr-1 h-3 w-3" />
-                  Active Contract
-                </Badge>
-              ) : (
-                <Badge variant="destructive">
+            <Badge 
+              variant={
+                status === 'inactive' ? 'outline' : 
+                !hasContract ? 'destructive' : 
+                'default'
+              }
+              className={
+                status === 'inactive' ? 'bg-gray-600 hover:bg-gray-700 text-white border-gray-600' : 
+                !hasContract ? '' : 
+                status === 'pending' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                'bg-green-600 hover:bg-green-700'
+              }
+            >
+              {status === 'inactive' ? (
+                <>
+                  <AlertCircle className="mr-1 h-3 w-3" />
+                  Inactive Customer
+                </>
+              ) : !hasContract ? (
+                <>
                   <AlertCircle className="mr-1 h-3 w-3" />
                   No Contract
-                </Badge>
+                </>
+              ) : status === 'pending' ? (
+                <>
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Pending Setup
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-1 h-3 w-3" />
+                  Active
+                </>
               )}
-              <Badge 
-                variant={status === 'active' ? 'default' : status === 'pending' ? 'secondary' : 'outline'}
-                className={
-                  status === 'active' ? 'bg-green-600 hover:bg-green-700' : 
-                  status === 'pending' ? 'bg-yellow-600 hover:bg-yellow-700' : 
-                  'bg-gray-600 hover:bg-gray-700'
-                }
-              >
-                {status?.charAt(0).toUpperCase() + status?.slice(1)}
-              </Badge>
-            </div>
+            </Badge>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
