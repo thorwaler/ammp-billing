@@ -69,17 +69,6 @@ export function CustomerCard({
                 No Contract
               </Badge>
             )}
-            <Badge
-              variant={
-                status === "active"
-                  ? "default"
-                  : status === "pending"
-                  ? "outline"
-                  : "secondary"
-              }
-            >
-              {status}
-            </Badge>
             <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
               <DialogTrigger asChild>
                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

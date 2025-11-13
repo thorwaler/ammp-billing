@@ -36,6 +36,7 @@ const contractFormSchema = z.object({
   initialMW: z.coerce.number().min(0, { message: "Initial MW is required" }),
   currency: z.enum(["USD", "EUR"]),
   billingFrequency: z.enum(["monthly", "quarterly", "biannual", "annual"]),
+  nextInvoiceDate: z.string().optional(),
   package: z.enum(["starter", "pro", "custom"]),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -186,6 +187,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
       initialMW: existingCustomer?.mwpManaged || 0,
       currency: userCurrency || "EUR",
       billingFrequency: "annual",
+      nextInvoiceDate: "",
       package: "pro" as const,
       modules: ["technicalMonitoring"],
       addons: [],
@@ -235,6 +237,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
         form.setValue('initialMW', contract.initial_mw);
         form.setValue('currency', contract.currency as "USD" | "EUR");
         form.setValue('billingFrequency', contract.billing_frequency as "monthly" | "quarterly" | "biannual" | "annual");
+        form.setValue('nextInvoiceDate', contract.next_invoice_date ? contract.next_invoice_date.split('T')[0] : '');
         form.setValue('package', contract.package as "starter" | "pro" | "custom");
         form.setValue('modules', (contract.modules || []) as string[]);
         form.setValue('customPricing', (contract.custom_pricing || {}) as any);
@@ -414,6 +417,7 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
           initial_mw: data.initialMW,
           currency: data.currency,
           billing_frequency: data.billingFrequency,
+          next_invoice_date: data.nextInvoiceDate || null,
           modules: data.modules || [],
           addons: enhancedAddons,
           custom_pricing: data.customPricing || {},
@@ -559,6 +563,29 @@ export function ContractForm({ existingCustomer, existingContractId, onComplete 
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="nextInvoiceDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel className="flex items-center gap-2">
+                    <CalendarIcon className="h-4 w-4" />
+                    Next Invoice Date
+                  </FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    This date will be used to track when the next invoice is due
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             
             <FormField
               control={form.control}
