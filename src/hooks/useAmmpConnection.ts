@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { dataApiClient } from '@/services/ammp/DataApiClient'
+import { dataApiKeyService } from '@/services/ammp/dataApiKeyService'
 import type { AssetResponse } from '@/types/ammp-api'
 import { toast } from '@/hooks/use-toast'
 
@@ -10,7 +11,6 @@ interface UseAmmpConnectionReturn {
   error: string | null
   testConnection: () => Promise<boolean>
   disconnect: () => void
-  setApiKey: (key: string) => void
 }
 
 export function useAmmpConnection(): UseAmmpConnectionReturn {
@@ -60,35 +60,30 @@ export function useAmmpConnection(): UseAmmpConnectionReturn {
     setAssets([])
     setError(null)
     
-    // Clear API key if in dev
-    if (!window.location.origin.includes('os.ammp.io') && 
-        !window.location.origin.includes('localhost:8080')) {
-      localStorage.removeItem('ammp_data_api_key')
-    }
+    // Clear API key
+    dataApiKeyService.clearApiKey()
     
     toast({
       title: 'Disconnected from AMMP',
     })
   }
 
-  // Set API key (dev only)
-  const setApiKey = (key: string) => {
-    localStorage.setItem('ammp_data_api_key', key)
-    testConnection()
-  }
-
   // Auto-connect on mount
   useEffect(() => {
     const autoConnect = async () => {
       const origin = window.location.origin
-      const isProduction = origin.includes('os.ammp.io') || origin.includes('localhost:8080')
+      const isCookieAuth = origin.includes('os.ammp.io') || 
+                          origin.includes('os.stage.ammp.io') || 
+                          origin.includes('localhost:8080')
 
-      if (isProduction) {
-        // Try cookie-based auth
-        await testConnection()
+      if (isCookieAuth) {
+        // Cookie-based auth: check for cookie and try to connect
+        if (document.cookie.includes('ammp_sso_access_token=')) {
+          await testConnection()
+        }
       } else {
-        // Check for API key
-        const apiKey = localStorage.getItem('ammp_data_api_key')
+        // Development: check for API key
+        const apiKey = dataApiKeyService.getApiKey()
         if (apiKey) {
           await testConnection()
         }
@@ -104,7 +99,6 @@ export function useAmmpConnection(): UseAmmpConnectionReturn {
     assets,
     error,
     testConnection,
-    disconnect,
-    setApiKey
+    disconnect
   }
 }
