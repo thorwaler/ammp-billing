@@ -48,12 +48,20 @@ export class DataApiClient {
     const url = `${this.baseURL}${path}`
 
     try {
+      // Only add Content-Type for requests with a body
+      const method = options.method?.toUpperCase() || 'GET'
+      const shouldIncludeContentType = ['POST', 'PUT', 'PATCH'].includes(method)
+      
+      const headers: Record<string, string> = {
+        ...this.getAuthHeaders(),
+        'Accept': 'application/json',
+        ...(shouldIncludeContentType && { 'Content-Type': 'application/json' }),
+      }
+      
       const response = await fetch(url, {
         ...options,
         headers: {
-          ...this.getAuthHeaders(),
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
+          ...headers,
           ...options.headers,
         },
         credentials: 'include' // Always include for cookie auth
