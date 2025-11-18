@@ -1,6 +1,6 @@
 
 import Layout from "@/components/layout/Layout";
-import HubspotIntegration from "@/components/integrations/HubspotIntegration";
+import AmmpIntegration from "@/components/integrations/AmmpIntegration";
 import XeroIntegration from "@/components/integrations/XeroIntegration";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link2 } from "lucide-react";
@@ -19,18 +19,18 @@ const Integrations = () => {
           </p>
         </div>
 
-        <Tabs defaultValue="xero" className="w-full">
+        <Tabs defaultValue="ammp" className="w-full">
           <TabsList className="grid grid-cols-2 w-[400px] mb-4">
+            <TabsTrigger value="ammp">AMMP Data API</TabsTrigger>
             <TabsTrigger value="xero">Xero</TabsTrigger>
-            <TabsTrigger value="hubspot">HubSpot</TabsTrigger>
           </TabsList>
+          
+          <TabsContent value="ammp" className="mt-0">
+            <AmmpIntegration />
+          </TabsContent>
           
           <TabsContent value="xero" className="mt-0">
             <XeroIntegration />
-          </TabsContent>
-          
-          <TabsContent value="hubspot" className="mt-0">
-            <HubspotIntegration />
           </TabsContent>
         </Tabs>
       </div>

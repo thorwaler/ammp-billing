@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -21,9 +22,11 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     location: existingCustomer?.location || "",
     mwpManaged: existingCustomer?.mwpManaged || "",
     status: existingCustomer?.status || "active",
+    ammpOrgId: existingCustomer?.ammp_org_id || "",
+    ammpAssetIds: existingCustomer?.ammp_asset_ids ? JSON.stringify(existingCustomer.ammp_asset_ids) : "",
   });
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
@@ -50,11 +53,27 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      let parsedAssetIds = [];
+      if (formData.ammpAssetIds) {
+        try {
+          parsedAssetIds = JSON.parse(formData.ammpAssetIds);
+        } catch (e) {
+          toast({
+            title: "Invalid Asset IDs",
+            description: "Asset IDs must be a valid JSON array",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
       const customerData = {
         name: formData.name,
         location: formData.location,
         mwp_managed: formData.mwpManaged ? parseFloat(formData.mwpManaged) : 0,
         status: formData.status,
+        ammp_org_id: formData.ammpOrgId || null,
+        ammp_asset_ids: parsedAssetIds,
         user_id: user.id,
       };
 
@@ -151,6 +170,40 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+        </div>
+
+        {/* AMMP Integration Section */}
+        <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+          <h3 className="font-medium text-sm">AMMP Integration (Optional)</h3>
+          
+          <div className="space-y-2">
+            <Label htmlFor="ammpOrgId">AMMP Organization ID</Label>
+            <Input
+              id="ammpOrgId"
+              name="ammpOrgId"
+              value={formData.ammpOrgId}
+              onChange={handleInputChange}
+              placeholder="e.g., org_abc123..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Link to AMMP for automatic MW and site data sync
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ammpAssetIds">AMMP Asset IDs (JSON array)</Label>
+            <Textarea
+              id="ammpAssetIds"
+              name="ammpAssetIds"
+              value={formData.ammpAssetIds}
+              onChange={handleInputChange}
+              placeholder='["uuid-1", "uuid-2"]'
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">
+              Paste asset UUIDs as JSON array (get from AMMP Integrations page)
+            </p>
           </div>
         </div>
 
