@@ -231,7 +231,9 @@ export function InvoiceCalculator({
   const [billingFrequency, setBillingFrequency] = useState<"monthly" | "quarterly" | "biannual" | "annual">("annual");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(prefilledDate || new Date());
   const [isSending, setIsSending] = useState(false);
+  const [ammpSummary, setAmmpSummary] = useState<CustomerAMMPSummary | null>(null);
   const { formatCurrency } = useCurrency();
+  const { syncCustomer, isSyncing: isAmmpSyncing } = useCustomerAmmpSync();
 
   // Load customers from database on mount
   useEffect(() => {
