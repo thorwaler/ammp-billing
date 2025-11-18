@@ -6,28 +6,41 @@ import type {
   AssetBulkDataRequestBody,
 } from '@/types/ammp-api'
 import { DataApiRequestError } from '@/types/ammp-api'
+import { dataApiKeyService } from './dataApiKeyService'
 
 export class DataApiClient {
   private baseURL = 'https://os.ammp.io/api/v1/data-api/v1'
 
-  // Detect if we need API key or cookie auth
-  private isDevEnvironment(): boolean {
+  // Detect if we're in a cookie-auth environment (production, staging, or localhost)
+  private isCookieAuthEnvironment(): boolean {
     const origin = window.location.origin
-    return !origin.includes('os.ammp.io') && 
-           !origin.includes('localhost:8080')
+    return origin.includes('os.ammp.io') || 
+           origin.includes('os.stage.ammp.io') || 
+           origin.includes('localhost:8080')
   }
 
   // Get auth headers based on environment
   private getAuthHeaders(): Record<string, string> {
-    if (this.isDevEnvironment()) {
-      const apiKey = localStorage.getItem('ammp_data_api_key')
+    if (this.isCookieAuthEnvironment()) {
+      // Production/staging/localhost: verify cookie exists
+      if (!document.cookie.includes('ammp_sso_access_token=')) {
+        throw new Error('Authentication cookie not found. Please log in to AMMP OS and refresh.')
+      }
+      // Cookies are sent automatically via credentials: 'include'
+      return {}
+    } else {
+      // Development (Lovable): use API key
+      const apiKey = dataApiKeyService.getApiKey()
       if (!apiKey) {
-        throw new Error('AMMP API key not found. Please configure in Integrations.')
+        // Auto-prompt for API key if not set
+        const newKey = dataApiKeyService.promptAndSetApiKey()
+        if (!newKey) {
+          throw new Error('AMMP API key is required. Please provide your API key.')
+        }
+        return { 'X-Api-Key': newKey }
       }
       return { 'X-Api-Key': apiKey }
     }
-    // Production uses cookies - no headers needed
-    return {}
   }
 
   // Generic request handler

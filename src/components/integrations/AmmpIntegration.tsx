@@ -1,26 +1,15 @@
-import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useAmmpConnection } from '@/hooks/useAmmpConnection'
-import { Database, Power, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Database, Power, Loader2, CheckCircle2, XCircle, Info } from 'lucide-react'
 
 export default function AmmpIntegration() {
-  const { isConnected, isConnecting, assets, error, testConnection, disconnect, setApiKey } = useAmmpConnection()
-  const [apiKeyInput, setApiKeyInput] = useState('')
+  const { isConnected, isConnecting, assets, error, testConnection, disconnect } = useAmmpConnection()
 
-  const isDevEnvironment = !window.location.origin.includes('os.ammp.io') && 
-                          !window.location.origin.includes('localhost:8080')
-
-  const handleConnect = () => {
-    if (isDevEnvironment) {
-      setApiKey(apiKeyInput)
-    } else {
-      testConnection()
-    }
-  }
+  const isCookieAuthEnvironment = window.location.origin.includes('os.ammp.io') || 
+                                  window.location.origin.includes('os.stage.ammp.io') || 
+                                  window.location.origin.includes('localhost:8080')
 
   return (
     <div className="space-y-6">
@@ -45,19 +34,21 @@ export default function AmmpIntegration() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!isConnected && isDevEnvironment && (
-            <div className="space-y-2">
-              <Label htmlFor="api-key">API Key</Label>
-              <Input
-                id="api-key"
-                type="password"
-                placeholder="Enter your AMMP Data API key"
-                value={apiKeyInput}
-                onChange={(e) => setApiKeyInput(e.target.value)}
-              />
-              <p className="text-sm text-muted-foreground">
-                Get your API key from AMMP OS Settings → API Access
-              </p>
+          {/* Authentication Info */}
+          {!isConnected && (
+            <div className="flex items-start gap-2 p-3 bg-muted rounded-md text-sm">
+              <Info className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
+              <div className="space-y-1">
+                {isCookieAuthEnvironment ? (
+                  <p className="text-muted-foreground">
+                    Authentication uses your AMMP OS session. Make sure you're logged in to AMMP OS.
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground">
+                    You'll be prompted to enter your API key when connecting. Get your API key from AMMP OS Settings → API Access.
+                  </p>
+                )}
+              </div>
             </div>
           )}
 
@@ -70,13 +61,13 @@ export default function AmmpIntegration() {
           <div className="flex gap-2">
             {!isConnected ? (
               <Button 
-                onClick={handleConnect} 
-                disabled={isConnecting || (isDevEnvironment && !apiKeyInput)}
+                onClick={testConnection} 
+                disabled={isConnecting}
               >
                 {isConnecting ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Connecting...</>
                 ) : (
-                  <>Connect to AMMP</>
+                  <>Connect to AMMP API</>
                 )}
               </Button>
             ) : (
