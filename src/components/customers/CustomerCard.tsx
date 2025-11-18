@@ -1,4 +1,5 @@
 
+import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,9 @@ interface CustomerCardProps {
   lastInvoiced?: string;
   contractId?: string;
   hasContract: boolean;
+  ammpOrgId?: string;
+  lastAmmpSync?: string;
+  ammpSyncStatus?: string;
   onViewContract?: () => void;
   onViewDetails?: () => void;
   onContractCreated?: () => void;
@@ -41,6 +45,9 @@ export function CustomerCard({
   lastInvoiced,
   contractId,
   hasContract,
+  ammpOrgId,
+  lastAmmpSync,
+  ammpSyncStatus,
   onViewContract,
   onViewDetails,
   onContractCreated,
@@ -193,7 +200,9 @@ export function CustomerCard({
                         name,
                         location,
                         mwpManaged,
-                        status
+                        status,
+                        ammp_org_id: ammpOrgId,
+                        ammp_asset_ids: null, // Will be loaded from DB if exists
                       }}
                     />
                   </DialogContent>
@@ -263,6 +272,24 @@ export function CustomerCard({
             <div className="text-sm text-muted-foreground">MWp Managed</div>
             <div className="font-medium">{mwpManaged} MWp</div>
           </div>
+          {ammpOrgId && (
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-muted-foreground">AMMP Sync</div>
+              <Badge variant="outline" className="text-xs">
+                {lastAmmpSync ? (
+                  <>
+                    <CheckCircle2 className="mr-1 h-3 w-3" />
+                    {formatDistanceToNow(new Date(lastAmmpSync), { addSuffix: true })}
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="mr-1 h-3 w-3" />
+                    Not synced
+                  </>
+                )}
+              </Badge>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
             <div className="font-medium">{formattedLastInvoiced}</div>

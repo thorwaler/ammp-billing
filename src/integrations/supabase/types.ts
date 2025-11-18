@@ -32,6 +32,9 @@ export type Database = {
           next_invoice_date: string | null
           notes: string | null
           package: string
+          period_end: string | null
+          period_start: string | null
+          signed_date: string | null
           updated_at: string
           user_id: string
           volume_discounts: Json | null
@@ -53,6 +56,9 @@ export type Database = {
           next_invoice_date?: string | null
           notes?: string | null
           package: string
+          period_end?: string | null
+          period_start?: string | null
+          signed_date?: string | null
           updated_at?: string
           user_id: string
           volume_discounts?: Json | null
@@ -74,6 +80,9 @@ export type Database = {
           next_invoice_date?: string | null
           notes?: string | null
           package?: string
+          period_end?: string | null
+          period_start?: string | null
+          signed_date?: string | null
           updated_at?: string
           user_id?: string
           volume_discounts?: Json | null
@@ -124,9 +133,14 @@ export type Database = {
       }
       customers: {
         Row: {
+          ammp_asset_ids: Json | null
+          ammp_capabilities: Json | null
+          ammp_org_id: string | null
+          ammp_sync_status: string | null
           created_at: string
           id: string
           join_date: string | null
+          last_ammp_sync: string | null
           last_invoiced: string | null
           location: string | null
           mwp_managed: number | null
@@ -136,9 +150,14 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ammp_asset_ids?: Json | null
+          ammp_capabilities?: Json | null
+          ammp_org_id?: string | null
+          ammp_sync_status?: string | null
           created_at?: string
           id?: string
           join_date?: string | null
+          last_ammp_sync?: string | null
           last_invoiced?: string | null
           location?: string | null
           mwp_managed?: number | null
@@ -148,9 +167,14 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ammp_asset_ids?: Json | null
+          ammp_capabilities?: Json | null
+          ammp_org_id?: string | null
+          ammp_sync_status?: string | null
           created_at?: string
           id?: string
           join_date?: string | null
+          last_ammp_sync?: string | null
           last_invoiced?: string | null
           location?: string | null
           mwp_managed?: number | null
