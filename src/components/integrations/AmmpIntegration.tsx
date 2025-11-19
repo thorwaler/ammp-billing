@@ -108,9 +108,6 @@ const AmmpIntegration = () => {
                 <Button onClick={disconnect} variant="outline" size="sm">
                   Disconnect
                 </Button>
-                <Button onClick={disconnect} variant="destructive" size="sm">
-                  Clear Stored Key
-                </Button>
               </div>
             </div>
           </>

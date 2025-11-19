@@ -39,22 +39,26 @@ function isTokenValid(tokenData: TokenData | null): boolean {
 }
 
 /**
- * Exchange API key for Bearer token
+ * Exchange API key for Bearer token via backend proxy
  */
 async function exchangeApiKeyForToken(apiKey: string): Promise<string> {
-  const response = await fetch(TOKEN_API_URL, {
-    method: 'POST',
-    headers: {
-      'accept': 'application/json',
-      'x-api-key': apiKey,
-    },
-  });
+  // Use backend edge function to avoid CORS issues
+  const { data, error } = await (await import('@/integrations/supabase/client')).supabase.functions.invoke(
+    'ammp-token-exchange',
+    {
+      body: { apiKey }
+    }
+  );
 
-  if (!response.ok) {
-    throw new Error(`Failed to authenticate: ${response.status} ${response.statusText}`);
+  if (error) {
+    console.error('Token exchange error:', error);
+    throw new Error(`Failed to authenticate: ${error.message}`);
   }
 
-  const data: TokenResponse = await response.json();
+  if (!data?.access_token) {
+    throw new Error('Failed to authenticate: No access token received');
+  }
+
   const expiresAt = parseJwtExpiration(data.access_token);
 
   cachedToken = {
