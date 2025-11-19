@@ -10,25 +10,28 @@ import { dataApiKeyService } from './dataApiKeyService'
 import { IS_LOVABLE } from '@/utils/environment'
 
 export class DataApiClient {
-  private baseURL = 'https://data-api.ammp.io/v1'
+  private baseURL = window.location.origin.includes('localhost')
+    ? 'http://localhost:8080/api/v1/data-api/v1'
+    : window.location.origin.includes('os.stage.ammp.io')
+      ? 'https://os.stage.ammp.io/api/v1/data-api/v1'
+      : 'https://os.ammp.io/api/v1/data-api/v1'
 
   // Get auth headers based on environment
   private getAuthHeaders(): Record<string, string> {
-    const headers: Record<string, string> = {
-      'Accept': 'application/json',
-    }
-
     // Only use API key in Lovable environment
     // In production/localhost, cookies handle auth automatically
     if (IS_LOVABLE) {
       const apiKey = dataApiKeyService.getApiKey()
-      if (apiKey) {
-        headers['X-Api-Key'] = apiKey
+      if (!apiKey) {
+        throw new Error('API key not found')
       }
-      // Note: Don't prompt here - let the connection logic handle prompting
+      return {
+        'X-Api-Key': apiKey
+      }
     }
-
-    return headers
+    
+    // Production/localhost: fetch() will use credentials: 'include' for cookies
+    return {}
   }
 
   // Clear connection (for logout/disconnect)
@@ -50,6 +53,7 @@ export class DataApiClient {
       
       const headers: Record<string, string> = {
         ...authHeaders,
+        'Accept': 'application/json',
         ...(shouldIncludeContentType && { 'Content-Type': 'application/json' }),
       }
       
