@@ -7,10 +7,6 @@ import { Database, Power, Loader2, CheckCircle2, XCircle, Info } from 'lucide-re
 export default function AmmpIntegration() {
   const { isConnected, isConnecting, assets, error, testConnection, disconnect } = useAmmpConnection()
 
-  const isCookieAuthEnvironment = window.location.origin.includes('os.ammp.io') || 
-                                  window.location.origin.includes('os.stage.ammp.io') || 
-                                  window.location.origin.includes('localhost:8080')
-
   return (
     <div className="space-y-6">
       {/* Connection Status Card */}
@@ -39,16 +35,22 @@ export default function AmmpIntegration() {
             <div className="flex items-start gap-2 p-3 bg-muted rounded-md text-sm">
               <Info className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
               <div className="space-y-1">
-                {isCookieAuthEnvironment ? (
-                  <p className="text-muted-foreground">
-                    Authentication uses your AMMP OS session. Make sure you're logged in to AMMP OS.
-                  </p>
-                ) : (
-                  <p className="text-muted-foreground">
-                    You'll be prompted to enter your API key when connecting. Get your API key from AMMP OS Settings → API Access.
-                  </p>
-                )}
+                <p className="text-muted-foreground">
+                  You'll be prompted to enter your API key when connecting. Get your API key from AMMP OS Settings → API Access.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Your API key is stored locally and used to obtain secure access tokens.
+                </p>
               </div>
+            </div>
+          )}
+          
+          {isConnected && (
+            <div className="flex items-start gap-2 p-3 bg-muted rounded-md text-sm">
+              <CheckCircle2 className="h-4 w-4 mt-0.5 text-green-600 flex-shrink-0" />
+              <p className="text-muted-foreground">
+                Token active (auto-refreshes before expiry)
+              </p>
             </div>
           )}
 

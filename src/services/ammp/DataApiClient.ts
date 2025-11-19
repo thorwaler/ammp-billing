@@ -4,43 +4,92 @@ import type {
   DeviceResponse,
   AssetDataResponse,
   AssetBulkDataRequestBody,
+  TokenResponse,
 } from '@/types/ammp-api'
 import { DataApiRequestError } from '@/types/ammp-api'
 import { dataApiKeyService } from './dataApiKeyService'
 
 export class DataApiClient {
-  private baseURL = 'https://os.ammp.io/api/v1/data-api/v1'
+  private baseURL = 'https://data-api.ammp.io/v1'
+  private token: string | null = null
+  private tokenExpiry: number | null = null
 
-  // Detect if we're in a cookie-auth environment (production, staging, or localhost)
-  private isCookieAuthEnvironment(): boolean {
-    const origin = window.location.origin
-    return origin.includes('os.ammp.io') || 
-           origin.includes('os.stage.ammp.io') || 
-           origin.includes('localhost:8080')
+  // Acquire Bearer token using API key
+  private async acquireToken(): Promise<string> {
+    const apiKey = dataApiKeyService.getApiKey()
+    if (!apiKey) {
+      // Prompt user for API key if not found
+      const newKey = dataApiKeyService.promptAndSetApiKey()
+      if (!newKey) {
+        throw new Error('AMMP API key is required. Please provide your API key.')
+      }
+    }
+
+    const finalApiKey = dataApiKeyService.getApiKey()!
+    
+    try {
+      const response = await fetch('https://data-api.ammp.io/v1/token', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'X-Api-Key': finalApiKey,
+        },
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        throw new DataApiRequestError(
+          `Failed to acquire AMMP access token: ${response.status} ${response.statusText}`,
+          response.url,
+          { method: 'POST' },
+          response.status,
+          errorText
+        )
+      }
+
+      const data: TokenResponse = await response.json()
+      
+      // Decode JWT to get expiry (exp field)
+      const payload = JSON.parse(atob(data.access_token.split('.')[1]))
+      
+      this.token = data.access_token
+      this.tokenExpiry = payload.exp * 1000 // Convert to milliseconds
+      
+      console.log('AMMP token acquired, expires at:', new Date(this.tokenExpiry))
+      
+      return this.token
+    } catch (error) {
+      if (error instanceof DataApiRequestError) throw error
+      throw new Error(`Network error acquiring token: ${(error as Error).message}`)
+    }
   }
 
-  // Get auth headers based on environment
-  private getAuthHeaders(): Record<string, string> {
-    if (this.isCookieAuthEnvironment()) {
-      // Production/staging/localhost: verify cookie exists
-      if (!document.cookie.includes('ammp_sso_access_token=')) {
-        throw new Error('Authentication cookie not found. Please log in to AMMP OS and refresh.')
-      }
-      // Cookies are sent automatically via credentials: 'include'
-      return {}
-    } else {
-      // Development (Lovable): use API key
-      const apiKey = dataApiKeyService.getApiKey()
-      if (!apiKey) {
-        // Auto-prompt for API key if not set
-        const newKey = dataApiKeyService.promptAndSetApiKey()
-        if (!newKey) {
-          throw new Error('AMMP API key is required. Please provide your API key.')
-        }
-        return { 'X-Api-Key': newKey }
-      }
-      return { 'X-Api-Key': apiKey }
+  // Ensure we have a valid token (refresh if needed)
+  private async ensureValidToken(): Promise<string> {
+    const now = Date.now()
+    
+    // If no token or token expired (with 5 min buffer), acquire new one
+    if (!this.token || !this.tokenExpiry || this.tokenExpiry - now < 5 * 60 * 1000) {
+      console.log('Token missing or expiring soon, acquiring new token...')
+      return await this.acquireToken()
     }
+    
+    return this.token
+  }
+
+  // Get auth headers with Bearer token
+  private async getAuthHeaders(): Promise<Record<string, string>> {
+    const token = await this.ensureValidToken()
+    return {
+      'Authorization': `Bearer ${token}`
+    }
+  }
+
+  // Clear token (for logout/disconnect)
+  clearToken(): void {
+    this.token = null
+    this.tokenExpiry = null
+    console.log('AMMP token cleared')
   }
 
   // Generic request handler
@@ -48,12 +97,15 @@ export class DataApiClient {
     const url = `${this.baseURL}${path}`
 
     try {
+      // Get auth headers with Bearer token
+      const authHeaders = await this.getAuthHeaders()
+      
       // Only add Content-Type for requests with a body
       const method = options.method?.toUpperCase() || 'GET'
-      const shouldIncludeContentType = ['POST', 'PUT', 'PATCH'].includes(method)
+      const shouldIncludeContentType = ['POST', 'PUT', 'PATCH'].includes(method) && options.body
       
       const headers: Record<string, string> = {
-        ...this.getAuthHeaders(),
+        ...authHeaders,
         'Accept': 'application/json',
         ...(shouldIncludeContentType && { 'Content-Type': 'application/json' }),
       }
@@ -64,13 +116,12 @@ export class DataApiClient {
           ...headers,
           ...options.headers,
         },
-        credentials: 'include' // Always include for cookie auth
       })
 
       if (!response.ok) {
         const errorBody = await response.text()
         throw new DataApiRequestError(
-          `API request failed: ${response.status} ${response.statusText}`,
+          `AMMP API request failed: ${response.status} ${response.statusText}`,
           url,
           options,
           response.status,
@@ -84,7 +135,7 @@ export class DataApiClient {
         throw error
       }
       throw new DataApiRequestError(
-        `Network error: ${(error as Error).message}`,
+        `Network error calling AMMP API: ${(error as Error).message}`,
         url,
         options
       )
@@ -103,9 +154,9 @@ export class DataApiClient {
     return this.request<AssetResponse>(`/assets/${assetId}`, { method: 'GET' })
   }
 
-  // Get devices for an asset
-  async getDevices(assetId: UUID): Promise<DeviceResponse[]> {
-    return this.request<DeviceResponse[]>(
+  // Get devices for an asset (returns full asset with nested devices)
+  async getDevices(assetId: UUID): Promise<AssetResponse> {
+    return this.request<AssetResponse>(
       `/assets/${assetId}/devices`,
       { method: 'GET' }
     )

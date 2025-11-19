@@ -60,7 +60,8 @@ export function useAmmpConnection(): UseAmmpConnectionReturn {
     setAssets([])
     setError(null)
     
-    // Clear API key
+    // Clear token and API key
+    dataApiClient.clearToken()
     dataApiKeyService.clearApiKey()
     
     toast({
@@ -71,22 +72,10 @@ export function useAmmpConnection(): UseAmmpConnectionReturn {
   // Auto-connect on mount
   useEffect(() => {
     const autoConnect = async () => {
-      const origin = window.location.origin
-      const isCookieAuth = origin.includes('os.ammp.io') || 
-                          origin.includes('os.stage.ammp.io') || 
-                          origin.includes('localhost:8080')
-
-      if (isCookieAuth) {
-        // Cookie-based auth: check for cookie and try to connect
-        if (document.cookie.includes('ammp_sso_access_token=')) {
-          await testConnection()
-        }
-      } else {
-        // Development: check for API key
-        const apiKey = dataApiKeyService.getApiKey()
-        if (apiKey) {
-          await testConnection()
-        }
+      // Check for API key and try to connect
+      const apiKey = dataApiKeyService.getApiKey()
+      if (apiKey) {
+        await testConnection()
       }
     }
 
