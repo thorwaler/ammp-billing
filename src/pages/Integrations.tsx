@@ -1,6 +1,6 @@
-
 import Layout from "@/components/layout/Layout";
 import XeroIntegration from "@/components/integrations/XeroIntegration";
+import AmmpIntegration from "@/components/integrations/AmmpIntegration";
 import { Link2 } from "lucide-react";
 
 const Integrations = () => {
@@ -17,7 +17,10 @@ const Integrations = () => {
           </p>
         </div>
 
-        <XeroIntegration />
+        <div className="grid gap-6 md:grid-cols-2">
+          <XeroIntegration />
+          <AmmpIntegration />
+        </div>
       </div>
     </Layout>
   );
