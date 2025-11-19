@@ -64,6 +64,7 @@ interface Customer {
   volumeDiscounts?: any;
   currency: 'USD' | 'EUR';
   sites?: number;
+  ammpCapabilities?: any;
 }
 
 interface CalculationResult {
@@ -82,6 +83,10 @@ interface CalculationResult {
   totalMWCost: number;
   totalPrice: number;
   invoicePeriod?: string;
+  hybridTieredBreakdown?: {
+    ongrid: { mw: number; cost: number; rate: number };
+    hybrid: { mw: number; cost: number; rate: number };
+  };
 }
 
 
@@ -239,6 +244,7 @@ export function InvoiceCalculator({
         id,
           name,
           mwp_managed,
+          ammp_capabilities,
           contracts (
             id,
             package,
@@ -273,7 +279,7 @@ export function InvoiceCalculator({
           return {
             id: c.id,
             name: c.name,
-            package: contract.package as 'starter' | 'pro' | 'custom',
+            package: contract.package as 'starter' | 'pro' | 'custom' | 'hybrid_tiered',
             mwManaged: Number(c.mwp_managed) || 0,
             modules,
             addons,
@@ -282,7 +288,8 @@ export function InvoiceCalculator({
             customPricing,
             volumeDiscounts,
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
-            billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual'
+            billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual',
+            ammpCapabilities: c.ammp_capabilities || null,
           };
         });
 
@@ -318,9 +325,26 @@ export function InvoiceCalculator({
         // Pre-fill billing frequency from contract
         setBillingFrequency(customerData.billingFrequency as 'monthly' | 'quarterly' | 'biannual' | 'annual');
         
+        // Auto-fill Solcast sites if AMMP capabilities exist
+        if (customerData.ammpCapabilities?.sitesWithSolcast) {
+          setSolcastSites(customerData.ammpCapabilities.sitesWithSolcast);
+          // Auto-enable and set quantity for satellite addon
+          const updatedAddons = defaultAddons.map(addon => {
+            if (addon.id === 'satelliteDataAPI') {
+              return {
+                ...addon,
+                selected: true,
+                quantity: customerData.ammpCapabilities.sitesWithSolcast
+              };
+            }
+            return addon;
+          });
+          setAddons(updatedAddons);
+        }
+        
         // Apply custom pricing to modules if available
         const updatedModules = defaultModules.map(module => {
-          const customPrice = customerData.customPricing?.[module.id];
+          let customPrice = customerData.customPricing?.[module.id];
           return {
             ...module,
             price: customPrice !== undefined ? customPrice : module.price,
@@ -329,13 +353,15 @@ export function InvoiceCalculator({
         });
         setModules(updatedModules);
         
-        // Update addons based on customer selection
-        const updatedAddons = defaultAddons.map(addon => ({
-          ...addon,
-          selected: customerData.addons.includes(addon.id),
-          complexity: customerData.addons.includes(addon.id) && addon.complexityPricing ? 'low' as const : undefined
-        }));
-        setAddons(updatedAddons);
+        // Update addons based on customer selection (if not already set by Solcast)
+        if (!customerData.ammpCapabilities?.sitesWithSolcast) {
+          const updatedAddons = defaultAddons.map(addon => ({
+            ...addon,
+            selected: customerData.addons.includes(addon.id),
+            complexity: customerData.addons.includes(addon.id) && addon.complexityPricing ? 'low' as const : undefined
+          }));
+          setAddons(updatedAddons);
+        }
       }
     } else {
       setSelectedCustomer(null);
@@ -432,6 +458,28 @@ export function InvoiceCalculator({
       
       // Only Technical Monitoring included
       // No module-based charges for Starter package
+    } else if (selectedCustomer.package === 'hybrid_tiered') {
+      // Hybrid Tiered package - different pricing for ongrid vs hybrid
+      const capabilities = selectedCustomer.ammpCapabilities;
+      const ongridPrice = selectedCustomer.customPricing?.ongrid_per_mwp || 0;
+      const hybridPrice = selectedCustomer.customPricing?.hybrid_per_mwp || 0;
+      
+      if (capabilities && capabilities.ongridTotalMW !== undefined && capabilities.hybridTotalMW !== undefined) {
+        const ongridMW = capabilities.ongridTotalMW;
+        const hybridMW = capabilities.hybridTotalMW;
+        
+        const ongridCost = ongridMW * ongridPrice * frequencyMultiplier;
+        const hybridCost = hybridMW * hybridPrice * frequencyMultiplier;
+        
+        calculationResult.totalMWCost = ongridCost + hybridCost;
+        calculationResult.hybridTieredBreakdown = {
+          ongrid: { mw: ongridMW, cost: ongridCost, rate: ongridPrice },
+          hybrid: { mw: hybridMW, cost: hybridCost, rate: hybridPrice }
+        };
+      } else {
+        // Fallback if no AMMP data
+        calculationResult.totalMWCost = totalMW * ongridPrice * frequencyMultiplier;
+      }
     } else {
       // Pro or Custom package - calculate module costs
       const selectedModules = modules.filter(m => m.selected);

@@ -117,6 +117,25 @@ export interface CustomerAMMPSummary {
   assetCapabilities: Record<UUID, AssetCapabilities>
 }
 
+// Extended summary for hybrid/ongrid breakdown
+export interface CustomerAMMPSummaryExtended {
+  totalMW: number
+  ongridTotalMW: number
+  hybridTotalMW: number
+  totalSites: number
+  ongridSites: number
+  hybridSites: number
+  sitesWithSolcast: number
+  assetBreakdown: Array<{
+    assetId: UUID
+    assetName: string
+    totalMW: number
+    isHybrid: boolean
+    hasSolcast: boolean
+    deviceCount: number
+  }>
+}
+
 // Error class
 export class DataApiRequestError extends Error {
   constructor(

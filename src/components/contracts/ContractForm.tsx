@@ -40,7 +40,7 @@ const contractFormSchema = z.object({
   signedDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered"]),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
   customPricing: z.object({
@@ -48,6 +48,8 @@ const contractFormSchema = z.object({
     energySavingsHub: z.coerce.number().optional(),
     stakeholderPortal: z.coerce.number().optional(),
     control: z.coerce.number().optional(),
+    ongrid_per_mwp: z.coerce.number().optional(),
+    hybrid_per_mwp: z.coerce.number().optional(),
   }).optional(),
   volumeDiscounts: z.object({
     annualUpfrontDiscount: z.coerce.number().optional(),
@@ -698,6 +700,7 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
                       <SelectItem value="starter">AMMP OS Starter (Max 5MW, 20 sites, €3000/year)</SelectItem>
                       <SelectItem value="pro">AMMP OS Pro (Per MW pricing, min €5000/year)</SelectItem>
                       <SelectItem value="custom">Custom/Legacy</SelectItem>
+                      <SelectItem value="hybrid_tiered">Hybrid Tiered (Different pricing for on-grid vs hybrid sites)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -705,6 +708,8 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
                       "AMMP OS Starter: Max 5MW, max 20 sites, €3000 per year flat fee. Only have access to Technical Monitoring Module." :
                       watchPackage === "pro" ? 
                       "AMMP OS Pro: Pricing per MW based on modules chosen, with a minimum of €5,000 per year." :
+                      watchPackage === "hybrid_tiered" ? 
+                      "Hybrid Tiered: Set different rates for on-grid and hybrid sites (with battery/genset)." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -759,6 +764,52 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
                 ))}
               </div>
             </div>
+            
+            {/* Hybrid Tiered Pricing Section */}
+            {watchPackage === "hybrid_tiered" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-semibold text-sm">Hybrid Tiered Pricing</h3>
+                <p className="text-xs text-muted-foreground">
+                  Set different per-MWp pricing for on-grid sites vs hybrid sites (with battery/genset)
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="customPricing.ongrid_per_mwp"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>On-Grid Price (€/MWp/year)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="e.g., 1200"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="customPricing.hybrid_per_mwp"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Hybrid Price (€/MWp/year)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="e.g., 1800"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
             
             {/* Addons section - only show addons for selected modules */}
             {watchModules && watchModules.length > 0 && (

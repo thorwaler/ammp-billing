@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { syncCustomerAMMPData } from "@/services/ammp/ammpService";
 
 interface CustomerFormProps {
   onComplete: () => void;
@@ -17,6 +18,7 @@ interface CustomerFormProps {
 
 const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [formData, setFormData] = useState({
     name: existingCustomer?.name || "",
     location: existingCustomer?.location || "",
@@ -33,6 +35,51 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
 
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleSyncFromAMMP = async () => {
+    if (!formData.ammpOrgId) {
+      toast({
+        title: "Missing Org ID",
+        description: "Please enter an AMMP Org ID first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!existingCustomer?.id) {
+      toast({
+        title: "Save First",
+        description: "Please save the customer before syncing from AMMP",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const summary = await syncCustomerAMMPData(existingCustomer.id, formData.ammpOrgId);
+      
+      // Update the form with synced data
+      setFormData(prev => ({
+        ...prev,
+        mwpManaged: summary.totalMW.toFixed(2),
+      }));
+
+      toast({
+        title: "Sync Successful",
+        description: `Synced ${summary.totalSites} sites (${summary.ongridSites} on-grid, ${summary.hybridSites} hybrid) - Total: ${summary.totalMW.toFixed(2)} MWp, Solcast: ${summary.sitesWithSolcast} sites`,
+      });
+    } catch (error) {
+      console.error('AMMP sync error:', error);
+      toast({
+        title: "Sync Failed",
+        description: error instanceof Error ? error.message : "Failed to sync from AMMP",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -179,15 +226,33 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
           
           <div className="space-y-2">
             <Label htmlFor="ammpOrgId">AMMP Organization ID</Label>
-            <Input
-              id="ammpOrgId"
-              name="ammpOrgId"
-              value={formData.ammpOrgId}
-              onChange={handleInputChange}
-              placeholder="e.g., org_abc123..."
-            />
+            <div className="flex gap-2">
+              <Input
+                id="ammpOrgId"
+                name="ammpOrgId"
+                value={formData.ammpOrgId}
+                onChange={handleInputChange}
+                placeholder="e.g., org_abc123..."
+                className="flex-1"
+              />
+              <Button 
+                type="button"
+                variant="outline"
+                onClick={handleSyncFromAMMP}
+                disabled={!formData.ammpOrgId || isSyncing || !existingCustomer}
+                title="Sync from AMMP"
+              >
+                {isSyncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground">
-              Link to AMMP for automatic MW and site data sync
+              {existingCustomer && formData.ammpOrgId 
+                ? "Click sync to fetch assets and calculate capabilities" 
+                : "Link to AMMP for automatic MW and site data sync"}
             </p>
           </div>
 
