@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calculator, Send, ArrowRight, CalendarIcon, Loader2, Database, RefreshCw } from "lucide-react";
+import { Calculator, Send, ArrowRight, CalendarIcon, Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
@@ -20,8 +20,6 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, formatDistanceToNow } from "date-fns";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useCustomerAmmpSync } from "@/hooks/useCustomerAmmpSync";
-import type { CustomerAMMPSummary, AssetCapabilities, UUID } from "@/types/ammp-api";
 
 interface Module {
   id: string;
@@ -66,10 +64,6 @@ interface Customer {
   volumeDiscounts?: any;
   currency: 'USD' | 'EUR';
   sites?: number;
-  ammpAssetIds?: UUID[];
-  ammpCapabilities?: any;
-  lastAmmpSync?: string;
-  ammpSyncStatus?: string;
 }
 
 interface CalculationResult {
@@ -231,9 +225,7 @@ export function InvoiceCalculator({
   const [billingFrequency, setBillingFrequency] = useState<"monthly" | "quarterly" | "biannual" | "annual">("annual");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(prefilledDate || new Date());
   const [isSending, setIsSending] = useState(false);
-  const [ammpSummary, setAmmpSummary] = useState<CustomerAMMPSummary | null>(null);
   const { formatCurrency } = useCurrency();
-  const { syncCustomer, isSyncing: isAmmpSyncing } = useCustomerAmmpSync();
 
   // Load customers from database on mount
   useEffect(() => {
@@ -244,13 +236,9 @@ export function InvoiceCalculator({
       const { data, error } = await supabase
         .from('customers')
         .select(`
-          id,
+        id,
           name,
           mwp_managed,
-          ammp_asset_ids,
-          ammp_capabilities,
-          last_ammp_sync,
-          ammp_sync_status,
           contracts (
             id,
             package,
@@ -294,11 +282,7 @@ export function InvoiceCalculator({
             customPricing,
             volumeDiscounts,
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
-            billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual',
-            ammpAssetIds: c.ammp_asset_ids as UUID[] | undefined,
-            ammpCapabilities: c.ammp_capabilities,
-            lastAmmpSync: c.last_ammp_sync,
-            ammpSyncStatus: c.ammp_sync_status
+            billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual'
           };
         });
 
@@ -735,39 +719,6 @@ export function InvoiceCalculator({
     return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
   };
 
-  const handleSyncAMMP = async () => {
-    if (!selectedCustomer) return;
-
-    const summary = await syncCustomer(selectedCustomer.id);
-    if (summary) {
-      setAmmpSummary(summary);
-      setMwManaged(summary.totalMW);
-      setSites(summary.totalSites);
-      setSolcastSites(summary.sitesWithSolcast);
-    }
-  };
-
-  // Auto-prefill from cached AMMP data when customer selected
-  useEffect(() => {
-    if (selectedCustomer?.ammpCapabilities) {
-      const capabilities = selectedCustomer.ammpCapabilities as Record<UUID, AssetCapabilities>;
-      const capArray = Object.values(capabilities);
-      
-      if (capArray.length > 0) {
-        const summary: CustomerAMMPSummary = {
-          totalMW: capArray.reduce((sum, c) => sum + c.totalMW, 0),
-          totalSites: capArray.length,
-          sitesWithSolcast: capArray.filter(c => c.hasSolcast).length,
-          sitesWithBattery: capArray.filter(c => c.hasBattery).length,
-          sitesWithGenset: capArray.filter(c => c.hasGenset).length,
-          earliestOnboardingDate: null,
-          assetCapabilities: capabilities
-        };
-        setAmmpSummary(summary);
-      }
-    }
-  }, [selectedCustomer]);
-
   return (
     <Card>
       <CardHeader>
@@ -791,56 +742,6 @@ export function InvoiceCalculator({
               </SelectContent>
             </Select>
           </div>
-
-          {selectedCustomer && selectedCustomer.ammpAssetIds && selectedCustomer.ammpAssetIds.length > 0 && (
-            <Card className="bg-blue-50 border-blue-200">
-              <CardContent className="pt-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Database className="h-5 w-5 text-blue-600" />
-                    <div>
-                      <p className="font-medium text-sm">AMMP Data Available</p>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedCustomer.lastAmmpSync 
-                          ? `Last synced: ${formatDistanceToNow(new Date(selectedCustomer.lastAmmpSync), { addSuffix: true })}`
-                          : 'Not synced yet'
-                        }
-                      </p>
-                    </div>
-                  </div>
-                  <Button 
-                    onClick={handleSyncAMMP} 
-                    disabled={isAmmpSyncing}
-                    size="sm"
-                    variant="outline"
-                  >
-                    {isAmmpSyncing ? (
-                      <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Syncing...</>
-                    ) : (
-                      <><RefreshCw className="mr-2 h-4 w-4" /> Sync Now</>
-                    )}
-                  </Button>
-                </div>
-
-                {ammpSummary && (
-                  <div className="mt-3 p-3 bg-white rounded-md text-sm space-y-1">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Total MW:</span>
-                      <span className="font-medium">{ammpSummary.totalMW.toFixed(2)} MW</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Sites:</span>
-                      <span className="font-medium">{ammpSummary.totalSites}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Solcast Sites:</span>
-                      <span className="font-medium">{ammpSummary.sitesWithSolcast}</span>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
 
           {selectedCustomer && (
             <>

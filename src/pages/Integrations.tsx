@@ -1,8 +1,6 @@
 
 import Layout from "@/components/layout/Layout";
-import AmmpIntegration from "@/components/integrations/AmmpIntegration";
 import XeroIntegration from "@/components/integrations/XeroIntegration";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link2 } from "lucide-react";
 
 const Integrations = () => {
@@ -19,20 +17,7 @@ const Integrations = () => {
           </p>
         </div>
 
-        <Tabs defaultValue="ammp" className="w-full">
-          <TabsList className="grid grid-cols-2 w-[400px] mb-4">
-            <TabsTrigger value="ammp">AMMP Data API</TabsTrigger>
-            <TabsTrigger value="xero">Xero</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="ammp" className="mt-0">
-            <AmmpIntegration />
-          </TabsContent>
-          
-          <TabsContent value="xero" className="mt-0">
-            <XeroIntegration />
-          </TabsContent>
-        </Tabs>
+        <XeroIntegration />
       </div>
     </Layout>
   );
