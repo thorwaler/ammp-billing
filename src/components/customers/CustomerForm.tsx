@@ -1,16 +1,15 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { syncCustomerAMMPData } from "@/services/ammp/ammpService";
-
+import { syncCustomerAMMPData, calculateCapabilities } from "@/services/ammp/ammpService";
+import { dataApiClient } from "@/services/ammp/dataApiClient";
 interface CustomerFormProps {
   onComplete: () => void;
   existingCustomer?: any;
@@ -19,14 +18,25 @@ interface CustomerFormProps {
 const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncedAssets, setSyncedAssets] = useState<any[]>([]);
+  const [syncedCapabilities, setSyncedCapabilities] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: existingCustomer?.name || "",
     location: existingCustomer?.location || "",
     mwpManaged: existingCustomer?.mwpManaged || "",
     status: existingCustomer?.status || "active",
     ammpOrgId: existingCustomer?.ammp_org_id || "",
-    ammpAssetIds: existingCustomer?.ammp_asset_ids ? JSON.stringify(existingCustomer.ammp_asset_ids) : "",
   });
+
+  // Initialize synced assets from existing customer
+  useEffect(() => {
+    if (existingCustomer?.ammp_asset_ids) {
+      setSyncedAssets(existingCustomer.ammp_asset_ids);
+    }
+    if (existingCustomer?.ammp_capabilities) {
+      setSyncedCapabilities(existingCustomer.ammp_capabilities);
+    }
+  }, [existingCustomer]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -47,29 +57,73 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       return;
     }
 
-    if (!existingCustomer?.id) {
-      toast({
-        title: "Save First",
-        description: "Please save the customer before syncing from AMMP",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setIsSyncing(true);
     try {
-      const summary = await syncCustomerAMMPData(existingCustomer.id, formData.ammpOrgId);
-      
-      // Update the form with synced data
-      setFormData(prev => ({
-        ...prev,
-        mwpManaged: summary.totalMW.toFixed(2),
-      }));
+      // For existing customers, sync to database
+      if (existingCustomer?.id) {
+        const summary = await syncCustomerAMMPData(existingCustomer.id, formData.ammpOrgId);
+        
+        // Update states with synced data
+        setSyncedCapabilities(summary);
+        setSyncedAssets(summary.assetBreakdown.map((a: any) => a.assetId));
+        setFormData(prev => ({
+          ...prev,
+          mwpManaged: summary.totalMW.toFixed(2),
+        }));
 
-      toast({
-        title: "Sync Successful",
-        description: `Synced ${summary.totalSites} sites (${summary.ongridSites} on-grid, ${summary.hybridSites} hybrid) - Total: ${summary.totalMW.toFixed(2)} MWp, Solcast: ${summary.sitesWithSolcast} sites`,
-      });
+        toast({
+          title: "✅ Sync Successful",
+          description: `Synced ${summary.totalSites} sites (${summary.ongridSites} on-grid, ${summary.hybridSites} hybrid) - Total: ${summary.totalMW.toFixed(2)} MWp, Solcast: ${summary.sitesWithSolcast} sites`,
+        });
+      } 
+      // For new customers, fetch and store in temp state
+      else {
+        // Fetch assets directly without saving to DB yet
+        const allAssets = await dataApiClient.listAssets();
+        const orgAssets = allAssets.filter((a: any) => a.org_id === formData.ammpOrgId);
+        
+        if (orgAssets.length === 0) {
+          throw new Error(`No assets found for org_id: ${formData.ammpOrgId}`);
+        }
+
+        // Calculate capabilities
+        const capabilities = await Promise.all(
+          orgAssets.map((asset: any) => calculateCapabilities(asset.asset_id))
+        );
+        
+        const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset);
+        const hybridSites = capabilities.filter(c => c.hasBattery || c.hasGenset);
+        
+        const summary = {
+          totalMW: capabilities.reduce((sum, cap) => sum + cap.totalMW, 0),
+          ongridTotalMW: ongridSites.reduce((sum, cap) => sum + cap.totalMW, 0),
+          hybridTotalMW: hybridSites.reduce((sum, cap) => sum + cap.totalMW, 0),
+          totalSites: capabilities.length,
+          ongridSites: ongridSites.length,
+          hybridSites: hybridSites.length,
+          sitesWithSolcast: capabilities.filter(c => c.hasSolcast).length,
+          assetBreakdown: capabilities.map(c => ({
+            assetId: c.assetId,
+            assetName: c.assetName,
+            totalMW: c.totalMW,
+            isHybrid: c.hasBattery || c.hasGenset,
+            hasSolcast: c.hasSolcast,
+          }))
+        };
+
+        // Store in temp state
+        setSyncedCapabilities(summary);
+        setSyncedAssets(orgAssets.map((a: any) => a.asset_id));
+        setFormData(prev => ({
+          ...prev,
+          mwpManaged: summary.totalMW.toFixed(2),
+        }));
+
+        toast({
+          title: "✅ Assets Loaded",
+          description: `Found ${summary.totalSites} sites (${summary.ongridSites} on-grid, ${summary.hybridSites} hybrid) - Total: ${summary.totalMW.toFixed(2)} MWp. Data will be saved when you create the customer.`,
+        });
+      }
     } catch (error) {
       console.error('AMMP sync error:', error);
       toast({
@@ -100,27 +154,16 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      let parsedAssetIds = [];
-      if (formData.ammpAssetIds) {
-        try {
-          parsedAssetIds = JSON.parse(formData.ammpAssetIds);
-        } catch (e) {
-          toast({
-            title: "Invalid Asset IDs",
-            description: "Asset IDs must be a valid JSON array",
-            variant: "destructive",
-          });
-          return;
-        }
-      }
-
       const customerData = {
         name: formData.name,
         location: formData.location,
         mwp_managed: formData.mwpManaged ? parseFloat(formData.mwpManaged) : 0,
         status: formData.status,
         ammp_org_id: formData.ammpOrgId || null,
-        ammp_asset_ids: parsedAssetIds,
+        ammp_asset_ids: syncedAssets.length > 0 ? syncedAssets : null,
+        ammp_capabilities: syncedCapabilities || null,
+        ammp_sync_status: syncedCapabilities ? 'synced' : null,
+        last_ammp_sync: syncedCapabilities ? new Date().toISOString() : null,
         user_id: user.id,
       };
 
@@ -239,37 +282,109 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 type="button"
                 variant="outline"
                 onClick={handleSyncFromAMMP}
-                disabled={!formData.ammpOrgId || isSyncing || !existingCustomer}
+                disabled={!formData.ammpOrgId || isSyncing}
                 title="Sync from AMMP"
               >
                 {isSyncing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
                 ) : (
-                  <RefreshCw className="h-4 w-4" />
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    {syncedCapabilities ? "Re-sync from AMMP" : "Sync from AMMP"}
+                  </>
                 )}
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              {existingCustomer && formData.ammpOrgId 
-                ? "Click sync to fetch assets and calculate capabilities" 
+              {syncedCapabilities 
+                ? `Last synced: ${syncedAssets.length} assets loaded`
                 : "Link to AMMP for automatic MW and site data sync"}
             </p>
+            {formData.ammpOrgId && !syncedCapabilities && (
+              <p className="text-xs text-amber-600 flex items-center gap-1">
+                <AlertCircle className="h-3 w-3" />
+                Org ID not yet validated - click sync to verify
+              </p>
+            )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="ammpAssetIds">AMMP Asset IDs (JSON array)</Label>
-            <Textarea
-              id="ammpAssetIds"
-              name="ammpAssetIds"
-              value={formData.ammpAssetIds}
-              onChange={handleInputChange}
-              placeholder='["uuid-1", "uuid-2"]'
-              rows={3}
-            />
-            <p className="text-xs text-muted-foreground">
-              Paste asset UUIDs as JSON array (get from AMMP Integrations page)
-            </p>
-          </div>
+          {syncedCapabilities && (
+            <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">AMMP Synced Assets</Label>
+                <span className="text-sm text-muted-foreground">
+                  {syncedAssets.length} total
+                </span>
+              </div>
+              
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total Sites:</span>
+                  <span className="font-medium">{syncedCapabilities.totalSites}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Total MW:</span>
+                  <span className="font-medium">{syncedCapabilities.totalMW.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">On-Grid:</span>
+                  <span className="font-medium">
+                    {syncedCapabilities.ongridSites} ({syncedCapabilities.ongridTotalMW.toFixed(2)} MWp)
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Hybrid:</span>
+                  <span className="font-medium">
+                    {syncedCapabilities.hybridSites} ({syncedCapabilities.hybridTotalMW.toFixed(2)} MWp)
+                  </span>
+                </div>
+                <div className="flex justify-between col-span-2">
+                  <span className="text-muted-foreground">Solcast-enabled:</span>
+                  <span className="font-medium">{syncedCapabilities.sitesWithSolcast} sites</span>
+                </div>
+              </div>
+
+              {/* Collapsible Asset Breakdown */}
+              <Collapsible>
+                <CollapsibleTrigger className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <span>View asset details</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="mt-2 space-y-1">
+                  {syncedCapabilities.assetBreakdown.map((asset: any) => (
+                    <div 
+                      key={asset.assetId} 
+                      className="flex items-center justify-between text-xs p-2 bg-background rounded"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-muted-foreground">
+                          {asset.assetName}
+                        </span>
+                        <div className="flex gap-1">
+                          {asset.isHybrid && (
+                            <Badge variant="secondary" className="text-xs">Hybrid</Badge>
+                          )}
+                          {asset.hasSolcast && (
+                            <Badge variant="outline" className="text-xs">Solcast</Badge>
+                          )}
+                        </div>
+                      </div>
+                      <span className="font-medium">{asset.totalMW.toFixed(2)} MWp</span>
+                    </div>
+                  ))}
+                </CollapsibleContent>
+              </Collapsible>
+            </div>
+          )}
+
+          {!syncedCapabilities && formData.ammpOrgId && (
+            <div className="p-3 border border-dashed rounded-lg text-center text-sm text-muted-foreground">
+              Click "Sync from AMMP" to load asset data
+            </div>
+          )}
         </div>
 
         <div className="pt-2">
