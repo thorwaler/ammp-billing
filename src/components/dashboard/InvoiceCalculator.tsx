@@ -797,6 +797,42 @@ export function InvoiceCalculator({
                 <Label>Contract Currency:</Label>
                 <span className="font-medium">{selectedCustomer.currency === 'USD' ? '$ USD' : '€ EUR'}</span>
               </div>
+
+              {selectedCustomer.ammpCapabilities && (
+                <div className="p-3 border rounded-lg bg-muted/50 mb-4">
+                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                    📊 AMMP Asset Breakdown
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Total Sites:</span>
+                      <span className="ml-2 font-medium">{selectedCustomer.ammpCapabilities.totalSites}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total MW:</span>
+                      <span className="ml-2 font-medium">{selectedCustomer.ammpCapabilities.totalMW?.toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">On-Grid Sites:</span>
+                      <span className="ml-2 font-medium">
+                        {selectedCustomer.ammpCapabilities.ongridSites} 
+                        ({selectedCustomer.ammpCapabilities.ongridTotalMW?.toFixed(2)} MWp)
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Hybrid Sites:</span>
+                      <span className="ml-2 font-medium">
+                        {selectedCustomer.ammpCapabilities.hybridSites}
+                        ({selectedCustomer.ammpCapabilities.hybridTotalMW?.toFixed(2)} MWp)
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-muted-foreground">Solcast-enabled:</span>
+                      <span className="ml-2 font-medium">{selectedCustomer.ammpCapabilities.sitesWithSolcast} sites</span>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -1125,6 +1161,22 @@ export function InvoiceCalculator({
                     <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier())}</span>
                   </div>
                 )}
+              </div>
+            )}
+
+            {result.hybridTieredBreakdown && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm">Hybrid Tiered Pricing:</h4>
+                <div className="space-y-1 text-sm pl-2">
+                  <div className="flex justify-between">
+                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MWp × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.ongrid.rate}):</span>
+                    <span>{formatCurrency(result.hybridTieredBreakdown.ongrid.cost)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MWp × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.hybrid.rate}):</span>
+                    <span>{formatCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
+                  </div>
+                </div>
               </div>
             )}
             
