@@ -2,11 +2,6 @@ export type UUID = string & { __brand?: "uuid" }
 export type DateStr = string & { __brand?: "date" }
 export type DateTimeStr = string & { __brand?: "datetime" }
 
-// Token response from /v1/token endpoint
-export interface TokenResponse {
-  access_token: string
-}
-
 // Asset tags
 export interface AssetTags {
   state?: string | null
