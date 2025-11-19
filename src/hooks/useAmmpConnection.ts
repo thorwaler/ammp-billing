@@ -3,6 +3,7 @@ import { dataApiClient } from '@/services/ammp/DataApiClient'
 import { dataApiKeyService } from '@/services/ammp/dataApiKeyService'
 import type { AssetResponse } from '@/types/ammp-api'
 import { toast } from '@/hooks/use-toast'
+import { IS_LOVABLE } from '@/utils/environment'
 
 interface UseAmmpConnectionReturn {
   isConnected: boolean
@@ -25,6 +26,20 @@ export function useAmmpConnection(): UseAmmpConnectionReturn {
     setError(null)
 
     try {
+      // In Lovable, ensure we have an API key
+      if (IS_LOVABLE) {
+        let apiKey = dataApiKeyService.getApiKey()
+        
+        if (!apiKey) {
+          // Prompt for API key
+          apiKey = dataApiKeyService.promptAndSetApiKey()
+          if (!apiKey) {
+            throw new Error('API key is required to connect in Lovable environment')
+          }
+        }
+      }
+
+      // Try to fetch assets
       const fetchedAssets = await dataApiClient.listAssets()
       setAssets(fetchedAssets)
       setIsConnected(true)
@@ -39,14 +54,29 @@ export function useAmmpConnection(): UseAmmpConnectionReturn {
       setIsConnected(false)
       setAssets([])
       
+      // Parse error message
       const errorMsg = err.message || 'Connection failed'
-      setError(errorMsg)
+      const statusCode = err.status || 0
       
-      toast({
-        title: 'Connection Failed',
-        description: errorMsg,
-        variant: 'destructive',
-      })
+      // Clear invalid API key on auth errors
+      if (IS_LOVABLE && (statusCode === 401 || statusCode === 403)) {
+        dataApiKeyService.clearApiKey()
+        setError('Invalid API key. Please try connecting again with a valid key.')
+        
+        toast({
+          title: 'Authentication Failed',
+          description: 'Invalid API key. It has been cleared. Please try again.',
+          variant: 'destructive',
+        })
+      } else {
+        setError(errorMsg)
+        
+        toast({
+          title: 'Connection Failed',
+          description: errorMsg,
+          variant: 'destructive',
+        })
+      }
 
       return false
     } finally {
@@ -69,18 +99,31 @@ export function useAmmpConnection(): UseAmmpConnectionReturn {
     })
   }
 
-  // Auto-connect on mount
+  // Auto-connect on mount (smarter logic)
   useEffect(() => {
     const autoConnect = async () => {
-      // Check for API key and try to connect
-      const apiKey = dataApiKeyService.getApiKey()
-      if (apiKey) {
-        await testConnection()
+      // Don't auto-connect if already connected or connecting
+      if (isConnected || isConnecting) return
+
+      // In Lovable: only auto-connect if we have an API key
+      if (IS_LOVABLE) {
+        const apiKey = dataApiKeyService.getApiKey()
+        if (apiKey) {
+          console.log('Auto-connecting with stored API key...')
+          await testConnection()
+        }
+      } else {
+        // In production/localhost: check for auth cookie
+        const hasAuthCookie = document.cookie.includes('ammp-admin-authtoken')
+        if (hasAuthCookie) {
+          console.log('Auto-connecting with auth cookie...')
+          await testConnection()
+        }
       }
     }
 
     autoConnect()
-  }, [])
+  }, []) // Empty deps - only run once on mount
 
   return {
     isConnected,

@@ -3,9 +3,21 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAmmpConnection } from '@/hooks/useAmmpConnection'
 import { Database, Power, Loader2, CheckCircle2, XCircle, Info } from 'lucide-react'
+import { IS_LOVABLE } from '@/utils/environment'
+import { dataApiKeyService } from '@/services/ammp/dataApiKeyService'
+import { toast } from '@/hooks/use-toast'
 
 export default function AmmpIntegration() {
   const { isConnected, isConnecting, assets, error, testConnection, disconnect } = useAmmpConnection()
+
+  const handleClearKey = () => {
+    dataApiKeyService.clearApiKey()
+    disconnect()
+    toast({
+      title: 'API Key Cleared',
+      description: 'Your stored API key has been removed. Connect again to enter a new one.',
+    })
+  }
 
   return (
     <div className="space-y-6">
@@ -35,12 +47,30 @@ export default function AmmpIntegration() {
             <div className="flex items-start gap-2 p-3 bg-muted rounded-md text-sm">
               <Info className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
               <div className="space-y-1">
-                <p className="text-muted-foreground">
-                  You'll be prompted to enter your API key when connecting. Get your API key from AMMP OS Settings → API Access.
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Your API key is stored locally and used to obtain secure access tokens.
-                </p>
+                {IS_LOVABLE ? (
+                  <>
+                    <p className="text-muted-foreground">
+                      You'll be prompted to enter your API key when connecting. Get your API key from AMMP OS Settings → API Access.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Your API key is stored in browser localStorage and sent with each request.
+                    </p>
+                    {dataApiKeyService.getApiKey() && (
+                      <p className="text-xs text-amber-600 font-medium mt-2">
+                        ⚠️ API key found in storage. Click "Connect" to test it.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-muted-foreground">
+                      Authentication uses cookies from AMMP OS. Make sure you're logged in to AMMP OS.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Cookie-based authentication (no API key needed).
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -49,7 +79,7 @@ export default function AmmpIntegration() {
             <div className="flex items-start gap-2 p-3 bg-muted rounded-md text-sm">
               <CheckCircle2 className="h-4 w-4 mt-0.5 text-green-600 flex-shrink-0" />
               <p className="text-muted-foreground">
-                Token active (auto-refreshes before expiry)
+                Connected using {IS_LOVABLE ? 'API key authentication' : 'cookie authentication'}
               </p>
             </div>
           )}
@@ -60,18 +90,31 @@ export default function AmmpIntegration() {
             </div>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             {!isConnected ? (
-              <Button 
-                onClick={testConnection} 
-                disabled={isConnecting}
-              >
-                {isConnecting ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Connecting...</>
-                ) : (
-                  <>Connect to AMMP API</>
+              <>
+                <Button 
+                  onClick={testConnection} 
+                  disabled={isConnecting}
+                >
+                  {isConnecting ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Connecting...</>
+                  ) : (
+                    <>Connect to AMMP API</>
+                  )}
+                </Button>
+                
+                {/* Show clear key button in Lovable if key exists */}
+                {IS_LOVABLE && dataApiKeyService.getApiKey() && (
+                  <Button 
+                    onClick={handleClearKey} 
+                    variant="outline"
+                    disabled={isConnecting}
+                  >
+                    Clear Stored Key
+                  </Button>
                 )}
-              </Button>
+              </>
             ) : (
               <>
                 <Button onClick={testConnection} disabled={isConnecting} variant="outline">
