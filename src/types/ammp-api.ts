@@ -2,6 +2,37 @@ export type UUID = string & { __brand?: "uuid" }
 export type DateStr = string & { __brand?: "date" }
 export type DateTimeStr = string & { __brand?: "datetime" }
 
+// Token response from /v1/token endpoint
+export interface TokenResponse {
+  access_token: string
+}
+
+// Asset tags
+export interface AssetTags {
+  state?: string | null
+  portal?: string | null
+  product?: string | null
+  customer?: string | null
+  hub_name?: string | null
+  site_ref?: string | null
+  hs_box_id?: string | null
+  serial_no?: string | null
+  site_name?: string | null
+  client_name?: string | null
+  hs_box_type?: string | null
+  customer_segment?: string | null
+  human_settlement?: string | null
+  inverter_cluster?: string | null
+  field_service_engineer?: string | null
+}
+
+// Device links
+export interface DeviceLink {
+  rel: string
+  title: string
+  href: string
+}
+
 // Asset metadata
 export interface AssetResponse {
   asset_id: UUID
@@ -16,16 +47,26 @@ export interface AssetResponse {
   co2_offset_factor?: number
   modeled_loss?: number
   warnings?: string[]
+  tags?: AssetTags
+  org_id?: UUID
+  beta?: number | null
+  tref?: number | null
+  asset_specific_params?: any
+  expected_pr?: number | null
+  devices?: DeviceResponse[]  // Nested devices when fetching /assets/{id}/devices
 }
 
 // Device metadata
 export interface DeviceResponse {
   device_id: UUID
   device_name: string
-  device_type: string  // "inverter", "battery", "genset", "meter"
+  device_type?: string  // "pv_inverter", "battery_system", "battery_inverter", "fuel_sensor", "temperature_sensor"
+  serial_no?: string | null
+  device_model_name?: string  // e.g., "battery_inverter - Victron"
   manufacturer?: string
   model?: string
   data_provider?: string  // "solcast", "sma", "huawei", etc.
+  links?: DeviceLink[]
 }
 
 // Device capabilities (derived)

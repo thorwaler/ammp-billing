@@ -9,15 +9,13 @@ import type {
 export class AmmpService {
   // Analyze device capabilities for a single asset
   async analyzeAssetCapabilities(assetId: UUID): Promise<AssetCapabilities> {
-    const [asset, devices] = await Promise.all([
-      dataApiClient.getAsset(assetId),
-      dataApiClient.getDevices(assetId)
-    ])
+    const assetWithDevices = await dataApiClient.getDevices(assetId)
+    const devices = assetWithDevices.devices || []
 
     const capabilities: AssetCapabilities = {
-      assetId: asset.asset_id,
-      assetName: asset.asset_name,
-      totalMW: (asset.total_pv_power || 0) / 1_000_000,
+      assetId: assetWithDevices.asset_id,
+      assetName: assetWithDevices.asset_name,
+      totalMW: (assetWithDevices.total_pv_power || 0) / 1_000_000,
       hasSolcast: this.detectSolcast(devices),
       hasBattery: this.detectBattery(devices),
       hasGenset: this.detectGenset(devices),
@@ -31,19 +29,26 @@ export class AmmpService {
 
   // Detect Solcast satellite data
   private detectSolcast(devices: DeviceResponse[]): boolean {
-    return devices.some(d => 
-      d.data_provider?.toLowerCase().includes('solcast') ||
-      d.device_name?.toLowerCase().includes('solcast')
-    )
+    return devices.some(d => {
+      // Check data_provider field
+      if (d.data_provider?.toLowerCase().includes('solcast')) return true
+      // Check device name
+      if (d.device_name?.toLowerCase().includes('solcast')) return true
+      // Check links for solcast endpoints
+      if (d.links?.some(link => link.href.toLowerCase().includes('solcast'))) return true
+      return false
+    })
   }
 
   // Detect battery storage
   private detectBattery(devices: DeviceResponse[]): boolean {
     return devices.some(d => {
       const type = d.device_type?.toLowerCase() || ''
+      const modelName = d.device_model_name?.toLowerCase() || ''
       return type.includes('battery') || 
-             type.includes('ess') ||
-             type.includes('storage')
+             modelName.includes('battery') ||
+             type === 'battery_system' ||
+             type === 'battery_inverter'
     })
   }
 
@@ -51,9 +56,13 @@ export class AmmpService {
   private detectGenset(devices: DeviceResponse[]): boolean {
     return devices.some(d => {
       const type = d.device_type?.toLowerCase() || ''
+      const modelName = d.device_model_name?.toLowerCase() || ''
       return type.includes('genset') || 
              type.includes('generator') ||
-             type.includes('gen')
+             type.includes('gen') ||
+             type === 'fuel_sensor' ||
+             modelName.includes('fuel') ||
+             modelName.includes('genset')
     })
   }
 
