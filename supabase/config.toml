@@ -17,3 +17,6 @@ verify_jwt = true
 
 [functions.ammp-token-exchange]
 verify_jwt = false
+
+[functions.ammp-data-proxy]
+verify_jwt = false

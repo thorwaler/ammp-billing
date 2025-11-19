@@ -1,31 +1,29 @@
 /**
- * HTTP client for AMMP Data API with Bearer token authentication
+ * HTTP client for AMMP Data API with Bearer token authentication via backend proxy
  */
 
 import { authService } from './authService';
+import { supabase } from '@/integrations/supabase/client';
 import { AssetResponse, DeviceResponse, DataApiRequestError } from '@/types/ammp-api';
-
-const BASE_URL = 'https://data-api.ammp.io/v1';
 
 /**
  * Generic request method with Bearer token authentication and automatic retry on 401
+ * Routes all requests through the backend proxy to avoid CORS issues
  */
 async function request<T>(path: string, options: RequestInit = {}, retryCount = 0): Promise<T> {
   const token = await authService.getValidToken();
-  const url = `${BASE_URL}${path}`;
 
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'accept': 'application/json',
-      'Authorization': `Bearer ${token}`,
-      ...options.headers,
+  const { data, error } = await supabase.functions.invoke('ammp-data-proxy', {
+    body: {
+      path,
+      method: options.method ?? 'GET',
+      token,
     },
   });
 
   // Handle token expiration with automatic refresh and retry
-  if (response.status === 401 && retryCount === 0) {
-    console.log('Token expired, refreshing and retrying request...');
+  if (error && (error as any).status === 401 && retryCount === 0) {
+    console.log('Token expired (via proxy), refreshing and retrying request...');
     
     // Force token refresh
     authService.clearToken();
@@ -37,7 +35,7 @@ async function request<T>(path: string, options: RequestInit = {}, retryCount = 
     } catch (refreshError) {
       throw new DataApiRequestError(
         'Authentication failed. Please reconnect to AMMP API.',
-        url,
+        path,
         options,
         401,
         'Token refresh failed'
@@ -45,17 +43,19 @@ async function request<T>(path: string, options: RequestInit = {}, retryCount = 
     }
   }
 
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => 'Unknown error');
+  // Handle other errors
+  if (error) {
+    const status = (error as any).status ?? 500;
+    const errorDetails = (error as any).details ?? error.message;
     
-    let errorMessage = `API request failed: ${response.status} ${response.statusText}`;
+    let errorMessage = `API request failed: ${status}`;
     
     // Provide user-friendly error messages
-    if (response.status === 401) {
+    if (status === 401) {
       errorMessage = 'Invalid API key or token expired. Please reconnect.';
-    } else if (response.status === 429) {
+    } else if (status === 429) {
       errorMessage = 'Too many requests. Please wait a moment and try again.';
-    } else if (response.status >= 500) {
+    } else if (status >= 500) {
       errorMessage = 'AMMP API is experiencing issues. Please try again later.';
     } else if (!navigator.onLine) {
       errorMessage = 'Cannot reach AMMP API. Check your internet connection.';
@@ -63,14 +63,15 @@ async function request<T>(path: string, options: RequestInit = {}, retryCount = 
     
     throw new DataApiRequestError(
       errorMessage,
-      url,
+      path,
       options,
-      response.status,
-      errorBody
+      status,
+      errorDetails
     );
   }
 
-  return response.json();
+  // Success: data is the JSON returned by the proxy
+  return data as T;
 }
 
 export const dataApiClient = {
