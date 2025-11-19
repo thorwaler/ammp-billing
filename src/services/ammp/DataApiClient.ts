@@ -7,28 +7,28 @@ import type {
 } from '@/types/ammp-api'
 import { DataApiRequestError } from '@/types/ammp-api'
 import { dataApiKeyService } from './dataApiKeyService'
+import { IS_LOVABLE } from '@/utils/environment'
 
 export class DataApiClient {
   private baseURL = 'https://data-api.ammp.io/v1'
 
-  // Get auth headers with API key
+  // Get auth headers based on environment
   private getAuthHeaders(): Record<string, string> {
-    const apiKey = dataApiKeyService.getApiKey()
-    
-    if (!apiKey) {
-      // Prompt user for API key if not found
-      const newKey = dataApiKeyService.promptAndSetApiKey()
-      if (!newKey) {
-        throw new Error('AMMP API key is required. Please provide your API key.')
-      }
-    }
-    
-    const finalApiKey = dataApiKeyService.getApiKey()!
-    
-    return {
-      'X-Api-Key': finalApiKey,
+    const headers: Record<string, string> = {
       'Accept': 'application/json',
     }
+
+    // Only use API key in Lovable environment
+    // In production/localhost, cookies handle auth automatically
+    if (IS_LOVABLE) {
+      const apiKey = dataApiKeyService.getApiKey()
+      if (apiKey) {
+        headers['X-Api-Key'] = apiKey
+      }
+      // Note: Don't prompt here - let the connection logic handle prompting
+    }
+
+    return headers
   }
 
   // Clear connection (for logout/disconnect)
