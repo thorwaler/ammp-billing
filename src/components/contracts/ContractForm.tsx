@@ -43,6 +43,8 @@ const contractFormSchema = z.object({
   package: z.enum(["starter", "pro", "custom", "hybrid_tiered"]),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
+  addonCustomPricing: z.record(z.coerce.number().optional()).optional(),
+  addonQuantities: z.record(z.coerce.number().optional()).optional(),
   customPricing: z.object({
     technicalMonitoring: z.coerce.number().optional(),
     energySavingsHub: z.coerce.number().optional(),
@@ -182,6 +184,8 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
   const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: string}>({});
+  const [addonCustomPrices, setAddonCustomPrices] = useState<{[key: string]: number}>({});
+  const [addonQuantities, setAddonQuantities] = useState<{[key: string]: number}>({});
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const { currency: userCurrency} = useCurrency();
@@ -281,14 +285,26 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
         const addonIds = ((contract.addons || []) as any[]).map((a: any) => a.id || a);
         form.setValue('addons', addonIds);
 
-        // Restore complexity selections
+        // Restore complexity selections, custom prices, and quantities
         const complexityMap: {[key: string]: string} = {};
+        const customPriceMap: {[key: string]: number} = {};
+        const quantityMap: {[key: string]: number} = {};
+        
         ((contract.addons || []) as any[]).forEach((addon: any) => {
           if (addon.complexity) {
             complexityMap[addon.id] = addon.complexity;
           }
+          if (addon.customPrice !== undefined) {
+            customPriceMap[addon.id] = addon.customPrice;
+          }
+          if (addon.quantity !== undefined) {
+            quantityMap[addon.id] = addon.quantity;
+          }
         });
+        
         setSelectedComplexityItems(complexityMap);
+        setAddonCustomPrices(customPriceMap);
+        setAddonQuantities(quantityMap);
 
       } catch (error) {
         console.error('Error loading contract:', error);
@@ -375,6 +391,20 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
         delete newComplexityItems[addonId];
         setSelectedComplexityItems(newComplexityItems);
       }
+      
+      // Clear custom price
+      if (addonCustomPrices[addonId]) {
+        const newPrices = {...addonCustomPrices};
+        delete newPrices[addonId];
+        setAddonCustomPrices(newPrices);
+      }
+      
+      // Clear quantity
+      if (addonQuantities[addonId]) {
+        const newQuantities = {...addonQuantities};
+        delete newQuantities[addonId];
+        setAddonQuantities(newQuantities);
+      }
     }
   };
 
@@ -414,12 +444,14 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
 
       if (customerError) throw customerError;
 
-      // 2. Prepare addons with complexity
+      // 2. Prepare addons with complexity, custom pricing, and quantity
       const enhancedAddons = (data.addons || []).map(addonId => {
         const addon = addons.find(a => a.id === addonId);
         return {
           id: addonId,
-          complexity: addon?.complexityPricing ? selectedComplexityItems[addonId] || 'low' : undefined
+          complexity: addon?.complexityPricing ? selectedComplexityItems[addonId] || 'low' : undefined,
+          customPrice: addonCustomPrices[addonId],
+          quantity: addonQuantities[addonId] || 1
         };
       });
 
@@ -462,6 +494,8 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
       } else {
         form.reset();
         setSelectedComplexityItems({});
+        setAddonCustomPrices({});
+        setAddonQuantities({});
         setSelectedPackage("");
         setSelectedModules([]);
         setShowCustomPricing(false);
@@ -867,6 +901,58 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
                                       <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
                                     </SelectContent>
                                   </Select>
+                                </div>
+                              )}
+
+                              {/* Price and Quantity inputs for all selected addons */}
+                              {watchAddons?.includes(addon.id) && (
+                                <div className="pl-6 space-y-2 mt-2">
+                                  <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                      <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
+                                        Price:
+                                      </Label>
+                                      <Input
+                                        id={`price-${addon.id}`}
+                                        type="number"
+                                        placeholder={addon.complexityPricing 
+                                          ? `${addon.lowPrice}-${addon.highPrice}` 
+                                          : String(addon.price)}
+                                        min={0}
+                                        step={0.01}
+                                        className="w-28 h-8"
+                                        value={addonCustomPrices[addon.id] ?? ''}
+                                        onChange={(e) => {
+                                          const value = e.target.value ? Number(e.target.value) : undefined;
+                                          setAddonCustomPrices(prev => ({
+                                            ...prev,
+                                            ...(value !== undefined ? { [addon.id]: value } : {})
+                                          }));
+                                        }}
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <Label htmlFor={`quantity-${addon.id}`} className="text-sm whitespace-nowrap">
+                                        Quantity:
+                                      </Label>
+                                      <Input
+                                        id={`quantity-${addon.id}`}
+                                        type="number"
+                                        placeholder="1"
+                                        min={1}
+                                        step={1}
+                                        className="w-20 h-8"
+                                        value={addonQuantities[addon.id] || 1}
+                                        onChange={(e) => {
+                                          const value = Math.max(1, Number(e.target.value) || 1);
+                                          setAddonQuantities(prev => ({
+                                            ...prev,
+                                            [addon.id]: value
+                                          }));
+                                        }}
+                                      />
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                             </div>
