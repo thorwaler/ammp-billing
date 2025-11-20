@@ -11,7 +11,20 @@ import { supabase } from '@/integrations/supabase/client';
  */
 export async function calculateCapabilities(assetId: string): Promise<AssetCapabilities> {
   const asset = await dataApiClient.getAsset(assetId);
-  const devices = await dataApiClient.getAssetDevices(assetId);
+  
+  // Some assets may not have devices - handle 404 gracefully
+  let devices = [];
+  try {
+    devices = await dataApiClient.getAssetDevices(assetId);
+  } catch (error: any) {
+    // If asset has no devices (404), that's okay - just use empty array
+    if (error?.status === 404) {
+      console.log(`Asset ${assetId} has no devices, using empty capabilities`);
+      devices = [];
+    } else {
+      throw error; // Re-throw other errors
+    }
+  }
 
   const hasSolcast = devices.some(d => d.data_provider === 'solcast');
   const hasBattery = devices.some(d => 
