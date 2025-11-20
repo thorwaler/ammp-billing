@@ -459,7 +459,8 @@ export function InvoiceCalculator({
       // Only Technical Monitoring included
       // No module-based charges for Starter package
     } else if (selectedCustomer.package === 'hybrid_tiered') {
-      // Hybrid Tiered package - different pricing for ongrid vs hybrid
+      // Hybrid Tiered package - uses fixed per-MWp rates for ongrid vs hybrid
+      // Modules are not factored into base pricing for this package type
       const capabilities = selectedCustomer.ammpCapabilities;
       const ongridPrice = selectedCustomer.customPricing?.ongrid_per_mwp || 0;
       const hybridPrice = selectedCustomer.customPricing?.hybrid_per_mwp || 0;
@@ -952,7 +953,8 @@ export function InvoiceCalculator({
                     <div 
                       key={module.id} 
                       className={`border rounded-md p-3 ${
-                        selectedCustomer.package === 'starter' && module.id !== 'technicalMonitoring' 
+                        (selectedCustomer.package === 'starter' && module.id !== 'technicalMonitoring') ||
+                        (selectedCustomer.package === 'hybrid_tiered' && module.id === 'technicalMonitoring')
                           ? 'opacity-60' : ''
                       }`}
                     >
@@ -961,7 +963,10 @@ export function InvoiceCalculator({
                           id={`module-${module.id}`}
                           checked={module.selected}
                           onCheckedChange={() => handleModuleToggle(module.id)}
-                          disabled={selectedCustomer.package === 'starter' && module.id !== 'technicalMonitoring'}
+                          disabled={
+                            (selectedCustomer.package === 'starter' && module.id !== 'technicalMonitoring') ||
+                            (selectedCustomer.package === 'hybrid_tiered' && module.id === 'technicalMonitoring')
+                          }
                         />
                         <Label 
                           htmlFor={`module-${module.id}`}
@@ -988,7 +993,7 @@ export function InvoiceCalculator({
                     
                     return (
                       <div key={`addon-group-${module.id}`} className="space-y-2">
-                        <Label>{module.name} Add-ons</Label>
+                        <Label>Addons</Label>
                         <div className="border rounded-md p-3 space-y-2">
                           {moduleAddons
                             .filter(addon => !addon.requiresPro || isProPackage)
