@@ -136,6 +136,18 @@ export interface CustomerAMMPSummaryExtended {
   }>
 }
 
+// Sync anomaly detection
+export interface SyncAnomalies {
+  hasAnomalies: boolean
+  warnings: string[]
+  stats: {
+    totalAssets: number
+    assetsWithNoDevices: number
+    assetsWithDevices: number
+    percentageWithNoDevices: number
+  }
+}
+
 // Error class
 export class DataApiRequestError extends Error {
   constructor(
