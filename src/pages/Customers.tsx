@@ -332,8 +332,8 @@ const Customers = () => {
     if (filterTab === "active") {
       filtered = filtered.filter(c => c.status === "active" && c.contractId);
     } else if (filterTab === "inactive") {
-      // Show customers that are inactive OR have no active contract
-      filtered = filtered.filter(c => c.status === "inactive" || !c.contractId);
+      // Show only customers with inactive status
+      filtered = filtered.filter(c => c.status === "inactive");
     } else if (filterTab === "no-contracts") {
       filtered = filtered.filter(c => !c.contractId);
     }
@@ -513,7 +513,7 @@ const Customers = () => {
               Needs Setup ({customersWithoutContracts.length})
             </TabsTrigger>
             <TabsTrigger value="inactive">
-              Inactive ({customersData.filter(c => c.status === "inactive" || !c.contractId).length})
+              Inactive ({customersData.filter(c => c.status === "inactive").length})
             </TabsTrigger>
           </TabsList>
         </Tabs>
