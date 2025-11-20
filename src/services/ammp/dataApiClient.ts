@@ -21,31 +21,6 @@ async function request<T>(path: string, options: RequestInit = {}, retryCount = 
     },
   });
 
-  // Check if the edge function returned an error in the data field (e.g., 404 from AMMP API)
-  if (data && typeof data === 'object' && 'error' in data && 'status' in data) {
-    const errorData = data as { error: string; details: string; status: number };
-    
-    // Handle 404 specifically - this means the resource doesn't exist
-    if (errorData.status === 404) {
-      throw new DataApiRequestError(
-        'Resource not found',
-        path,
-        options,
-        404,
-        errorData.details
-      );
-    }
-    
-    // Handle other error statuses
-    throw new DataApiRequestError(
-      errorData.error || 'API request failed',
-      path,
-      options,
-      errorData.status,
-      errorData.details
-    );
-  }
-
   // Handle token expiration with automatic refresh and retry
   if (error && (error as any).status === 401 && retryCount === 0) {
     console.log('Token expired (via proxy), refreshing and retrying request...');
