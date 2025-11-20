@@ -8,17 +8,11 @@ import { supabase } from '@/integrations/supabase/client';
 
 /**
  * Calculate capabilities for a single asset
+ * Uses single API call to /assets/{assetId}/devices which returns asset + devices
  */
 export async function calculateCapabilities(assetId: string): Promise<AssetCapabilities> {
   const asset = await dataApiClient.getAsset(assetId);
-  const devicesResponse = await dataApiClient.getAssetDevices(assetId);
-  
-  // Ensure devices is always an array (defensive check)
-  const devices = Array.isArray(devicesResponse) ? devicesResponse : [];
-  
-  if (!Array.isArray(devicesResponse)) {
-    console.warn(`Asset ${assetId}: devices is not an array, got:`, devicesResponse);
-  }
+  const devices = asset.devices || [];
 
   const hasSolcast = devices.some(d => d.data_provider === 'solcast');
   const hasBattery = devices.some(d => 
@@ -35,7 +29,7 @@ export async function calculateCapabilities(assetId: string): Promise<AssetCapab
     hasSolcast,
     hasBattery,
     hasGenset,
-    onboardingDate: null, // Not available in API response
+    onboardingDate: null,
     deviceCount: devices.length,
     devices,
   };
@@ -145,15 +139,24 @@ export async function syncCustomerAMMPData(
     throw new Error(`No assets found for org_id: ${orgId}`);
   }
 
-  // 2. Calculate capabilities for each asset (sequential for progress tracking)
-  const capabilities = [];
-  for (let i = 0; i < orgAssets.length; i++) {
-    const asset = orgAssets[i];
-    if (onProgress) {
-      onProgress(i + 1, orgAssets.length, asset.asset_name);
-    }
-    const cap = await calculateCapabilities(asset.asset_id);
-    capabilities.push(cap);
+  // 2. Calculate capabilities in batches (parallel processing with progress tracking)
+  const BATCH_SIZE = 10; // Process 10 assets concurrently
+  const capabilities: AssetCapabilities[] = [];
+
+  for (let i = 0; i < orgAssets.length; i += BATCH_SIZE) {
+    const batch = orgAssets.slice(i, i + BATCH_SIZE);
+    
+    // Process batch in parallel
+    const batchPromises = batch.map(async (asset, batchIndex) => {
+      const globalIndex = i + batchIndex;
+      if (onProgress) {
+        onProgress(globalIndex + 1, orgAssets.length, asset.asset_name);
+      }
+      return calculateCapabilities(asset.asset_id);
+    });
+    
+    const batchResults = await Promise.all(batchPromises);
+    capabilities.push(...batchResults);
   }
   
   // 3. Aggregate data
