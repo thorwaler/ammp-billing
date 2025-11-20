@@ -338,6 +338,12 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
       setShowCustomPricing(false);
     } else if (value === "custom") {
       setShowCustomPricing(true);
+    } else if (value === "hybrid_tiered") {
+      // Remove technical monitoring from hybrid_tiered packages
+      const currentModules = form.getValues("modules") || [];
+      const filteredModules = currentModules.filter(id => id !== "technicalMonitoring");
+      form.setValue("modules", filteredModules);
+      setShowCustomPricing(false);
     } else {
       setShowCustomPricing(false);
     }
@@ -758,7 +764,10 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
                   <div 
                     key={module.id} 
                     className={`border rounded-md p-3 ${
-                      watchPackage === "starter" && module.id !== "technicalMonitoring" ? "opacity-50" : ""
+                      (watchPackage === "starter" && module.id !== "technicalMonitoring") || 
+                      (watchPackage === "hybrid_tiered" && module.id === "technicalMonitoring")
+                        ? "opacity-50" 
+                        : ""
                     }`}
                   >
                     <div className="flex items-center space-x-2">
@@ -766,7 +775,10 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
                         id={`module-${module.id}`} 
                         checked={watchModules?.includes(module.id)} 
                         onCheckedChange={(checked) => handleModuleSelection(module.id, !!checked)}
-                        disabled={watchPackage === "starter" && module.id !== "technicalMonitoring"}
+                        disabled={
+                          (watchPackage === "starter" && module.id !== "technicalMonitoring") ||
+                          (watchPackage === "hybrid_tiered" && module.id === "technicalMonitoring")
+                        }
                       />
                       <label 
                         htmlFor={`module-${module.id}`}
