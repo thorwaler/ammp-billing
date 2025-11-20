@@ -194,7 +194,8 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     }
   };
 
-  const getDeviceIcon = (deviceType: string) => {
+  const getDeviceIcon = (deviceType?: string) => {
+    if (!deviceType) return Database;
     if (deviceType.includes('inverter')) return Zap;
     if (deviceType.includes('battery')) return Battery;
     if (deviceType.includes('meter') || deviceType.includes('monitor')) return Activity;
@@ -433,30 +434,137 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
               {/* Collapsible Asset Breakdown */}
               <Collapsible>
                 <CollapsibleTrigger className="flex items-center gap-2 text-sm text-primary hover:underline">
+                  <ChevronDown className="h-4 w-4" />
                   <span>View asset details</span>
                 </CollapsibleTrigger>
-                <CollapsibleContent className="mt-2 space-y-1">
-                  {syncedCapabilities.assetBreakdown.map((asset: any) => (
-                    <div 
-                      key={asset.assetId} 
-                      className="flex items-center justify-between text-xs p-2 bg-background rounded"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-muted-foreground">
-                          {asset.assetName}
-                        </span>
-                        <div className="flex gap-1">
-                          {asset.isHybrid && (
-                            <Badge variant="secondary" className="text-xs">Hybrid</Badge>
-                          )}
-                          {asset.hasSolcast && (
-                            <Badge variant="outline" className="text-xs">Solcast</Badge>
-                          )}
-                        </div>
-                      </div>
-                      <span className="font-medium">{asset.totalMW.toFixed(2)} MWp</span>
-                    </div>
-                  ))}
+                <CollapsibleContent className="mt-3">
+                  <Accordion type="single" collapsible className="w-full">
+                    {syncedCapabilities.assetBreakdown.map((asset: any) => (
+                      <AccordionItem key={asset.assetId} value={asset.assetId}>
+                        <AccordionTrigger 
+                          className="hover:no-underline"
+                          onClick={() => {
+                            if (!assetsWithDevices.has(asset.assetId)) {
+                              fetchDevicesForAsset(asset.assetId);
+                            }
+                          }}
+                        >
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{asset.assetName}</span>
+                              {asset.isHybrid && (
+                                <Badge variant="secondary" className="text-xs">Hybrid</Badge>
+                              )}
+                              {asset.hasSolcast && (
+                                <Badge variant="outline" className="text-xs">Solcast</Badge>
+                              )}
+                            </div>
+                            <span className="text-sm text-muted-foreground">
+                              {asset.totalMW.toFixed(2)} MWp
+                            </span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          <div className="space-y-4 pt-2">
+                            {/* Asset ID */}
+                            <div className="flex items-center gap-2 p-2 bg-muted/30 rounded">
+                              <span className="text-xs text-muted-foreground">Asset ID:</span>
+                              <code className="text-xs font-mono flex-1">{asset.assetId}</code>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(asset.assetId)}
+                                className="h-6 w-6 p-0"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
+                            </div>
+
+                            {/* Devices Table */}
+                            <div>
+                              <h4 className="text-sm font-medium mb-2">Devices</h4>
+                              {assetsWithDevices.get(asset.assetId)?.loading && (
+                                <div className="space-y-2">
+                                  <Skeleton className="h-8 w-full" />
+                                  <Skeleton className="h-8 w-full" />
+                                  <Skeleton className="h-8 w-full" />
+                                </div>
+                              )}
+                              
+                              {assetsWithDevices.get(asset.assetId)?.error && (
+                                <div className="text-center py-4">
+                                  <p className="text-sm text-destructive mb-2">
+                                    {assetsWithDevices.get(asset.assetId)?.error}
+                                  </p>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => fetchDevicesForAsset(asset.assetId)}
+                                  >
+                                    Retry
+                                  </Button>
+                                </div>
+                              )}
+                              
+                              {!assetsWithDevices.get(asset.assetId)?.loading && 
+                               !assetsWithDevices.get(asset.assetId)?.error && (
+                                <>
+                                  {assetsWithDevices.get(asset.assetId)?.devices.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground text-center py-4">
+                                      No devices configured for this asset
+                                    </p>
+                                  ) : (
+                                    <div className="border rounded-md">
+                                      <Table>
+                                        <TableHeader>
+                                          <TableRow>
+                                            <TableHead>Device</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Manufacturer</TableHead>
+                                            <TableHead>Provider</TableHead>
+                                          </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                          {assetsWithDevices.get(asset.assetId)?.devices.map((device, idx) => {
+                                            const Icon = getDeviceIcon(device.device_type);
+                                            return (
+                                              <TableRow key={idx}>
+                                                <TableCell className="font-medium text-sm">
+                                                  <div className="flex items-center gap-2">
+                                                    <Icon className="h-3 w-3 text-muted-foreground" />
+                                                    {device.device_name || device.device_id}
+                                                  </div>
+                                                </TableCell>
+                                                <TableCell className="text-sm">
+                                                  <Badge variant="outline" className="text-xs">
+                                                    {device.device_type?.replace(/_/g, ' ') || 'Unknown'}
+                                                  </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-sm text-muted-foreground">
+                                                  {device.manufacturer || 'N/A'}
+                                                </TableCell>
+                                                <TableCell className="text-sm">
+                                                  <Badge variant="secondary" className="text-xs">
+                                                    {device.data_provider}
+                                                  </Badge>
+                                                </TableCell>
+                                              </TableRow>
+                                            );
+                                          })}
+                                        </TableBody>
+                                      </Table>
+                                    </div>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                 </CollapsibleContent>
               </Collapsible>
             </div>
