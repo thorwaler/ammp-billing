@@ -65,13 +65,52 @@ Deno.serve(async (req) => {
     }
     
     if (!response.ok) {
-      // Special case: 404 for devices endpoint means no devices exist for this asset
-      // This is a valid state, so return empty array instead of error
-      if (response.status === 404 && path.includes('/devices')) {
-        console.log(`Asset has no devices (404), returning empty array for: ${path}`);
+      // Special case: 404 for /assets/{id}/devices means no devices exist
+      // Make fallback call to /assets/{id} to get asset metadata
+      if (response.status === 404 && path.match(/^\/assets\/[^\/]+\/devices$/)) {
+        console.log(`Asset has no devices (404), fetching asset metadata: ${path}`);
         
+        // Extract asset ID and fetch basic asset info
+        const assetId = path.split('/')[2];
+        const fallbackUrl = `${AMMP_BASE_URL}/assets/${assetId}`;
+        
+        try {
+          const fallbackResponse = await fetch(fallbackUrl, {
+            method: 'GET',
+            headers: {
+              'accept': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          });
+          
+          if (fallbackResponse.ok) {
+            const assetData = await fallbackResponse.json();
+            // Return asset with empty devices array
+            const assetWithDevices = { ...assetData, devices: [] };
+            
+            console.log(`Successfully fetched asset metadata for ${assetId}, adding empty devices array`);
+            
+            return new Response(
+              JSON.stringify(assetWithDevices),
+              {
+                status: 200,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              }
+            );
+          }
+        } catch (fallbackError) {
+          console.error(`Fallback fetch failed for ${assetId}:`, fallbackError);
+        }
+        
+        // If fallback fails, return minimal structure
+        console.warn(`Could not fetch asset metadata for ${assetId}, returning minimal structure`);
         return new Response(
-          JSON.stringify([]),
+          JSON.stringify({ 
+            asset_id: assetId,
+            asset_name: 'Unknown Asset',
+            devices: [],
+            total_pv_power: 0,
+          }),
           {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

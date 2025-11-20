@@ -12,6 +12,13 @@ import { supabase } from '@/integrations/supabase/client';
  */
 export async function calculateCapabilities(assetId: string): Promise<AssetCapabilities> {
   const asset = await dataApiClient.getAsset(assetId);
+  
+  // Defensive check: ensure we got a valid asset object
+  if (!asset || !asset.asset_id || typeof asset.asset_name !== 'string') {
+    console.error(`Invalid asset data received for ${assetId}:`, asset);
+    throw new Error(`Failed to fetch valid asset data for ${assetId}`);
+  }
+  
   const devices = asset.devices || [];
 
   const hasSolcast = devices.some(d => d.data_provider === 'solcast');
