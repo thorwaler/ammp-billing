@@ -94,6 +94,7 @@ export const dataApiClient = {
    * Get devices for an asset
    */
   async getAssetDevices(assetId: string): Promise<DeviceResponse[]> {
-    return request<DeviceResponse[]>(`/assets/${assetId}/devices`);
+    const response = await request<AssetResponse>(`/assets/${assetId}/devices`);
+    return response.devices || [];
   }
 };
