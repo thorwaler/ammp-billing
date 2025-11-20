@@ -335,7 +335,8 @@ const Customers = () => {
       // Show only customers with inactive status
       filtered = filtered.filter(c => c.status === "inactive");
     } else if (filterTab === "no-contracts") {
-      filtered = filtered.filter(c => !c.contractId);
+      // Show customers that have no contract AND are not inactive
+      filtered = filtered.filter(c => !c.contractId && c.status !== "inactive");
     }
     
     // Apply search filter
@@ -350,7 +351,7 @@ const Customers = () => {
   };
 
   const filteredCustomers = getFilteredCustomers();
-  const customersWithoutContracts = customersData.filter(c => !c.contractId);
+  const customersWithoutContracts = customersData.filter(c => !c.contractId && c.status !== "inactive");
 
   return (
     <Layout>
