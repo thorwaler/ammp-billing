@@ -71,6 +71,7 @@ async function request<T>(path: string, options: RequestInit = {}, retryCount = 
   }
 
   // Success: data is the JSON returned by the proxy
+  console.log(`[dataApiClient] Response for ${path}:`, data);
   return data as T;
 }
 
