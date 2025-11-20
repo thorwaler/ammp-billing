@@ -74,7 +74,11 @@ export async function getCustomerSummary(assetIds: UUID[]): Promise<CustomerAMMP
  * Sync customer AMMP data by org_id
  * Fetches all assets for an org, calculates capabilities, and stores in database
  */
-export async function syncCustomerAMMPData(customerId: string, orgId: string) {
+export async function syncCustomerAMMPData(
+  customerId: string, 
+  orgId: string,
+  onProgress?: (current: number, total: number, assetName: string) => void
+) {
   // 1. Fetch all assets
   const allAssets = await dataApiClient.listAssets();
   const orgAssets = allAssets.filter(a => a.org_id === orgId);
@@ -83,10 +87,16 @@ export async function syncCustomerAMMPData(customerId: string, orgId: string) {
     throw new Error(`No assets found for org_id: ${orgId}`);
   }
 
-  // 2. Calculate capabilities for each asset
-  const capabilities = await Promise.all(
-    orgAssets.map(asset => calculateCapabilities(asset.asset_id))
-  );
+  // 2. Calculate capabilities for each asset (sequential for progress tracking)
+  const capabilities = [];
+  for (let i = 0; i < orgAssets.length; i++) {
+    const asset = orgAssets[i];
+    if (onProgress) {
+      onProgress(i + 1, orgAssets.length, asset.asset_name);
+    }
+    const cap = await calculateCapabilities(asset.asset_id);
+    capabilities.push(cap);
+  }
   
   // 3. Aggregate data
   const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset);
