@@ -84,10 +84,10 @@ export const dataApiClient = {
   },
 
   /**
-   * Get single asset by ID
+   * Get single asset by ID with devices (uses /devices endpoint for efficiency)
    */
   async getAsset(assetId: string): Promise<AssetResponse> {
-    return request<AssetResponse>(`/assets/${assetId}`);
+    return request<AssetResponse>(`/assets/${assetId}/devices`);
   },
 
   /**
