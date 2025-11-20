@@ -246,7 +246,9 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       const customerData = {
         name: formData.name,
         location: formData.location,
-        mwp_managed: formData.mwpManaged ? parseFloat(formData.mwpManaged) : 0,
+        mwp_managed: syncedCapabilities 
+          ? syncedCapabilities.totalMW 
+          : (formData.mwpManaged ? parseFloat(formData.mwpManaged) : 0),
         status: formData.status,
         ammp_org_id: formData.ammpOrgId || null,
         ammp_asset_ids: syncedAssets.length > 0 ? syncedAssets : null,
