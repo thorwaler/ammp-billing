@@ -42,6 +42,9 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     status: existingCustomer?.status || "active",
     ammpOrgId: existingCustomer?.ammp_org_id || "",
   });
+  
+  // Track original status to detect manual changes
+  const [originalStatus] = useState(existingCustomer?.status || "active");
 
   // Initialize synced assets from existing customer
   useEffect(() => {
@@ -228,6 +231,9 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Check if status was manually changed
+      const statusChanged = existingCustomer && formData.status !== originalStatus;
+      
       const customerData = {
         name: formData.name,
         location: formData.location,
@@ -238,6 +244,8 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
         ammp_capabilities: syncedCapabilities || null,
         ammp_sync_status: syncedCapabilities ? 'synced' : null,
         last_ammp_sync: syncedCapabilities ? new Date().toISOString() : null,
+        // Set manual_status_override to true if status was manually changed
+        manual_status_override: statusChanged ? true : (existingCustomer?.manual_status_override || false),
         user_id: user.id,
       };
 
@@ -320,7 +328,14 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="status">Customer Status</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="status">Customer Status</Label>
+              {existingCustomer?.manual_status_override && (
+                <Badge variant="outline" className="text-xs">
+                  Manually managed
+                </Badge>
+              )}
+            </div>
             <Select 
               value={formData.status}
               onValueChange={(value) => handleSelectChange("status", value)}
@@ -334,6 +349,11 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
+            {formData.status !== originalStatus && (
+              <p className="text-xs text-muted-foreground">
+                Status will be manually managed (Xero sync won't change it)
+              </p>
+            )}
           </div>
         </div>
 
