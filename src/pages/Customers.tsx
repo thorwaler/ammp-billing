@@ -28,6 +28,12 @@ interface CustomerData {
   joinDate: string;
   lastInvoiced: string;
   contractId: string;
+  ammpOrgId?: string;
+  ammpAssetIds?: string[];
+  ammpCapabilities?: any;
+  lastAmmpSync?: string;
+  ammpSyncStatus?: string;
+  manualStatusOverride?: boolean;
 }
 
 
@@ -58,6 +64,11 @@ const Customers = () => {
           join_date,
           last_invoiced,
           manual_status_override,
+          ammp_org_id,
+          ammp_asset_ids,
+          ammp_capabilities,
+          last_ammp_sync,
+          ammp_sync_status,
           contracts (
             id,
             package,
@@ -154,7 +165,13 @@ const Customers = () => {
         addOns: [...modules, ...addons],
         joinDate: c.join_date || new Date().toISOString(),
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
-        contractId: activeContract?.id || ''
+        contractId: activeContract?.id || '',
+        ammpOrgId: c.ammp_org_id || undefined,
+        ammpAssetIds: (Array.isArray(c.ammp_asset_ids) ? c.ammp_asset_ids : undefined) as string[] | undefined,
+        ammpCapabilities: c.ammp_capabilities || undefined,
+        lastAmmpSync: c.last_ammp_sync || undefined,
+        ammpSyncStatus: c.ammp_sync_status || undefined,
+        manualStatusOverride: c.manual_status_override || false,
       };
     });
 
@@ -437,9 +454,22 @@ const Customers = () => {
           {filteredCustomers.map((customer) => (
             <CustomerCard 
               key={customer.id} 
-              {...customer}
+              id={customer.id}
+              name={customer.name}
+              location={customer.location}
               contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValue, customer.contractCurrency))}/year`}
+              mwpManaged={customer.mwpManaged}
+              status={customer.status}
+              addOns={customer.addOns}
+              joinDate={customer.joinDate}
+              lastInvoiced={customer.lastInvoiced}
+              contractId={customer.contractId}
               hasContract={!!customer.contractId}
+              ammpOrgId={customer.ammpOrgId}
+              ammpAssetIds={customer.ammpAssetIds}
+              ammpCapabilities={customer.ammpCapabilities}
+              lastAmmpSync={customer.lastAmmpSync}
+              ammpSyncStatus={customer.ammpSyncStatus}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)} 
               onViewDetails={() => navigate(`/customers/${customer.id}`)} 
               onContractCreated={loadCustomers}

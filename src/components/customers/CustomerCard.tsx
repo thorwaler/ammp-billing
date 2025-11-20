@@ -26,6 +26,8 @@ interface CustomerCardProps {
   contractId?: string;
   hasContract: boolean;
   ammpOrgId?: string;
+  ammpAssetIds?: string[];
+  ammpCapabilities?: any;
   lastAmmpSync?: string;
   ammpSyncStatus?: string;
   onViewContract?: () => void;
@@ -46,6 +48,8 @@ export function CustomerCard({
   contractId,
   hasContract,
   ammpOrgId,
+  ammpAssetIds,
+  ammpCapabilities,
   lastAmmpSync,
   ammpSyncStatus,
   onViewContract,
@@ -202,7 +206,10 @@ export function CustomerCard({
                         mwpManaged,
                         status,
                         ammp_org_id: ammpOrgId,
-                        ammp_asset_ids: null, // Will be loaded from DB if exists
+                        ammp_asset_ids: ammpAssetIds,
+                        ammp_capabilities: ammpCapabilities,
+                        last_ammp_sync: lastAmmpSync,
+                        ammp_sync_status: ammpSyncStatus,
                       }}
                     />
                   </DialogContent>
