@@ -11,7 +11,14 @@ import { supabase } from '@/integrations/supabase/client';
  */
 export async function calculateCapabilities(assetId: string): Promise<AssetCapabilities> {
   const asset = await dataApiClient.getAsset(assetId);
-  const devices = await dataApiClient.getAssetDevices(assetId); // Returns [] if no devices
+  const devicesResponse = await dataApiClient.getAssetDevices(assetId);
+  
+  // Ensure devices is always an array (defensive check)
+  const devices = Array.isArray(devicesResponse) ? devicesResponse : [];
+  
+  if (!Array.isArray(devicesResponse)) {
+    console.warn(`Asset ${assetId}: devices is not an array, got:`, devicesResponse);
+  }
 
   const hasSolcast = devices.some(d => d.data_provider === 'solcast');
   const hasBattery = devices.some(d => 
