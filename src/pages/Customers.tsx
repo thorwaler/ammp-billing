@@ -66,11 +66,11 @@ const Customers = () => {
             minimum_annual_value,
             minimum_charge,
             volume_discounts,
-            currency
+            currency,
+            contract_status
           )
         `)
-        .eq('user_id', user.id)
-        .eq('contracts.contract_status', 'active');
+        .eq('user_id', user.id);
 
     if (error) {
       console.error('Error loading customers:', error);
@@ -136,27 +136,40 @@ const Customers = () => {
         };
 
     const transformed: CustomerData[] = (data || []).map(c => {
-      const contract = c.contracts?.[0];
-      const modules = Array.isArray(contract?.modules) ? contract.modules as string[] : [];
-      const addons = Array.isArray(contract?.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
+      // Filter for active contract only (client-side filtering)
+      const activeContract = c.contracts?.find((contract: any) => contract.contract_status === 'active');
+      const modules = Array.isArray(activeContract?.modules) ? activeContract.modules as string[] : [];
+      const addons = Array.isArray(activeContract?.addons) ? (activeContract.addons as any[]).map((a: any) => a.id || a) : [];
       const mwpManaged = Number(c.mwp_managed) || 0;
       
       return {
         id: c.id,
         name: c.name,
         location: c.location || 'N/A',
-        contractValue: calculateContractValue(contract, mwpManaged),
-        contractCurrency: contract?.currency || 'USD',
+        contractValue: calculateContractValue(activeContract, mwpManaged),
+        contractCurrency: activeContract?.currency || 'USD',
         mwpManaged,
         status: (c.status || 'active') as "active" | "pending" | "inactive",
         addOns: [...modules, ...addons],
         joinDate: c.join_date || new Date().toISOString(),
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
-        contractId: contract?.id || ''
+        contractId: activeContract?.id || ''
       };
     });
 
-    setCustomersData(transformed);
+    // Deduplicate by customer ID
+    const deduplicatedMap = new Map<string, CustomerData>();
+    transformed.forEach(customer => {
+      if (!deduplicatedMap.has(customer.id)) {
+        deduplicatedMap.set(customer.id, customer);
+      } else {
+        console.warn(`[Customers] Duplicate customer detected: ${customer.id} (${customer.name})`);
+      }
+    });
+    const deduplicatedData = Array.from(deduplicatedMap.values());
+    
+    console.log(`[Customers] Loaded ${transformed.length} rows, ${deduplicatedData.length} unique customers`);
+    setCustomersData(deduplicatedData);
   };
 
   useEffect(() => {
