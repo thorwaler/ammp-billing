@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ContractPackageSelector } from "@/components/contracts/ContractPackageSelector";
+import { MODULES, ADDONS, type ComplexityLevel } from "@/data/pricingData";
 import {
   Select,
   SelectContent,
@@ -80,112 +82,15 @@ interface ContractFormProps {
   onComplete?: () => void;
 }
 
-const modules = [
-  { id: "technicalMonitoring", name: "Technical Monitoring", price: 1000, available: true },
-  { id: "energySavingsHub", name: "Energy Savings Hub", price: 500, available: true, trial: true },
-  { id: "stakeholderPortal", name: "Stakeholder Portal", price: 250, available: true, trial: true },
-  { id: "control", name: "Control", price: 500, available: true, trial: true },
-];
-
-const addons = [
-  // Technical Monitoring Addons
-  { 
-    id: "customKPIs", 
-    name: "Custom KPIs", 
-    module: "technicalMonitoring", 
-    complexityPricing: true,
-    lowPrice: 200,
-    mediumPrice: 1500,
-    highPrice: 10000
-  },
-  { 
-    id: "customAPIIntegration", 
-    name: "Custom API Integration", 
-    module: "technicalMonitoring", 
-    price: 3500 
-  },
-  { 
-    id: "satelliteDataAPI", 
-    name: "Satellite Data API Access", 
-    module: "technicalMonitoring", 
-    price: 6 
-  },
-  { 
-    id: "dataLoggerSetup", 
-    name: "Data Logger Setup", 
-    module: "technicalMonitoring", 
-    complexityPricing: true,
-    lowPrice: 1000,
-    mediumPrice: 2500,
-    highPrice: 5000
-  },
-  { 
-    id: "tmCustomDashboards", 
-    name: "Custom Dashboards", 
-    module: "technicalMonitoring", 
-    price: 1000,
-    requiresPro: true
-  },
-  { 
-    id: "tmCustomReports", 
-    name: "Custom Reports", 
-    module: "technicalMonitoring", 
-    price: 1500,
-    requiresPro: true
-  },
-  { 
-    id: "tmCustomAlerts", 
-    name: "Custom Alerts", 
-    module: "technicalMonitoring", 
-    price: 150,
-    requiresPro: true
-  },
-  
-  // Energy Savings Hub Addons
-  { 
-    id: "eshCustomDashboard", 
-    name: "Custom Dashboard", 
-    module: "energySavingsHub", 
-    price: 1000 
-  },
-  { 
-    id: "eshCustomReport", 
-    name: "Custom Report", 
-    module: "energySavingsHub", 
-    price: 1500 
-  },
-  { 
-    id: "eshCustomKPIs", 
-    name: "Custom KPIs", 
-    module: "energySavingsHub", 
-    complexityPricing: true,
-    lowPrice: 200,
-    mediumPrice: 1500,
-    highPrice: 10000
-  },
-  
-  // Stakeholder Portal Addons
-  { 
-    id: "spCustomDashboard", 
-    name: "Custom Dashboard", 
-    module: "stakeholderPortal", 
-    price: 1000 
-  },
-  { 
-    id: "spCustomReport", 
-    name: "Custom Report", 
-    module: "stakeholderPortal", 
-    price: 1500 
-  },
-];
+// Module and addon definitions now imported from shared data file
 
 export function ContractForm({ existingCustomer, onComplete }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
-  const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: string}>({});
-  const [addonCustomPrices, setAddonCustomPrices] = useState<{[key: string]: number}>({});
-  const [addonQuantities, setAddonQuantities] = useState<{[key: string]: number}>({});
+  const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: ComplexityLevel}>({});
+  const [addonCustomPrices, setAddonCustomPrices] = useState<{[key: string]: number | undefined}>({});
+  const [addonQuantities, setAddonQuantities] = useState<{[key: string]: number | undefined}>({});
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const { currency: userCurrency} = useCurrency();
@@ -286,13 +191,13 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
         form.setValue('addons', addonIds);
 
         // Restore complexity selections, custom prices, and quantities
-        const complexityMap: {[key: string]: string} = {};
+        const complexityMap: {[key: string]: ComplexityLevel} = {};
         const customPriceMap: {[key: string]: number} = {};
         const quantityMap: {[key: string]: number} = {};
         
         ((contract.addons || []) as any[]).forEach((addon: any) => {
           if (addon.complexity) {
-            complexityMap[addon.id] = addon.complexity;
+            complexityMap[addon.id] = addon.complexity as ComplexityLevel;
           }
           if (addon.customPrice !== undefined) {
             customPriceMap[addon.id] = addon.customPrice;
@@ -364,7 +269,7 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
       // Remove addons associated with this module
       const currentAddons = form.getValues("addons") || [];
       const filteredAddons = currentAddons.filter(
-        (addonId) => !addons.find((a) => a.id === addonId && a.module === moduleId)
+        (addonId) => !ADDONS.find((a) => a.id === addonId && a.module === moduleId)
       );
       form.setValue("addons", filteredAddons);
     }
@@ -378,7 +283,7 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
       form.setValue("addons", [...currentAddons, addonId]);
       
       // If the addon has complexity pricing, open a dialog or show fields to select complexity
-      const addon = addons.find(a => a.id === addonId);
+      const addon = ADDONS.find(a => a.id === addonId);
       if (addon?.complexityPricing) {
         setSelectedComplexityItems({
           ...selectedComplexityItems,
@@ -415,7 +320,7 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
   };
 
   // Handle complexity selection for addons
-  const handleComplexityChange = (addonId: string, complexity: string) => {
+  const handleComplexityChange = (addonId: string, complexity: ComplexityLevel) => {
     setSelectedComplexityItems({
       ...selectedComplexityItems,
       [addonId]: complexity
@@ -452,7 +357,7 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
 
       // 2. Prepare addons with complexity, custom pricing, and quantity
       const enhancedAddons = (data.addons || []).map(addonId => {
-        const addon = addons.find(a => a.id === addonId);
+        const addon = ADDONS.find(a => a.id === addonId);
         return {
           id: addonId,
           complexity: addon?.complexityPricing ? selectedComplexityItems[addonId] || 'low' : undefined,
@@ -757,59 +662,33 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
               )}
             />
             
-            <div>
-              <Label>Modules</Label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                {modules.map((module) => (
-                  <div 
-                    key={module.id} 
-                    className={`border rounded-md p-3 ${
-                      (watchPackage === "starter" && module.id !== "technicalMonitoring") || 
-                      (watchPackage === "hybrid_tiered" && module.id === "technicalMonitoring")
-                        ? "opacity-50" 
-                        : ""
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <Checkbox 
-                        id={`module-${module.id}`} 
-                        checked={watchModules?.includes(module.id)} 
-                        onCheckedChange={(checked) => handleModuleSelection(module.id, !!checked)}
-                        disabled={
-                          (watchPackage === "starter" && module.id !== "technicalMonitoring") ||
-                          (watchPackage === "hybrid_tiered" && module.id === "technicalMonitoring")
-                        }
-                      />
-                      <label 
-                        htmlFor={`module-${module.id}`}
-                        className="flex-grow font-medium cursor-pointer text-sm"
-                      >
-                        {module.name}
-                      </label>
-                      <span className="text-sm">
-                        €{module.price}/MWp/year
-                        {module.trial && " (6 months free trial)"}
-                      </span>
-                    </div>
-                    
-                    {watchModules?.includes(module.id) && (
-                      <div className="mt-2 pl-6">
-                        <Label htmlFor={`custom-${module.id}`} className="text-xs">
-                          {showCustomPricing ? "Custom Price (€/MWp/year)" : "Override Price (€/MWp/year)"}
-                        </Label>
-                        <Input 
-                          id={`custom-${module.id}`} 
-                          type="number" 
-                          placeholder={`Default: €${module.price}`}
-                          className="mt-1 h-8"
-                          {...form.register(`customPricing.${module.id}` as any, { valueAsNumber: true })}
-                        />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* Package Selector Component - Modules & Addons */}
+            <ContractPackageSelector
+              selectedPackage={watchPackage || ""}
+              selectedModules={watchModules || []}
+              selectedAddons={watchAddons || []}
+              addonComplexity={selectedComplexityItems}
+              addonCustomPrices={addonCustomPrices}
+              addonQuantities={addonQuantities}
+              customPricing={form.watch("customPricing")}
+              showCustomPricing={showCustomPricing}
+              onModuleToggle={(moduleId) => handleModuleSelection(moduleId, !watchModules?.includes(moduleId))}
+              onAddonToggle={(addonId) => handleAddonSelection(addonId, !watchAddons?.includes(addonId))}
+              onComplexityChange={handleComplexityChange}
+              onCustomPriceChange={(id, price) => setAddonCustomPrices({...addonCustomPrices, [id]: price})}
+              onQuantityChange={(id, qty) => setAddonQuantities({...addonQuantities, [id]: qty})}
+              currency={form.watch("currency")}
+              mode="contract"
+              renderModuleInput={(moduleId) => (
+                <Input 
+                  id={`custom-${moduleId}`} 
+                  type="number" 
+                  placeholder={`Default: €${MODULES.find(m => m.id === moduleId)?.price}`}
+                  className="mt-1 h-8"
+                  {...form.register(`customPricing.${moduleId}` as any, { valueAsNumber: true })}
+                />
+              )}
+            />
             
             {/* Hybrid Tiered Pricing Section */}
             {watchPackage === "hybrid_tiered" && (
@@ -853,126 +732,6 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
                       </FormItem>
                     )}
                   />
-                </div>
-              </div>
-            )}
-            
-            {/* Addons section - only show addons for selected modules */}
-            {watchModules && watchModules.length > 0 && (
-              <div>
-                <Label>Add-ons</Label>
-                <div className="grid grid-cols-1 gap-4 mt-2">
-                  {watchModules.map(moduleId => (
-                    <div key={moduleId} className="border rounded-md p-4">
-                      <h4 className="font-medium mb-2">
-                        {modules.find(m => m.id === moduleId)?.name} Add-ons
-                      </h4>
-                      <div className="space-y-2">
-                        {addons
-                          .filter(addon => addon.module === moduleId)
-                          .filter(addon => !addon.requiresPro || watchPackage !== "starter")
-                          .map(addon => (
-                            <div 
-                              key={addon.id} 
-                              className={`${addon.requiresPro && watchPackage === "starter" ? "opacity-50" : ""}`}
-                            >
-                              <div className="flex items-center space-x-2">
-                                <Checkbox 
-                                  id={`addon-${addon.id}`} 
-                                  checked={watchAddons?.includes(addon.id)}
-                                  onCheckedChange={(checked) => handleAddonSelection(addon.id, !!checked)}
-                                  disabled={addon.requiresPro && watchPackage === "starter"}
-                                />
-                                <label 
-                                  htmlFor={`addon-${addon.id}`}
-                                  className="flex-grow cursor-pointer text-sm"
-                                >
-                                  {addon.name}
-                                </label>
-                                <span className="text-sm">
-                                  {addon.complexityPricing ? 
-                                    `€${addon.lowPrice} - €${addon.highPrice}` : 
-                                    `€${addon.price}`}
-                                </span>
-                              </div>
-                              
-                              {/* Show complexity selector for selected addons with complexity pricing */}
-                              {watchAddons?.includes(addon.id) && addon.complexityPricing && (
-                                <div className="mt-2 pl-6">
-                                  <Label className="text-xs">Complexity</Label>
-                                  <Select 
-                                    value={selectedComplexityItems[addon.id] || "low"} 
-                                    onValueChange={(value) => handleComplexityChange(addon.id, value)}
-                                  >
-                                    <SelectTrigger className="h-8 mt-1">
-                                      <SelectValue placeholder="Select complexity" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="low">Low (€{addon.lowPrice})</SelectItem>
-                                      <SelectItem value="medium">Medium (€{addon.mediumPrice})</SelectItem>
-                                      <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              )}
-
-                              {/* Price and Quantity inputs for all selected addons */}
-                              {watchAddons?.includes(addon.id) && (
-                                <div className="pl-6 space-y-2 mt-2">
-                                  <div className="flex items-center gap-4">
-                                    <div className="flex items-center gap-2">
-                                      <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
-                                        Price:
-                                      </Label>
-                                      <Input
-                                        id={`price-${addon.id}`}
-                                        type="number"
-                                        placeholder={addon.complexityPricing 
-                                          ? `${addon.lowPrice}-${addon.highPrice}` 
-                                          : String(addon.price)}
-                                        min={0}
-                                        step={0.01}
-                                        className="w-28 h-8"
-                                        value={addonCustomPrices[addon.id] ?? ''}
-                                        onChange={(e) => {
-                                          const value = e.target.value ? Number(e.target.value) : undefined;
-                                          setAddonCustomPrices(prev => ({
-                                            ...prev,
-                                            ...(value !== undefined ? { [addon.id]: value } : {})
-                                          }));
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <Label htmlFor={`quantity-${addon.id}`} className="text-sm whitespace-nowrap">
-                                        Quantity:
-                                      </Label>
-                                      <Input
-                                        id={`quantity-${addon.id}`}
-                                        type="number"
-                                        placeholder="1"
-                                        min={1}
-                                        step={1}
-                                        className="w-20 h-8"
-                                        value={addonQuantities[addon.id] || 1}
-                                        onChange={(e) => {
-                                          const value = Math.max(1, Number(e.target.value) || 1);
-                                          setAddonQuantities(prev => ({
-                                            ...prev,
-                                            [addon.id]: value
-                                          }));
-                                        }}
-                                      />
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          ))
-                        }
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             )}

@@ -20,7 +20,22 @@ import { Calendar } from "@/components/ui/calendar";
 import { format, formatDistanceToNow } from "date-fns";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
+import { ContractPackageSelector } from "@/components/contracts/ContractPackageSelector";
+import { 
+  MODULES, 
+  ADDONS, 
+  type ComplexityLevel, 
+  type PackageType 
+} from "@/data/pricingData";
+import { 
+  calculateInvoice, 
+  getFrequencyMultiplier,
+  calculateProrationMultiplier,
+  type CalculationParams,
+  type CalculationResult 
+} from "@/lib/invoiceCalculations";
 
+// Simplified interfaces - complex types moved to shared files
 interface Module {
   id: string;
   name: string;
@@ -37,16 +52,15 @@ interface Addon {
   lowPrice?: number;
   mediumPrice?: number;
   highPrice?: number;
-  complexity?: 'low' | 'medium' | 'high';
+  complexity?: ComplexityLevel;
   selected: boolean;
   requiresPro?: boolean;
   solcastSiteCount?: number;
   quantity?: number;
   customPrice?: number;
 }
-
 interface Customer {
-  id: string;  // customer_id
+  id: string;
   name: string;
   mwManaged: number;
   lastInvoiced?: string;
@@ -55,7 +69,7 @@ interface Customer {
   periodEnd?: string;
   billingFrequency: string;
   nextInvoiceDate?: string;
-  package: string;
+  package: PackageType;
   modules: string[];
   addons: any[];
   minimumCharge?: number;
@@ -67,142 +81,9 @@ interface Customer {
   ammpCapabilities?: any;
 }
 
-interface CalculationResult {
-  moduleCosts: {
-    moduleId: string;
-    moduleName: string;
-    cost: number;
-  }[];
-  addonCosts: {
-    addonId: string;
-    addonName: string;
-    cost: number;
-  }[];
-  starterPackageCost: number;
-  minimumCharges: number;
-  totalMWCost: number;
-  totalPrice: number;
-  invoicePeriod?: string;
-  hybridTieredBreakdown?: {
-    ongrid: { mw: number; cost: number; rate: number };
-    hybrid: { mw: number; cost: number; rate: number };
-  };
-}
-
-
-const defaultModules: Module[] = [
-  { id: "technicalMonitoring", name: "Technical Monitoring", price: 1000, selected: false },
-  { id: "energySavingsHub", name: "Energy Savings Hub", price: 500, selected: false },
-  { id: "stakeholderPortal", name: "Stakeholder Portal", price: 250, selected: false },
-  { id: "control", name: "Control", price: 500, selected: false },
-];
-
-const defaultAddons: Addon[] = [
-  // Technical Monitoring Addons
-  { 
-    id: "customKPIs", 
-    name: "Custom KPIs", 
-    module: "technicalMonitoring", 
-    complexityPricing: true,
-    lowPrice: 200,
-    mediumPrice: 1500,
-    highPrice: 10000,
-    selected: false
-  },
-  { 
-    id: "customAPIIntegration", 
-    name: "Custom API Integration", 
-    module: "technicalMonitoring", 
-    price: 3500,
-    selected: false
-  },
-  { 
-    id: "satelliteDataAPI", 
-    name: "Satellite Data API Access", 
-    module: "technicalMonitoring", 
-    complexityPricing: true,
-    lowPrice: 1,
-    mediumPrice: 2,
-    highPrice: 3,
-    selected: false
-  },
-  { 
-    id: "dataLoggerSetup", 
-    name: "Data Logger Setup", 
-    module: "technicalMonitoring", 
-    complexityPricing: true,
-    lowPrice: 1000,
-    mediumPrice: 2500,
-    highPrice: 5000,
-    selected: false
-  },
-  { 
-    id: "tmCustomDashboards", 
-    name: "Custom Dashboards", 
-    module: "technicalMonitoring", 
-    price: 1000,
-    selected: false,
-    requiresPro: true
-  },
-  { 
-    id: "tmCustomReports", 
-    name: "Custom Reports", 
-    module: "technicalMonitoring", 
-    price: 1500,
-    selected: false,
-    requiresPro: true
-  },
-  { 
-    id: "tmCustomAlerts", 
-    name: "Custom Alerts", 
-    module: "technicalMonitoring", 
-    price: 150,
-    selected: false,
-    requiresPro: true
-  },
-  
-  // Energy Savings Hub Addons
-  { 
-    id: "eshCustomDashboard", 
-    name: "Custom Dashboard", 
-    module: "energySavingsHub", 
-    price: 1000,
-    selected: false
-  },
-  { 
-    id: "eshCustomReport", 
-    name: "Custom Report", 
-    module: "energySavingsHub", 
-    price: 1500,
-    selected: false
-  },
-  { 
-    id: "eshCustomKPIs", 
-    name: "Custom KPIs", 
-    module: "energySavingsHub", 
-    complexityPricing: true,
-    lowPrice: 200,
-    mediumPrice: 1500,
-    highPrice: 10000,
-    selected: false
-  },
-  
-  // Stakeholder Portal Addons
-  { 
-    id: "spCustomDashboard", 
-    name: "Custom Dashboard", 
-    module: "stakeholderPortal", 
-    price: 1000,
-    selected: false
-  },
-  { 
-    id: "spCustomReport", 
-    name: "Custom Report", 
-    module: "stakeholderPortal", 
-    price: 1500,
-    selected: false
-  },
-];
+// Default modules and addons from shared data
+const defaultModules: Module[] = MODULES.map(m => ({ ...m, selected: false }));
+const defaultAddons: Addon[] = ADDONS.map(a => ({ ...a, selected: false }));
 
 interface InvoiceCalculatorProps {
   preselectedCustomerId?: string;
@@ -378,37 +259,26 @@ export function InvoiceCalculator({
     }
   }, [customer, customers]);
 
-  // Calculate the number of days between two dates for prorating
-  const calculateDaysBetween = (startDate: Date, endDate: Date): number => {
-    const oneDay = 24 * 60 * 60 * 1000; // milliseconds in a day
-    return Math.round(Math.abs((endDate.getTime() - startDate.getTime()) / oneDay));
-  };
-
-  // Calculate proration multiplier based on days
-  const calculateProrationMultiplier = (startDate: Date, endDate: Date, frequency: string): number => {
-    const days = calculateDaysBetween(startDate, endDate);
+  // Calculation helper - now using shared logic
+  const getInvoicePeriodText = () => {
+    if (!invoiceDate) return "";
     
-    // Standard period lengths in days
-    const periodDays: { [key: string]: number } = {
-      monthly: 30,
-      quarterly: 91,
-      biannual: 182,
-      annual: 365
-    };
+    const startDate = new Date(invoiceDate);
+    const endDate = new Date(invoiceDate);
     
-    const standardDays = periodDays[frequency] || 365;
-    return days / standardDays;
-  };
-
-  // Calculate frequency multiplier for billing
-  const getFrequencyMultiplier = () => {
-    switch (billingFrequency) {
-      case "monthly": return 1/12;
-      case "quarterly": return 0.25;
-      case "biannual": return 0.5;
-      case "annual": return 1;
-      default: return 1;
+    if (billingFrequency === "monthly") {
+      endDate.setMonth(endDate.getMonth() + 1);
+    } else if (billingFrequency === "quarterly") {
+      endDate.setMonth(endDate.getMonth() + 3);
+    } else if (billingFrequency === "biannual") {
+      endDate.setMonth(endDate.getMonth() + 6);
+    } else {
+      endDate.setFullYear(endDate.getFullYear() + 1);
     }
+    
+    endDate.setDate(endDate.getDate() - 1);
+    
+    return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
   };
 
   const handleCalculate = () => {
@@ -429,7 +299,7 @@ export function InvoiceCalculator({
                            selectedCustomer.periodStart &&
                            invoiceDate;
     
-    let frequencyMultiplier = getFrequencyMultiplier();
+    let frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
     let invoicePeriodDisplay = getInvoicePeriodText();
     
     // For first invoice, calculate based on initial period (signed to first invoice)
@@ -446,6 +316,10 @@ export function InvoiceCalculator({
 
     // Update calculation logic based on new pricing structure
     const totalMW = Number(mwManaged) + Number(newSystems);
+    
+    // Store invoice period separately since it's not in the standard CalculationResult
+    const invoicePeriod = invoicePeriodDisplay;
+    
     let calculationResult: CalculationResult = {
       moduleCosts: [],
       addonCosts: [],
@@ -453,7 +327,6 @@ export function InvoiceCalculator({
       minimumCharges: 0,
       totalMWCost: 0,
       totalPrice: 0,
-      invoicePeriod: invoicePeriodDisplay,
     };
     
     // Calculate costs based on package
@@ -565,7 +438,8 @@ export function InvoiceCalculator({
       calculationResult.addonCosts.reduce((sum, item) => sum + item.cost, 0) +
       calculationResult.minimumCharges;
     
-    setResult(calculationResult);
+    // Store result with invoice period
+    setResult({ ...calculationResult, invoicePeriod } as any);
     setShowResult(true);
   };
 
@@ -752,27 +626,6 @@ export function InvoiceCalculator({
 
   const isProPackage = selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'custom';
 
-  const getInvoicePeriodText = () => {
-    if (!invoiceDate) return "";
-    
-    const startDate = new Date(invoiceDate);
-    const endDate = new Date(invoiceDate);
-    
-    if (billingFrequency === "monthly") {
-      endDate.setMonth(endDate.getMonth() + 1);
-    } else if (billingFrequency === "quarterly") {
-      endDate.setMonth(endDate.getMonth() + 3);
-    } else if (billingFrequency === "biannual") {
-      endDate.setMonth(endDate.getMonth() + 6);
-    } else {
-      endDate.setFullYear(endDate.getFullYear() + 1);
-    }
-    
-    // Subtract one day from end date to make it inclusive
-    endDate.setDate(endDate.getDate() - 1);
-    
-    return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
-  };
 
   return (
     <Card>
@@ -1166,10 +1019,10 @@ export function InvoiceCalculator({
                   ))}
                 </div>
                 
-                {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier() && (
+                {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier(billingFrequency) && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Contract Value Applied:</span>
-                    <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier())}</span>
+                    <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier(billingFrequency))}</span>
                   </div>
                 )}
               </div>
