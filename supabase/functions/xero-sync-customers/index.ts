@@ -101,7 +101,7 @@ Deno.serve(async (req) => {
     // Fetch all local customers first to track deletions
     const { data: localCustomers, error: localError } = await supabase
       .from('customers')
-      .select('id, name')
+      .select('id, name, manual_status_override')
       .eq('user_id', user.id);
 
     if (localError) {
@@ -109,7 +109,13 @@ Deno.serve(async (req) => {
       throw new Error('Failed to fetch local customers');
     }
 
-    const localCustomerMap = new Map(localCustomers?.map(c => [c.name.toLowerCase(), c]) || []);
+    const localCustomerMap = new Map(
+      localCustomers?.map(c => [c.name.toLowerCase(), { 
+        id: c.id, 
+        name: c.name,
+        manual_status_override: c.manual_status_override 
+      }]) || []
+    );
     console.log(`Found ${localCustomerMap.size} local customers`);
 
     // Fetch customers from Xero (include archived)
@@ -152,6 +158,7 @@ Deno.serve(async (req) => {
     let syncedInactiveCount = 0;
     let errorCount = 0;
     let skippedCount = 0;
+    let skippedManualOverride = 0;
     const seenCustomers = new Set<string>();
 
     for (const contact of contacts) {
@@ -165,6 +172,17 @@ Deno.serve(async (req) => {
 
         // Track this customer as seen
         seenCustomers.add(contact.Name.toLowerCase());
+
+        // Check if this customer exists locally and has manual override
+        const existingCustomer = localCustomerMap.get(contact.Name.toLowerCase());
+        const hasManualOverride = existingCustomer?.manual_status_override === true;
+
+        // If manual override is set, skip updating this customer's status from Xero
+        if (hasManualOverride) {
+          console.log(`Customer "${contact.Name}" has manual status override, skipping status update`);
+          skippedManualOverride++;
+          continue;
+        }
 
         // Map Xero contact to our customers table structure
         const customerStatus = getCustomerStatus(contact.ContactStatus);
@@ -205,6 +223,12 @@ Deno.serve(async (req) => {
     let markedInactiveCount = 0;
     for (const [customerName, customer] of localCustomerMap) {
       if (!seenCustomers.has(customerName)) {
+        // Skip if manual override is enabled
+        if (customer.manual_status_override === true) {
+          console.log(`Customer "${customer.name}" has manual status override, skipping deletion sync`);
+          continue;
+        }
+
         console.log(`Customer "${customer.name}" not found in Xero, marking as inactive`);
         const { error: updateError } = await supabase
           .from('customers')
@@ -224,7 +248,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Customer sync complete. Active: ${syncedActiveCount}, Inactive (archived): ${syncedInactiveCount}, Inactive (deleted): ${markedInactiveCount}, Errors: ${errorCount}, Skipped: ${skippedCount}`);
+    console.log(`Customer sync complete. Active: ${syncedActiveCount}, Inactive (archived): ${syncedInactiveCount}, Inactive (deleted): ${markedInactiveCount}, Manual override: ${skippedManualOverride}, Errors: ${errorCount}, Skipped: ${skippedCount}`);
 
     return new Response(
       JSON.stringify({ 
@@ -232,9 +256,10 @@ Deno.serve(async (req) => {
         syncedActive: syncedActiveCount,
         syncedInactive: syncedInactiveCount,
         markedInactive: markedInactiveCount,
+        skippedManualOverride,
         errorCount,
         skippedCount,
-        totalContacts: contacts.length 
+        totalContacts: contacts.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

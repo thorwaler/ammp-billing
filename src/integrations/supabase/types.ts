@@ -143,6 +143,7 @@ export type Database = {
           last_ammp_sync: string | null
           last_invoiced: string | null
           location: string | null
+          manual_status_override: boolean | null
           mwp_managed: number | null
           name: string
           status: string | null
@@ -160,6 +161,7 @@ export type Database = {
           last_ammp_sync?: string | null
           last_invoiced?: string | null
           location?: string | null
+          manual_status_override?: boolean | null
           mwp_managed?: number | null
           name: string
           status?: string | null
@@ -177,6 +179,7 @@ export type Database = {
           last_ammp_sync?: string | null
           last_invoiced?: string | null
           location?: string | null
+          manual_status_override?: boolean | null
           mwp_managed?: number | null
           name?: string
           status?: string | null

@@ -57,6 +57,7 @@ const Customers = () => {
           status,
           join_date,
           last_invoiced,
+          manual_status_override,
           contracts (
             id,
             package,
@@ -217,9 +218,18 @@ const Customers = () => {
       
       if (error) throw error;
       
+      const totalSynced = (data.syncedActive || 0) + (data.syncedInactive || 0);
+      const details = [];
+      
+      if (data.syncedActive > 0) details.push(`${data.syncedActive} active`);
+      if (data.syncedInactive > 0) details.push(`${data.syncedInactive} archived`);
+      if (data.markedInactive > 0) details.push(`${data.markedInactive} deleted`);
+      if (data.skippedManualOverride > 0) details.push(`${data.skippedManualOverride} manually managed`);
+      if (data.skippedCount > 0) details.push(`${data.skippedCount} suppliers skipped`);
+      
       toast({
-        title: "Sync complete",
-        description: `Successfully synced ${data.syncedCount} customers from Xero. ${data.skippedCount ? `Skipped ${data.skippedCount} suppliers.` : ''}`,
+        title: "✅ Sync complete",
+        description: `Synced ${totalSynced} customers from Xero${details.length > 0 ? `: ${details.join(', ')}` : ''}`,
       });
       
       // Reload customers
