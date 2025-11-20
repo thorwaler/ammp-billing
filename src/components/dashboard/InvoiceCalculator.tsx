@@ -345,10 +345,16 @@ export function InvoiceCalculator({
         // Apply custom pricing to modules if available
         const updatedModules = defaultModules.map(module => {
           let customPrice = customerData.customPricing?.[module.id];
+          
+          // For hybrid_tiered pricing, exclude technical monitoring from selection
+          const shouldSelect = customerData.package === 'hybrid_tiered' && module.id === 'technicalMonitoring'
+            ? false
+            : customerData.modules.includes(module.id);
+          
           return {
             ...module,
             price: customPrice !== undefined ? customPrice : module.price,
-            selected: customerData.modules.includes(module.id)
+            selected: shouldSelect
           };
         });
         setModules(updatedModules);
