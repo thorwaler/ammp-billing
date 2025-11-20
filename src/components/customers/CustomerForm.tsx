@@ -5,11 +5,16 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, RefreshCw, AlertCircle } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle, Copy, Zap, Battery, Activity, Database, ChevronDown } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { syncCustomerAMMPData, calculateCapabilities } from "@/services/ammp/ammpService";
 import { dataApiClient } from "@/services/ammp/dataApiClient";
+import { DeviceResponse } from "@/types/ammp-api";
 interface CustomerFormProps {
   onComplete: () => void;
   existingCustomer?: any;
@@ -20,6 +25,16 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncedAssets, setSyncedAssets] = useState<any[]>([]);
   const [syncedCapabilities, setSyncedCapabilities] = useState<any>(null);
+  const [syncProgress, setSyncProgress] = useState<{
+    current: number;
+    total: number;
+    assetName: string;
+  } | null>(null);
+  const [assetsWithDevices, setAssetsWithDevices] = useState<Map<string, {
+    devices: DeviceResponse[];
+    loading: boolean;
+    error: string | null;
+  }>>(new Map());
   const [formData, setFormData] = useState({
     name: existingCustomer?.name || "",
     location: existingCustomer?.location || "",
@@ -58,10 +73,17 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     }
 
     setIsSyncing(true);
+    setSyncProgress(null);
     try {
       // For existing customers, sync to database
       if (existingCustomer?.id) {
-        const summary = await syncCustomerAMMPData(existingCustomer.id, formData.ammpOrgId);
+        const summary = await syncCustomerAMMPData(
+          existingCustomer.id, 
+          formData.ammpOrgId,
+          (current, total, assetName) => {
+            setSyncProgress({ current, total, assetName });
+          }
+        );
         
         // Update states with synced data
         setSyncedCapabilities(summary);
@@ -86,10 +108,14 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
           throw new Error(`No assets found for org_id: ${formData.ammpOrgId}`);
         }
 
-        // Calculate capabilities
-        const capabilities = await Promise.all(
-          orgAssets.map((asset: any) => calculateCapabilities(asset.asset_id))
-        );
+        // Calculate capabilities with progress
+        const capabilities = [];
+        for (let i = 0; i < orgAssets.length; i++) {
+          const asset = orgAssets[i];
+          setSyncProgress({ current: i + 1, total: orgAssets.length, assetName: asset.asset_name });
+          const cap = await calculateCapabilities(asset.asset_id);
+          capabilities.push(cap);
+        }
         
         const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset);
         const hybridSites = capabilities.filter(c => c.hasBattery || c.hasGenset);
@@ -133,7 +159,54 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       });
     } finally {
       setIsSyncing(false);
+      setSyncProgress(null);
     }
+  };
+
+  const fetchDevicesForAsset = async (assetId: string) => {
+    setAssetsWithDevices(prev => {
+      const newMap = new Map(prev);
+      newMap.set(assetId, { devices: [], loading: true, error: null });
+      return newMap;
+    });
+
+    try {
+      const devices = await dataApiClient.getAssetDevices(assetId);
+      setAssetsWithDevices(prev => {
+        const newMap = new Map(prev);
+        newMap.set(assetId, { 
+          devices: Array.isArray(devices) ? devices : [], 
+          loading: false, 
+          error: null 
+        });
+        return newMap;
+      });
+    } catch (error: any) {
+      setAssetsWithDevices(prev => {
+        const newMap = new Map(prev);
+        newMap.set(assetId, { 
+          devices: [], 
+          loading: false, 
+          error: error.message || "Failed to load devices" 
+        });
+        return newMap;
+      });
+    }
+  };
+
+  const getDeviceIcon = (deviceType: string) => {
+    if (deviceType.includes('inverter')) return Zap;
+    if (deviceType.includes('battery')) return Battery;
+    if (deviceType.includes('meter') || deviceType.includes('monitor')) return Activity;
+    return Database;
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({
+      title: "Copied",
+      description: "Asset ID copied to clipboard",
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -283,7 +356,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 variant="outline"
                 onClick={handleSyncFromAMMP}
                 disabled={!formData.ammpOrgId || isSyncing}
-                title="Sync from AMMP"
+                className="w-full"
               >
                 {isSyncing ? (
                   <>
@@ -297,6 +370,15 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                   </>
                 )}
               </Button>
+              
+              {isSyncing && syncProgress && (
+                <div className="space-y-2 mt-3">
+                  <Progress value={(syncProgress.current / syncProgress.total) * 100} />
+                  <p className="text-xs text-muted-foreground text-center">
+                    Syncing asset {syncProgress.current} of {syncProgress.total}: {syncProgress.assetName}
+                  </p>
+                </div>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
               {syncedCapabilities 
