@@ -35,6 +35,20 @@ Deno.serve(async (req) => {
     const responseText = await response.text();
     
     if (!response.ok) {
+      // Special case: 404 for devices endpoint means no devices exist for this asset
+      // This is a valid state, so return empty array instead of error
+      if (response.status === 404 && path.includes('/devices')) {
+        console.log(`Asset has no devices (404), returning empty array for: ${path}`);
+        
+        return new Response(
+          JSON.stringify([]),
+          {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      
       console.error(`AMMP API error: ${response.status} - ${responseText}`);
       
       return new Response(
