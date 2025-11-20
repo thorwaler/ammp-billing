@@ -363,44 +363,43 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
           
           <div className="space-y-2">
             <Label htmlFor="ammpOrgId">AMMP Organization ID</Label>
-            <div className="flex gap-2">
-              <Input
-                id="ammpOrgId"
-                name="ammpOrgId"
-                value={formData.ammpOrgId}
-                onChange={handleInputChange}
-                placeholder="e.g., org_abc123..."
-                className="flex-1"
-              />
-              <Button 
-                type="button"
-                variant="outline"
-                onClick={handleSyncFromAMMP}
-                disabled={!formData.ammpOrgId || isSyncing}
-                className="w-full"
-              >
-                {isSyncing ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Syncing...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    {syncedCapabilities ? "Re-sync from AMMP" : "Sync from AMMP"}
-                  </>
-                )}
-              </Button>
-              
-              {isSyncing && syncProgress && (
-                <div className="space-y-2 mt-3">
-                  <Progress value={(syncProgress.current / syncProgress.total) * 100} />
-                  <p className="text-xs text-muted-foreground text-center">
-                    Syncing asset {syncProgress.current} of {syncProgress.total}: {syncProgress.assetName}
-                  </p>
-                </div>
+            <Input
+              id="ammpOrgId"
+              name="ammpOrgId"
+              value={formData.ammpOrgId}
+              onChange={handleInputChange}
+              placeholder="e.g., org_abc123..."
+              className="w-full"
+            />
+            <Button 
+              type="button"
+              variant="outline"
+              onClick={handleSyncFromAMMP}
+              disabled={!formData.ammpOrgId || isSyncing}
+              className="w-full"
+            >
+              {isSyncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  {syncedCapabilities ? "Re-sync from AMMP" : "Sync from AMMP"}
+                </>
               )}
-            </div>
+            </Button>
+              
+            {isSyncing && syncProgress && (
+              <div className="space-y-2 mt-3">
+                <Progress value={(syncProgress.current / syncProgress.total) * 100} />
+                <p className="text-xs text-muted-foreground text-center">
+                  Syncing asset {syncProgress.current} of {syncProgress.total}: {syncProgress.assetName}
+                </p>
+              </div>
+            )}
+            
             <p className="text-xs text-muted-foreground">
               {syncedCapabilities 
                 ? `Last synced: ${syncedAssets.length} assets loaded`
