@@ -43,6 +43,7 @@ const Customers = () => {
   const [showBulkContractForm, setShowBulkContractForm] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isAmmpSyncing, setIsAmmpSyncing] = useState(false);
   const [customersData, setCustomersData] = useState<CustomerData[]>([]);
   const [filterTab, setFilterTab] = useState("all");
   const navigate = useNavigate();
@@ -263,6 +264,67 @@ const Customers = () => {
     }
   };
 
+  const handleBulkAmmpSync = async () => {
+    setIsAmmpSyncing(true);
+    
+    try {
+      const customersWithAmmp = customersData.filter(c => c.ammpOrgId);
+      
+      if (customersWithAmmp.length === 0) {
+        toast({
+          title: "No AMMP customers",
+          description: "No customers have AMMP org IDs configured.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+      
+      for (const customer of customersWithAmmp) {
+        try {
+          const { syncCustomerAMMPData } = await import('@/services/ammp/ammpService');
+          await syncCustomerAMMPData(customer.id, customer.ammpOrgId!);
+          successCount++;
+        } catch (error) {
+          failCount++;
+          console.error(`Failed to sync ${customer.name}:`, error);
+          errors.push(`${customer.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+      }
+      
+      if (successCount > 0) {
+        toast({
+          title: "✅ AMMP Sync Complete",
+          description: `Successfully synced ${successCount} of ${customersWithAmmp.length} customers${failCount > 0 ? `. ${failCount} failed.` : ''}`,
+        });
+      }
+      
+      if (failCount > 0) {
+        console.error('AMMP sync errors:', errors);
+        toast({
+          title: "Some syncs failed",
+          description: `${failCount} customers failed to sync. Check console for details.`,
+          variant: "destructive",
+        });
+      }
+      
+      await loadCustomers();
+      
+    } catch (error) {
+      console.error('Error during bulk AMMP sync:', error);
+      toast({
+        title: "Bulk sync failed",
+        description: error instanceof Error ? error.message : "An unexpected error occurred.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAmmpSyncing(false);
+    }
+  };
+
   const getFilteredCustomers = () => {
     let filtered = customersData;
     
@@ -343,6 +405,23 @@ const Customers = () => {
                 <>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Sync from Xero
+                </>
+              )}
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleBulkAmmpSync} 
+              disabled={isAmmpSyncing || customersData.filter(c => c.ammpOrgId).length === 0}
+            >
+              {isAmmpSyncing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Syncing AMMP...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Sync All from AMMP ({customersData.filter(c => c.ammpOrgId).length})
                 </>
               )}
             </Button>
@@ -427,14 +506,14 @@ const Customers = () => {
             <TabsTrigger value="all">
               All Customers ({customersData.length})
             </TabsTrigger>
-            <TabsTrigger value="with-contract">
-              With Contracts ({customersData.filter(c => c.contractId).length})
+            <TabsTrigger value="active">
+              Active with Contracts ({customersData.filter(c => c.status === "active" && c.contractId).length})
             </TabsTrigger>
-            <TabsTrigger value="needs-setup">
+            <TabsTrigger value="no-contracts">
               Needs Setup ({customersWithoutContracts.length})
             </TabsTrigger>
             <TabsTrigger value="inactive">
-              Inactive ({customersData.filter(c => c.status === "inactive").length})
+              Inactive ({customersData.filter(c => c.status === "inactive" || !c.contractId).length})
             </TabsTrigger>
           </TabsList>
         </Tabs>
