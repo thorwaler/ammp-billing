@@ -3,7 +3,7 @@
  */
 
 import { dataApiClient } from './dataApiClient';
-import { AssetCapabilities, CustomerAMMPSummary, UUID } from '@/types/ammp-api';
+import { AssetCapabilities, CustomerAMMPSummary, UUID, SyncAnomalies } from '@/types/ammp-api';
 import { supabase } from '@/integrations/supabase/client';
 
 /**
@@ -71,6 +71,64 @@ export async function getCustomerSummary(assetIds: UUID[]): Promise<CustomerAMMP
 }
 
 /**
+ * Detect anomalies in synced AMMP data
+ */
+export function detectSyncAnomalies(capabilities: AssetCapabilities[]): SyncAnomalies {
+  const totalAssets = capabilities.length;
+  const assetsWithNoDevices = capabilities.filter(c => c.deviceCount === 0).length;
+  const assetsWithDevices = totalAssets - assetsWithNoDevices;
+  const percentageWithNoDevices = (assetsWithNoDevices / totalAssets) * 100;
+  
+  const warnings: string[] = [];
+  
+  // Anomaly 1: High percentage of assets with no devices
+  if (percentageWithNoDevices > 50 && totalAssets >= 5) {
+    warnings.push(
+      `${assetsWithNoDevices} of ${totalAssets} assets (${percentageWithNoDevices.toFixed(0)}%) have no devices. ` +
+      `This may indicate an API permission issue or data configuration problem.`
+    );
+  }
+  
+  // Anomaly 2: ALL assets have no devices (very suspicious)
+  if (assetsWithNoDevices === totalAssets && totalAssets > 0) {
+    warnings.push(
+      `All ${totalAssets} assets have 0 devices. This is highly unusual and likely indicates: ` +
+      `(1) API key lacks device read permissions, (2) Wrong API endpoint, or (3) Assets not configured in AMMP.`
+    );
+  }
+  
+  // Anomaly 3: No Solcast data anywhere
+  const sitesWithSolcast = capabilities.filter(c => c.hasSolcast).length;
+  if (sitesWithSolcast === 0 && assetsWithDevices > 0) {
+    warnings.push(
+      `None of the ${assetsWithDevices} assets with devices have Solcast enabled. ` +
+      `Verify Solcast integration is configured in AMMP.`
+    );
+  }
+  
+  // Anomaly 4: Very few devices per asset on average
+  const totalDevices = capabilities.reduce((sum, c) => sum + c.deviceCount, 0);
+  const avgDevicesPerAsset = totalDevices / Math.max(1, assetsWithDevices);
+  if (avgDevicesPerAsset < 2 && assetsWithDevices >= 5) {
+    warnings.push(
+      `Average of ${avgDevicesPerAsset.toFixed(1)} devices per asset is unusually low. ` +
+      `Expected 5-10+ devices per solar asset.`
+    );
+  }
+  
+  return {
+    hasAnomalies: warnings.length > 0,
+    warnings,
+    stats: {
+      totalAssets,
+      assetsWithNoDevices,
+      assetsWithDevices,
+      percentageWithNoDevices,
+    }
+  };
+}
+
+/**
  * Sync customer AMMP data by org_id
  * Fetches all assets for an org, calculates capabilities, and stores in database
  */
@@ -120,7 +178,15 @@ export async function syncCustomerAMMPData(
     }))
   };
   
-  // 4. Store in database
+  // 4. Detect anomalies
+  const anomalies = detectSyncAnomalies(capabilities);
+  
+  // Log warnings to console for debugging
+  if (anomalies.hasAnomalies) {
+    console.warn('[AMMP Sync] Anomalies detected:', anomalies);
+  }
+  
+  // 5. Store in database
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Not authenticated');
 
@@ -138,5 +204,8 @@ export async function syncCustomerAMMPData(
     
   if (error) throw error;
   
-  return summary;
+  return {
+    summary,
+    anomalies,
+  };
 }

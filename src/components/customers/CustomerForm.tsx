@@ -9,12 +9,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, RefreshCw, AlertCircle, Copy, Zap, Battery, Activity, Database, ChevronDown } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle, Copy, Zap, Battery, Activity, Database, ChevronDown, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { syncCustomerAMMPData, calculateCapabilities } from "@/services/ammp/ammpService";
 import { dataApiClient } from "@/services/ammp/dataApiClient";
-import { DeviceResponse } from "@/types/ammp-api";
+import { DeviceResponse, SyncAnomalies } from "@/types/ammp-api";
 interface CustomerFormProps {
   onComplete: () => void;
   existingCustomer?: any;
@@ -30,6 +31,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     total: number;
     assetName: string;
   } | null>(null);
+  const [syncAnomalies, setSyncAnomalies] = useState<SyncAnomalies | null>(null);
   const [assetsWithDevices, setAssetsWithDevices] = useState<Map<string, {
     devices: DeviceResponse[];
     loading: boolean;
@@ -80,7 +82,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     try {
       // For existing customers, sync to database
       if (existingCustomer?.id) {
-        const summary = await syncCustomerAMMPData(
+        const result = await syncCustomerAMMPData(
           existingCustomer.id, 
           formData.ammpOrgId,
           (current, total, assetName) => {
@@ -89,18 +91,19 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
         );
         
         // Update states with synced data
-        setSyncedCapabilities(summary);
-        setSyncedAssets(summary.assetBreakdown.map((a: any) => a.assetId));
+        setSyncedCapabilities(result.summary);
+        setSyncAnomalies(result.anomalies);
+        setSyncedAssets(result.summary.assetBreakdown.map((a: any) => a.assetId));
         setFormData(prev => ({
           ...prev,
-          mwpManaged: summary.totalMW.toFixed(2),
+          mwpManaged: result.summary.totalMW.toFixed(2),
         }));
 
         toast({
           title: "✅ Sync Successful",
-          description: `Synced ${summary.totalSites} sites (${summary.ongridSites} on-grid, ${summary.hybridSites} hybrid) - Total: ${summary.totalMW.toFixed(2)} MWp, Solcast: ${summary.sitesWithSolcast} sites`,
+          description: `Synced ${result.summary.totalSites} sites (${result.summary.ongridSites} on-grid, ${result.summary.hybridSites} hybrid) - Total: ${result.summary.totalMW.toFixed(2)} MWp, Solcast: ${result.summary.sitesWithSolcast} sites`,
         });
-      } 
+      }
       // For new customers, fetch and store in temp state
       else {
         // Fetch assets directly without saving to DB yet
@@ -137,11 +140,17 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
             totalMW: c.totalMW,
             isHybrid: c.hasBattery || c.hasGenset,
             hasSolcast: c.hasSolcast,
+            deviceCount: c.deviceCount,
           }))
         };
 
+        // Import detectSyncAnomalies from ammpService
+        const { detectSyncAnomalies } = await import('@/services/ammp/ammpService');
+        const anomalies = detectSyncAnomalies(capabilities);
+
         // Store in temp state
         setSyncedCapabilities(summary);
+        setSyncAnomalies(anomalies);
         setSyncedAssets(orgAssets.map((a: any) => a.asset_id));
         setFormData(prev => ({
           ...prev,
@@ -398,6 +407,27 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                   Syncing asset {syncProgress.current} of {syncProgress.total}: {syncProgress.assetName}
                 </p>
               </div>
+            )}
+            
+            {syncAnomalies?.hasAnomalies && (
+              <Alert variant="destructive" className="mt-3">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Sync completed with warnings</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  {syncAnomalies.warnings.map((warning, idx) => (
+                    <p key={idx} className="text-sm">{warning}</p>
+                  ))}
+                  <div className="mt-3 p-2 bg-muted rounded text-xs">
+                    <p><strong>Stats:</strong></p>
+                    <p>• Total assets: {syncAnomalies.stats.totalAssets}</p>
+                    <p>• Assets with devices: {syncAnomalies.stats.assetsWithDevices}</p>
+                    <p>• Assets with no devices: {syncAnomalies.stats.assetsWithNoDevices}</p>
+                  </div>
+                  <p className="text-xs mt-2">
+                    💡 <strong>Tip:</strong> Check your AMMP API key permissions or contact AMMP support.
+                  </p>
+                </AlertDescription>
+              </Alert>
             )}
             
             <p className="text-xs text-muted-foreground">

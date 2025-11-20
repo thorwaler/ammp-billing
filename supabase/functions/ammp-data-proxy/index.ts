@@ -24,6 +24,7 @@ Deno.serve(async (req) => {
     const url = `${AMMP_BASE_URL}${path}`;
     console.log(`Proxying ${method} request to: ${url}`);
 
+    const startTime = Date.now();
     const response = await fetch(url, {
       method,
       headers: {
@@ -31,8 +32,37 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${token}`,
       },
     });
+    const duration = Date.now() - startTime;
+    console.log(`[AMMP Timing] ${url} took ${duration}ms`);
 
     const responseText = await response.text();
+    
+    // Log detailed response information
+    console.log(`[AMMP Response] Status: ${response.status}, Path: ${path}`);
+    console.log(`[AMMP Response] Content-Type: ${response.headers.get('content-type')}`);
+    console.log(`[AMMP Response] Body length: ${responseText.length} bytes`);
+    
+    // Special logging for device endpoints
+    if (path.includes('/devices')) {
+      try {
+        const parsed = JSON.parse(responseText);
+        const deviceCount = Array.isArray(parsed) ? parsed.length : 'not-an-array';
+        console.log(`[AMMP Devices] Asset: ${path}, Device count: ${deviceCount}`);
+        
+        if (Array.isArray(parsed) && parsed.length === 0) {
+          console.warn(`[AMMP Devices] Empty device array for: ${path}`);
+        } else if (Array.isArray(parsed) && parsed.length > 0) {
+          console.log(`[AMMP Devices] Sample device types:`, parsed.slice(0, 3).map(d => d.device_type));
+        }
+        
+        // Log raw response for debugging if it's short enough
+        if (responseText.length < 1000) {
+          console.log(`[AMMP Raw Response] ${path}:`, responseText);
+        }
+      } catch (e) {
+        console.error(`[AMMP Devices] Failed to parse response:`, e);
+      }
+    }
     
     if (!response.ok) {
       // Special case: 404 for devices endpoint means no devices exist for this asset
