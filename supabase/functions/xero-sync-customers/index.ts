@@ -98,8 +98,22 @@ Deno.serve(async (req) => {
     // Get valid access token
     const { accessToken, tenantId } = await getValidAccessToken(supabase, user.id);
 
-    // Fetch only customers from Xero (exclude suppliers)
-    const xeroResponse = await fetch('https://api.xero.com/api.xro/2.0/Contacts?where=IsCustomer==true', {
+    // Fetch all local customers first to track deletions
+    const { data: localCustomers, error: localError } = await supabase
+      .from('customers')
+      .select('id, name')
+      .eq('user_id', user.id);
+
+    if (localError) {
+      console.error('Error fetching local customers:', localError);
+      throw new Error('Failed to fetch local customers');
+    }
+
+    const localCustomerMap = new Map(localCustomers?.map(c => [c.name.toLowerCase(), c]) || []);
+    console.log(`Found ${localCustomerMap.size} local customers`);
+
+    // Fetch customers from Xero (include archived)
+    const xeroResponse = await fetch('https://api.xero.com/api.xro/2.0/Contacts?where=IsCustomer==true&includeArchived=true', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
@@ -119,10 +133,26 @@ Deno.serve(async (req) => {
     
     console.log(`Fetched ${contacts.length} contacts from Xero`);
 
+    // Helper function for status mapping
+    const getCustomerStatus = (contactStatus: string): string => {
+      switch (contactStatus) {
+        case 'ACTIVE':
+          return 'active';
+        case 'ARCHIVED':
+        case 'GDPRREQUEST':
+          return 'inactive';
+        default:
+          console.warn(`Unknown ContactStatus: ${contactStatus}`);
+          return 'inactive';
+      }
+    };
+
     // Sync contacts to local database
-    let syncedCount = 0;
+    let syncedActiveCount = 0;
+    let syncedInactiveCount = 0;
     let errorCount = 0;
     let skippedCount = 0;
+    const seenCustomers = new Set<string>();
 
     for (const contact of contacts) {
       try {
@@ -133,13 +163,17 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Track this customer as seen
+        seenCustomers.add(contact.Name.toLowerCase());
+
         // Map Xero contact to our customers table structure
+        const customerStatus = getCustomerStatus(contact.ContactStatus);
         const customerData = {
           user_id: user.id,
           name: contact.Name || 'Unknown',
           location: contact.Addresses?.[0]?.City || null,
           mwp_managed: 0, // Default value, can be updated manually
-          status: contact.ContactStatus === 'ACTIVE' ? 'active' : 'inactive',
+          status: customerStatus,
           join_date: parseXeroDate(contact.UpdatedDateUTC),
         };
 
@@ -155,7 +189,11 @@ Deno.serve(async (req) => {
           console.error(`Error upserting customer ${contact.Name}:`, upsertError);
           errorCount++;
         } else {
-          syncedCount++;
+          if (customerStatus === 'active') {
+            syncedActiveCount++;
+          } else {
+            syncedInactiveCount++;
+          }
         }
       } catch (err) {
         console.error('Error processing contact:', err);
@@ -163,12 +201,37 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Customer sync complete. Synced: ${syncedCount}, Errors: ${errorCount}, Skipped: ${skippedCount}`);
+    // Mark customers deleted from Xero as inactive
+    let markedInactiveCount = 0;
+    for (const [customerName, customer] of localCustomerMap) {
+      if (!seenCustomers.has(customerName)) {
+        console.log(`Customer "${customer.name}" not found in Xero, marking as inactive`);
+        const { error: updateError } = await supabase
+          .from('customers')
+          .update({ 
+            status: 'inactive',
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', customer.id)
+          .eq('user_id', user.id);
+
+        if (updateError) {
+          console.error(`Error marking customer ${customer.name} as inactive:`, updateError);
+          errorCount++;
+        } else {
+          markedInactiveCount++;
+        }
+      }
+    }
+
+    console.log(`Customer sync complete. Active: ${syncedActiveCount}, Inactive (archived): ${syncedInactiveCount}, Inactive (deleted): ${markedInactiveCount}, Errors: ${errorCount}, Skipped: ${skippedCount}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        syncedCount,
+        syncedActive: syncedActiveCount,
+        syncedInactive: syncedInactiveCount,
+        markedInactive: markedInactiveCount,
         errorCount,
         skippedCount,
         totalContacts: contacts.length 
