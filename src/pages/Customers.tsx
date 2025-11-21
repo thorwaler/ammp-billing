@@ -142,7 +142,9 @@ const Customers = () => {
             });
             
             // Compare with minimum annual value and use the higher
-            const minimumValue = contract.minimum_annual_value || (contract.package === 'pro' ? 5000 : 0);
+            const minimumValue = contract.minimum_annual_value || 
+              (contract.package === 'pro' ? 5000 : 
+               contract.package === 'hybrid_tiered' ? (contract.minimum_annual_value || 0) : 0);
             annualValue = Math.max(annualValue, minimumValue);
           }
           

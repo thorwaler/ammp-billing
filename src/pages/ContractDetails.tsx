@@ -399,7 +399,8 @@ const ContractDetails = () => {
                   <p className="text-sm text-muted-foreground">Package</p>
                   <p className="font-medium">
                     {contract.package === "starter" ? "AMMP OS Starter" : 
-                     contract.package === "pro" ? "AMMP OS Pro" : "Custom/Legacy"}
+                     contract.package === "pro" ? "AMMP OS Pro" : 
+                     contract.package === "hybrid_tiered" ? "Hybrid Tiered" : "Custom/Legacy"}
                   </p>
                 </div>
                 
