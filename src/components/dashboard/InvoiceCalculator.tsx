@@ -1090,28 +1090,31 @@ export function InvoiceCalculator({
                         )}
                             
                             <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-2">
-                                <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
-                                  Price:
-                                </Label>
-                                <Input
-                                  id={`price-${addon.id}`}
-                                  type="number"
-                                  placeholder={addon.complexityPricing 
-                                    ? `${addon.lowPrice}-${addon.highPrice}` 
-                                    : String(addon.price)}
-                                  min={0}
-                                  step={0.01}
-                                  className="w-28 h-8"
-                                  value={addon.customPrice ?? ''}
-                                  onChange={(e) => {
-                                    const value = e.target.value ? Number(e.target.value) : undefined;
-                                    setAddons(prev => prev.map(a => 
-                                      a.id === addon.id ? { ...a, customPrice: value } : a
-                                    ));
-                                  }}
-                                />
-                              </div>
+                              {/* Hide price input for tiered pricing addons */}
+                              {!addon.tieredPricing && (
+                                <div className="flex items-center gap-2">
+                                  <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
+                                    Price:
+                                  </Label>
+                                  <Input
+                                    id={`price-${addon.id}`}
+                                    type="number"
+                                    placeholder={addon.complexityPricing 
+                                      ? `${addon.lowPrice}-${addon.highPrice}` 
+                                      : String(addon.price)}
+                                    min={0}
+                                    step={0.01}
+                                    className="w-28 h-8"
+                                    value={addon.customPrice ?? ''}
+                                    onChange={(e) => {
+                                      const value = e.target.value ? Number(e.target.value) : undefined;
+                                      setAddons(prev => prev.map(a => 
+                                        a.id === addon.id ? { ...a, customPrice: value } : a
+                                      ));
+                                    }}
+                                  />
+                                </div>
+                              )}
                               <div className="flex items-center gap-2">
                                 <Label htmlFor={`quantity-${addon.id}`} className="text-sm whitespace-nowrap">
                                   Quantity:
