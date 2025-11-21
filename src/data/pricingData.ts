@@ -9,15 +9,26 @@ export interface ModuleDefinition {
   trial?: boolean;
 }
 
+export interface PricingTier {
+  minQuantity: number;
+  maxQuantity: number | null; // null for "no upper limit"
+  pricePerUnit: number;
+  label: string;
+}
+
 export interface AddonDefinition {
   id: string;
   name: string;
   price?: number;
   complexityPricing?: boolean;
+  tieredPricing?: boolean;
+  pricingTiers?: PricingTier[];
   lowPrice?: number;
   mediumPrice?: number;
   highPrice?: number;
   requiresPro?: boolean;
+  autoActivateFromAMMP?: boolean;
+  ammpSourceField?: string;
 }
 
 export const MODULES: ModuleDefinition[] = [
@@ -86,7 +97,15 @@ export const ADDONS: AddonDefinition[] = [
   { 
     id: "satelliteDataAPI", 
     name: "Satellite Data API Access", 
-    price: 6 
+    tieredPricing: true,
+    autoActivateFromAMMP: true,
+    ammpSourceField: "sitesWithSolcast",
+    pricingTiers: [
+      { minQuantity: 0, maxQuantity: 99, pricePerUnit: 3, label: "0-99 sites" },
+      { minQuantity: 100, maxQuantity: 499, pricePerUnit: 2, label: "100-499 sites" },
+      { minQuantity: 500, maxQuantity: 999, pricePerUnit: 1.5, label: "500-999 sites" },
+      { minQuantity: 1000, maxQuantity: null, pricePerUnit: 1, label: "1000+ sites" }
+    ]
   },
   { 
     id: "dataLoggerSetup", 
@@ -134,4 +153,40 @@ export const getAddonPrice = (
   
   // Fixed price
   return addon.price || 0;
+};
+
+export const calculateTieredPrice = (
+  addon: AddonDefinition,
+  quantity: number,
+  customTiers?: PricingTier[]
+): { pricePerUnit: number; totalPrice: number; appliedTier: PricingTier | null } => {
+  if (!addon.tieredPricing || !addon.pricingTiers) {
+    return {
+      pricePerUnit: addon.price || 0,
+      totalPrice: (addon.price || 0) * quantity,
+      appliedTier: null
+    };
+  }
+
+  const tiers = customTiers || addon.pricingTiers;
+  const appliedTier = tiers.find(tier => 
+    quantity >= tier.minQuantity && 
+    (tier.maxQuantity === null || quantity <= tier.maxQuantity)
+  );
+
+  if (!appliedTier) {
+    // Fallback to highest tier
+    const highestTier = tiers[tiers.length - 1];
+    return {
+      pricePerUnit: highestTier.pricePerUnit,
+      totalPrice: highestTier.pricePerUnit * quantity,
+      appliedTier: highestTier
+    };
+  }
+
+  return {
+    pricePerUnit: appliedTier.pricePerUnit,
+    totalPrice: appliedTier.pricePerUnit * quantity,
+    appliedTier
+  };
 };

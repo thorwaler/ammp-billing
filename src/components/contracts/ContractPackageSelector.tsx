@@ -160,11 +160,17 @@ export function ContractPackageSelector({
                     >
                       {addon.name}
                     </label>
-                    <span className="text-sm">
-                      {addon.complexityPricing ? 
-                        `${currencySymbol}${addon.lowPrice} - ${currencySymbol}${addon.highPrice}` : 
-                        `${currencySymbol}${addon.price}`}
-                    </span>
+                          <span className="text-sm">
+                            {addon.tieredPricing && addon.pricingTiers ? (
+                              <span className="text-xs">
+                                €{addon.pricingTiers[0].pricePerUnit}-€{addon.pricingTiers[addon.pricingTiers.length - 1].pricePerUnit}/site
+                              </span>
+                            ) : addon.complexityPricing ? (
+                              `${currencySymbol}${addon.lowPrice} - ${currencySymbol}${addon.highPrice}`
+                            ) : (
+                              `${currencySymbol}${addon.price}`
+                            )}
+                          </span>
                   </div>
                   
                   {/* Complexity selector for selected addons with complexity pricing */}
