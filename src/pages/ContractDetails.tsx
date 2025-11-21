@@ -288,6 +288,7 @@ const ContractDetails = () => {
                     setShowEditDialog(false);
                     loadContractData();
                   }}
+                  onCancel={() => setShowEditDialog(false)}
                 />
               </DialogContent>
             </Dialog>
@@ -302,7 +303,7 @@ const ContractDetails = () => {
                 <DialogHeader>
                   <DialogTitle>Extend Contract - {contract.companyName}</DialogTitle>
                 </DialogHeader>
-                <ContractForm />
+                <ContractForm onCancel={() => setShowExtendDialog(false)} />
               </DialogContent>
             </Dialog>
             

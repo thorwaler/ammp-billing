@@ -194,7 +194,7 @@ export function ContractList() {
             <DialogHeader>
               <DialogTitle>Edit Contract - {selectedContract?.customer}</DialogTitle>
             </DialogHeader>
-            <ContractForm />
+            <ContractForm onCancel={() => setShowEditForm(false)} />
           </DialogContent>
         </Dialog>
       </CardContent>

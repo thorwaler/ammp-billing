@@ -41,6 +41,7 @@ const Customers = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [showAddCustomerForm, setShowAddCustomerForm] = useState(false);
   const [showBulkContractForm, setShowBulkContractForm] = useState(false);
+  const [openContractDialogs, setOpenContractDialogs] = useState<{[key: string]: boolean}>({});
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
   const [isAmmpSyncing, setIsAmmpSyncing] = useState(false);
@@ -469,7 +470,11 @@ const Customers = () => {
                   </div>
                   <div className="space-y-2 max-h-[60vh] overflow-y-auto">
                     {customersWithoutContracts.map((customer) => (
-                      <Dialog key={customer.id}>
+                      <Dialog 
+                        key={customer.id} 
+                        open={openContractDialogs[customer.id] || false}
+                        onOpenChange={(open) => setOpenContractDialogs({...openContractDialogs, [customer.id]: open})}
+                      >
                         <DialogTrigger asChild>
                           <Button variant="outline" className="w-full justify-start">
                             <Users className="mr-2 h-4 w-4" />
@@ -488,8 +493,10 @@ const Customers = () => {
                               mwpManaged: customer.mwpManaged 
                             }}
                             onComplete={() => {
+                              setOpenContractDialogs({...openContractDialogs, [customer.id]: false});
                               loadCustomers();
                             }}
+                            onCancel={() => setOpenContractDialogs({...openContractDialogs, [customer.id]: false})}
                           />
                         </DialogContent>
                       </Dialog>

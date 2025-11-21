@@ -82,11 +82,12 @@ interface ContractFormProps {
     mwpManaged: number;
   };
   onComplete?: () => void;
+  onCancel?: () => void;
 }
 
 // Module and addon definitions now imported from shared data file
 
-export function ContractForm({ existingCustomer, onComplete }: ContractFormProps) {
+export function ContractForm({ existingCustomer, onComplete, onCancel }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
@@ -992,7 +993,7 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
             />
             
             <div className="flex justify-end space-x-2">
-              <Button variant="outline" type="button">
+              <Button variant="outline" type="button" onClick={onCancel}>
                 Cancel
               </Button>
               <Button type="submit">
