@@ -221,28 +221,6 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
         setAddonCustomPrices(customPriceMap);
         setAddonQuantities(quantityMap);
         setAddonCustomTiers(customTiersMap);
-        
-        // Auto-activate Solcast addon if customer has sitesWithSolcast
-        const { data: customerData } = await supabase
-          .from('customers')
-          .select('ammp_capabilities')
-          .eq('id', existingCustomer.id)
-          .single();
-        
-        if (customerData?.ammp_capabilities) {
-          const capabilities = customerData.ammp_capabilities as any;
-          if (capabilities.sitesWithSolcast) {
-            const solcastCount = capabilities.sitesWithSolcast;
-            const currentAddons = form.getValues('addons') || [];
-            if (!currentAddons.includes('satelliteDataAPI')) {
-              form.setValue('addons', [...currentAddons, 'satelliteDataAPI']);
-            }
-            setAddonQuantities(prev => ({
-              ...prev,
-              satelliteDataAPI: solcastCount
-            }));
-          }
-        }
 
       } catch (error) {
         console.error('Error loading contract:', error);
@@ -258,6 +236,46 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
 
     loadExistingContract();
   }, [existingCustomer]);
+
+  // Auto-activate Solcast addon based on customer capabilities
+  useEffect(() => {
+    const checkSolcastAutoActivation = async () => {
+      if (!existingCustomer?.id) return;
+      
+      try {
+        const { data: customerData } = await supabase
+          .from('customers')
+          .select('ammp_capabilities')
+          .eq('id', existingCustomer.id)
+          .single();
+        
+        if (customerData?.ammp_capabilities) {
+          const capabilities = customerData.ammp_capabilities as any;
+          if (capabilities.sitesWithSolcast && capabilities.sitesWithSolcast > 0) {
+            const solcastCount = capabilities.sitesWithSolcast;
+            
+            // Auto-activate addon if not already selected
+            const currentAddons = form.getValues('addons') || [];
+            if (!currentAddons.includes('satelliteDataAPI')) {
+              form.setValue('addons', [...currentAddons, 'satelliteDataAPI']);
+            }
+            
+            // Set quantity
+            setAddonQuantities(prev => ({
+              ...prev,
+              satelliteDataAPI: solcastCount
+            }));
+            
+            console.log(`Auto-activated Solcast addon with ${solcastCount} sites for customer ${existingCustomer.id}`);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking Solcast auto-activation:', error);
+      }
+    };
+
+    checkSolcastAutoActivation();
+  }, [existingCustomer?.id]);
 
   const watchPackage = form.watch("package");
   const watchModules = form.watch("modules");
