@@ -416,7 +416,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertTitle>Sync completed with warnings</AlertTitle>
                 <AlertDescription className="space-y-2">
-                  {syncAnomalies.warnings.map((warning, idx) => (
+                  {syncAnomalies.warnings?.map((warning, idx) => (
                     <p key={idx} className="text-sm">{warning}</p>
                   ))}
                   <div className="mt-3 p-2 bg-muted rounded text-xs">
@@ -490,7 +490,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 </CollapsibleTrigger>
                 <CollapsibleContent className="mt-3">
                   <Accordion type="single" collapsible className="w-full">
-                    {syncedCapabilities.assetBreakdown.map((asset: any) => (
+                    {syncedCapabilities?.assetBreakdown?.map((asset: any) => (
                       <AccordionItem key={asset.assetId} value={asset.assetId}>
                         <AccordionTrigger 
                           className="hover:no-underline"
@@ -578,7 +578,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                                           </TableRow>
                                         </TableHeader>
                                         <TableBody>
-                                          {assetsWithDevices.get(asset.assetId)?.devices.map((device, idx) => {
+                                          {assetsWithDevices.get(asset.assetId)?.devices?.map((device, idx) => {
                                             const Icon = getDeviceIcon(device.device_type);
                                             return (
                                               <TableRow key={idx}>
