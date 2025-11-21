@@ -26,7 +26,7 @@ export type Database = {
           ocr_data: Json | null
           ocr_processed_at: string | null
           ocr_status: string | null
-          pdf_url: string
+          pdf_url: string | null
           updated_at: string
           user_id: string
         }
@@ -41,7 +41,7 @@ export type Database = {
           ocr_data?: Json | null
           ocr_processed_at?: string | null
           ocr_status?: string | null
-          pdf_url: string
+          pdf_url?: string | null
           updated_at?: string
           user_id: string
         }
@@ -56,7 +56,7 @@ export type Database = {
           ocr_data?: Json | null
           ocr_processed_at?: string | null
           ocr_status?: string | null
-          pdf_url?: string
+          pdf_url?: string | null
           updated_at?: string
           user_id?: string
         }

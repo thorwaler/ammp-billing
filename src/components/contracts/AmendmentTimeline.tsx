@@ -15,7 +15,7 @@ interface Amendment {
   amendment_number: number;
   amendment_date: string;
   effective_date: string | null;
-  pdf_url: string;
+  pdf_url: string | null;
   ocr_data: any;
   ocr_status: string;
   changes_summary: string | null;
@@ -52,6 +52,8 @@ export default function AmendmentTimeline({
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive"> = {
       completed: "default",
+      manual: "default",
+      uploaded: "default",
       processing: "secondary",
       failed: "destructive",
       pending: "secondary",
@@ -128,20 +130,22 @@ export default function AmendmentTimeline({
                       </div>
                       <div className="flex items-center gap-2">
                         {getStatusBadge(amendment.ocr_status)}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          asChild
-                          className="h-8 w-8"
-                        >
-                          <a
-                            href={amendment.pdf_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        {amendment.pdf_url && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            asChild
+                            className="h-8 w-8"
                           >
-                            <Download className="h-4 w-4" />
-                          </a>
-                        </Button>
+                            <a
+                              href={amendment.pdf_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <Download className="h-4 w-4" />
+                            </a>
+                          </Button>
+                        )}
                       </div>
                     </div>
 
