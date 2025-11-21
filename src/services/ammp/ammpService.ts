@@ -21,7 +21,9 @@ export async function calculateCapabilities(assetId: string): Promise<AssetCapab
   
   const devices = asset.devices || [];
 
-  const hasSolcast = devices.some(d => d.data_provider === 'solcast');
+  const hasSolcast = devices.some(d => 
+    d.data_provider === 'solcast' || d.device_type === 'satellite'
+  );
   const hasBattery = devices.some(d => 
     d.device_type === 'battery_system' || d.device_type === 'battery_inverter'
   );
