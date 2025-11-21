@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
+// @ts-ignore
+import pdfParse from "https://esm.sh/pdf-parse@1.1.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -54,18 +56,16 @@ serve(async (req) => {
       throw new Error(`Failed to download PDF: ${downloadError.message}`);
     }
 
-    // Convert PDF to base64 in chunks to avoid stack overflow
+    // Extract text from PDF
     const arrayBuffer = await pdfData.arrayBuffer();
-    const uint8Array = new Uint8Array(arrayBuffer);
-    const chunkSize = 32768; // Process 32KB at a time
-    let base64Pdf = '';
-    
-    for (let i = 0; i < uint8Array.length; i += chunkSize) {
-      const chunk = uint8Array.slice(i, Math.min(i + chunkSize, uint8Array.length));
-      base64Pdf += btoa(String.fromCharCode(...chunk));
-    }
-
+    const buffer = new Uint8Array(arrayBuffer);
     console.log("PDF downloaded, size:", arrayBuffer.byteLength, "bytes");
+
+    // Parse PDF to extract text
+    const pdfData_parsed = await pdfParse(buffer);
+    const extractedText = pdfData_parsed.text;
+
+    console.log("Extracted text from", pdfData_parsed.numpages, "pages, length:", extractedText.length, "chars");
 
     // Enhanced system prompt based on whether it's an amendment or original contract
     const systemPrompt = isAmendment 
@@ -124,18 +124,7 @@ Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field 
           },
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Please extract all contract information from this PDF document."
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:application/pdf;base64,${base64Pdf}`
-                }
-              }
-            ]
+            content: `Please extract all contract information from this PDF document:\n\n${extractedText}`
           }
         ],
         tools: [
