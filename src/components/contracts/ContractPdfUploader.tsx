@@ -19,6 +19,19 @@ export function ContractPdfUploader({ onOcrComplete, contractId }: ContractPdfUp
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [ocrStatus, setOcrStatus] = useState<'idle' | 'uploading' | 'processing' | 'completed' | 'error'>('idle');
 
+  const sanitizeFileName = (fileName: string): string => {
+    const lastDotIndex = fileName.lastIndexOf('.');
+    const name = fileName.substring(0, lastDotIndex);
+    const ext = fileName.substring(lastDotIndex);
+    
+    const sanitized = name
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-]/g, '')
+      .toLowerCase();
+    
+    return sanitized + ext;
+  };
+
   const onDrop = async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
@@ -46,7 +59,8 @@ export function ContractPdfUploader({ onOcrComplete, contractId }: ContractPdfUp
 
       // Upload to Supabase Storage
       const timestamp = Date.now();
-      const fileName = `${user.id}/${timestamp}-${file.name}`;
+      const sanitizedName = sanitizeFileName(file.name);
+      const fileName = `${user.id}/${timestamp}-${sanitizedName}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('contract-pdfs')
