@@ -19,6 +19,7 @@ export type Database = {
           addons: Json | null
           billing_frequency: string | null
           company_name: string
+          contract_pdf_url: string | null
           contract_status: string | null
           created_at: string
           currency: string | null
@@ -31,6 +32,9 @@ export type Database = {
           modules: Json | null
           next_invoice_date: string | null
           notes: string | null
+          ocr_data: Json | null
+          ocr_processed_at: string | null
+          ocr_status: string | null
           package: string
           period_end: string | null
           period_start: string | null
@@ -43,6 +47,7 @@ export type Database = {
           addons?: Json | null
           billing_frequency?: string | null
           company_name: string
+          contract_pdf_url?: string | null
           contract_status?: string | null
           created_at?: string
           currency?: string | null
@@ -55,6 +60,9 @@ export type Database = {
           modules?: Json | null
           next_invoice_date?: string | null
           notes?: string | null
+          ocr_data?: Json | null
+          ocr_processed_at?: string | null
+          ocr_status?: string | null
           package: string
           period_end?: string | null
           period_start?: string | null
@@ -67,6 +75,7 @@ export type Database = {
           addons?: Json | null
           billing_frequency?: string | null
           company_name?: string
+          contract_pdf_url?: string | null
           contract_status?: string | null
           created_at?: string
           currency?: string | null
@@ -79,6 +88,9 @@ export type Database = {
           modules?: Json | null
           next_invoice_date?: string | null
           notes?: string | null
+          ocr_data?: Json | null
+          ocr_processed_at?: string | null
+          ocr_status?: string | null
           package?: string
           period_end?: string | null
           period_start?: string | null

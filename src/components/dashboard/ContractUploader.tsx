@@ -5,6 +5,7 @@ import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { UploadCloud, AlertCircle, FileText, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 const ContractUploader = () => {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
@@ -23,7 +24,7 @@ const ContractUploader = () => {
     maxSize: 10485760, // 10MB
   });
 
-  const handleProcessFiles = () => {
+  const handleProcessFiles = async () => {
     if (files.length === 0) {
       toast({
         title: "No files selected",
@@ -35,15 +36,76 @@ const ContractUploader = () => {
 
     setIsProcessing(true);
     
-    // Simulating PDF processing
-    setTimeout(() => {
+    try {
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      let processedCount = 0;
+
+      // Process each file
+      for (const file of files) {
+        try {
+          // Upload to Supabase Storage
+          const timestamp = Date.now();
+          const fileName = `${user.id}/${timestamp}-${file.name}`;
+          
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('contract-pdfs')
+            .upload(fileName, file, {
+              contentType: 'application/pdf',
+              upsert: false
+            });
+
+          if (uploadError) throw uploadError;
+
+          // Get public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from('contract-pdfs')
+            .getPublicUrl(fileName);
+
+          // Call OCR edge function
+          const { data: ocrData, error: ocrError } = await supabase.functions.invoke(
+            'process-contract-ocr',
+            {
+              body: { pdfUrl: publicUrl }
+            }
+          );
+
+          if (ocrError) throw ocrError;
+
+          processedCount++;
+        } catch (error) {
+          console.error(`Error processing ${file.name}:`, error);
+          toast({
+            title: `Failed to process ${file.name}`,
+            description: error instanceof Error ? error.message : "Unknown error",
+            variant: "destructive",
+          });
+        }
+      }
+
+      setIsProcessing(false);
+      
+      if (processedCount > 0) {
+        toast({
+          title: "Contracts processed",
+          description: `Successfully extracted data from ${processedCount} contract${processedCount > 1 ? 's' : ''}.`,
+        });
+      }
+      
+      setFiles([]);
+    } catch (error) {
+      console.error("Error processing contracts:", error);
       setIsProcessing(false);
       toast({
-        title: "Contracts processed",
-        description: `Successfully extracted data from ${files.length} contracts.`,
+        title: "Processing failed",
+        description: error instanceof Error ? error.message : "Failed to process contracts",
+        variant: "destructive",
       });
-      setFiles([]);
-    }, 2000);
+    }
   };
 
   return (
