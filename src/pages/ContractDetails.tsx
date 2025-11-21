@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FileText, Download, Edit, Clock, Calculator, MoreVertical } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
+import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -597,6 +598,15 @@ const ContractDetails = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Contract Amendments Section */}
+        <ContractAmendments
+          contractId={contract.id}
+          originalContract={{
+            signed_date: contract.signed_date,
+            contract_pdf_url: contract.contract_pdf_url,
+          }}
+        />
       </div>
     </Layout>
   );

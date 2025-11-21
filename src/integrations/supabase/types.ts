@@ -14,6 +14,62 @@ export type Database = {
   }
   public: {
     Tables: {
+      contract_amendments: {
+        Row: {
+          amendment_date: string
+          amendment_number: number
+          changes_summary: string | null
+          contract_id: string
+          created_at: string
+          effective_date: string | null
+          id: string
+          ocr_data: Json | null
+          ocr_processed_at: string | null
+          ocr_status: string | null
+          pdf_url: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amendment_date?: string
+          amendment_number: number
+          changes_summary?: string | null
+          contract_id: string
+          created_at?: string
+          effective_date?: string | null
+          id?: string
+          ocr_data?: Json | null
+          ocr_processed_at?: string | null
+          ocr_status?: string | null
+          pdf_url: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amendment_date?: string
+          amendment_number?: number
+          changes_summary?: string | null
+          contract_id?: string
+          created_at?: string
+          effective_date?: string | null
+          id?: string
+          ocr_data?: Json | null
+          ocr_processed_at?: string | null
+          ocr_status?: string | null
+          pdf_url?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_amendments_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contracts: {
         Row: {
           addons: Json | null
