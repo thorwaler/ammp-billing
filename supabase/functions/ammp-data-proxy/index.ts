@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     if (!response.ok) {
       // Special case: 404 for /assets/{id}/devices means no devices exist
       // Make fallback call to /assets/{id} to get asset metadata
-      if (response.status === 404 && /^\/assets\/[^\/]+\/devices/.test(path)) {
+      if (response.status === 404 && path.startsWith('/assets/') && path.includes('/devices')) {
         console.log(`Asset has no devices (404), fetching asset metadata: ${path}`);
         
         // Extract asset ID and fetch basic asset info
