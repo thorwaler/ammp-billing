@@ -237,6 +237,21 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
     loadExistingContract();
   }, [existingCustomer]);
 
+  // Debug: Watch form values and errors
+  useEffect(() => {
+    const subscription = form.watch((value, { name, type }) => {
+      console.log('📝 Form values changed:', name, type);
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  // Debug: Log form errors
+  useEffect(() => {
+    if (Object.keys(form.formState.errors).length > 0) {
+      console.error('❌ Form validation errors:', form.formState.errors);
+    }
+  }, [form.formState.errors]);
+
   // Auto-activate Solcast addon based on customer capabilities
   useEffect(() => {
     const checkSolcastAutoActivation = async () => {
@@ -449,6 +464,9 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
   };
 
   const onSubmit = async (data: ContractFormValues) => {
+    console.log('🚀 Form submission triggered!', data);
+    console.log('Form state:', form.formState);
+    
     try {
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
@@ -562,6 +580,24 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
         ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            {/* Debug Panel - Development Only */}
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded text-xs font-mono">
+                <div className="font-bold mb-2">🐛 Debug Info:</div>
+                <div>Form Valid: {form.formState.isValid ? '✅ Yes' : '❌ No'}</div>
+                <div>Is Submitting: {form.formState.isSubmitting ? '⏳ Yes' : '✅ No'}</div>
+                <div>Error Count: {Object.keys(form.formState.errors).length}</div>
+                {Object.keys(form.formState.errors).length > 0 && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer font-semibold">View Errors</summary>
+                    <pre className="mt-2 text-xs overflow-auto max-h-40">
+                      {JSON.stringify(form.formState.errors, null, 2)}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+            
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
                 control={form.control}
@@ -1049,9 +1085,22 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
               <Button variant="outline" type="button" onClick={onCancel}>
                 Cancel
               </Button>
-              <Button type="submit">
-                <Save className="mr-2 h-4 w-4" />
-                Save Contract
+              <Button 
+                type="submit" 
+                disabled={form.formState.isSubmitting}
+                onClick={() => {
+                  console.log('💥 Button clicked!');
+                  console.log('Form state:', form.formState);
+                  console.log('Form errors:', form.formState.errors);
+                  console.log('Form is valid:', form.formState.isValid);
+                  console.log('Form values:', form.getValues());
+                }}
+              >
+                {form.formState.isSubmitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {!form.formState.isSubmitting && <Save className="mr-2 h-4 w-4" />}
+                {form.formState.isSubmitting ? 'Saving...' : 'Save Contract'}
               </Button>
             </div>
           </form>
