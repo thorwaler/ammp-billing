@@ -19,6 +19,7 @@ export interface CalculationParams {
   minimumCharge?: number;
   sitesUnderThreshold?: number;
   frequencyMultiplier: number;
+  billingFrequency?: string;
   ammpCapabilities?: {
     ongridTotalMW?: number;
     hybridTotalMW?: number;
@@ -86,7 +87,8 @@ export function calculateModuleCosts(params: CalculationParams): {
  */
 export function calculateAddonCosts(
   selectedAddons: CalculationParams['selectedAddons'],
-  frequencyMultiplier: number
+  frequencyMultiplier: number,
+  billingFrequency?: string
 ): CalculationResult['addonCosts'] {
   return selectedAddons.map(addon => {
     const addonDef = ADDONS.find(a => a.id === addon.id);
@@ -95,24 +97,31 @@ export function calculateAddonCosts(
     // Handle tiered pricing first
     if (addonDef.tieredPricing && addon.quantity) {
       const tierCalc = calculateTieredPrice(addonDef, addon.quantity, addon.customTiers);
+      
+      // Satellite Data API uses monthly pricing, multiply by period months
+      // Other addons are one-off costs, no multiplication needed
+      const priceMultiplier = addon.id === 'satelliteDataAPI' && billingFrequency
+        ? getPeriodMonthsMultiplier(billingFrequency)
+        : 1;
+      
       return {
         addonId: addon.id,
         addonName: addonDef.name,
-        cost: tierCalc.totalPrice * frequencyMultiplier,
+        cost: tierCalc.totalPrice * priceMultiplier,
         quantity: addon.quantity,
         tierApplied: tierCalc.appliedTier,
         pricePerUnit: tierCalc.pricePerUnit
       };
     }
     
-    // Fallback to standard pricing
+    // Fallback to standard pricing (one-off costs, no frequency multiplication)
     const addonPrice = getAddonPrice(addonDef, addon.complexity, addon.customPrice);
     const quantity = addon.quantity || 1;
     
     return {
       addonId: addon.id,
       addonName: addonDef.name,
-      cost: addonPrice * quantity * frequencyMultiplier,
+      cost: addonPrice * quantity,
       quantity
     };
   }).filter(Boolean) as CalculationResult['addonCosts'];
@@ -223,7 +232,7 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   }
   
   // Calculate addon costs
-  result.addonCosts = calculateAddonCosts(selectedAddons, frequencyMultiplier);
+  result.addonCosts = calculateAddonCosts(selectedAddons, frequencyMultiplier, params.billingFrequency);
   
   // Calculate minimum charges
   result.minimumCharges = calculateMinimumCharges(
@@ -251,6 +260,19 @@ export function getFrequencyMultiplier(frequency: string): number {
     case "quarterly": return 0.25;
     case "biannual": return 0.5;
     case "annual": return 1;
+    default: return 1;
+  }
+}
+
+/**
+ * Helper to get number of months in billing period (for monthly-priced items like Satellite Data API)
+ */
+export function getPeriodMonthsMultiplier(frequency: string): number {
+  switch (frequency) {
+    case "monthly": return 1;
+    case "quarterly": return 3;
+    case "biannual": return 6;
+    case "annual": return 12;
     default: return 1;
   }
 }
