@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MODULES, ADDONS, getAddonsByModule, type ComplexityLevel } from "@/data/pricingData";
+import { MODULES, ADDONS, type ComplexityLevel } from "@/data/pricingData";
 
 export interface PackageSelectorProps {
   // Package and module selections

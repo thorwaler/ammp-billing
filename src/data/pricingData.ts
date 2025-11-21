@@ -12,7 +12,6 @@ export interface ModuleDefinition {
 export interface AddonDefinition {
   id: string;
   name: string;
-  module: string;
   price?: number;
   complexityPricing?: boolean;
   lowPrice?: number;
@@ -52,94 +51,50 @@ export const MODULES: ModuleDefinition[] = [
 ];
 
 export const ADDONS: AddonDefinition[] = [
-  // Technical Monitoring Addons
+  // Universal Add-ons (independent of modules)
   { 
     id: "customKPIs", 
     name: "Custom KPIs", 
-    module: "technicalMonitoring", 
     complexityPricing: true,
     lowPrice: 200,
     mediumPrice: 1500,
     highPrice: 10000
   },
   { 
+    id: "customDashboard", 
+    name: "Custom Dashboard", 
+    price: 1000,
+    requiresPro: true
+  },
+  { 
+    id: "customReport", 
+    name: "Custom Report", 
+    price: 1500,
+    requiresPro: true
+  },
+  { 
+    id: "customAlerts", 
+    name: "Custom Alerts", 
+    price: 150,
+    requiresPro: true
+  },
+  { 
     id: "customAPIIntegration", 
     name: "Custom API Integration", 
-    module: "technicalMonitoring", 
     price: 3500 
   },
   { 
     id: "satelliteDataAPI", 
     name: "Satellite Data API Access", 
-    module: "technicalMonitoring", 
     price: 6 
   },
   { 
     id: "dataLoggerSetup", 
     name: "Data Logger Setup", 
-    module: "technicalMonitoring", 
     complexityPricing: true,
     lowPrice: 1000,
     mediumPrice: 2500,
     highPrice: 5000
-  },
-  { 
-    id: "tmCustomDashboards", 
-    name: "Custom Dashboards", 
-    module: "technicalMonitoring", 
-    price: 1000,
-    requiresPro: true
-  },
-  { 
-    id: "tmCustomReports", 
-    name: "Custom Reports", 
-    module: "technicalMonitoring", 
-    price: 1500,
-    requiresPro: true
-  },
-  { 
-    id: "tmCustomAlerts", 
-    name: "Custom Alerts", 
-    module: "technicalMonitoring", 
-    price: 150,
-    requiresPro: true
-  },
-  
-  // Energy Savings Hub Addons
-  { 
-    id: "eshCustomDashboard", 
-    name: "Custom Dashboard", 
-    module: "energySavingsHub", 
-    price: 1000 
-  },
-  { 
-    id: "eshCustomReport", 
-    name: "Custom Report", 
-    module: "energySavingsHub", 
-    price: 1500 
-  },
-  { 
-    id: "eshCustomKPIs", 
-    name: "Custom KPIs", 
-    module: "energySavingsHub", 
-    complexityPricing: true,
-    lowPrice: 200,
-    mediumPrice: 1500,
-    highPrice: 10000
-  },
-  
-  // Stakeholder Portal Addons
-  { 
-    id: "spCustomDashboard", 
-    name: "Custom Dashboard", 
-    module: "stakeholderPortal", 
-    price: 1000 
-  },
-  { 
-    id: "spCustomReport", 
-    name: "Custom Report", 
-    module: "stakeholderPortal", 
-    price: 1500 
   },
 ];
 
@@ -157,9 +112,10 @@ export const getAddonById = (id: string): AddonDefinition | undefined => {
   return ADDONS.find(a => a.id === id);
 };
 
-export const getAddonsByModule = (moduleId: string): AddonDefinition[] => {
-  return ADDONS.filter(a => a.module === moduleId);
-};
+// Deprecated: Addons are now independent of modules
+// export const getAddonsByModule = (moduleId: string): AddonDefinition[] => {
+//   return ADDONS.filter(a => a.module === moduleId);
+// };
 
 export const getAddonPrice = (
   addon: AddonDefinition, 

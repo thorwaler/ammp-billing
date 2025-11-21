@@ -346,13 +346,7 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
         "modules",
         currentModules.filter((id) => id !== moduleId)
       );
-      
-      // Remove addons associated with this module
-      const currentAddons = form.getValues("addons") || [];
-      const filteredAddons = currentAddons.filter(
-        (addonId) => !ADDONS.find((a) => a.id === addonId && a.module === moduleId)
-      );
-      form.setValue("addons", filteredAddons);
+      // Modules and addons are now independent - no coupling!
     }
   };
 
