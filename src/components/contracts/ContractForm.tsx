@@ -35,6 +35,9 @@ import { useCurrency } from "@/contexts/CurrencyContext";
 import { Badge } from "@/components/ui/badge";
 
 // Define the form schema
+// Helper to handle optional number fields that may be NaN from empty inputs
+const optionalNumber = z.coerce.number().transform(val => isNaN(val) ? undefined : val).optional();
+
 const contractFormSchema = z.object({
   companyName: z.string().min(2, { message: "Company name is required" }),
   initialMW: z.coerce.number().min(0, { message: "Initial MW is required" }),
@@ -50,12 +53,12 @@ const contractFormSchema = z.object({
   addonCustomPricing: z.record(z.coerce.number().optional()).optional(),
   addonQuantities: z.record(z.coerce.number().optional()).optional(),
   customPricing: z.object({
-    technicalMonitoring: z.coerce.number().optional(),
-    energySavingsHub: z.coerce.number().optional(),
-    stakeholderPortal: z.coerce.number().optional(),
-    control: z.coerce.number().optional(),
-    ongrid_per_mwp: z.coerce.number().optional(),
-    hybrid_per_mwp: z.coerce.number().optional(),
+    technicalMonitoring: optionalNumber,
+    energySavingsHub: optionalNumber,
+    stakeholderPortal: optionalNumber,
+    control: optionalNumber,
+    ongrid_per_mwp: optionalNumber,
+    hybrid_per_mwp: optionalNumber,
   }).optional(),
   volumeDiscounts: z.object({
     annualUpfrontDiscount: z.coerce.number().optional(),
