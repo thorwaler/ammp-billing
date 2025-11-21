@@ -140,8 +140,7 @@ export function ContractPackageSelector({
             .filter(addon => !addon.requiresPro || selectedPackage !== "starter")
             .map(addon => {
               const isSelected = selectedAddons.includes(addon.id);
-              const isModuleSelected = selectedModules.includes(addon.module);
-              const isAddonDisabled = !isModuleSelected || (addon.requiresPro && selectedPackage === "starter");
+              const isAddonDisabled = addon.requiresPro && selectedPackage === "starter";
               
               return (
                 <div 
