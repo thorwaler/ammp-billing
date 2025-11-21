@@ -73,6 +73,15 @@ interface Addon {
     appliedTier: PricingTier | null;
   };
 }
+
+interface ContractAddon {
+  id: string;
+  quantity?: number;
+  complexity?: string;
+  customPrice?: number;
+  customTiers?: PricingTier[];
+}
+
 interface Customer {
   id: string;
   name: string;
@@ -169,7 +178,8 @@ export function InvoiceCalculator({
         .map(c => {
           const contract = c.contracts[0];
           const modules = Array.isArray(contract.modules) ? contract.modules as string[] : [];
-          const addons = Array.isArray(contract.addons) ? (contract.addons as any[]).map((a: any) => a.id || a) : [];
+          // Keep full addon objects with custom tiers instead of just IDs
+          const addons = Array.isArray(contract.addons) ? contract.addons : [];
           const customPricing = typeof contract.custom_pricing === 'object' && contract.custom_pricing !== null ? contract.custom_pricing as {[key: string]: number} : {};
           const volumeDiscounts = typeof contract.volume_discounts === 'object' && contract.volume_discounts !== null ? contract.volume_discounts as any : {};
           
@@ -267,14 +277,30 @@ export function InvoiceCalculator({
         
         // Auto-activate addons based on AMMP capabilities
         const updatedAddons = defaultAddons.map(addon => {
+          // Find matching contract addon (could be string ID or full object)
+          const contractAddon = customerData.addons.find((a: any) => 
+            typeof a === 'string' ? a === addon.id : a.id === addon.id
+          );
+          
+          const contractAddonObj = typeof contractAddon === 'object' ? contractAddon : null;
+          
           // Check if addon should auto-activate
           if (addon.autoActivateFromAMMP && addon.ammpSourceField) {
             const sourceValue = customerData.ammpCapabilities?.[addon.ammpSourceField];
             
             if (sourceValue && sourceValue > 0) {
+              // Use custom tiers from contract if available, otherwise use default
+              const tiersToUse = contractAddonObj?.customTiers || addon.pricingTiers;
+              
+              // Create addon definition with custom tiers for calculation
+              const addonWithCustomTiers = tiersToUse && contractAddonObj?.customTiers ? {
+                ...addon,
+                pricingTiers: contractAddonObj.customTiers
+              } : addon;
+              
               // Auto-activate with quantity and tiered pricing
               const tieredCalc = addon.tieredPricing 
-                ? calculateTieredPrice(addon, sourceValue)
+                ? calculateTieredPrice(addonWithCustomTiers, sourceValue, contractAddonObj?.customTiers)
                 : undefined;
               
               // Update solcast sites state for display
@@ -286,18 +312,26 @@ export function InvoiceCalculator({
                 ...addon,
                 selected: true,
                 quantity: sourceValue,
+                customTiers: contractAddonObj?.customTiers, // Store custom tiers in state
                 calculatedTieredPrice: tieredCalc
               };
             }
           }
           
           // Otherwise, check if it was manually selected in contract
+          const isSelected = typeof contractAddon === 'string' 
+            ? true 
+            : contractAddon !== undefined;
+          
           return {
             ...addon,
-            selected: customerData.addons.includes(addon.id),
-            complexity: customerData.addons.includes(addon.id) && addon.complexityPricing 
-              ? 'low' as const 
-              : undefined
+            selected: isSelected,
+            quantity: contractAddonObj?.quantity,
+            customTiers: contractAddonObj?.customTiers,
+            complexity: isSelected && addon.complexityPricing 
+              ? (contractAddonObj?.complexity as ComplexityLevel) || 'low' as const 
+              : undefined,
+            customPrice: contractAddonObj?.customPrice
           };
         });
         
