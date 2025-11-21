@@ -142,7 +142,7 @@ Remember: It is better to omit a field than to guess or infer its value. Return 
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "openai/gpt-5",
         messages: [
           {
             role: "system",
@@ -156,10 +156,10 @@ Remember: It is better to omit a field than to guess or infer its value. Return 
                 text: "Please extract all contract information from this PDF document."
               },
               {
-                type: "inline_data",
-                inline_data: {
-                  mime_type: "application/pdf",
-                  data: base64Pdf
+                type: "file",
+                file: {
+                  filename: "contract.pdf",
+                  file_data: `data:application/pdf;base64,${base64Pdf}`
                 }
               }
             ]
