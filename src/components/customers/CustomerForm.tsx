@@ -458,27 +458,27 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total Sites:</span>
-                  <span className="font-medium">{syncedCapabilities.totalSites}</span>
+                  <span className="font-medium">{syncedCapabilities.totalSites || 0}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total MW:</span>
-                  <span className="font-medium">{syncedCapabilities.totalMW.toFixed(2)}</span>
+                  <span className="font-medium">{(syncedCapabilities.totalMW || 0).toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">On-Grid:</span>
                   <span className="font-medium">
-                    {syncedCapabilities.ongridSites} ({syncedCapabilities.ongridTotalMW.toFixed(2)} MWp)
+                    {syncedCapabilities.ongridSites || 0} ({(syncedCapabilities.ongridTotalMW || 0).toFixed(2)} MWp)
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Hybrid:</span>
                   <span className="font-medium">
-                    {syncedCapabilities.hybridSites} ({syncedCapabilities.hybridTotalMW.toFixed(2)} MWp)
+                    {syncedCapabilities.hybridSites || 0} ({(syncedCapabilities.hybridTotalMW || 0).toFixed(2)} MWp)
                   </span>
                 </div>
                 <div className="flex justify-between col-span-2">
                   <span className="text-muted-foreground">Solcast-enabled:</span>
-                  <span className="font-medium">{syncedCapabilities.sitesWithSolcast} sites</span>
+                  <span className="font-medium">{syncedCapabilities.sitesWithSolcast || 0} sites</span>
                 </div>
               </div>
 
@@ -511,7 +511,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                               )}
                             </div>
                             <span className="text-sm text-muted-foreground">
-                              {asset.totalMW.toFixed(2)} MWp
+                              {(asset.totalMW || 0).toFixed(2)} MWp
                             </span>
                           </div>
                         </AccordionTrigger>
