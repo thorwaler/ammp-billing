@@ -46,7 +46,6 @@ interface Module {
 interface Addon {
   id: string;
   name: string;
-  module: string;
   price?: number;
   complexityPricing?: boolean;
   lowPrice?: number;
@@ -576,17 +575,7 @@ export function InvoiceCalculator({
           : m
       )
     );
-    
-    // If module is deselected, deselect all its addons as well
-    if (modules.find(m => m.id === moduleId)?.selected) {
-      setAddons(prevAddons => 
-        prevAddons.map(a => 
-          a.module === moduleId 
-            ? { ...a, selected: false } 
-            : a
-        )
-      );
-    }
+    // Modules and addons are now independent - no coupling!
   };
 
   const handleAddonToggle = (addonId: string) => {
@@ -619,10 +608,10 @@ export function InvoiceCalculator({
     );
   };
 
-  // Filter addons to only show those related to selected modules
-  const getAddonsByModule = (moduleId: string) => {
-    return addons.filter(a => a.module === moduleId);
-  };
+  // Deprecated: Addons are now independent of modules
+  // const getAddonsByModule = (moduleId: string) => {
+  //   return addons.filter(a => a.module === moduleId);
+  // };
 
   const isProPackage = selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'custom';
 
@@ -842,141 +831,107 @@ export function InvoiceCalculator({
                 </div>
               </div>
               
-              {/* Only show addons for selected modules */}
-              <div className="space-y-4">
-                {modules
-                  .filter(m => m.selected)
-                  .map(module => {
-                    const moduleAddons = getAddonsByModule(module.id);
-                    if (moduleAddons.length === 0) return null;
-                    
-                    return (
-                      <div key={`addon-group-${module.id}`} className="space-y-2">
-                        <Label>Addons</Label>
-                        <div className="border rounded-md p-3 space-y-2">
-                          {moduleAddons
-                            .filter(addon => !addon.requiresPro || isProPackage)
-                            .map(addon => (
-                              <div key={addon.id} className="space-y-2">
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox 
-                                    id={`addon-${addon.id}`}
-                                    checked={addon.selected}
-                                    onCheckedChange={() => handleAddonToggle(addon.id)}
-                                    disabled={addon.requiresPro && !isProPackage}
-                                  />
-                                  <Label 
-                                    htmlFor={`addon-${addon.id}`}
-                                    className="flex-grow cursor-pointer text-sm"
-                                  >
-                                    {addon.name}
-                                  </Label>
-                                  <span className="text-sm">
-                                    {addon.complexityPricing 
-                                      ? `€${addon.lowPrice}-€${addon.highPrice}` 
-                                      : `€${addon.price}`
-                                    }
-                                  </span>
-                                </div>
-                                
-                                {/* Complexity selector for applicable addons */}
-                                {addon.selected && addon.complexityPricing && (
-                                  <div className="pl-6">
-                                    <Select 
-                                      value={addon.complexity || 'low'} 
-                                      onValueChange={(value: any) => handleComplexityChange(addon.id, value)}
-                                    >
-                                      <SelectTrigger className="h-8">
-                                        <SelectValue placeholder="Select complexity" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="low">Low (€{addon.lowPrice})</SelectItem>
-                                        <SelectItem value="medium">Medium (€{addon.mediumPrice})</SelectItem>
-                                        <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                )}
-                                
-                                {/* Price and Quantity inputs for all selected addons */}
-                                {addon.selected && (
-                                  <div className="pl-6 space-y-2">
-                                    <div className="flex items-center gap-4">
-                                      <div className="flex items-center gap-2">
-                                        <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
-                                          Price:
-                                        </Label>
-                                        <Input
-                                          id={`price-${addon.id}`}
-                                          type="number"
-                                          placeholder={addon.complexityPricing 
-                                            ? `${addon.lowPrice}-${addon.highPrice}` 
-                                            : String(addon.price)}
-                                          min={0}
-                                          step={0.01}
-                                          className="w-28 h-8"
-                                          value={addon.customPrice ?? ''}
-                                          onChange={(e) => {
-                                            const value = e.target.value ? Number(e.target.value) : undefined;
-                                            setAddons(prev => prev.map(a => 
-                                              a.id === addon.id ? { ...a, customPrice: value } : a
-                                            ));
-                                          }}
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <Label htmlFor={`quantity-${addon.id}`} className="text-sm whitespace-nowrap">
-                                          Quantity:
-                                        </Label>
-                                        <Input
-                                          id={`quantity-${addon.id}`}
-                                          type="number"
-                                          placeholder="1"
-                                          min={1}
-                                          step={1}
-                                          className="w-20 h-8"
-                                          value={addon.quantity || 1}
-                                          onChange={(e) => {
-                                            const value = Math.max(1, Number(e.target.value) || 1);
-                                            setAddons(prev => prev.map(a => 
-                                              a.id === addon.id ? { ...a, quantity: value } : a
-                                            ));
-                                          }}
-                                        />
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                                
-                                {/* Solcast API Site Count for Satellite Data API - REMOVED */}
-                                {addon.selected && addon.id === 'satelliteDataAPI_OLD' && (
-                                  <div className="pl-6 space-y-2">
-                                    <Label htmlFor={`solcast-sites-${addon.id}`} className="text-sm">
-                                      Sites Using Solcast API
-                                    </Label>
-                                    <Input
-                                      id={`solcast-sites-${addon.id}`}
-                                      type="number"
-                                      placeholder="Enter number of sites"
-                                      min={0}
-                                      step={1}
-                                      value={addon.solcastSiteCount || ""}
-                                      onChange={(e) => handleSolcastSitesChange(addon.id, e.target.value ? Number(e.target.value) : 0)}
-                                      className="h-8"
-                                    />
-                                    <p className="text-xs text-muted-foreground">
-                                      Tiered pricing: €3/site (0-100), €2/site (101-500), €1.5/site (501-1000), €1/site (1000+)
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            ))
-                          }
+              {/* Add-ons Section - Independent of Modules */}
+              <div className="space-y-2">
+                <Label>Add-ons (independent of modules)</Label>
+                <div className="border rounded-md p-3 space-y-2">
+                  {addons
+                    .filter(addon => !addon.requiresPro || isProPackage)
+                    .map(addon => (
+                      <div key={addon.id} className="space-y-2">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`addon-${addon.id}`}
+                            checked={addon.selected}
+                            onCheckedChange={() => handleAddonToggle(addon.id)}
+                            disabled={addon.requiresPro && !isProPackage}
+                          />
+                          <Label 
+                            htmlFor={`addon-${addon.id}`}
+                            className="flex-grow cursor-pointer text-sm"
+                          >
+                            {addon.name}
+                          </Label>
+                          <span className="text-sm">
+                            {addon.complexityPricing 
+                              ? `€${addon.lowPrice}-€${addon.highPrice}` 
+                              : `€${addon.price}`
+                            }
+                          </span>
                         </div>
+                        
+                        {/* Complexity selector for applicable addons */}
+                        {addon.selected && addon.complexityPricing && (
+                          <div className="pl-6">
+                            <Select 
+                              value={addon.complexity || 'low'} 
+                              onValueChange={(value: any) => handleComplexityChange(addon.id, value)}
+                            >
+                              <SelectTrigger className="h-8">
+                                <SelectValue placeholder="Select complexity" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="low">Low (€{addon.lowPrice})</SelectItem>
+                                <SelectItem value="medium">Medium (€{addon.mediumPrice})</SelectItem>
+                                <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        
+                        {/* Price and Quantity inputs for all selected addons */}
+                        {addon.selected && (
+                          <div className="pl-6 space-y-2">
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
+                                  Price:
+                                </Label>
+                                <Input
+                                  id={`price-${addon.id}`}
+                                  type="number"
+                                  placeholder={addon.complexityPricing 
+                                    ? `${addon.lowPrice}-${addon.highPrice}` 
+                                    : String(addon.price)}
+                                  min={0}
+                                  step={0.01}
+                                  className="w-28 h-8"
+                                  value={addon.customPrice ?? ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value ? Number(e.target.value) : undefined;
+                                    setAddons(prev => prev.map(a => 
+                                      a.id === addon.id ? { ...a, customPrice: value } : a
+                                    ));
+                                  }}
+                                />
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Label htmlFor={`quantity-${addon.id}`} className="text-sm whitespace-nowrap">
+                                  Quantity:
+                                </Label>
+                                <Input
+                                  id={`quantity-${addon.id}`}
+                                  type="number"
+                                  placeholder="1"
+                                  min={1}
+                                  step={1}
+                                  className="w-20 h-8"
+                                  value={addon.quantity || 1}
+                                  onChange={(e) => {
+                                    const value = Math.max(1, Number(e.target.value) || 1);
+                                    setAddons(prev => prev.map(a => 
+                                      a.id === addon.id ? { ...a, quantity: value } : a
+                                    ));
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    );
-                  })
-                }
+                    ))
+                  }
+                </div>
               </div>
             </>
           )}
