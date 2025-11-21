@@ -54,9 +54,16 @@ serve(async (req) => {
       throw new Error(`Failed to download PDF: ${downloadError.message}`);
     }
 
-    // Convert PDF to base64
+    // Convert PDF to base64 in chunks to avoid stack overflow
     const arrayBuffer = await pdfData.arrayBuffer();
-    const base64Pdf = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+    const uint8Array = new Uint8Array(arrayBuffer);
+    const chunkSize = 32768; // Process 32KB at a time
+    let base64Pdf = '';
+    
+    for (let i = 0; i < uint8Array.length; i += chunkSize) {
+      const chunk = uint8Array.slice(i, Math.min(i + chunkSize, uint8Array.length));
+      base64Pdf += btoa(String.fromCharCode(...chunk));
+    }
 
     console.log("PDF downloaded, size:", arrayBuffer.byteLength, "bytes");
 
