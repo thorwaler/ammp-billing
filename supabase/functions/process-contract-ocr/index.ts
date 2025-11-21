@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { pdfUrl, contractId } = await req.json();
+    const { pdfUrl, contractId, isAmendment = false, amendmentId } = await req.json();
     
     if (!pdfUrl) {
       throw new Error("PDF URL is required");
@@ -29,6 +29,18 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // Fetch original contract data if processing an amendment
+    let originalContractData = null;
+    if (isAmendment && contractId) {
+      const { data: originalContract } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('id', contractId)
+        .single();
+      
+      originalContractData = originalContract;
+    }
 
     // Download PDF from storage
     const pdfPath = pdfUrl.split('/').slice(-2).join('/'); // Extract bucket path
@@ -48,6 +60,47 @@ serve(async (req) => {
 
     console.log("PDF downloaded, size:", arrayBuffer.byteLength, "bytes");
 
+    // Enhanced system prompt based on whether it's an amendment or original contract
+    const systemPrompt = isAmendment 
+      ? `You are a contract amendment data extraction specialist. Compare the amendment with the original contract and extract changes.
+
+ORIGINAL CONTRACT DATA:
+- Company Name: ${originalContractData?.company_name || 'N/A'}
+- Package: ${originalContractData?.package || 'N/A'}
+- Initial MW: ${originalContractData?.initial_mw || 'N/A'}
+- Currency: ${originalContractData?.currency || 'N/A'}
+- Billing Frequency: ${originalContractData?.billing_frequency || 'N/A'}
+- Signed Date: ${originalContractData?.signed_date || 'N/A'}
+- Period Start: ${originalContractData?.period_start || 'N/A'}
+- Period End: ${originalContractData?.period_end || 'N/A'}
+- Minimum Charge: ${originalContractData?.minimum_charge || 'N/A'}
+- Minimum Annual Value: ${originalContractData?.minimum_annual_value || 'N/A'}
+
+Extract all contract fields from the amendment document. Additionally, provide a "changes_summary" field that concisely describes what has changed compared to the original contract values above (e.g., "Capacity increased from 5MW to 7MW, Extended contract end date to Dec 2025, Added Custom API module").
+
+Return structured data with all fields, even if unchanged, plus the changes_summary.`
+      : `You are a contract data extraction specialist. Extract key contract information from the provided contract PDF.
+
+Extract the following fields:
+- companyName: Company/Customer Name
+- packageType: Contract Package Type (starter/pro/custom/hybrid_tiered)
+- initialMW: Initial MW capacity (numeric)
+- currency: Currency (USD or EUR)
+- billingFrequency: Billing Frequency (monthly/quarterly/biannual/annual)
+- signedDate: Signed Date (YYYY-MM-DD format)
+- periodStart: Contract Period Start Date (YYYY-MM-DD format)
+- periodEnd: Contract Period End Date (YYYY-MM-DD format)
+- nextInvoiceDate: Next Invoice Date (YYYY-MM-DD format)
+- modules: Array of modules included
+- addons: Array of add-ons
+- customPricing: Object with custom pricing details
+- volumeDiscounts: Object with volume discount details
+- minimumCharge: Minimum charge amount
+- minimumAnnualValue: Minimum annual value
+- notes: Notes and special terms
+
+Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field is not found, omit it or return null.`;
+
     // Call Lovable AI with vision to extract contract data
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -60,27 +113,7 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: `You are a contract data extraction specialist. Extract key contract information from the provided contract PDF.
-
-Extract the following fields:
-- companyName: Company/Customer Name
-- packageType: Contract Package Type (starter/pro/custom/hybrid_tiered)
-- initialMW: Initial MW capacity (numeric)
-- currency: Currency (USD or EUR)
-- billingFrequency: Billing Frequency (monthly/quarterly/biannual/annual)
-- signedDate: Signed Date (YYYY-MM-DD format)
-- periodStart: Contract Period Start Date (YYYY-MM-DD format)
-- periodEnd: Contract Period End Date (YYYY-MM-DD format)
-- nextInvoiceDate: Next Invoice Date (YYYY-MM-DD format)
-- modules: Array of modules included (e.g., ["Technical Monitoring", "Energy Savings Hub", "Stakeholder Portal", "Control"])
-- addons: Array of add-ons
-- customPricing: Object with custom pricing details
-- volumeDiscounts: Object with volume discount details
-- minimumCharge: Minimum charge amount
-- minimumAnnualValue: Minimum annual value
-- notes: Notes and special terms
-
-Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field is not found, omit it or return null.`
+            content: systemPrompt
           },
           {
             role: "user",
@@ -137,9 +170,10 @@ Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field 
                   volumeDiscounts: { type: "object" },
                   minimumCharge: { type: "number" },
                   minimumAnnualValue: { type: "number" },
-                  notes: { type: "string" }
+                  notes: { type: "string" },
+                  changes_summary: { type: "string" }
                 },
-                required: ["companyName"]
+                required: isAmendment ? ["changes_summary"] : ["companyName"]
               }
             }
           }
@@ -192,19 +226,37 @@ Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field 
 
     console.log("Extracted contract data:", extractedData);
 
-    // Update contract with OCR data if contractId provided
-    if (contractId) {
+    // Update contract or amendment with OCR data
+    if (isAmendment && amendmentId) {
+      // Update amendment record
+      const { error: updateError } = await supabase
+        .from('contract_amendments')
+        .update({
+          ocr_data: extractedData,
+          ocr_status: 'completed',
+          ocr_processed_at: new Date().toISOString(),
+          changes_summary: (extractedData as any).changes_summary || null,
+        })
+        .eq('id', amendmentId);
+
+      if (updateError) {
+        console.error('Error updating amendment:', updateError);
+        throw updateError;
+      }
+    } else if (contractId) {
+      // Update contract record
       const { error: updateError } = await supabase
         .from('contracts')
         .update({
           ocr_data: extractedData,
           ocr_status: 'completed',
-          ocr_processed_at: new Date().toISOString()
+          ocr_processed_at: new Date().toISOString(),
         })
         .eq('id', contractId);
 
       if (updateError) {
-        console.error("Error updating contract:", updateError);
+        console.error('Error updating contract:', updateError);
+        throw updateError;
       }
     }
 
