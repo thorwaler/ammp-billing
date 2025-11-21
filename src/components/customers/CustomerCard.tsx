@@ -346,6 +346,7 @@ export function CustomerCard({
                         setShowContractForm(false);
                         onContractCreated?.();
                       }}
+                      onCancel={() => setShowContractForm(false)}
                     />
                   </DialogContent>
                 </Dialog>
@@ -368,6 +369,7 @@ export function CustomerCard({
                       setShowContractForm(false);
                       onContractCreated?.();
                     }}
+                    onCancel={() => setShowContractForm(false)}
                   />
                 </DialogContent>
               </Dialog>
