@@ -12,7 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MODULES, ADDONS, type ComplexityLevel } from "@/data/pricingData";
+import { MODULES, ADDONS, type ComplexityLevel, type PricingTier, calculateTieredPrice } from "@/data/pricingData";
+import { TierPricingEditor } from "./TierPricingEditor";
 
 export interface PackageSelectorProps {
   // Package and module selections
@@ -24,6 +25,7 @@ export interface PackageSelectorProps {
   addonComplexity: { [key: string]: ComplexityLevel };
   addonCustomPrices: { [key: string]: number | undefined };
   addonQuantities: { [key: string]: number | undefined };
+  addonCustomTiers?: Record<string, PricingTier[]>;
   
   // Custom pricing
   customPricing?: { [key: string]: number | undefined };
@@ -36,6 +38,7 @@ export interface PackageSelectorProps {
   onComplexityChange: (addonId: string, complexity: ComplexityLevel) => void;
   onCustomPriceChange: (addonId: string, price: number | undefined) => void;
   onQuantityChange: (addonId: string, quantity: number) => void;
+  onCustomTiersChange?: (addonId: string, tiers: PricingTier[]) => void;
   
   // Display options
   currency?: 'USD' | 'EUR';
@@ -52,6 +55,7 @@ export function ContractPackageSelector({
   addonComplexity,
   addonCustomPrices,
   addonQuantities,
+  addonCustomTiers,
   customPricing,
   showCustomPricing,
   onModuleToggle,
@@ -60,6 +64,7 @@ export function ContractPackageSelector({
   onComplexityChange,
   onCustomPriceChange,
   onQuantityChange,
+  onCustomTiersChange,
   currency = 'EUR',
   mode = 'contract',
   renderModuleInput,
@@ -192,6 +197,41 @@ export function ContractPackageSelector({
                           </SelectContent>
                         </Select>
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Tiered pricing editor - ONLY FOR SATELLITE DATA API */}
+                  {isSelected && 
+                   addon.id === 'satelliteDataAPI' && 
+                   addon.tieredPricing && 
+                   addon.pricingTiers && 
+                   !isAddonDisabled && (
+                    <div className="mt-2 pl-6 space-y-2">
+                      <TierPricingEditor
+                        tiers={addonCustomTiers?.[addon.id] || addon.pricingTiers}
+                        onTiersChange={(newTiers) => onCustomTiersChange?.(addon.id, newTiers)}
+                        currentQuantity={addonQuantities[addon.id]}
+                        currencySymbol={currencySymbol}
+                      />
+                      
+                      {/* Show calculated total */}
+                      {addonQuantities[addon.id] > 0 && (() => {
+                        const pricing = calculateTieredPrice(
+                          addon,
+                          addonQuantities[addon.id],
+                          addonCustomTiers?.[addon.id]
+                        );
+                        return (
+                          <div className="text-xs bg-primary/5 p-2 rounded font-medium border border-primary/10">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Calculated Total:</span>
+                              <span className="text-primary">
+                                {currencySymbol}{pricing.totalPrice.toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                   

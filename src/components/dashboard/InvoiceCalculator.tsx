@@ -29,6 +29,7 @@ import {
   type PricingTier,
   calculateTieredPrice
 } from "@/data/pricingData";
+import { TierPricingEditor } from "@/components/contracts/TierPricingEditor";
 import { 
   calculateInvoice, 
   getFrequencyMultiplier,
@@ -929,9 +930,12 @@ export function InvoiceCalculator({
                         {/* Price and Quantity inputs for all selected addons */}
                         {addon.selected && (
                           <div className="pl-6 space-y-2">
-                            {/* Tiered pricing display */}
-                            {addon.tieredPricing && addon.calculatedTieredPrice && (
-                              <div className="text-xs bg-muted/50 p-2 rounded space-y-1">
+                        {/* Tiered pricing display and editor - ONLY FOR SATELLITE DATA API */}
+                        {addon.selected && addon.id === 'satelliteDataAPI' && addon.tieredPricing && addon.pricingTiers && (
+                          <div className="pl-6 space-y-2 mt-2">
+                            {/* Current tier summary */}
+                            {addon.calculatedTieredPrice && (
+                              <div className="text-xs bg-muted/50 p-2 rounded space-y-1 border">
                                 <div className="flex justify-between">
                                   <span className="text-muted-foreground">Quantity: {addon.quantity || 0} sites</span>
                                 </div>
@@ -945,6 +949,51 @@ export function InvoiceCalculator({
                                 </div>
                               </div>
                             )}
+                            
+                            {/* Tier editor */}
+                            <TierPricingEditor
+                              tiers={addon.customTiers || addon.pricingTiers}
+                              onTiersChange={(newTiers) => {
+                                setAddons(prev => prev.map(a => {
+                                  if (a.id === addon.id) {
+                                    const updatedAddon = { ...a, customTiers: newTiers };
+                                    // Recalculate with new tiers
+                                    if (a.tieredPricing && a.quantity) {
+                                      updatedAddon.calculatedTieredPrice = calculateTieredPrice(
+                                        a,
+                                        a.quantity,
+                                        newTiers
+                                      );
+                                    }
+                                    return updatedAddon;
+                                  }
+                                  return a;
+                                }));
+                              }}
+                              currentQuantity={addon.quantity}
+                              currencySymbol="€"
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Tiered pricing display for non-satellite addons */}
+                        {addon.selected && addon.id !== 'satelliteDataAPI' && addon.tieredPricing && addon.calculatedTieredPrice && (
+                          <div className="pl-6">
+                            <div className="text-xs bg-muted/50 p-2 rounded space-y-1 border">
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Quantity: {addon.quantity || 0} sites</span>
+                              </div>
+                              <div className="flex justify-between font-medium">
+                                <span>Tier: {addon.calculatedTieredPrice.appliedTier?.label}</span>
+                                <span>€{addon.calculatedTieredPrice.pricePerUnit}/site</span>
+                              </div>
+                              <div className="flex justify-between text-primary font-semibold">
+                                <span>Total:</span>
+                                <span>€{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                             
                             <div className="flex items-center gap-4">
                               <div className="flex items-center gap-2">
