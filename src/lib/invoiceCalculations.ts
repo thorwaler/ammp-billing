@@ -39,6 +39,7 @@ export interface CalculationResult {
   minimumCharges: number;
   totalMWCost: number;
   totalPrice: number;
+  invoicePeriod?: string;
   hybridTieredBreakdown?: {
     ongrid: { mw: number; cost: number; rate: number };
     hybrid: { mw: number; cost: number; rate: number };
