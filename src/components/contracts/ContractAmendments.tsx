@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
-import AmendmentUploader from "./AmendmentUploader";
+import AmendmentForm from "./AmendmentForm";
 import AmendmentTimeline from "./AmendmentTimeline";
 import { useToast } from "@/hooks/use-toast";
 
@@ -87,19 +87,18 @@ export default function ContractAmendments({
                 Add Amendment
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Upload Contract Amendment</DialogTitle>
+                <DialogTitle>Add Contract Amendment</DialogTitle>
                 <DialogDescription>
-                  Upload a PDF of the contract amendment. Our AI will
-                  automatically extract the changes and update the contract
-                  details.
+                  Record changes made to this contract. Any pricing or term changes
+                  will automatically update the contract data.
                 </DialogDescription>
               </DialogHeader>
-              <AmendmentUploader
+              <AmendmentForm
                 contractId={contractId}
                 nextAmendmentNumber={nextAmendmentNumber}
-                onUploadComplete={handleUploadComplete}
+                onComplete={handleUploadComplete}
               />
             </DialogContent>
           </Dialog>
