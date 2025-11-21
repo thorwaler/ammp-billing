@@ -590,9 +590,13 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
                 {Object.keys(form.formState.errors).length > 0 && (
                   <details className="mt-2">
                     <summary className="cursor-pointer font-semibold">View Errors</summary>
-                    <pre className="mt-2 text-xs overflow-auto max-h-40">
-                      {JSON.stringify(form.formState.errors, null, 2)}
-                    </pre>
+                    <div className="mt-2 space-y-1">
+                      {Object.entries(form.formState.errors).map(([field, error]: [string, any]) => (
+                        <div key={field} className="text-red-600">
+                          <strong>{field}:</strong> {error?.message?.toString() || 'Invalid'}
+                        </div>
+                      ))}
+                    </div>
                   </details>
                 )}
               </div>
