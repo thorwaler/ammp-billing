@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.81.1";
-// @ts-ignore
-import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.0.379/legacy/build/pdf.mjs";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -56,34 +54,24 @@ serve(async (req) => {
       throw new Error(`Failed to download PDF: ${downloadError.message}`);
     }
 
-    // Extract text from PDF using PDF.js
+    // Convert PDF to base64 for AI processing
     const arrayBuffer = await pdfData.arrayBuffer();
     console.log("PDF downloaded, size:", arrayBuffer.byteLength, "bytes");
 
-    // Parse PDF to extract text
-    let extractedText = "";
+    let base64Pdf = "";
     try {
-      const typedArray = new Uint8Array(arrayBuffer);
-      const loadingTask = pdfjsLib.getDocument({ data: typedArray });
-      const pdfDocument = await loadingTask.promise;
-      
-      console.log("PDF loaded, pages:", pdfDocument.numPages);
-      
-      // Extract text from all pages
-      for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-        const page = await pdfDocument.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        extractedText += pageText + '\n';
+      const uint8Array = new Uint8Array(arrayBuffer);
+      // Use chunks to avoid stack overflow on large files
+      const chunkSize = 32768;
+      for (let i = 0; i < uint8Array.length; i += chunkSize) {
+        const chunk = uint8Array.slice(i, Math.min(i + chunkSize, uint8Array.length));
+        base64Pdf += btoa(String.fromCharCode(...chunk));
       }
-      
-      console.log("Extracted text length:", extractedText.length, "chars");
-    } catch (parseError) {
-      console.error("Error parsing PDF:", parseError);
+      console.log("PDF converted to base64, length:", base64Pdf.length);
+    } catch (conversionError) {
+      console.error("Error converting PDF to base64:", conversionError);
       return new Response(
-        JSON.stringify({ error: "Failed to extract text from PDF" }),
+        JSON.stringify({ error: "Failed to process PDF file" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -145,7 +133,19 @@ Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field 
           },
           {
             role: "user",
-            content: `Please extract all contract information from this PDF document:\n\n${extractedText}`
+            content: [
+              {
+                type: "text",
+                text: "Please extract all contract information from this PDF document."
+              },
+              {
+                type: "inline_data",
+                inline_data: {
+                  mime_type: "application/pdf",
+                  data: base64Pdf
+                }
+              }
+            ]
           }
         ],
         tools: [
