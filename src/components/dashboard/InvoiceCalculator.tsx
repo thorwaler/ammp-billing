@@ -34,6 +34,7 @@ import { TierPricingEditor } from "@/components/contracts/TierPricingEditor";
 import { 
   calculateInvoice, 
   getFrequencyMultiplier,
+  getPeriodMonthsMultiplier,
   calculateProrationMultiplier,
   type CalculationParams,
   type CalculationResult 
@@ -480,10 +481,17 @@ export function InvoiceCalculator({
       // Handle tiered pricing first
       if (addon.tieredPricing && addon.quantity) {
         const tierCalc = calculateTieredPrice(addon, addon.quantity, addon.customTiers);
+        
+        // Satellite Data API uses monthly pricing, multiply by period months
+        // Other addons are one-off costs, no multiplication needed
+        const priceMultiplier = addon.id === 'satelliteDataAPI' 
+          ? getPeriodMonthsMultiplier(billingFrequency)
+          : 1;
+        
         return {
           addonId: addon.id,
           addonName: addon.name,
-          cost: tierCalc.totalPrice * frequencyMultiplier,
+          cost: tierCalc.totalPrice * priceMultiplier,
           quantity: addon.quantity,
           tierApplied: tierCalc.appliedTier,
           pricePerUnit: tierCalc.pricePerUnit
@@ -507,11 +515,11 @@ export function InvoiceCalculator({
       
       const quantity = addon.quantity || 1;
       
-      // Apply frequency multiplier to addon costs
+      // One-off costs, no frequency multiplication
       return {
         addonId: addon.id,
         addonName: addon.name,
-        cost: addonPrice * quantity * frequencyMultiplier,
+        cost: addonPrice * quantity,
         quantity
       };
     });
@@ -995,10 +1003,15 @@ export function InvoiceCalculator({
                             {addon.name}
                           </Label>
                           <span className="text-sm">
-                            {addon.complexityPricing 
-                              ? `€${addon.lowPrice}-€${addon.highPrice}` 
-                              : `€${addon.price}`
-                            }
+                            {addon.tieredPricing && addon.pricingTiers ? (
+                              <span className="text-xs">
+                                €{addon.pricingTiers[0].pricePerUnit}-€{addon.pricingTiers[addon.pricingTiers.length - 1].pricePerUnit}/site
+                              </span>
+                            ) : addon.complexityPricing ? (
+                              `€${addon.lowPrice}-€${addon.highPrice}`
+                            ) : (
+                              `€${addon.price}`
+                            )}
                           </span>
                         </div>
                         
@@ -1035,7 +1048,16 @@ export function InvoiceCalculator({
                                 </div>
                                 <div className="flex justify-between font-medium">
                                   <span>Tier: {addon.calculatedTieredPrice.appliedTier?.label}</span>
-                                  <span>€{addon.calculatedTieredPrice.pricePerUnit}/site</span>
+                                  <span>€{addon.calculatedTieredPrice.pricePerUnit.toFixed(2)}/site/month</span>
+                                </div>
+                                <div className="flex justify-between text-xs text-muted-foreground">
+                                  <span>Invoice period:</span>
+                                  <span>
+                                    {billingFrequency === 'monthly' ? '1 month' :
+                                     billingFrequency === 'quarterly' ? '3 months' : 
+                                     billingFrequency === 'biannual' ? '6 months' :
+                                     '12 months'}
+                                  </span>
                                 </div>
                                 <div className="flex justify-between text-primary font-semibold">
                                   <span>Total:</span>
