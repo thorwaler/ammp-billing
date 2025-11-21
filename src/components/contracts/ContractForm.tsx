@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContractPackageSelector } from "@/components/contracts/ContractPackageSelector";
 import { ContractPdfUploader } from "@/components/contracts/ContractPdfUploader";
-import { MODULES, ADDONS, type ComplexityLevel } from "@/data/pricingData";
+import { MODULES, ADDONS, type ComplexityLevel, type PricingTier } from "@/data/pricingData";
 import {
   Select,
   SelectContent,
@@ -94,6 +94,7 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
   const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: ComplexityLevel}>({});
   const [addonCustomPrices, setAddonCustomPrices] = useState<{[key: string]: number | undefined}>({});
   const [addonQuantities, setAddonQuantities] = useState<{[key: string]: number | undefined}>({});
+  const [addonCustomTiers, setAddonCustomTiers] = useState<Record<string, PricingTier[]>>({});
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
@@ -195,10 +196,11 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
         const addonIds = ((contract.addons || []) as any[]).map((a: any) => a.id || a);
         form.setValue('addons', addonIds);
 
-        // Restore complexity selections, custom prices, and quantities
+        // Restore complexity selections, custom prices, quantities, and custom tiers
         const complexityMap: {[key: string]: ComplexityLevel} = {};
         const customPriceMap: {[key: string]: number} = {};
         const quantityMap: {[key: string]: number} = {};
+        const customTiersMap: Record<string, PricingTier[]> = {};
         
         ((contract.addons || []) as any[]).forEach((addon: any) => {
           if (addon.complexity) {
@@ -210,11 +212,15 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
           if (addon.quantity !== undefined) {
             quantityMap[addon.id] = addon.quantity;
           }
+          if (addon.customTiers) {
+            customTiersMap[addon.id] = addon.customTiers;
+          }
         });
         
         setSelectedComplexityItems(complexityMap);
         setAddonCustomPrices(customPriceMap);
         setAddonQuantities(quantityMap);
+        setAddonCustomTiers(customTiersMap);
         
         // Auto-activate Solcast addon if customer has sitesWithSolcast
         const { data: customerData } = await supabase
@@ -452,43 +458,49 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
 
       if (customerError) throw customerError;
 
-      // 2. Prepare addons with complexity, custom pricing, and quantity
+      // 2. Prepare addons with complexity, custom pricing, quantity, and custom tiers
       const enhancedAddons = (data.addons || []).map(addonId => {
         const addon = ADDONS.find(a => a.id === addonId);
         return {
           id: addonId,
           complexity: addon?.complexityPricing ? selectedComplexityItems[addonId] || 'low' : undefined,
           customPrice: addonCustomPrices[addonId],
-          quantity: addonQuantities[addonId] || 1
+          quantity: addonQuantities[addonId] || 1,
+          customTiers: addonCustomTiers[addonId]
         };
       });
 
       // 3. Upsert contract (update if exists, create if not)
+      const contractData: any = {
+        customer_id: customer.id,
+        company_name: data.companyName,
+        package: data.package,
+        initial_mw: data.initialMW,
+        currency: data.currency,
+        billing_frequency: data.billingFrequency,
+        next_invoice_date: data.nextInvoiceDate || null,
+        signed_date: data.signedDate || null,
+        period_start: data.periodStart || null,
+        period_end: data.periodEnd || null,
+        modules: data.modules || [],
+        addons: enhancedAddons,
+        custom_pricing: data.customPricing || {},
+        volume_discounts: data.volumeDiscounts || {},
+        minimum_charge: data.minimumCharge || 0,
+        minimum_annual_value: data.minimumAnnualValue || 0,
+        notes: data.notes || '',
+        contract_status: 'active',
+        user_id: user.id,
+        contract_pdf_url: uploadedPdfUrl || null,
+      };
+
+      if (existingContractId) {
+        contractData.id = existingContractId;
+      }
+
       const { error: contractError } = await supabase
         .from('contracts')
-        .upsert({
-          ...(existingContractId && { id: existingContractId }),
-          customer_id: customer.id,
-          company_name: data.companyName,
-          package: data.package,
-          initial_mw: data.initialMW,
-          currency: data.currency,
-          billing_frequency: data.billingFrequency,
-          next_invoice_date: data.nextInvoiceDate || null,
-          signed_date: data.signedDate || null,
-          period_start: data.periodStart || null,
-          period_end: data.periodEnd || null,
-          modules: data.modules || [],
-          addons: enhancedAddons,
-          custom_pricing: data.customPricing || {},
-          volume_discounts: data.volumeDiscounts || {},
-          minimum_charge: data.minimumCharge || 0,
-          minimum_annual_value: data.minimumAnnualValue || 0,
-          notes: data.notes || '',
-          contract_status: 'active',
-          user_id: user.id,
-          contract_pdf_url: uploadedPdfUrl || null,
-        });
+        .upsert(contractData);
 
       if (contractError) throw contractError;
 
@@ -768,6 +780,7 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
               addonComplexity={selectedComplexityItems}
               addonCustomPrices={addonCustomPrices}
               addonQuantities={addonQuantities}
+              addonCustomTiers={addonCustomTiers}
               customPricing={form.watch("customPricing")}
               showCustomPricing={showCustomPricing}
               onModuleToggle={(moduleId) => handleModuleSelection(moduleId, !watchModules?.includes(moduleId))}
@@ -775,6 +788,12 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
               onComplexityChange={handleComplexityChange}
               onCustomPriceChange={(id, price) => setAddonCustomPrices({...addonCustomPrices, [id]: price})}
               onQuantityChange={(id, qty) => setAddonQuantities({...addonQuantities, [id]: qty})}
+              onCustomTiersChange={(addonId, tiers) => {
+                setAddonCustomTiers(prev => ({
+                  ...prev,
+                  [addonId]: tiers
+                }));
+              }}
               currency={form.watch("currency")}
               mode="contract"
               renderModuleInput={(moduleId) => (
