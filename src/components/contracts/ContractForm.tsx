@@ -240,20 +240,6 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
     loadExistingContract();
   }, [existingCustomer]);
 
-  // Debug: Watch form values and errors
-  useEffect(() => {
-    const subscription = form.watch((value, { name, type }) => {
-      console.log('📝 Form values changed:', name, type);
-    });
-    return () => subscription.unsubscribe();
-  }, [form]);
-
-  // Debug: Log form errors
-  useEffect(() => {
-    if (Object.keys(form.formState.errors).length > 0) {
-      console.error('❌ Form validation errors:', form.formState.errors);
-    }
-  }, [form.formState.errors]);
 
   // Auto-activate Solcast addon based on customer capabilities
   useEffect(() => {
@@ -858,12 +844,23 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
               currency={form.watch("currency")}
               mode="contract"
               renderModuleInput={(moduleId) => (
-                <Input 
-                  id={`custom-${moduleId}`} 
-                  type="number" 
-                  placeholder={`Default: €${MODULES.find(m => m.id === moduleId)?.price}`}
-                  className="mt-1 h-8"
-                  {...form.register(`customPricing.${moduleId}` as any, { valueAsNumber: true })}
+                <FormField
+                  control={form.control}
+                  name={`customPricing.${moduleId}` as any}
+                  render={({ field }) => (
+                    <Input 
+                      id={`custom-${moduleId}`} 
+                      type="number" 
+                      placeholder={`Default: €${MODULES.find(m => m.id === moduleId)?.price}`}
+                      className="mt-1 h-8"
+                      value={field.value || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        field.onChange(value === '' ? undefined : Number(value));
+                      }}
+                      onBlur={field.onBlur}
+                    />
+                  )}
                 />
               )}
             />
