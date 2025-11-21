@@ -76,8 +76,71 @@ serve(async (req) => {
       );
     }
 
-    // Enhanced system prompt based on whether it's an amendment or original contract
-    const systemPrompt = isAmendment 
+    // STAGE 1: OCR with Gemini to extract plain text
+    console.log("Stage 1: Starting Gemini OCR to extract plain text...");
+    const ocrPrompt = `You are an OCR engine. Your only job is to read the attached contract PDF and output its complete text, preserving section headings and paragraph breaks as much as possible.
+
+Do not summarize, interpret, extract fields, or add explanations.
+Return plain UTF-8 text only, no JSON, no markup, no commentary.`;
+
+    const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-pro",
+        messages: [
+          { role: "system", content: ocrPrompt },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Please transcribe this contract PDF into plain text." },
+              {
+                type: "inline_data",
+                inline_data: {
+                  mime_type: "application/pdf",
+                  data: base64Pdf
+                }
+              }
+            ]
+          }
+        ]
+      }),
+    });
+
+    if (!ocrResponse.ok) {
+      if (ocrResponse.status === 429) {
+        return new Response(
+          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (ocrResponse.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const errorText = await ocrResponse.text();
+      console.error("Gemini OCR error:", ocrResponse.status, errorText);
+      throw new Error(`OCR failed: ${errorText}`);
+    }
+
+    const ocrData = await ocrResponse.json();
+    const ocrText = ocrData.choices?.[0]?.message?.content ?? "";
+    
+    if (!ocrText || ocrText.trim().length === 0) {
+      throw new Error("OCR extraction failed: No text extracted from PDF");
+    }
+    
+    console.log(`Stage 1 complete: Extracted ${ocrText.length} characters of text`);
+
+    // STAGE 2: Structured extraction with OpenAI GPT-5
+    console.log("Stage 2: Starting OpenAI GPT-5 structured extraction...");
+    
+    const extractionPrompt = isAmendment 
       ? `You are a contract amendment data extraction specialist. Compare the amendment with the original contract and extract changes.
 
 ⚠️ CRITICAL INSTRUCTIONS - ANTI-HALLUCINATION:
@@ -103,7 +166,7 @@ ORIGINAL CONTRACT DATA:
 Extract ONLY the fields that are explicitly mentioned in the amendment document. Additionally, provide a "changes_summary" field that concisely describes what has changed compared to the original contract values above (e.g., "Capacity increased from 5MW to 7MW, Extended contract end date to Dec 2025, Added Custom API module").
 
 Only include fields that are explicitly stated in the amendment. Do not fill in fields that are not mentioned.`
-      : `You are a contract data extraction specialist. Extract key contract information from the provided contract PDF.
+      : `You are a contract data extraction specialist. Extract key contract information from the provided contract text.
 
 ⚠️ CRITICAL INSTRUCTIONS - ANTI-HALLUCINATION:
 1. Only extract information that is EXPLICITLY STATED in the contract document
@@ -134,35 +197,23 @@ Extract ONLY the following fields if they are explicitly stated:
 
 Remember: It is better to omit a field than to guess or infer its value. Return ONLY valid JSON with fields that are explicitly present in the document.`;
 
-    // Call Lovable AI with vision to extract contract data
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const gptResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
+        model: "openai/gpt-5",
         messages: [
-          {
-            role: "system",
-            content: systemPrompt
-          },
+          { role: "system", content: extractionPrompt },
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Please extract all contract information from this PDF document."
-              },
-              {
-                type: "inline_data",
-                inline_data: {
-                  mime_type: "application/pdf",
-                  data: base64Pdf
-                }
-              }
-            ]
+            content: `Here is the full text of the contract. Extract the structured contract data exactly as instructed in the system prompt. Do not guess or invent fields.
+
+--- CONTRACT TEXT START ---
+${ocrText}
+--- CONTRACT TEXT END ---`
           }
         ],
         tools: [
@@ -170,7 +221,7 @@ Remember: It is better to omit a field than to guess or infer its value. Return 
             type: "function",
             function: {
               name: "extract_contract_data",
-              description: "Extract structured contract data from the PDF. ONLY include fields that are explicitly stated in the document. Do not infer or guess any values.",
+              description: "Extract structured contract data from the contract text. ONLY include fields that are explicitly stated in the document. Do not infer or guess any values.",
               parameters: {
                 type: "object",
                 properties: {
@@ -257,26 +308,26 @@ Remember: It is better to omit a field than to guess or infer its value. Return 
       }),
     });
 
-    if (!aiResponse.ok) {
-      if (aiResponse.status === 429) {
+    if (!gptResponse.ok) {
+      if (gptResponse.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (aiResponse.status === 402) {
+      if (gptResponse.status === 402) {
         return new Response(
           JSON.stringify({ error: "AI credits exhausted. Please add credits to continue." }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await aiResponse.text();
-      console.error("AI API error:", aiResponse.status, errorText);
-      throw new Error(`AI API error: ${errorText}`);
+      const errorText = await gptResponse.text();
+      console.error("GPT-5 extraction error:", gptResponse.status, errorText);
+      throw new Error(`Structured extraction failed: ${errorText}`);
     }
 
-    const aiData = await aiResponse.json();
-    console.log("AI response received");
+    const aiData = await gptResponse.json();
+    console.log("Stage 2 complete: GPT-5 structured extraction received");
 
     // Extract the structured data from tool call
     const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
