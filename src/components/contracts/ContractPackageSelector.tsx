@@ -4,6 +4,7 @@
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -131,121 +132,129 @@ export function ContractPackageSelector({
         </div>
       </div>
       
-      {/* Addons Section - grouped by module */}
-      {selectedModules.length > 0 && (
-        <div>
-          <Label>Add-ons</Label>
-          <div className="grid grid-cols-1 gap-4 mt-2">
-            {selectedModules.map(moduleId => {
-              const moduleAddons = getAddonsByModule(moduleId);
-              const module = MODULES.find(m => m.id === moduleId);
-              
-              if (moduleAddons.length === 0) return null;
-              
-              return (
-                <div key={moduleId} className="border rounded-md p-4">
-                  <div className="space-y-2">
-                    {moduleAddons
-                      .filter(addon => !addon.requiresPro || selectedPackage !== "starter")
-                      .map(addon => {
-                        const isSelected = selectedAddons.includes(addon.id);
-                        const isDisabled = addon.requiresPro && selectedPackage === "starter";
-                        
-                        return (
-                          <div 
-                            key={addon.id} 
-                            className={isDisabled ? "opacity-50" : ""}
-                          >
-                            <div className="flex items-center space-x-2">
-                              <Checkbox 
-                                id={`addon-${addon.id}`} 
-                                checked={isSelected}
-                                onCheckedChange={() => onAddonToggle(addon.id)}
-                                disabled={isDisabled}
-                              />
-                              <label 
-                                htmlFor={`addon-${addon.id}`}
-                                className="flex-grow cursor-pointer text-sm"
-                              >
-                                {addon.name}
-                              </label>
-                              <span className="text-sm">
-                                {addon.complexityPricing ? 
-                                  `${currencySymbol}${addon.lowPrice} - ${currencySymbol}${addon.highPrice}` : 
-                                  `${currencySymbol}${addon.price}`}
-                              </span>
-                            </div>
-                            
-                            {/* Complexity selector for selected addons with complexity pricing */}
-                            {isSelected && addon.complexityPricing && (
-                              <div className="mt-2 pl-6 space-y-2">
-                                <div>
-                                  <Label className="text-xs">Complexity</Label>
-                                  <Select 
-                                    value={addonComplexity[addon.id] || "low"} 
-                                    onValueChange={(value) => onComplexityChange(addon.id, value as ComplexityLevel)}
-                                  >
-                                    <SelectTrigger className="h-8 mt-1">
-                                      <SelectValue placeholder="Select complexity" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="low">Low ({currencySymbol}{addon.lowPrice})</SelectItem>
-                                      <SelectItem value="medium">Medium ({currencySymbol}{addon.mediumPrice})</SelectItem>
-                                      <SelectItem value="high">High ({currencySymbol}{addon.highPrice})</SelectItem>
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Custom price and quantity inputs for selected addons */}
-                            {isSelected && (
-                              <div className="mt-2 pl-6 grid grid-cols-2 gap-2">
-                                <div>
-                                  <Label htmlFor={`addon-price-${addon.id}`} className="text-xs">
-                                    Custom Price (optional)
-                                  </Label>
-                                  <Input 
-                                    id={`addon-price-${addon.id}`} 
-                                    type="number" 
-                                    placeholder="Override"
-                                    className="mt-1 h-8"
-                                    value={addonCustomPrices[addon.id] || ''}
-                                    onChange={(e) => {
-                                      const value = e.target.value ? Number(e.target.value) : undefined;
-                                      onCustomPriceChange(addon.id, value);
-                                    }}
-                                  />
-                                </div>
-                                <div>
-                                  <Label htmlFor={`addon-qty-${addon.id}`} className="text-xs">
-                                    Quantity
-                                  </Label>
-                                  <Input 
-                                    id={`addon-qty-${addon.id}`} 
-                                    type="number" 
-                                    min="1"
-                                    placeholder="1"
-                                    className="mt-1 h-8"
-                                    value={addonQuantities[addon.id] || 1}
-                                    onChange={(e) => {
-                                      const value = e.target.value ? Number(e.target.value) : 1;
-                                      onQuantityChange(addon.id, value);
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
+      {/* Addons Section - showing all addons grouped by module */}
+      <div>
+        <Label>Add-ons</Label>
+        <div className="grid grid-cols-1 gap-4 mt-2">
+          {MODULES.map(module => {
+            const moduleAddons = getAddonsByModule(module.id);
+            
+            if (moduleAddons.length === 0) return null;
+            
+            const isModuleSelected = selectedModules.includes(module.id);
+            
+            return (
+              <div 
+                key={module.id} 
+                className={`border rounded-md p-4 ${!isModuleSelected ? "opacity-60 bg-muted/30" : ""}`}
+              >
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="font-medium text-sm">{module.name}</span>
+                  {!isModuleSelected && (
+                    <Badge variant="outline" className="text-xs">Module not selected</Badge>
+                  )}
                 </div>
-              );
-            })}
-          </div>
+                <div className="space-y-2">
+                  {moduleAddons
+                    .filter(addon => !addon.requiresPro || selectedPackage !== "starter")
+                    .map(addon => {
+                      const isSelected = selectedAddons.includes(addon.id);
+                      const isAddonDisabled = !isModuleSelected || (addon.requiresPro && selectedPackage === "starter");
+                      
+                      return (
+                        <div 
+                          key={addon.id} 
+                          className={isAddonDisabled ? "opacity-50" : ""}
+                        >
+                          <div className="flex items-center space-x-2">
+                            <Checkbox 
+                              id={`addon-${addon.id}`} 
+                              checked={isSelected}
+                              onCheckedChange={() => onAddonToggle(addon.id)}
+                              disabled={isAddonDisabled}
+                            />
+                            <label 
+                              htmlFor={`addon-${addon.id}`}
+                              className="flex-grow cursor-pointer text-sm"
+                            >
+                              {addon.name}
+                            </label>
+                            <span className="text-sm">
+                              {addon.complexityPricing ? 
+                                `${currencySymbol}${addon.lowPrice} - ${currencySymbol}${addon.highPrice}` : 
+                                `${currencySymbol}${addon.price}`}
+                            </span>
+                          </div>
+                          
+                          {/* Complexity selector for selected addons with complexity pricing */}
+                          {isSelected && addon.complexityPricing && !isAddonDisabled && (
+                            <div className="mt-2 pl-6 space-y-2">
+                              <div>
+                                <Label className="text-xs">Complexity</Label>
+                                <Select 
+                                  value={addonComplexity[addon.id] || "low"} 
+                                  onValueChange={(value) => onComplexityChange(addon.id, value as ComplexityLevel)}
+                                >
+                                  <SelectTrigger className="h-8 mt-1">
+                                    <SelectValue placeholder="Select complexity" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="low">Low ({currencySymbol}{addon.lowPrice})</SelectItem>
+                                    <SelectItem value="medium">Medium ({currencySymbol}{addon.mediumPrice})</SelectItem>
+                                    <SelectItem value="high">High ({currencySymbol}{addon.highPrice})</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Custom price and quantity inputs for selected addons */}
+                          {isSelected && !isAddonDisabled && (
+                            <div className="mt-2 pl-6 grid grid-cols-2 gap-2">
+                              <div>
+                                <Label htmlFor={`addon-price-${addon.id}`} className="text-xs">
+                                  Custom Price (optional)
+                                </Label>
+                                <Input 
+                                  id={`addon-price-${addon.id}`} 
+                                  type="number" 
+                                  placeholder="Override"
+                                  className="mt-1 h-8"
+                                  value={addonCustomPrices[addon.id] || ''}
+                                  onChange={(e) => {
+                                    const value = e.target.value ? Number(e.target.value) : undefined;
+                                    onCustomPriceChange(addon.id, value);
+                                  }}
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor={`addon-qty-${addon.id}`} className="text-xs">
+                                  Quantity
+                                </Label>
+                                <Input 
+                                  id={`addon-qty-${addon.id}`} 
+                                  type="number" 
+                                  min="1"
+                                  placeholder="1"
+                                  className="mt-1 h-8"
+                                  value={addonQuantities[addon.id] || 1}
+                                  onChange={(e) => {
+                                    const value = e.target.value ? Number(e.target.value) : 1;
+                                    onQuantityChange(addon.id, value);
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      )}
+      </div>
     </div>
   );
 }
