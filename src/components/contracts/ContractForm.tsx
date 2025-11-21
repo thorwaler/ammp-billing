@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContractPackageSelector } from "@/components/contracts/ContractPackageSelector";
+import { ContractPdfUploader } from "@/components/contracts/ContractPdfUploader";
 import { MODULES, ADDONS, type ComplexityLevel } from "@/data/pricingData";
 import {
   Select,
@@ -28,9 +29,10 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "@/hooks/use-toast";
-import { FileUp, Save, DollarSign, Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { FileUp, Save, DollarSign, Calendar as CalendarIcon, Loader2, CheckCircle2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { Badge } from "@/components/ui/badge";
 
 // Define the form schema
 const contractFormSchema = z.object({
@@ -93,6 +95,8 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
   const [addonQuantities, setAddonQuantities] = useState<{[key: string]: number | undefined}>({});
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
+  const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
+  const [ocrExtractedFields, setOcrExtractedFields] = useState<Set<string>>(new Set());
   const { currency: userCurrency} = useCurrency();
 
   const form = useForm<ContractFormValues>({
@@ -254,6 +258,82 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
     }
   };
 
+  // Handle OCR completion
+  const handleOcrComplete = (extractedData: any, pdfUrl: string) => {
+    setUploadedPdfUrl(pdfUrl);
+    const extractedFieldNames = new Set<string>();
+
+    // Auto-populate form fields with extracted data
+    if (extractedData.companyName) {
+      form.setValue("companyName", extractedData.companyName);
+      extractedFieldNames.add("companyName");
+    }
+    if (extractedData.initialMW) {
+      form.setValue("initialMW", extractedData.initialMW);
+      extractedFieldNames.add("initialMW");
+    }
+    if (extractedData.currency) {
+      form.setValue("currency", extractedData.currency);
+      extractedFieldNames.add("currency");
+    }
+    if (extractedData.billingFrequency) {
+      form.setValue("billingFrequency", extractedData.billingFrequency);
+      extractedFieldNames.add("billingFrequency");
+    }
+    if (extractedData.signedDate) {
+      form.setValue("signedDate", extractedData.signedDate);
+      extractedFieldNames.add("signedDate");
+    }
+    if (extractedData.periodStart) {
+      form.setValue("periodStart", extractedData.periodStart);
+      extractedFieldNames.add("periodStart");
+    }
+    if (extractedData.periodEnd) {
+      form.setValue("periodEnd", extractedData.periodEnd);
+      extractedFieldNames.add("periodEnd");
+    }
+    if (extractedData.nextInvoiceDate) {
+      form.setValue("nextInvoiceDate", extractedData.nextInvoiceDate);
+      extractedFieldNames.add("nextInvoiceDate");
+    }
+    if (extractedData.packageType) {
+      handlePackageChange(extractedData.packageType);
+      extractedFieldNames.add("package");
+    }
+    if (extractedData.modules && Array.isArray(extractedData.modules)) {
+      form.setValue("modules", extractedData.modules);
+      setSelectedModules(extractedData.modules);
+      extractedFieldNames.add("modules");
+    }
+    if (extractedData.addons && Array.isArray(extractedData.addons)) {
+      form.setValue("addons", extractedData.addons);
+      extractedFieldNames.add("addons");
+    }
+    if (extractedData.minimumCharge) {
+      form.setValue("minimumCharge", extractedData.minimumCharge);
+      extractedFieldNames.add("minimumCharge");
+    }
+    if (extractedData.minimumAnnualValue) {
+      form.setValue("minimumAnnualValue", extractedData.minimumAnnualValue);
+      extractedFieldNames.add("minimumAnnualValue");
+    }
+    if (extractedData.notes) {
+      form.setValue("notes", extractedData.notes);
+      extractedFieldNames.add("notes");
+    }
+    if (extractedData.customPricing) {
+      form.setValue("customPricing", extractedData.customPricing);
+      setShowCustomPricing(true);
+      extractedFieldNames.add("customPricing");
+    }
+    if (extractedData.volumeDiscounts) {
+      form.setValue("volumeDiscounts", extractedData.volumeDiscounts);
+      extractedFieldNames.add("volumeDiscounts");
+    }
+
+    setOcrExtractedFields(extractedFieldNames);
+  };
+
   // Handle module selection
   const handleModuleSelection = (moduleId: string, checked: boolean) => {
     const currentModules = form.getValues("modules") || [];
@@ -389,7 +469,8 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
           minimum_annual_value: data.minimumAnnualValue || 0,
           notes: data.notes || '',
           contract_status: 'active',
-          user_id: user.id
+          user_id: user.id,
+          contract_pdf_url: uploadedPdfUrl || null,
         });
 
       if (contractError) throw contractError;
@@ -771,15 +852,10 @@ export function ContractForm({ existingCustomer, onComplete }: ContractFormProps
               )}
             />
             
-            <div>
-              <Label>Contract Upload</Label>
-              <div className="mt-2">
-                <div className="grid w-full max-w-sm items-center gap-1.5">
-                  <Label htmlFor="contract-pdf">Upload PDF</Label>
-                  <Input id="contract-pdf" type="file" accept=".pdf" />
-                </div>
-              </div>
-            </div>
+            <ContractPdfUploader 
+              onOcrComplete={handleOcrComplete}
+              contractId={existingContractId || undefined}
+            />
             
             {/* Volume Discounts Section - Moved to bottom */}
             <div className="border rounded-md p-4">
