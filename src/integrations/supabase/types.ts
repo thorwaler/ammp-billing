@@ -95,13 +95,6 @@ export type Database = {
             referencedRelation: "customers"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "contracts_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers_without_contracts"
-            referencedColumns: ["id"]
-          },
         ]
       }
       currency_settings: {
@@ -283,21 +276,7 @@ export type Database = {
       }
     }
     Views: {
-      customers_without_contracts: {
-        Row: {
-          created_at: string | null
-          id: string | null
-          join_date: string | null
-          last_invoiced: string | null
-          location: string | null
-          mwp_managed: number | null
-          name: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       has_role: {
