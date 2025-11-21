@@ -1,16 +1,17 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import StatCard from "@/components/dashboard/StatCard";
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import CustomerCard from "@/components/customers/CustomerCard";
 import InvoiceCalculator from "@/components/dashboard/InvoiceCalculator";
-import { Users, FileText, BarChart4, DollarSign, PlusCircle } from "lucide-react";
+import { Users, FileText, BarChart4, TrendingUp, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { getTotalMWAdded } from "@/lib/invoiceAnalytics";
 
 const customers = [
   {
@@ -63,6 +64,22 @@ const Index = () => {
   const navigate = useNavigate();
   const quarterRange = getCurrentQuarterRange();
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
+  const [mwGrowthThisYear, setMwGrowthThisYear] = useState<number>(0);
+  
+  // Fetch MW growth data
+  useEffect(() => {
+    const fetchMWGrowth = async () => {
+      try {
+        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
+        const today = new Date();
+        const growth = await getTotalMWAdded(startOfYear, today);
+        setMwGrowthThisYear(growth);
+      } catch (error) {
+        console.error('Error fetching MW growth:', error);
+      }
+    };
+    fetchMWGrowth();
+  }, []);
   
   const handleAddContract = () => {
     navigate("/contracts");
@@ -106,11 +123,11 @@ const Index = () => {
             trendValue="+15.3 this quarter"
           />
           <StatCard
-            title="Quarterly Revenue"
-            value={formatCurrency(convertToDisplayCurrency(32450))}
-            icon={DollarSign}
-            trend="up"
-            trendValue="+8% vs last quarter"
+            title="MW Added This Year"
+            value={`${mwGrowthThisYear.toFixed(1)} MW`}
+            icon={TrendingUp}
+            trend={mwGrowthThisYear > 0 ? "up" : "neutral"}
+            description="New capacity added through invoices"
           />
         </div>
 

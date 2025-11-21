@@ -249,6 +249,78 @@ export type Database = {
         }
         Relationships: []
       }
+      invoices: {
+        Row: {
+          addons_data: Json | null
+          billing_frequency: string
+          contract_id: string | null
+          created_at: string | null
+          currency: string | null
+          customer_id: string
+          id: string
+          invoice_amount: number
+          invoice_date: string
+          modules_data: Json | null
+          mw_change: number | null
+          mw_managed: number
+          total_mw: number
+          updated_at: string | null
+          user_id: string
+          xero_invoice_id: string | null
+        }
+        Insert: {
+          addons_data?: Json | null
+          billing_frequency: string
+          contract_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          customer_id: string
+          id?: string
+          invoice_amount: number
+          invoice_date: string
+          modules_data?: Json | null
+          mw_change?: number | null
+          mw_managed: number
+          total_mw: number
+          updated_at?: string | null
+          user_id: string
+          xero_invoice_id?: string | null
+        }
+        Update: {
+          addons_data?: Json | null
+          billing_frequency?: string
+          contract_id?: string | null
+          created_at?: string | null
+          currency?: string | null
+          customer_id?: string
+          id?: string
+          invoice_amount?: number
+          invoice_date?: string
+          modules_data?: Json | null
+          mw_change?: number | null
+          mw_managed?: number
+          total_mw?: number
+          updated_at?: string | null
+          user_id?: string
+          xero_invoice_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
