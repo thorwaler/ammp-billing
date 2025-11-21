@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FileText, Download, Edit, Clock, Calculator, MoreVertical } from "lucide-react";
@@ -210,9 +210,10 @@ const ContractDetails = () => {
   }
 
   const daysUntilExpiration = () => {
-    if (!contract.next_invoice_date) return null;
+    // Use period_end for contract expiration, not next_invoice_date
+    if (!contract.period_end) return null;
     const today = new Date();
-    const expiration = new Date(contract.next_invoice_date);
+    const expiration = new Date(contract.period_end);
     const diffTime = expiration.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -220,11 +221,11 @@ const ContractDetails = () => {
 
   const expirationStatus = () => {
     const days = daysUntilExpiration();
-    if (days === null) return { label: "No expiration set", variant: "secondary" };
-    if (days < 0) return { label: "Expired", variant: "destructive" };
-    if (days < 30) return { label: `Expires in ${days} days`, variant: "destructive" };
-    if (days < 90) return { label: `Expires in ${days} days`, variant: "warning" };
-    return { label: `Expires in ${days} days`, variant: "default" };
+    if (days === null) return { label: "No end date set", variant: "secondary" };
+    if (days < 0) return { label: "Contract ended", variant: "destructive" };
+    if (days < 30) return { label: `Ends in ${days} days`, variant: "destructive" };
+    if (days < 90) return { label: `Ends in ${days} days`, variant: "warning" };
+    return { label: `Ends in ${days} days`, variant: "default" };
   };
 
   const companyName = customer?.name || contract.company_name || "Unknown Company";
@@ -299,12 +300,45 @@ const ContractDetails = () => {
                   Extend Contract
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Extend Contract - {contract.companyName}</DialogTitle>
-                </DialogHeader>
-                <ContractForm onCancel={() => setShowExtendDialog(false)} />
-              </DialogContent>
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Extend Contract - {contract.company_name}</DialogTitle>
+            <DialogDescription>
+              Update the contract period and make any necessary changes
+            </DialogDescription>
+          </DialogHeader>
+          <ContractForm 
+            existingCustomer={{
+              id: contract.customer_id,
+              name: contract.company_name,
+              mwpManaged: customer?.mwp_managed || contract.initial_mw
+            }}
+            existingContract={{
+              id: contract.id,
+              package: contract.package,
+              modules: contract.modules || [],
+              addons: contract.addons || [],
+              initialMW: contract.initial_mw,
+              billingFrequency: contract.billing_frequency || 'annual',
+              customPricing: contract.custom_pricing,
+              volumeDiscounts: contract.volume_discounts,
+              minimumCharge: contract.minimum_charge,
+              minimumAnnualValue: contract.minimum_annual_value,
+              currency: contract.currency || 'EUR',
+              signedDate: contract.signed_date,
+              periodStart: contract.period_start,
+              periodEnd: contract.period_end,
+              notes: contract.notes,
+              contractStatus: contract.contract_status
+            }}
+            isExtending={true}
+            onComplete={() => {
+              setShowExtendDialog(false);
+              loadContractData();
+            }}
+            onCancel={() => setShowExtendDialog(false)} 
+          />
+        </DialogContent>
             </Dialog>
             
             <DropdownMenu>
@@ -449,6 +483,15 @@ const ContractDetails = () => {
                   <p className="font-medium">
                     {contract.period_start && contract.period_end
                       ? `${formatDate(contract.period_start)} - ${formatDate(contract.period_end)}`
+                      : "Not set"}
+                  </p>
+                </div>
+                
+                <div className="space-y-1">
+                  <p className="text-sm text-muted-foreground">Next Invoice Date</p>
+                  <p className="font-medium">
+                    {contract.next_invoice_date 
+                      ? formatDate(contract.next_invoice_date)
                       : "Not set"}
                   </p>
                 </div>
