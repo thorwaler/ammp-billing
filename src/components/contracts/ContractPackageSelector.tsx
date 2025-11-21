@@ -238,23 +238,25 @@ export function ContractPackageSelector({
                   {/* Custom price and quantity inputs for selected addons */}
                   {isSelected && !isAddonDisabled && (
                     <div className="mt-2 pl-6 grid grid-cols-2 gap-2">
-                      <div>
-                        <Label htmlFor={`addon-price-${addon.id}`} className="text-xs">
-                          Custom Price (optional)
-                        </Label>
-                        <Input 
-                          id={`addon-price-${addon.id}`} 
-                          type="number" 
-                          placeholder="Override"
-                          className="mt-1 h-8"
-                          value={addonCustomPrices[addon.id] || ''}
-                          onChange={(e) => {
-                            const value = e.target.value ? Number(e.target.value) : undefined;
-                            onCustomPriceChange(addon.id, value);
-                          }}
-                        />
-                      </div>
-                      <div>
+                      {!addon.tieredPricing && (
+                        <div>
+                          <Label htmlFor={`addon-price-${addon.id}`} className="text-xs">
+                            Custom Price (optional)
+                          </Label>
+                          <Input 
+                            id={`addon-price-${addon.id}`} 
+                            type="number" 
+                            placeholder="Override"
+                            className="mt-1 h-8"
+                            value={addonCustomPrices[addon.id] || ''}
+                            onChange={(e) => {
+                              const value = e.target.value ? Number(e.target.value) : undefined;
+                              onCustomPriceChange(addon.id, value);
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div className={addon.tieredPricing ? "col-span-2" : ""}>
                         <Label htmlFor={`addon-qty-${addon.id}`} className="text-xs">
                           Quantity
                         </Label>
