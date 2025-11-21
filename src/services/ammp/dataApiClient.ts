@@ -87,14 +87,14 @@ export const dataApiClient = {
    * Get single asset by ID with devices (uses /devices endpoint for efficiency)
    */
   async getAsset(assetId: string): Promise<AssetResponse> {
-    return request<AssetResponse>(`/assets/${assetId}/devices`);
+    return request<AssetResponse>(`/assets/${assetId}/devices?include_virtual=true`);
   },
 
   /**
    * Get devices for an asset
    */
   async getAssetDevices(assetId: string): Promise<DeviceResponse[]> {
-    const response = await request<AssetResponse>(`/assets/${assetId}/devices`);
+    const response = await request<AssetResponse>(`/assets/${assetId}/devices?include_virtual=true`);
     return response.devices || [];
   }
 };
