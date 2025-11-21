@@ -589,7 +589,7 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
                   <FormItem>
                     <FormLabel>Initial MW to be Onboarded</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.1" min="0" {...field} />
+                  <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
