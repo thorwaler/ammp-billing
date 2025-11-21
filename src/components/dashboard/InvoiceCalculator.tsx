@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calculator, Send, ArrowRight, CalendarIcon, Loader2 } from "lucide-react";
+import { Calculator, Send, ArrowRight, CalendarIcon, Loader2, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
@@ -21,6 +21,7 @@ import { format, formatDistanceToNow } from "date-fns";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ContractPackageSelector } from "@/components/contracts/ContractPackageSelector";
+import { cn } from "@/lib/utils";
 import { 
   MODULES, 
   ADDONS, 
@@ -110,7 +111,6 @@ export function InvoiceCalculator({
 }: InvoiceCalculatorProps = {}) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customer, setCustomer] = useState("");
-  const [newSystems, setNewSystems] = useState<number | "">("");
   const [mwManaged, setMwManaged] = useState<number | "">("");
   const [sites, setSites] = useState<number | "">("");
   const [sitesUnderThreshold, setSitesUnderThreshold] = useState<number | "">("");
@@ -123,6 +123,9 @@ export function InvoiceCalculator({
   const [billingFrequency, setBillingFrequency] = useState<"monthly" | "quarterly" | "biannual" | "annual">("annual");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(prefilledDate || new Date());
   const [isSending, setIsSending] = useState(false);
+  const [lastInvoiceMW, setLastInvoiceMW] = useState<number | null>(null);
+  const [mwChange, setMwChange] = useState<number>(0);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { formatCurrency } = useCurrency();
 
   // Load customers from database on mount
@@ -196,6 +199,49 @@ export function InvoiceCalculator({
 
     loadCustomers();
   }, [preselectedCustomerId]);
+
+  // Fetch last invoice when customer is selected to calculate MW change
+  useEffect(() => {
+    const fetchLastInvoice = async () => {
+      if (!selectedCustomer) {
+        setLastInvoiceMW(null);
+        setMwChange(0);
+        return;
+      }
+
+      setIsLoadingHistory(true);
+      try {
+        const { data: lastInvoice, error } = await supabase
+          .from('invoices')
+          .select('total_mw, invoice_date')
+          .eq('customer_id', selectedCustomer.id)
+          .order('invoice_date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (error) {
+          throw error;
+        }
+
+        if (lastInvoice) {
+          setLastInvoiceMW(lastInvoice.total_mw);
+          // Calculate change when mwManaged is set
+          const currentMW = Number(mwManaged) || selectedCustomer.mwManaged;
+          setMwChange(currentMW - lastInvoice.total_mw);
+        } else {
+          // First invoice for this customer
+          setLastInvoiceMW(null);
+          setMwChange(0);
+        }
+      } catch (error) {
+        console.error('Error fetching last invoice:', error);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    fetchLastInvoice();
+  }, [selectedCustomer, mwManaged]);
 
   // Update modules and addons when a customer is selected
   useEffect(() => {
@@ -315,7 +361,7 @@ export function InvoiceCalculator({
   };
 
   const handleCalculate = () => {
-    if (!customer || newSystems === "" || mwManaged === "") {
+    if (!customer || mwManaged === "") {
       toast({
         title: "Missing information",
         description: "Please fill in all required fields.",
@@ -348,7 +394,7 @@ export function InvoiceCalculator({
     }
 
     // Update calculation logic based on new pricing structure
-    const totalMW = Number(mwManaged) + Number(newSystems);
+    const totalMW = Number(mwManaged);
     
     // Store invoice period separately since it's not in the standard CalculationResult
     const invoicePeriod = invoicePeriodDisplay;
@@ -547,6 +593,9 @@ export function InvoiceCalculator({
       
       if (error) throw error;
       
+      // Extract Xero invoice ID from response
+      const xeroInvoiceId = data?.Invoices?.[0]?.InvoiceID;
+      
       toast({
         title: "Invoice sent to Xero",
         description: "The invoice has been created in Xero as a draft.",
@@ -585,13 +634,47 @@ export function InvoiceCalculator({
           .eq('contract_status', 'active');
       }
       
+      // Save invoice record to database for history tracking
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Get contract ID for this customer
+        const { data: contractData } = await supabase
+          .from('contracts')
+          .select('id')
+          .eq('customer_id', selectedCustomer.id)
+          .eq('contract_status', 'active')
+          .maybeSingle();
+        
+        const { error: invoiceError } = await supabase
+          .from('invoices')
+          .insert([{
+            user_id: user.id,
+            customer_id: selectedCustomer.id,
+            contract_id: contractData?.id || null,
+            invoice_date: invoiceDate.toISOString(),
+            xero_invoice_id: xeroInvoiceId || null,
+            billing_frequency: billingFrequency,
+            mw_managed: Number(mwManaged),
+            mw_change: mwChange,
+            total_mw: Number(mwManaged),
+            invoice_amount: result.totalPrice,
+            currency: selectedCustomer.currency,
+            modules_data: modules.filter(m => m.selected) as any,
+            addons_data: addons.filter(a => a.selected) as any
+          }]);
+
+        if (invoiceError) {
+          console.error('Failed to save invoice record:', invoiceError);
+          // Don't fail the whole operation, just log
+        }
+      }
+      
       // Notify parent if callback provided
       onInvoiceCreated?.();
       
       // Reset form
       setTimeout(() => {
         setCustomer("");
-        setNewSystems("");
         setMwManaged("");
         setSites("");
         setSitesUnderThreshold("");
@@ -602,6 +685,8 @@ export function InvoiceCalculator({
         setShowResult(false);
         setInvoiceDate(new Date());
         setBillingFrequency("annual");
+        setLastInvoiceMW(null);
+        setMwChange(0);
       }, 2000);
     } catch (error) {
       console.error('Error sending invoice to Xero:', error);
@@ -770,31 +855,40 @@ export function InvoiceCalculator({
                 </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="new-systems">New MW Added</Label>
-                  <Input
-                    id="new-systems"
-                    type="number"
-                    placeholder="Enter MW value"
-                    min={0}
-                    step={0.1}
-                    value={newSystems}
-                    onChange={(e) => setNewSystems(e.target.value ? Number(e.target.value) : "")}
-                  />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="mw-managed">Total MW for Invoice (from AMMP sync)</Label>
+                  {lastInvoiceMW !== null && (
+                    <div className={cn(
+                      "text-xs font-medium px-2 py-1 rounded-full flex items-center gap-1",
+                      mwChange > 0 && "bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400",
+                      mwChange < 0 && "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400",
+                      mwChange === 0 && "bg-muted text-muted-foreground"
+                    )}>
+                      {mwChange > 0 && <ArrowUp className="h-3 w-3" />}
+                      {mwChange < 0 && <ArrowDown className="h-3 w-3" />}
+                      {mwChange === 0 ? "No change" : `${mwChange > 0 ? '+' : ''}${mwChange.toFixed(2)} MW`}
+                      <span className="text-muted-foreground ml-1">vs last</span>
+                    </div>
+                  )}
+                  {lastInvoiceMW === null && mwManaged && (
+                    <div className="text-xs text-muted-foreground">First invoice</div>
+                  )}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="mw-managed">Total MW Under Management</Label>
-                  <Input
-                    id="mw-managed"
-                    type="number"
-                    placeholder="Enter MW value"
-                    min={0}
-                    step={0.1}
-                    value={mwManaged}
-                    onChange={(e) => setMwManaged(e.target.value ? Number(e.target.value) : "")}
-                  />
-                </div>
+                <Input
+                  id="mw-managed"
+                  type="number"
+                  placeholder="Enter MW value"
+                  min={0}
+                  step={0.1}
+                  value={mwManaged}
+                  onChange={(e) => setMwManaged(e.target.value ? Number(e.target.value) : "")}
+                />
+                {lastInvoiceMW !== null && (
+                  <p className="text-xs text-muted-foreground">
+                    Previous invoice: {lastInvoiceMW.toFixed(2)} MW
+                  </p>
+                )}
               </div>
               
               {(selectedCustomer?.volumeDiscounts?.siteSizeDiscount != null && 
@@ -1064,7 +1158,7 @@ export function InvoiceCalculator({
           <Button 
             className="w-full" 
             onClick={handleCalculate}
-            disabled={!customer || newSystems === "" || mwManaged === "" || !invoiceDate}
+            disabled={!customer || mwManaged === "" || !invoiceDate}
           >
             <Calculator className="mr-2 h-4 w-4" />
             Calculate Invoice
