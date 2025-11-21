@@ -1,5 +1,5 @@
 // Shared invoice calculation logic
-import { MODULES, ADDONS, getAddonPrice, type ComplexityLevel } from "@/data/pricingData";
+import { MODULES, ADDONS, getAddonPrice, calculateTieredPrice, type ComplexityLevel, type PricingTier } from "@/data/pricingData";
 
 export interface CalculationParams {
   packageType: string;
@@ -10,6 +10,7 @@ export interface CalculationParams {
     complexity?: ComplexityLevel;
     customPrice?: number;
     quantity?: number;
+    customTiers?: PricingTier[];
   }>;
   customPricing?: {
     [key: string]: number;
@@ -34,6 +35,9 @@ export interface CalculationResult {
     addonId: string;
     addonName: string;
     cost: number;
+    quantity?: number;
+    tierApplied?: PricingTier | null;
+    pricePerUnit?: number;
   }[];
   starterPackageCost: number;
   minimumCharges: number;
@@ -78,7 +82,7 @@ export function calculateModuleCosts(params: CalculationParams): {
 }
 
 /**
- * Calculate addon costs
+ * Calculate addon costs with tiered pricing support
  */
 export function calculateAddonCosts(
   selectedAddons: CalculationParams['selectedAddons'],
@@ -88,13 +92,28 @@ export function calculateAddonCosts(
     const addonDef = ADDONS.find(a => a.id === addon.id);
     if (!addonDef) return null;
     
+    // Handle tiered pricing first
+    if (addonDef.tieredPricing && addon.quantity) {
+      const tierCalc = calculateTieredPrice(addonDef, addon.quantity, addon.customTiers);
+      return {
+        addonId: addon.id,
+        addonName: addonDef.name,
+        cost: tierCalc.totalPrice * frequencyMultiplier,
+        quantity: addon.quantity,
+        tierApplied: tierCalc.appliedTier,
+        pricePerUnit: tierCalc.pricePerUnit
+      };
+    }
+    
+    // Fallback to standard pricing
     const addonPrice = getAddonPrice(addonDef, addon.complexity, addon.customPrice);
     const quantity = addon.quantity || 1;
     
     return {
       addonId: addon.id,
       addonName: addonDef.name,
-      cost: addonPrice * quantity * frequencyMultiplier
+      cost: addonPrice * quantity * frequencyMultiplier,
+      quantity
     };
   }).filter(Boolean) as CalculationResult['addonCosts'];
 }

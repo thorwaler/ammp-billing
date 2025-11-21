@@ -25,7 +25,9 @@ import {
   MODULES, 
   ADDONS, 
   type ComplexityLevel, 
-  type PackageType 
+  type PackageType,
+  type PricingTier,
+  calculateTieredPrice
 } from "@/data/pricingData";
 import { 
   calculateInvoice, 
@@ -48,6 +50,10 @@ interface Addon {
   name: string;
   price?: number;
   complexityPricing?: boolean;
+  tieredPricing?: boolean;
+  pricingTiers?: PricingTier[];
+  autoActivateFromAMMP?: boolean;
+  ammpSourceField?: string;
   lowPrice?: number;
   mediumPrice?: number;
   highPrice?: number;
@@ -57,6 +63,12 @@ interface Addon {
   solcastSiteCount?: number;
   quantity?: number;
   customPrice?: number;
+  customTiers?: PricingTier[];
+  calculatedTieredPrice?: {
+    pricePerUnit: number;
+    totalPrice: number;
+    appliedTier: PricingTier | null;
+  };
 }
 interface Customer {
   id: string;
@@ -205,22 +217,43 @@ export function InvoiceCalculator({
         // Pre-fill billing frequency from contract
         setBillingFrequency(customerData.billingFrequency as 'monthly' | 'quarterly' | 'biannual' | 'annual');
         
-        // Auto-fill Solcast sites if AMMP capabilities exist
-        if (customerData.ammpCapabilities?.sitesWithSolcast) {
-          setSolcastSites(customerData.ammpCapabilities.sitesWithSolcast);
-          // Auto-enable and set quantity for satellite addon
-          const updatedAddons = defaultAddons.map(addon => {
-            if (addon.id === 'satelliteDataAPI') {
+        // Auto-activate addons based on AMMP capabilities
+        const updatedAddons = defaultAddons.map(addon => {
+          // Check if addon should auto-activate
+          if (addon.autoActivateFromAMMP && addon.ammpSourceField) {
+            const sourceValue = customerData.ammpCapabilities?.[addon.ammpSourceField];
+            
+            if (sourceValue && sourceValue > 0) {
+              // Auto-activate with quantity and tiered pricing
+              const tieredCalc = addon.tieredPricing 
+                ? calculateTieredPrice(addon, sourceValue)
+                : undefined;
+              
+              // Update solcast sites state for display
+              if (addon.id === 'satelliteDataAPI') {
+                setSolcastSites(sourceValue);
+              }
+              
               return {
                 ...addon,
                 selected: true,
-                quantity: customerData.ammpCapabilities.sitesWithSolcast
+                quantity: sourceValue,
+                calculatedTieredPrice: tieredCalc
               };
             }
-            return addon;
-          });
-          setAddons(updatedAddons);
-        }
+          }
+          
+          // Otherwise, check if it was manually selected in contract
+          return {
+            ...addon,
+            selected: customerData.addons.includes(addon.id),
+            complexity: customerData.addons.includes(addon.id) && addon.complexityPricing 
+              ? 'low' as const 
+              : undefined
+          };
+        });
+        
+        setAddons(updatedAddons);
         
         // Apply custom pricing to modules if available
         const updatedModules = defaultModules.map(module => {
@@ -397,7 +430,20 @@ export function InvoiceCalculator({
     calculationResult.addonCosts = selectedAddons.map(addon => {
       let addonPrice = 0;
       
-      // Check for custom price override first
+      // Handle tiered pricing first
+      if (addon.tieredPricing && addon.quantity) {
+        const tierCalc = calculateTieredPrice(addon, addon.quantity, addon.customTiers);
+        return {
+          addonId: addon.id,
+          addonName: addon.name,
+          cost: tierCalc.totalPrice * frequencyMultiplier,
+          quantity: addon.quantity,
+          tierApplied: tierCalc.appliedTier,
+          pricePerUnit: tierCalc.pricePerUnit
+        };
+      }
+      
+      // Check for custom price override
       if (addon.customPrice != null) {
         addonPrice = addon.customPrice;
       } else if (addon.complexityPricing && addon.complexity) {
@@ -418,7 +464,8 @@ export function InvoiceCalculator({
       return {
         addonId: addon.id,
         addonName: addon.name,
-        cost: addonPrice * quantity * frequencyMultiplier
+        cost: addonPrice * quantity * frequencyMultiplier,
+        quantity
       };
     });
     
@@ -882,6 +929,23 @@ export function InvoiceCalculator({
                         {/* Price and Quantity inputs for all selected addons */}
                         {addon.selected && (
                           <div className="pl-6 space-y-2">
+                            {/* Tiered pricing display */}
+                            {addon.tieredPricing && addon.calculatedTieredPrice && (
+                              <div className="text-xs bg-muted/50 p-2 rounded space-y-1">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Quantity: {addon.quantity || 0} sites</span>
+                                </div>
+                                <div className="flex justify-between font-medium">
+                                  <span>Tier: {addon.calculatedTieredPrice.appliedTier?.label}</span>
+                                  <span>€{addon.calculatedTieredPrice.pricePerUnit}/site</span>
+                                </div>
+                                <div className="flex justify-between text-primary font-semibold">
+                                  <span>Total:</span>
+                                  <span>€{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            )}
+                            
                             <div className="flex items-center gap-4">
                               <div className="flex items-center gap-2">
                                 <Label htmlFor={`price-${addon.id}`} className="text-sm whitespace-nowrap">
@@ -919,9 +983,21 @@ export function InvoiceCalculator({
                                   value={addon.quantity || 1}
                                   onChange={(e) => {
                                     const value = Math.max(1, Number(e.target.value) || 1);
-                                    setAddons(prev => prev.map(a => 
-                                      a.id === addon.id ? { ...a, quantity: value } : a
-                                    ));
+                                    setAddons(prev => prev.map(a => {
+                                      if (a.id === addon.id) {
+                                        const updatedAddon = { ...a, quantity: value };
+                                        // Recalculate tiered price if applicable
+                                        if (a.tieredPricing && a.pricingTiers) {
+                                          updatedAddon.calculatedTieredPrice = calculateTieredPrice(
+                                            a,
+                                            value,
+                                            a.customTiers
+                                          );
+                                        }
+                                        return updatedAddon;
+                                      }
+                                      return a;
+                                    }));
                                   }}
                                 />
                               </div>
@@ -1002,17 +1078,29 @@ export function InvoiceCalculator({
             {result.addonCosts.length > 0 && (
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Add-on Costs:</h4>
-                <div className="space-y-1 text-sm pl-2">
-                  {result.addonCosts.map((item) => {
+                <div className="space-y-2 text-sm pl-2">
+                  {result.addonCosts.map((item: any) => {
                     const addon = addons.find(a => a.id === item.addonId);
-                    const quantity = addon?.quantity || 1;
+                    const quantity = item.quantity || addon?.quantity || 1;
                     return (
-                      <div key={item.addonId} className="flex justify-between">
-                        <span>
-                          {item.addonName}
-                          {quantity > 1 && <span className="text-muted-foreground"> (×{quantity})</span>}:
-                        </span>
-                        <span>{formatCurrency(item.cost)}</span>
+                      <div key={item.addonId} className="space-y-1">
+                        <div className="flex justify-between">
+                          <span>
+                            {item.addonName}
+                            {quantity > 1 && (
+                              <span className="text-muted-foreground">
+                                {' '}({quantity} × {formatCurrency(item.cost / quantity / getFrequencyMultiplier(billingFrequency))})
+                              </span>
+                            )}:
+                          </span>
+                          <span className="font-medium">{formatCurrency(item.cost)}</span>
+                        </div>
+                        {/* Show tier details for tiered addons */}
+                        {item.tierApplied && (
+                          <div className="text-xs text-muted-foreground pl-2">
+                            Tier: {item.tierApplied.label} @ {formatCurrency(item.pricePerUnit)}/site
+                          </div>
+                        )}
                       </div>
                     );
                   })}

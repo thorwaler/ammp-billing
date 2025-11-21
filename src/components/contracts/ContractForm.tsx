@@ -215,6 +215,28 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
         setSelectedComplexityItems(complexityMap);
         setAddonCustomPrices(customPriceMap);
         setAddonQuantities(quantityMap);
+        
+        // Auto-activate Solcast addon if customer has sitesWithSolcast
+        const { data: customerData } = await supabase
+          .from('customers')
+          .select('ammp_capabilities')
+          .eq('id', existingCustomer.id)
+          .single();
+        
+        if (customerData?.ammp_capabilities) {
+          const capabilities = customerData.ammp_capabilities as any;
+          if (capabilities.sitesWithSolcast) {
+            const solcastCount = capabilities.sitesWithSolcast;
+            const currentAddons = form.getValues('addons') || [];
+            if (!currentAddons.includes('satelliteDataAPI')) {
+              form.setValue('addons', [...currentAddons, 'satelliteDataAPI']);
+            }
+            setAddonQuantities(prev => ({
+              ...prev,
+              satelliteDataAPI: solcastCount
+            }));
+          }
+        }
 
       } catch (error) {
         console.error('Error loading contract:', error);
