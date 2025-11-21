@@ -80,6 +80,14 @@ serve(async (req) => {
     const systemPrompt = isAmendment 
       ? `You are a contract amendment data extraction specialist. Compare the amendment with the original contract and extract changes.
 
+⚠️ CRITICAL INSTRUCTIONS - ANTI-HALLUCINATION:
+1. Only extract information that is EXPLICITLY STATED in the amendment document
+2. Do NOT infer, guess, estimate, or make up any information
+3. Do NOT use typical, standard, or template values for any field
+4. If a field is not clearly present in the document, OMIT it entirely from your response
+5. When in doubt, LEAVE IT OUT rather than guessing
+6. Do NOT include fields like "implementation fees", "setup costs", or similar unless they are explicitly mentioned in the document
+
 ORIGINAL CONTRACT DATA:
 - Company Name: ${originalContractData?.company_name || 'N/A'}
 - Package: ${originalContractData?.package || 'N/A'}
@@ -92,30 +100,39 @@ ORIGINAL CONTRACT DATA:
 - Minimum Charge: ${originalContractData?.minimum_charge || 'N/A'}
 - Minimum Annual Value: ${originalContractData?.minimum_annual_value || 'N/A'}
 
-Extract all contract fields from the amendment document. Additionally, provide a "changes_summary" field that concisely describes what has changed compared to the original contract values above (e.g., "Capacity increased from 5MW to 7MW, Extended contract end date to Dec 2025, Added Custom API module").
+Extract ONLY the fields that are explicitly mentioned in the amendment document. Additionally, provide a "changes_summary" field that concisely describes what has changed compared to the original contract values above (e.g., "Capacity increased from 5MW to 7MW, Extended contract end date to Dec 2025, Added Custom API module").
 
-Return structured data with all fields, even if unchanged, plus the changes_summary.`
+Only include fields that are explicitly stated in the amendment. Do not fill in fields that are not mentioned.`
       : `You are a contract data extraction specialist. Extract key contract information from the provided contract PDF.
 
-Extract the following fields:
-- companyName: Company/Customer Name
-- packageType: Contract Package Type (starter/pro/custom/hybrid_tiered)
-- initialMW: Initial MW capacity (numeric)
-- currency: Currency (USD or EUR)
-- billingFrequency: Billing Frequency (monthly/quarterly/biannual/annual)
-- signedDate: Signed Date (YYYY-MM-DD format)
-- periodStart: Contract Period Start Date (YYYY-MM-DD format)
-- periodEnd: Contract Period End Date (YYYY-MM-DD format)
-- nextInvoiceDate: Next Invoice Date (YYYY-MM-DD format)
-- modules: Array of modules included
-- addons: Array of add-ons
-- customPricing: Object with custom pricing details
-- volumeDiscounts: Object with volume discount details
-- minimumCharge: Minimum charge amount
-- minimumAnnualValue: Minimum annual value
-- notes: Notes and special terms
+⚠️ CRITICAL INSTRUCTIONS - ANTI-HALLUCINATION:
+1. Only extract information that is EXPLICITLY STATED in the contract document
+2. Do NOT infer, guess, estimate, or make up any information
+3. Do NOT use typical, standard, or template values for any field
+4. If a field is not clearly present in the document, OMIT it entirely from your response
+5. When in doubt, LEAVE IT OUT rather than guessing
+6. Do NOT include fields like "implementation fees", "setup costs", "onboarding fees", or similar unless they are explicitly mentioned in the document
+7. For pricing, ONLY extract values that are explicitly written in the contract
 
-Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field is not found, omit it or return null.`;
+Extract ONLY the following fields if they are explicitly stated:
+- companyName: Company/Customer Name (REQUIRED - must be in document)
+- packageType: Contract Package Type (only if explicitly stated: starter/pro/custom/hybrid_tiered)
+- initialMW: Initial MW capacity (only if explicitly stated as a number)
+- currency: Currency (only if explicitly stated: USD or EUR)
+- billingFrequency: Billing Frequency (only if explicitly stated: monthly/quarterly/biannual/annual)
+- signedDate: Signed Date (only if explicitly stated, use YYYY-MM-DD format)
+- periodStart: Contract Period Start Date (only if explicitly stated, use YYYY-MM-DD format)
+- periodEnd: Contract Period End Date (only if explicitly stated, use YYYY-MM-DD format)
+- nextInvoiceDate: Next Invoice Date (only if explicitly stated, use YYYY-MM-DD format)
+- modules: Array of modules included (only if explicitly listed)
+- addons: Array of add-ons (only if explicitly listed)
+- customPricing: Object with custom pricing details (only if explicitly stated)
+- volumeDiscounts: Object with volume discount details (only if explicitly stated)
+- minimumCharge: Minimum charge amount (only if explicitly stated)
+- minimumAnnualValue: Minimum annual value (only if explicitly stated)
+- notes: Notes and special terms (only if explicitly stated)
+
+Remember: It is better to omit a field than to guess or infer its value. Return ONLY valid JSON with fields that are explicitly present in the document.`;
 
     // Call Lovable AI with vision to extract contract data
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -153,42 +170,83 @@ Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field 
             type: "function",
             function: {
               name: "extract_contract_data",
-              description: "Extract structured contract data from the PDF",
+              description: "Extract structured contract data from the PDF. ONLY include fields that are explicitly stated in the document. Do not infer or guess any values.",
               parameters: {
                 type: "object",
                 properties: {
-                  companyName: { type: "string" },
+                  companyName: { 
+                    type: "string",
+                    description: "Company/Customer name - only if explicitly stated in document"
+                  },
                   packageType: { 
                     type: "string",
-                    enum: ["starter", "pro", "custom", "hybrid_tiered"]
+                    enum: ["starter", "pro", "custom", "hybrid_tiered"],
+                    description: "Contract package type - only if explicitly stated in document"
                   },
-                  initialMW: { type: "number" },
+                  initialMW: { 
+                    type: "number",
+                    description: "Initial MW capacity - only if explicitly stated as a number in document"
+                  },
                   currency: { 
                     type: "string",
-                    enum: ["USD", "EUR"]
+                    enum: ["USD", "EUR"],
+                    description: "Currency - only if explicitly stated in document"
                   },
                   billingFrequency: { 
                     type: "string",
-                    enum: ["monthly", "quarterly", "biannual", "annual"]
+                    enum: ["monthly", "quarterly", "biannual", "annual"],
+                    description: "Billing frequency - only if explicitly stated in document"
                   },
-                  signedDate: { type: "string" },
-                  periodStart: { type: "string" },
-                  periodEnd: { type: "string" },
-                  nextInvoiceDate: { type: "string" },
+                  signedDate: { 
+                    type: "string",
+                    description: "Signed date in YYYY-MM-DD format - only if explicitly stated in document"
+                  },
+                  periodStart: { 
+                    type: "string",
+                    description: "Contract start date in YYYY-MM-DD format - only if explicitly stated in document"
+                  },
+                  periodEnd: { 
+                    type: "string",
+                    description: "Contract end date in YYYY-MM-DD format - only if explicitly stated in document"
+                  },
+                  nextInvoiceDate: { 
+                    type: "string",
+                    description: "Next invoice date in YYYY-MM-DD format - only if explicitly stated in document"
+                  },
                   modules: {
                     type: "array",
-                    items: { type: "string" }
+                    items: { type: "string" },
+                    description: "List of modules - only if explicitly listed in document"
                   },
                   addons: {
                     type: "array",
-                    items: { type: "string" }
+                    items: { type: "string" },
+                    description: "List of add-ons - only if explicitly listed in document"
                   },
-                  customPricing: { type: "object" },
-                  volumeDiscounts: { type: "object" },
-                  minimumCharge: { type: "number" },
-                  minimumAnnualValue: { type: "number" },
-                  notes: { type: "string" },
-                  changes_summary: { type: "string" }
+                  customPricing: { 
+                    type: "object",
+                    description: "Custom pricing details - only if explicitly stated in document. Do not include typical or template values."
+                  },
+                  volumeDiscounts: { 
+                    type: "object",
+                    description: "Volume discount details - only if explicitly stated in document"
+                  },
+                  minimumCharge: { 
+                    type: "number",
+                    description: "Minimum charge amount - only if explicitly stated in document"
+                  },
+                  minimumAnnualValue: { 
+                    type: "number",
+                    description: "Minimum annual value - only if explicitly stated in document"
+                  },
+                  notes: { 
+                    type: "string",
+                    description: "Notes and special terms - only if explicitly stated in document"
+                  },
+                  changes_summary: { 
+                    type: "string",
+                    description: "Summary of changes compared to original contract - only for amendments"
+                  }
                 },
                 required: isAmendment ? ["changes_summary"] : ["companyName"]
               }
@@ -241,7 +299,33 @@ Return ONLY valid JSON. For dates, use ISO 8601 format (YYYY-MM-DD). If a field 
       }
     }
 
-    console.log("Extracted contract data:", extractedData);
+    // Post-processing validation to prevent hallucination
+    const suspiciousFields = [
+      'implementationFee', 'implementation_fee', 'setupFee', 'setup_fee',
+      'onboardingFee', 'onboarding_fee', 'setupCost', 'setup_cost'
+    ];
+    
+    // Remove any suspicious fields that shouldn't be in standard contracts
+    for (const field of suspiciousFields) {
+      if (field in extractedData) {
+        console.log(`Warning: Removing suspicious field "${field}" that may be hallucinated`);
+        delete (extractedData as any)[field];
+      }
+    }
+
+    // Validate numeric fields are reasonable
+    const numericFields = ['initialMW', 'minimumCharge', 'minimumAnnualValue'];
+    for (const field of numericFields) {
+      const value = (extractedData as any)[field];
+      if (value !== undefined && value !== null) {
+        if (typeof value !== 'number' || value < 0 || !isFinite(value)) {
+          console.log(`Warning: Removing invalid numeric field "${field}" with value:`, value);
+          delete (extractedData as any)[field];
+        }
+      }
+    }
+
+    console.log("Extracted contract data (after validation):", extractedData);
 
     // Update contract or amendment with OCR data
     if (isAmendment && amendmentId) {
