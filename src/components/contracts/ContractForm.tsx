@@ -84,13 +84,32 @@ interface ContractFormProps {
     location?: string;
     mwpManaged: number;
   };
+  existingContract?: {
+    id: string;
+    package: string;
+    modules: any[];
+    addons: any[];
+    initialMW: number;
+    billingFrequency: string;
+    customPricing?: any;
+    volumeDiscounts?: any;
+    minimumCharge?: number;
+    minimumAnnualValue?: number;
+    currency: string;
+    signedDate?: string;
+    periodStart?: string;
+    periodEnd?: string;
+    notes?: string;
+    contractStatus?: string;
+  };
   onComplete?: () => void;
   onCancel?: () => void;
+  isExtending?: boolean;
 }
 
 // Module and addon definitions now imported from shared data file
 
-export function ContractForm({ existingCustomer, onComplete, onCancel }: ContractFormProps) {
+export function ContractForm({ existingCustomer, existingContract, onComplete, onCancel, isExtending }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
@@ -106,7 +125,24 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
 
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractFormSchema),
-    defaultValues: {
+    defaultValues: existingContract ? {
+      companyName: existingCustomer?.name || "",
+      initialMW: existingContract.initialMW,
+      currency: existingContract.currency as "USD" | "EUR",
+      billingFrequency: existingContract.billingFrequency as any,
+      package: existingContract.package as any,
+      modules: existingContract.modules || [],
+      addons: (existingContract.addons || []).map((a: any) => typeof a === 'string' ? a : a.id),
+      customPricing: existingContract.customPricing,
+      volumeDiscounts: existingContract.volumeDiscounts,
+      minimumCharge: existingContract.minimumCharge,
+      minimumAnnualValue: existingContract.minimumAnnualValue,
+      notes: existingContract.notes,
+      signedDate: existingContract.signedDate?.split('T')[0] || "",
+      periodStart: existingContract.periodStart?.split('T')[0] || "",
+      periodEnd: existingContract.periodEnd?.split('T')[0] || "",
+      contractStatus: existingContract.contractStatus as any,
+    } : {
       companyName: existingCustomer?.name || "",
       initialMW: existingCustomer?.mwpManaged || 0,
       currency: userCurrency || "EUR",
@@ -139,8 +175,65 @@ export function ContractForm({ existingCustomer, onComplete, onCancel }: Contrac
     },
   });
 
-  // Load existing contract data if editing
+  // Initialize state from existingContract prop
   useEffect(() => {
+    if (existingContract) {
+      setSelectedPackage(existingContract.package);
+      setSelectedModules(existingContract.modules || []);
+      
+      // Initialize addon states
+      const addons = existingContract.addons || [];
+      const complexities: {[key: string]: ComplexityLevel} = {};
+      const customPrices: {[key: string]: number | undefined} = {};
+      const quantities: {[key: string]: number | undefined} = {};
+      const customTiers: Record<string, PricingTier[]> = {};
+      
+      addons.forEach((addon: any) => {
+        const addonId = typeof addon === 'string' ? addon : addon.id;
+        if (typeof addon === 'object') {
+          if (addon.complexity) complexities[addonId] = addon.complexity;
+          if (addon.customPrice) customPrices[addonId] = addon.customPrice;
+          if (addon.quantity) quantities[addonId] = addon.quantity;
+          if (addon.customTiers) customTiers[addonId] = addon.customTiers;
+        }
+      });
+      
+      setSelectedComplexityItems(complexities);
+      setAddonCustomPrices(customPrices);
+      setAddonQuantities(quantities);
+      setAddonCustomTiers(customTiers);
+      
+      // Set custom pricing visibility if custom pricing exists
+      if (existingContract.customPricing && Object.keys(existingContract.customPricing).length > 0) {
+        setShowCustomPricing(true);
+      }
+      
+      // Store contract ID for update if not extending
+      if (!isExtending) {
+        setExistingContractId(existingContract.id);
+      }
+    }
+  }, [existingContract, isExtending]);
+
+  // Auto-extend period dates when extending a contract
+  useEffect(() => {
+    if (isExtending && existingContract?.periodEnd) {
+      const currentEnd = new Date(existingContract.periodEnd);
+      const newStart = new Date(currentEnd);
+      newStart.setDate(newStart.getDate() + 1);
+      
+      const newEnd = new Date(newStart);
+      newEnd.setFullYear(newEnd.getFullYear() + 1); // Extend by 1 year
+      
+      form.setValue('periodStart', newStart.toISOString().split('T')[0]);
+      form.setValue('periodEnd', newEnd.toISOString().split('T')[0]);
+    }
+  }, [isExtending, existingContract?.periodEnd]);
+
+  // Load existing contract data if editing (only when no existingContract prop is provided)
+  useEffect(() => {
+    if (existingContract) return; // Skip if we already have contract data from props
+    
     const loadExistingContract = async () => {
       if (!existingCustomer?.id) return;
       

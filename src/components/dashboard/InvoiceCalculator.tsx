@@ -133,6 +133,7 @@ export function InvoiceCalculator({
   const [billingFrequency, setBillingFrequency] = useState<"monthly" | "quarterly" | "biannual" | "annual">("annual");
   const [invoiceDate, setInvoiceDate] = useState<Date | undefined>(prefilledDate || new Date());
   const [isSending, setIsSending] = useState(false);
+  const [calculating, setCalculating] = useState(false);
   const [lastInvoiceMW, setLastInvoiceMW] = useState<number | null>(null);
   const [mwChange, setMwChange] = useState<number>(0);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -395,17 +396,22 @@ export function InvoiceCalculator({
     return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
   };
 
-  const handleCalculate = () => {
-    if (!customer || mwManaged === "") {
-      toast({
-        title: "Missing information",
-        description: "Please fill in all required fields.",
-        variant: "destructive",
-      });
-      return;
-    }
+  const handleCalculate = async () => {
+    if (calculating) return; // Prevent multiple rapid clicks
+    
+    setCalculating(true);
+    
+    try {
+      if (!customer || mwManaged === "") {
+        toast({
+          title: "Missing information",
+          description: "Please fill in all required fields.",
+          variant: "destructive",
+        });
+        return;
+      }
 
-    if (!selectedCustomer) return;
+      if (!selectedCustomer) return;
 
     // Check if this is the first invoice
     const isFirstInvoice = selectedCustomer.signedDate && 
@@ -573,9 +579,18 @@ export function InvoiceCalculator({
       calculationResult.addonCosts.reduce((sum, item) => sum + item.cost, 0) +
       calculationResult.minimumCharges;
     
-    // Store result with invoice period
-    setResult({ ...calculationResult, invoicePeriod } as any);
-    setShowResult(true);
+      // Store result with invoice period
+      setResult({ ...calculationResult, invoicePeriod } as any);
+      setShowResult(true);
+    } catch (error) {
+      toast({
+        title: "Calculation Error",
+        description: "There was an error calculating the invoice.",
+        variant: "destructive",
+      });
+    } finally {
+      setCalculating(false);
+    }
   };
 
   const handleSendToXero = async () => {
@@ -1214,14 +1229,23 @@ export function InvoiceCalculator({
             </>
           )}
           
-          <Button 
-            className="w-full" 
-            onClick={handleCalculate}
-            disabled={!customer || mwManaged === "" || !invoiceDate}
-          >
-            <Calculator className="mr-2 h-4 w-4" />
-            Calculate Invoice
-          </Button>
+            <Button 
+              className="w-full" 
+              onClick={handleCalculate}
+              disabled={!customer || mwManaged === "" || !invoiceDate || calculating}
+            >
+              {calculating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Calculating...
+                </>
+              ) : (
+                <>
+                  <Calculator className="mr-2 h-4 w-4" />
+                  Calculate Invoice
+                </>
+              )}
+            </Button>
         </div>
         
         {showResult && result && (
