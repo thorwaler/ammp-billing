@@ -91,6 +91,7 @@ export interface CalculationResult {
     hybrid: { mw: number; cost: number; rate: number };
   };
   siteMinimumPricingBreakdown?: SiteMinimumPricingResult;
+  minimumContractAdjustment?: number;
 }
 
 /**
@@ -379,14 +380,6 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       result.minimumCharges = siteMinPricing.minimumPricingTotal;
       result.siteMinimumPricingBreakdown = siteMinPricing;
     }
-    
-    // Apply minimum for Pro package (only if not using site-level pricing)
-    if (packageType === 'pro' && !params.enableSiteMinimumPricing) {
-      const proMinimum = minimumAnnualValue || 5000;
-      if (totalMWCost < proMinimum * frequencyMultiplier) {
-        result.totalMWCost = proMinimum * frequencyMultiplier;
-      }
-    }
   }
   
   // Calculate addon costs
@@ -409,6 +402,17 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     result.totalMWCost + 
     result.addonCosts.reduce((sum, item) => sum + item.cost, 0) +
     result.minimumCharges;
+  
+  // Apply minimum annual value to final total (for Pro and Custom packages)
+  if ((packageType === 'pro' || packageType === 'custom') && minimumAnnualValue) {
+    const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
+    if (result.totalPrice < minimumForPeriod) {
+      // Add the difference as a "minimum contract value adjustment"
+      const adjustment = minimumForPeriod - result.totalPrice;
+      result.minimumContractAdjustment = adjustment;
+      result.totalPrice = minimumForPeriod;
+    }
+  }
   
   return result;
 }
