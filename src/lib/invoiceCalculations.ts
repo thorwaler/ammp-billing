@@ -219,7 +219,19 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     // Hybrid tiered - special per-MWp rates
     const breakdown = calculateHybridTieredBreakdown(params);
     result.hybridTieredBreakdown = breakdown;
-    result.totalMWCost = breakdown.ongrid.cost + breakdown.hybrid.cost;
+    
+    // Calculate module costs but EXCLUDE Technical Monitoring (already covered by hybrid pricing)
+    const filteredModules = params.selectedModules.filter(
+      moduleId => moduleId !== 'technicalMonitoring'
+    );
+    
+    const { moduleCosts, totalMWCost } = calculateModuleCosts({
+      ...params,
+      selectedModules: filteredModules
+    });
+    result.moduleCosts = moduleCosts;
+    
+    result.totalMWCost = breakdown.ongrid.cost + breakdown.hybrid.cost + totalMWCost;
   } else {
     // Pro or Custom - calculate module costs
     const { moduleCosts, totalMWCost } = calculateModuleCosts(params);

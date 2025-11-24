@@ -81,7 +81,8 @@ const Customers = () => {
             minimum_charge,
             volume_discounts,
             currency,
-            contract_status
+            contract_status,
+            signed_date
           )
         `)
         .eq('user_id', user.id);
@@ -158,6 +159,14 @@ const Customers = () => {
       const addons = Array.isArray(activeContract?.addons) ? (activeContract.addons as any[]).map((a: any) => a.id || a) : [];
       const mwpManaged = Number(c.mwp_managed) || 0;
       
+      // Find the earliest contract signed date across ALL contracts
+      const firstSignedDate = c.contracts && c.contracts.length > 0
+        ? c.contracts
+            .map((contract: any) => contract.signed_date)
+            .filter((date: string) => date) // Remove nulls
+            .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0]
+        : null;
+      
       return {
         id: c.id,
         name: c.name,
@@ -167,7 +176,7 @@ const Customers = () => {
         mwpManaged,
         status: (c.status || 'active') as "active" | "pending" | "inactive",
         addOns: [...modules, ...addons],
-        joinDate: c.join_date || new Date().toISOString(),
+        joinDate: firstSignedDate || c.join_date || new Date().toISOString(),
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
         contractId: activeContract?.id || '',
         ammpOrgId: c.ammp_org_id || undefined,
