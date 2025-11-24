@@ -374,6 +374,26 @@ export function InvoiceCalculator({
     }
   }, [customer, customers]);
 
+  // Auto-calculate when key fields change
+  useEffect(() => {
+    // Only auto-calculate if we have the minimum required data
+    if (customer && mwManaged !== "" && invoiceDate && selectedCustomer) {
+      // Debounce to avoid excessive calculations
+      const timer = setTimeout(() => {
+        handleCalculate();
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [
+    billingFrequency,  // Main trigger - billing frequency changes
+    mwManaged,         // MW value changes
+    modules,           // Module selection changes
+    addons,            // Addon selection/quantity changes
+    sitesUnderThreshold,
+    invoiceDate
+  ]);
+
   // Calculation helper - now using shared logic
   const getInvoicePeriodText = () => {
     if (!invoiceDate) return "";
@@ -1313,7 +1333,12 @@ export function InvoiceCalculator({
                         <div className="flex justify-between">
                           <span>
                             {item.addonName}
-                            {quantity > 1 && (
+                            {quantity > 1 && item.addonId === 'satelliteDataAPI' && item.pricePerUnit && (
+                              <span className="text-muted-foreground">
+                                {' '}({quantity} sites × {formatCurrency(item.pricePerUnit)}/mo × {getPeriodMonthsMultiplier(billingFrequency)} months)
+                              </span>
+                            )}
+                            {quantity > 1 && item.addonId !== 'satelliteDataAPI' && (
                               <span className="text-muted-foreground">
                                 {' '}({quantity} × {formatCurrency(item.cost / quantity / getFrequencyMultiplier(billingFrequency))})
                               </span>
