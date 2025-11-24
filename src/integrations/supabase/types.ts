@@ -86,6 +86,7 @@ export type Database = {
           max_mw: number | null
           minimum_annual_value: number | null
           minimum_charge: number | null
+          minimum_charge_tiers: Json | null
           modules: Json | null
           next_invoice_date: string | null
           notes: string | null
@@ -95,6 +96,7 @@ export type Database = {
           package: string
           period_end: string | null
           period_start: string | null
+          portfolio_discount_tiers: Json | null
           signed_date: string | null
           updated_at: string
           user_id: string
@@ -115,6 +117,7 @@ export type Database = {
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
+          minimum_charge_tiers?: Json | null
           modules?: Json | null
           next_invoice_date?: string | null
           notes?: string | null
@@ -124,6 +127,7 @@ export type Database = {
           package: string
           period_end?: string | null
           period_start?: string | null
+          portfolio_discount_tiers?: Json | null
           signed_date?: string | null
           updated_at?: string
           user_id: string
@@ -144,6 +148,7 @@ export type Database = {
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
+          minimum_charge_tiers?: Json | null
           modules?: Json | null
           next_invoice_date?: string | null
           notes?: string | null
@@ -153,6 +158,7 @@ export type Database = {
           package?: string
           period_end?: string | null
           period_start?: string | null
+          portfolio_discount_tiers?: Json | null
           signed_date?: string | null
           updated_at?: string
           user_id?: string
