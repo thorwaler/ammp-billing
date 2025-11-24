@@ -1310,11 +1310,11 @@ export function InvoiceCalculator({
                 <h4 className="font-medium text-sm">Hybrid Tiered Pricing:</h4>
                 <div className="space-y-1 text-sm pl-2">
                   <div className="flex justify-between">
-                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MWp × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.ongrid.rate}):</span>
+                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.ongrid.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
                     <span>{formatCurrency(result.hybridTieredBreakdown.ongrid.cost)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MWp × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.hybrid.rate}):</span>
+                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.hybrid.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
                     <span>{formatCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
                   </div>
                 </div>
