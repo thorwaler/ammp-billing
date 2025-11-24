@@ -401,17 +401,21 @@ export function InvoiceCalculator({
     const startDate = new Date(invoiceDate);
     const endDate = new Date(invoiceDate);
     
-    if (billingFrequency === "monthly") {
+    if (billingFrequency === "quarterly") {
+      // Quarterly is retrospective: period ends on invoice date, starts 3 months prior
+      startDate.setMonth(startDate.getMonth() - 3);
+    } else if (billingFrequency === "monthly") {
+      // Forward-looking for other frequencies
       endDate.setMonth(endDate.getMonth() + 1);
-    } else if (billingFrequency === "quarterly") {
-      endDate.setMonth(endDate.getMonth() + 3);
+      endDate.setDate(endDate.getDate() - 1);
     } else if (billingFrequency === "biannual") {
       endDate.setMonth(endDate.getMonth() + 6);
+      endDate.setDate(endDate.getDate() - 1);
     } else {
+      // Annual
       endDate.setFullYear(endDate.getFullYear() + 1);
+      endDate.setDate(endDate.getDate() - 1);
     }
-    
-    endDate.setDate(endDate.getDate() - 1);
     
     return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
   };
