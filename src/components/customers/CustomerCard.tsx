@@ -12,6 +12,20 @@ import CustomerForm from "./CustomerForm";
 import ContractForm from "../contracts/ContractForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { getModuleById, getAddonById } from "@/data/pricingData";
+
+const getDisplayName = (id: string, isModule: boolean): string => {
+  // Special case for Satellite Data API
+  if (id === 'satelliteDataAPI') return 'Solcast';
+  
+  if (isModule) {
+    const module = getModuleById(id);
+    return module?.name || id;
+  } else {
+    const addon = getAddonById(id);
+    return addon?.name || id;
+  }
+};
 
 interface CustomerCardProps {
   id: string;
@@ -20,6 +34,7 @@ interface CustomerCardProps {
   contractValue: string;
   mwpManaged: number;
   status: "active" | "pending" | "inactive";
+  modules: string[];
   addOns: string[];
   joinDate?: string;
   lastInvoiced?: string;
@@ -42,6 +57,7 @@ export function CustomerCard({
   contractValue,
   mwpManaged,
   status,
+  modules,
   addOns,
   joinDate,
   lastInvoiced,
@@ -301,13 +317,25 @@ export function CustomerCard({
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
             <div className="font-medium">{formattedLastInvoiced}</div>
           </div>
+          {modules.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted-foreground">Modules</div>
+              <div className="flex flex-wrap gap-1">
+                {modules.map((moduleId) => (
+                  <Badge key={moduleId} variant="outline" className="text-xs">
+                    {getDisplayName(moduleId, true)}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
           {addOns.length > 0 && (
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Add-ons</div>
               <div className="flex flex-wrap gap-1">
-                {addOns.map((addon) => (
-                  <Badge key={addon} variant="outline" className="text-xs">
-                    {addon}
+                {addOns.map((addonId) => (
+                  <Badge key={addonId} variant="outline" className="text-xs">
+                    {getDisplayName(addonId, false)}
                   </Badge>
                 ))}
               </div>

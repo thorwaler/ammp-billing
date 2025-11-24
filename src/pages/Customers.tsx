@@ -24,6 +24,7 @@ interface CustomerData {
   contractCurrency: string;
   mwpManaged: number;
   status: "active" | "pending" | "inactive";
+  modules: string[];
   addOns: string[];
   joinDate: string;
   lastInvoiced: string;
@@ -175,7 +176,8 @@ const Customers = () => {
         contractCurrency: activeContract?.currency || 'USD',
         mwpManaged,
         status: (c.status || 'active') as "active" | "pending" | "inactive",
-        addOns: [...modules, ...addons],
+        modules: modules,
+        addOns: addons,
         joinDate: firstSignedDate || c.join_date || new Date().toISOString(),
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
         contractId: activeContract?.id || '',
@@ -576,6 +578,7 @@ const Customers = () => {
               contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValue, customer.contractCurrency))}/year`}
               mwpManaged={customer.mwpManaged}
               status={customer.status}
+              modules={customer.modules}
               addOns={customer.addOns}
               joinDate={customer.joinDate}
               lastInvoiced={customer.lastInvoiced}

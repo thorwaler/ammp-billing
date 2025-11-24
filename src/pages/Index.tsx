@@ -21,7 +21,8 @@ const customers = [
     contractValueUSD: 45000,
     mwpManaged: 42.5,
     status: "active" as const,
-    addOns: ["Monitoring", "Analytics"],
+    modules: ["technicalMonitoring"],
+    addOns: ["tmCustomDashboards"],
     hasContract: true,
   },
   {
@@ -31,7 +32,8 @@ const customers = [
     contractValueUSD: 42500,
     mwpManaged: 35.2,
     status: "active" as const,
-    addOns: ["Monitoring", "Maintenance"],
+    modules: ["technicalMonitoring", "energySavingsHub"],
+    addOns: [],
     hasContract: true,
   },
 ];
