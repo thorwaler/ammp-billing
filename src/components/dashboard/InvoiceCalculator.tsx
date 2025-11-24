@@ -39,6 +39,7 @@ import {
   type CalculationParams,
   type CalculationResult 
 } from "@/lib/invoiceCalculations";
+import { monitorMWAndNotify } from "@/utils/mwMonitoring";
 
 // Simplified interfaces - complex types moved to shared files
 interface Module {
@@ -768,6 +769,16 @@ export function InvoiceCalculator({
         if (invoiceError) {
           console.error('Failed to save invoice record:', invoiceError);
           // Don't fail the whole operation, just log
+        } else {
+          // Check MW capacity for capped contracts
+          if (contractData?.id) {
+            await monitorMWAndNotify(
+              user.id,
+              contractData.id,
+              selectedCustomer.name,
+              Number(mwManaged)
+            );
+          }
         }
       }
       

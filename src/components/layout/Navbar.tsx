@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Sun, Moon, Menu, LogOut, User } from 'lucide-react';
 import { CurrencySwitcher } from "@/components/ui/currency-switcher";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationCenter } from "@/components/notifications/NotificationCenter";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +43,7 @@ const Navbar = ({ toggleSidebar }: NavbarProps) => {
         </div>
         <div className="flex items-center gap-2">
           <CurrencySwitcher />
+          <NotificationCenter />
           
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
