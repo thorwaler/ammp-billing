@@ -3,6 +3,8 @@ import { InvoiceCard } from "./InvoiceCard";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { calculateInvoice } from "@/lib/invoiceCalculations";
+import type { MinimumChargeTier, DiscountTier } from "@/data/pricingData";
 
 interface UpcomingInvoice {
   customerId: string;
@@ -12,11 +14,15 @@ interface UpcomingInvoice {
   currency: string;
   packageType: string;
   mwpManaged: number;
+  initialMW: number;
   modules: any[];
   addons: any[];
   minimumCharge: number;
+  minimumChargeTiers: MinimumChargeTier[];
+  portfolioDiscountTiers: DiscountTier[];
   minimumAnnualValue: number;
   customPricing: any;
+  ammpCapabilities: any;
 }
 
 interface UpcomingInvoicesListProps {
@@ -49,12 +55,16 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           modules,
           addons,
           minimum_charge,
+          minimum_charge_tiers,
+          portfolio_discount_tiers,
           minimum_annual_value,
           custom_pricing,
+          initial_mw,
           customers (
             id,
             name,
-            mwp_managed
+            mwp_managed,
+            ammp_capabilities
           )
         `)
         .eq('user_id', user.id)
@@ -68,6 +78,15 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
         .filter(c => c.customers)
         .map(c => {
           const customer = Array.isArray(c.customers) ? c.customers[0] : c.customers;
+          
+          const minimumChargeTiers = Array.isArray(c.minimum_charge_tiers) 
+            ? c.minimum_charge_tiers as unknown as MinimumChargeTier[]
+            : [];
+          
+          const portfolioDiscountTiers = Array.isArray(c.portfolio_discount_tiers)
+            ? c.portfolio_discount_tiers as unknown as DiscountTier[]
+            : [];
+          
           return {
             customerId: customer.id,
             customerName: customer.name,
@@ -76,11 +95,15 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             currency: c.currency || 'EUR',
             packageType: c.package,
             mwpManaged: Number(customer.mwp_managed) || 0,
+            initialMW: Number(c.initial_mw) || Number(customer.mwp_managed) || 0,
             modules: Array.isArray(c.modules) ? c.modules : [],
             addons: Array.isArray(c.addons) ? c.addons : [],
             minimumCharge: Number(c.minimum_charge) || 0,
+            minimumChargeTiers,
+            portfolioDiscountTiers,
             minimumAnnualValue: Number(c.minimum_annual_value) || 0,
-            customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {}
+            customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {},
+            ammpCapabilities: customer.ammp_capabilities || null
           };
         });
 
@@ -107,17 +130,45 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
     
     const multiplier = frequencyMultipliers[invoice.billingFrequency as keyof typeof frequencyMultipliers] || 1;
     
-    if (invoice.packageType === 'starter') {
-      const minimumValue = invoice.minimumAnnualValue || 3000;
-      return minimumValue * multiplier;
-    }
+    const assetBreakdown = invoice.ammpCapabilities?.assetBreakdown 
+      ? invoice.ammpCapabilities.assetBreakdown.map((asset: any) => ({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          totalMW: asset.totalMW,
+          isHybrid: asset.isHybrid
+        }))
+      : undefined;
     
-    // Simplified estimation for Pro/Custom packages
-    const moduleCount = Array.isArray(invoice.modules) ? invoice.modules.length : 0;
-    const proMinimum = invoice.minimumAnnualValue || 5000;
-    const baseAmount = Math.max(proMinimum, moduleCount * 1000 * invoice.mwpManaged);
+    const selectedModules = Array.isArray(invoice.modules) 
+      ? invoice.modules.map((m: any) => typeof m === 'string' ? m : m.id)
+      : [];
     
-    return baseAmount * multiplier;
+    const selectedAddons = Array.isArray(invoice.addons)
+      ? invoice.addons.map((a: any) => ({
+          id: typeof a === 'string' ? a : a.id,
+          complexity: a.complexity,
+          customPrice: a.customPrice,
+          quantity: a.quantity,
+          customTiers: a.customTiers
+        }))
+      : [];
+    
+    const result = calculateInvoice({
+      packageType: invoice.packageType as any,
+      totalMW: invoice.mwpManaged,
+      selectedModules,
+      selectedAddons,
+      customPricing: invoice.customPricing,
+      minimumCharge: invoice.minimumCharge,
+      minimumChargeTiers: invoice.minimumChargeTiers,
+      portfolioDiscountTiers: invoice.portfolioDiscountTiers,
+      minimumAnnualValue: invoice.minimumAnnualValue,
+      frequencyMultiplier: multiplier,
+      assetBreakdown,
+      enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0
+    });
+    
+    return result.totalPrice;
   };
 
   if (loading) {
