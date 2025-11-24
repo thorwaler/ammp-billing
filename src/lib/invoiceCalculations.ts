@@ -396,23 +396,23 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     );
   }
   
-  // Calculate total
-  result.totalPrice = 
-    result.starterPackageCost + 
-    result.totalMWCost + 
-    result.addonCosts.reduce((sum, item) => sum + item.cost, 0) +
-    result.minimumCharges;
+  // Calculate base cost (modules + minimum charges, or package cost)
+  let baseCost = result.starterPackageCost + result.totalMWCost + result.minimumCharges;
   
-  // Apply minimum annual value to final total (for Pro and Custom packages)
+  // Apply minimum annual value to BASE COST only (for Pro and Custom packages)
   if ((packageType === 'pro' || packageType === 'custom') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
-    if (result.totalPrice < minimumForPeriod) {
+    if (baseCost < minimumForPeriod) {
       // Add the difference as a "minimum contract value adjustment"
-      const adjustment = minimumForPeriod - result.totalPrice;
+      const adjustment = minimumForPeriod - baseCost;
       result.minimumContractAdjustment = adjustment;
-      result.totalPrice = minimumForPeriod;
+      baseCost = minimumForPeriod;
     }
   }
+  
+  // Calculate final total: base cost + addons
+  const addonTotal = result.addonCosts.reduce((sum, item) => sum + item.cost, 0);
+  result.totalPrice = baseCost + addonTotal;
   
   return result;
 }
