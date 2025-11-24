@@ -96,6 +96,7 @@ interface ContractFormProps {
     volumeDiscounts?: any;
     minimumCharge?: number;
     minimumAnnualValue?: number;
+    maxMw?: number;
     currency: string;
     signedDate?: string;
     periodStart?: string;
@@ -132,6 +133,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       currency: existingContract.currency as "USD" | "EUR",
       billingFrequency: existingContract.billingFrequency as any,
       package: existingContract.package as any,
+      maxMw: existingContract.maxMw,
       modules: existingContract.modules || [],
       addons: (existingContract.addons || []).map((a: any) => typeof a === 'string' ? a : a.id),
       customPricing: existingContract.customPricing,
@@ -281,6 +283,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         }) as any);
         form.setValue('minimumCharge', contract.minimum_charge || 0);
         form.setValue('minimumAnnualValue', contract.minimum_annual_value || 0);
+        form.setValue('maxMw', contract.max_mw || undefined);
         form.setValue('notes', contract.notes || '');
         form.setValue('contractStatus', (contract.contract_status || 'active') as "active" | "pending" | "expired" | "cancelled");
 
