@@ -108,7 +108,7 @@ export default function AmendmentForm({
         effective_date: values.effectiveDate?.toISOString() || null,
         changes_summary: values.changesSummary,
         pdf_url: null,
-        ocr_status: "manual",
+        ocr_status: "completed", // Manual amendments don't require OCR processing
         ocr_data: {
           new_mw: values.newMw || null,
           new_period_end: values.newPeriodEnd?.toISOString() || null,
