@@ -571,7 +571,10 @@ const ContractDetails = () => {
               {contract.package === "starter" ? (
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Annual Package Fee</p>
-                  <p className="font-medium">$3,000</p>
+                  <p className="font-medium">
+                    {contract.currency === 'EUR' ? '€' : '$'}
+                    {contract.minimum_annual_value?.toLocaleString() || '0'}
+                  </p>
                 </div>
               ) : (
                 <>
