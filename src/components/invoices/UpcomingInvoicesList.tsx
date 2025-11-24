@@ -164,6 +164,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       portfolioDiscountTiers: invoice.portfolioDiscountTiers,
       minimumAnnualValue: invoice.minimumAnnualValue,
       frequencyMultiplier: multiplier,
+      ammpCapabilities: invoice.ammpCapabilities,
       assetBreakdown,
       enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0
     });
