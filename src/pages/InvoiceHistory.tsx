@@ -18,6 +18,7 @@ interface Invoice {
   id: string;
   invoice_date: string;
   customer_id: string;
+  contract_id: string | null;
   invoice_amount: number;
   billing_frequency: string;
   xero_invoice_id: string | null;
@@ -96,6 +97,12 @@ export default function InvoiceHistory() {
     if (!selectedInvoice) return;
 
     try {
+      // Get invoice details before deletion
+      const invoiceDate = new Date(selectedInvoice.invoice_date);
+      const contractId = selectedInvoice.contract_id;
+      const billingFrequency = selectedInvoice.billing_frequency;
+
+      // Delete the invoice
       const { error } = await supabase
         .from('invoices')
         .delete()
@@ -103,7 +110,52 @@ export default function InvoiceHistory() {
 
       if (error) throw error;
 
-      toast.success('Invoice deleted successfully');
+      // Roll back the contract's next_invoice_date if we have a contract_id
+      if (contractId) {
+        // Calculate the period end (day before invoice date)
+        const periodEnd = new Date(invoiceDate);
+        periodEnd.setDate(periodEnd.getDate() - 1);
+        
+        // Calculate the previous period start based on billing frequency
+        let previousPeriodStart = new Date(periodEnd);
+        switch (billingFrequency) {
+          case 'monthly':
+            previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 1);
+            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
+            break;
+          case 'quarterly':
+            previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 3);
+            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
+            break;
+          case 'biannual':
+            previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 6);
+            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
+            break;
+          case 'annual':
+            previousPeriodStart.setFullYear(previousPeriodStart.getFullYear() - 1);
+            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
+            break;
+        }
+
+        const { error: updateError } = await supabase
+          .from('contracts')
+          .update({
+            next_invoice_date: invoiceDate.toISOString(),
+            period_start: previousPeriodStart.toISOString(),
+            period_end: periodEnd.toISOString()
+          })
+          .eq('id', contractId);
+
+        if (updateError) {
+          console.error('Error updating contract:', updateError);
+          toast.warning('Invoice deleted but contract dates may not have been updated');
+        } else {
+          toast.success('Invoice deleted - contract will reappear in upcoming invoices');
+        }
+      } else {
+        toast.success('Invoice deleted successfully');
+      }
+
       fetchInvoices();
     } catch (error) {
       console.error('Error deleting invoice:', error);
