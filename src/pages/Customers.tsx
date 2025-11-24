@@ -29,6 +29,7 @@ interface CustomerData {
   joinDate: string;
   lastInvoiced: string;
   contractId: string;
+  package?: string;
   ammpOrgId?: string;
   ammpAssetIds?: string[];
   ammpCapabilities?: any;
@@ -101,6 +102,53 @@ const Customers = () => {
           if (contract.package === 'starter') {
             // Starter package fixed annual cost
             annualValue = contract.minimum_annual_value || 3000;
+          } else if (contract.package === 'hybrid_tiered') {
+            // Hybrid tiered package - use per-MWp rates
+            const ongridPrice = contract.custom_pricing?.ongrid_per_mwp || 0;
+            const hybridPrice = contract.custom_pricing?.hybrid_per_mwp || 0;
+            
+            // If AMMP capabilities available, use them to split MW
+            if (contract.ammp_capabilities?.ongridTotalMW !== undefined && 
+                contract.ammp_capabilities?.hybridTotalMW !== undefined) {
+              const ongridMW = contract.ammp_capabilities.ongridTotalMW;
+              const hybridMW = contract.ammp_capabilities.hybridTotalMW;
+              annualValue = (ongridMW * ongridPrice) + (hybridMW * hybridPrice);
+            } else {
+              // Fallback: treat all MW as ongrid
+              annualValue = mwpManaged * ongridPrice;
+            }
+            
+            // Add recurring addons (annual cost)
+            const addons = Array.isArray(contract.addons) ? contract.addons : [];
+            const recurringAddons = [
+              { id: 'satelliteDataAPI', pricePerMW: 6 },
+              { id: 'tmCustomDashboards', price: 1000 },
+              { id: 'tmCustomReports', price: 1500 },
+              { id: 'tmCustomAlerts', price: 150 },
+              { id: 'eshCustomDashboard', price: 1000 },
+              { id: 'eshCustomReport', price: 1500 },
+              { id: 'spCustomDashboard', price: 1000 },
+              { id: 'spCustomReport', price: 1500 }
+            ];
+            
+            addons.forEach((addon: any) => {
+              const addonId = typeof addon === 'string' ? addon : addon.id;
+              const addonConfig = recurringAddons.find(a => a.id === addonId);
+              if (addonConfig) {
+                if ('pricePerMW' in addonConfig) {
+                  annualValue += addonConfig.pricePerMW * mwpManaged;
+                } else {
+                  annualValue += addonConfig.price;
+                }
+              }
+            });
+            
+            // Use minimum_annual_value if specified and higher
+            const minimumValue = contract.minimum_annual_value || 0;
+            annualValue = Math.max(annualValue, minimumValue);
+          } else if (contract.package === 'capped') {
+            // Capped package - fixed annual fee
+            annualValue = contract.minimum_annual_value || 0;
           } else {
             // Pro or Custom package - calculate module costs (annual)
             const defaultPrices: {[key: string]: number} = {
@@ -121,7 +169,7 @@ const Customers = () => {
             // Add recurring addons (annual cost)
             const addons = Array.isArray(contract.addons) ? contract.addons : [];
             const recurringAddons = [
-              { id: 'satelliteDataAPI', pricePerMW: 6 }, // €6/MW/year
+              { id: 'satelliteDataAPI', pricePerMW: 6 },
               { id: 'tmCustomDashboards', price: 1000 },
               { id: 'tmCustomReports', price: 1500 },
               { id: 'tmCustomAlerts', price: 150 },
@@ -145,8 +193,7 @@ const Customers = () => {
             
             // Compare with minimum annual value and use the higher
             const minimumValue = contract.minimum_annual_value || 
-              (contract.package === 'pro' ? 5000 : 
-               contract.package === 'hybrid_tiered' ? (contract.minimum_annual_value || 0) : 0);
+              (contract.package === 'pro' ? 5000 : 0);
             annualValue = Math.max(annualValue, minimumValue);
           }
           
@@ -181,6 +228,7 @@ const Customers = () => {
         joinDate: firstSignedDate || c.join_date || new Date().toISOString(),
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
         contractId: activeContract?.id || '',
+        package: activeContract?.package || undefined,
         ammpOrgId: c.ammp_org_id || undefined,
         ammpAssetIds: (Array.isArray(c.ammp_asset_ids) ? c.ammp_asset_ids : undefined) as string[] | undefined,
         ammpCapabilities: c.ammp_capabilities || undefined,
@@ -580,6 +628,7 @@ const Customers = () => {
               status={customer.status}
               modules={customer.modules}
               addOns={customer.addOns}
+              package={customer.package}
               joinDate={customer.joinDate}
               lastInvoiced={customer.lastInvoiced}
               contractId={customer.contractId}

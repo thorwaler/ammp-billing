@@ -36,6 +36,7 @@ interface CustomerCardProps {
   status: "active" | "pending" | "inactive";
   modules: string[];
   addOns: string[];
+  package?: string;
   joinDate?: string;
   lastInvoiced?: string;
   contractId?: string;
@@ -59,6 +60,7 @@ export function CustomerCard({
   status,
   modules,
   addOns,
+  package: packageType,
   joinDate,
   lastInvoiced,
   contractId,
@@ -317,15 +319,26 @@ export function CustomerCard({
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
             <div className="font-medium">{formattedLastInvoiced}</div>
           </div>
-          {modules.length > 0 && (
+          {(modules.length > 0 || packageType === 'hybrid_tiered') && (
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Modules</div>
               <div className="flex flex-wrap gap-1">
-                {modules.map((moduleId) => (
-                  <Badge key={moduleId} variant="outline" className="text-xs">
-                    {getDisplayName(moduleId, true)}
-                  </Badge>
-                ))}
+                {packageType === 'hybrid_tiered' ? (
+                  <>
+                    <Badge variant="outline" className="text-xs">
+                      Technical Monitoring
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      Hybrid
+                    </Badge>
+                  </>
+                ) : (
+                  modules.map((moduleId) => (
+                    <Badge key={moduleId} variant="outline" className="text-xs">
+                      {getDisplayName(moduleId, true)}
+                    </Badge>
+                  ))
+                )}
               </div>
             </div>
           )}
