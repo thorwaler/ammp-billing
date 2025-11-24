@@ -35,6 +35,34 @@ export interface CalculationParams {
     ongridTotalMW?: number;
     hybridTotalMW?: number;
   };
+  assetBreakdown?: Array<{
+    assetId: string;
+    assetName: string;
+    totalMW: number;
+    isHybrid?: boolean;
+  }>;
+  enableSiteMinimumPricing?: boolean;
+}
+
+export interface SiteMinimumPricingResult {
+  sitesAboveThreshold: {
+    assetId: string;
+    assetName: string;
+    mw: number;
+    calculatedCost: number;
+    usesNormalPricing: true;
+  }[];
+  sitesBelowThreshold: {
+    assetId: string;
+    assetName: string;
+    mw: number;
+    calculatedCost: number;
+    minimumCharge: number;
+    usesMinimumPricing: true;
+  }[];
+  normalPricingTotal: number;
+  minimumPricingTotal: number;
+  totalSitesOnMinimum: number;
 }
 
 export interface CalculationResult {
@@ -61,6 +89,64 @@ export interface CalculationResult {
   hybridTieredBreakdown?: {
     ongrid: { mw: number; cost: number; rate: number };
     hybrid: { mw: number; cost: number; rate: number };
+  };
+  siteMinimumPricingBreakdown?: SiteMinimumPricingResult;
+}
+
+/**
+ * Calculate site-level minimum pricing
+ * Identifies sites where calculated cost is below minimum charge threshold
+ */
+export function calculateSiteMinimumPricing(
+  assetBreakdown: Array<{
+    assetId: string;
+    assetName: string;
+    totalMW: number;
+    isHybrid?: boolean;
+  }>,
+  perMWpRate: number,
+  totalPortfolioMW: number,
+  minimumChargeTiers: MinimumChargeTier[],
+  frequencyMultiplier: number
+): SiteMinimumPricingResult {
+  const applicableMinCharge = getApplicableMinimumCharge(totalPortfolioMW, minimumChargeTiers);
+  
+  const sitesAboveThreshold: SiteMinimumPricingResult['sitesAboveThreshold'] = [];
+  const sitesBelowThreshold: SiteMinimumPricingResult['sitesBelowThreshold'] = [];
+  
+  for (const asset of assetBreakdown) {
+    const normalCost = asset.totalMW * perMWpRate * frequencyMultiplier;
+    const minimumCharge = applicableMinCharge * frequencyMultiplier;
+    
+    if (normalCost < minimumCharge) {
+      sitesBelowThreshold.push({
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        mw: asset.totalMW,
+        calculatedCost: normalCost,
+        minimumCharge,
+        usesMinimumPricing: true
+      });
+    } else {
+      sitesAboveThreshold.push({
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        mw: asset.totalMW,
+        calculatedCost: normalCost,
+        usesNormalPricing: true
+      });
+    }
+  }
+  
+  const normalPricingTotal = sitesAboveThreshold.reduce((sum, site) => sum + site.calculatedCost, 0);
+  const minimumPricingTotal = sitesBelowThreshold.reduce((sum, site) => sum + site.minimumCharge, 0);
+  
+  return {
+    sitesAboveThreshold,
+    sitesBelowThreshold,
+    normalPricingTotal,
+    minimumPricingTotal,
+    totalSitesOnMinimum: sitesBelowThreshold.length
   };
 }
 
@@ -265,8 +351,37 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
     
-    // Apply minimum for Pro package
-    if (packageType === 'pro') {
+    // Apply site-level minimum pricing if enabled and data available
+    if (params.enableSiteMinimumPricing && 
+        params.assetBreakdown && 
+        params.assetBreakdown.length > 0 &&
+        params.minimumChargeTiers &&
+        params.minimumChargeTiers.length > 0) {
+      
+      // Calculate per-MWp rate from selected modules
+      const perMWpRate = params.selectedModules.reduce((sum, moduleId) => {
+        const module = MODULES.find(m => m.id === moduleId);
+        const price = params.customPricing?.[moduleId] ?? module?.price ?? 0;
+        return sum + price;
+      }, 0);
+      
+      // Calculate site minimum pricing breakdown
+      const siteMinPricing = calculateSiteMinimumPricing(
+        params.assetBreakdown,
+        perMWpRate,
+        totalMW,
+        params.minimumChargeTiers,
+        frequencyMultiplier
+      );
+      
+      // Replace totalMWCost and minimumCharges with site-aware calculation
+      result.totalMWCost = siteMinPricing.normalPricingTotal;
+      result.minimumCharges = siteMinPricing.minimumPricingTotal;
+      result.siteMinimumPricingBreakdown = siteMinPricing;
+    }
+    
+    // Apply minimum for Pro package (only if not using site-level pricing)
+    if (packageType === 'pro' && !params.enableSiteMinimumPricing) {
       const proMinimum = minimumAnnualValue || 5000;
       if (totalMWCost < proMinimum * frequencyMultiplier) {
         result.totalMWCost = proMinimum * frequencyMultiplier;
@@ -277,14 +392,16 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   // Calculate addon costs
   result.addonCosts = calculateAddonCosts(selectedAddons, frequencyMultiplier, params.billingFrequency);
   
-  // Calculate minimum charges (with tier support)
-  result.minimumCharges = calculateMinimumCharges(
-    minimumCharge,
-    sitesUnderThreshold,
-    frequencyMultiplier,
-    totalMW,
-    params.minimumChargeTiers
-  );
+  // Calculate minimum charges (with tier support) - only if not already set by site-level pricing
+  if (!result.siteMinimumPricingBreakdown) {
+    result.minimumCharges = calculateMinimumCharges(
+      minimumCharge,
+      sitesUnderThreshold,
+      frequencyMultiplier,
+      totalMW,
+      params.minimumChargeTiers
+    );
+  }
   
   // Calculate total
   result.totalPrice = 

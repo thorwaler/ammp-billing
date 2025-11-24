@@ -97,6 +97,8 @@ interface Customer {
   modules: string[];
   addons: any[];
   minimumCharge?: number;
+  minimumChargeTiers?: any[];
+  portfolioDiscountTiers?: any[];
   customPricing?: any;
   minimumAnnualValue?: number;
   volumeDiscounts?: any;
@@ -124,7 +126,6 @@ export function InvoiceCalculator({
   const [customer, setCustomer] = useState("");
   const [mwManaged, setMwManaged] = useState<number | "">("");
   const [sites, setSites] = useState<number | "">("");
-  const [sitesUnderThreshold, setSitesUnderThreshold] = useState<number | "">("");
   const [solcastSites, setSolcastSites] = useState<number | "">("");
   const [modules, setModules] = useState<Module[]>(defaultModules);
   const [addons, setAddons] = useState<Addon[]>(defaultAddons);
@@ -160,6 +161,8 @@ export function InvoiceCalculator({
             addons,
             custom_pricing,
             minimum_charge,
+            minimum_charge_tiers,
+            portfolio_discount_tiers,
             minimum_annual_value,
             volume_discounts,
             currency,
@@ -184,6 +187,8 @@ export function InvoiceCalculator({
           const addons = Array.isArray(contract.addons) ? contract.addons : [];
           const customPricing = typeof contract.custom_pricing === 'object' && contract.custom_pricing !== null ? contract.custom_pricing as {[key: string]: number} : {};
           const volumeDiscounts = typeof contract.volume_discounts === 'object' && contract.volume_discounts !== null ? contract.volume_discounts as any : {};
+          const minimumChargeTiers = Array.isArray(contract.minimum_charge_tiers) ? contract.minimum_charge_tiers : [];
+          const portfolioDiscountTiers = Array.isArray(contract.portfolio_discount_tiers) ? contract.portfolio_discount_tiers : [];
           
           return {
             id: c.id,
@@ -193,6 +198,8 @@ export function InvoiceCalculator({
             modules,
             addons,
             minimumCharge: Number(contract.minimum_charge) || 0,
+            minimumChargeTiers,
+            portfolioDiscountTiers,
             minimumAnnualValue: Number(contract.minimum_annual_value) || 0,
             customPricing,
             volumeDiscounts,
@@ -266,7 +273,6 @@ export function InvoiceCalculator({
         // Reset site values if customer has no minimum charge
         if (!customerData.minimumCharge) {
           setSites("");
-          setSitesUnderThreshold("");
         }
         // Set initial MW managed
         setMwManaged(customerData.mwManaged);
@@ -391,7 +397,6 @@ export function InvoiceCalculator({
     mwManaged,         // MW value changes
     modules,           // Module selection changes
     addons,            // Addon selection/quantity changes
-    sitesUnderThreshold,
     invoiceDate
   ]);
 
@@ -558,7 +563,47 @@ export function InvoiceCalculator({
       }
     }
     
-    // Calculate addon costs
+    // Prepare asset breakdown for site-level pricing
+    const assetBreakdown = selectedCustomer.ammpCapabilities?.assetBreakdown?.map((asset: any) => ({
+      assetId: asset.assetId,
+      assetName: asset.assetName,
+      totalMW: asset.totalMW,
+      isHybrid: asset.isHybrid
+    }));
+    
+    // Enable site minimum pricing if we have asset breakdown and minimum charge tiers
+    const enableSiteMinPricing = !!(
+      assetBreakdown && 
+      assetBreakdown.length > 0
+    );
+    
+    // Use shared calculation logic with all parameters
+    const params: CalculationParams = {
+      packageType: selectedCustomer.package,
+      totalMW,
+      selectedModules: modules.filter(m => m.selected).map(m => m.id),
+      selectedAddons: addons.filter(a => a.selected).map(a => ({
+        id: a.id,
+        complexity: a.complexity,
+        customPrice: a.customPrice,
+        quantity: a.quantity,
+        customTiers: a.customTiers
+      })),
+      customPricing: selectedCustomer.customPricing,
+      minimumAnnualValue: selectedCustomer.minimumAnnualValue,
+      minimumCharge: selectedCustomer.minimumCharge,
+      minimumChargeTiers: selectedCustomer.minimumChargeTiers,
+      portfolioDiscountTiers: selectedCustomer.portfolioDiscountTiers,
+      frequencyMultiplier,
+      billingFrequency,
+      ammpCapabilities: selectedCustomer.ammpCapabilities,
+      assetBreakdown,
+      enableSiteMinimumPricing: enableSiteMinPricing
+    };
+    
+    calculationResult = calculateInvoice(params);
+    
+    // Calculate addon costs (legacy code - now handled in shared function)
     const selectedAddons = addons.filter(a => a.selected);
     
     calculationResult.addonCosts = selectedAddons.map(addon => {
@@ -610,21 +655,6 @@ export function InvoiceCalculator({
       };
     });
     
-    // Calculate minimum charges if applicable
-    let minimumCharges = 0;
-    if (selectedCustomer.minimumCharge && sitesUnderThreshold) {
-      minimumCharges = Number(selectedCustomer.minimumCharge) * Number(sitesUnderThreshold) * frequencyMultiplier;
-    }
-    
-    calculationResult.minimumCharges = minimumCharges;
-    
-    // Calculate final total
-    calculationResult.totalPrice = 
-      calculationResult.starterPackageCost + 
-      calculationResult.totalMWCost + 
-      calculationResult.addonCosts.reduce((sum, item) => sum + item.cost, 0) +
-      calculationResult.minimumCharges;
-    
       // Store result with invoice period
       setResult({ ...calculationResult, invoicePeriod } as any);
       setShowResult(true);
@@ -671,8 +701,11 @@ export function InvoiceCalculator({
       }
       
       if (result.minimumCharges > 0) {
+        const siteCount = result.siteMinimumPricingBreakdown?.totalSitesOnMinimum || 0;
         lineItems.push({
-          Description: `Minimum Charges (${sitesUnderThreshold} sites)`,
+          Description: siteCount > 0 
+            ? `Minimum Charges (${siteCount} sites)` 
+            : "Minimum Charges",
           Quantity: 1,
           UnitAmount: result.minimumCharges,
           AccountCode: "200"
@@ -790,7 +823,6 @@ export function InvoiceCalculator({
         setCustomer("");
         setMwManaged("");
         setSites("");
-        setSitesUnderThreshold("");
         setModules(defaultModules);
         setAddons(defaultAddons);
         setSelectedCustomer(null);
@@ -1016,34 +1048,6 @@ export function InvoiceCalculator({
                       min={0}
                       value={sites}
                       onChange={(e) => setSites(e.target.value ? Number(e.target.value) : "")}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="sites-threshold">
-                      Sites Under Threshold
-                      <span className="text-xs text-muted-foreground ml-1">
-                        (Sites below {selectedCustomer.volumeDiscounts?.siteSizeThreshold || 3} MW)
-                      </span>
-                    </Label>
-                    <Input
-                      id="sites-threshold"
-                      type="number"
-                      placeholder="Sites under threshold"
-                      min={0}
-                      max={sites || 0}
-                      value={sitesUnderThreshold}
-                      onChange={(e) => {
-                        const value = e.target.value ? Number(e.target.value) : "";
-                        if (value && sites && value > sites) {
-                          toast({
-                            title: "Invalid value",
-                            description: "Sites under threshold cannot exceed total sites",
-                            variant: "destructive",
-                          });
-                          return;
-                        }
-                        setSitesUnderThreshold(value);
-                      }}
                     />
                   </div>
                 </div>
@@ -1396,11 +1400,62 @@ export function InvoiceCalculator({
             )}
             
             {result.minimumCharges > 0 && (
-              <div className="space-y-1 text-sm mb-3">
-                <div className="flex justify-between">
-                  <span>Minimum Charges ({sitesUnderThreshold} sites):</span>
+              <div className="space-y-2 mb-3">
+                <div className="flex justify-between text-sm">
+                  <span>Minimum Charges{result.siteMinimumPricingBreakdown?.totalSitesOnMinimum ? ` (${result.siteMinimumPricingBreakdown.totalSitesOnMinimum} sites)` : ''}:</span>
                   <span>{formatCurrency(result.minimumCharges)}</span>
                 </div>
+                
+                {/* Site-level breakdown if available */}
+                {result.siteMinimumPricingBreakdown && (
+                  <details className="text-xs bg-muted/30 p-3 rounded-md border">
+                    <summary className="cursor-pointer font-medium mb-2">
+                      View site pricing breakdown
+                    </summary>
+                    <div className="space-y-3 mt-2">
+                      {result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 && (
+                        <div>
+                          <div className="font-medium mb-1 text-orange-600 dark:text-orange-400">
+                            Sites using minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length}):
+                          </div>
+                          <div className="space-y-1 pl-2">
+                            {result.siteMinimumPricingBreakdown.sitesBelowThreshold.map((site) => (
+                              <div key={site.assetId} className="flex justify-between items-center py-1 border-b border-border/30">
+                                <div className="flex-1">
+                                  <div className="font-medium">{site.assetName}</div>
+                                  <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="line-through text-muted-foreground">{formatCurrency(site.calculatedCost)}</div>
+                                  <div className="font-medium text-orange-600 dark:text-orange-400">{formatCurrency(site.minimumCharge)}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
+                        <div>
+                          <div className="font-medium mb-1 text-green-600 dark:text-green-400">
+                            Sites using normal pricing ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length}):
+                          </div>
+                          <div className="space-y-1 pl-2">
+                            {result.siteMinimumPricingBreakdown.sitesAboveThreshold.map((site) => (
+                              <div key={site.assetId} className="flex justify-between items-center py-1 border-b border-border/30 last:border-b-0">
+                                <div className="flex-1">
+                                  <div className="font-medium">{site.assetName}</div>
+                                  <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
+                                </div>
+                                <div className="font-medium">{formatCurrency(site.calculatedCost)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                )}
               </div>
             )}
             
