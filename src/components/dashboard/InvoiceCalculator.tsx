@@ -730,7 +730,7 @@ export function InvoiceCalculator({
       if (error) throw error;
       
       // Extract Xero invoice ID from response
-      const xeroInvoiceId = data?.Invoices?.[0]?.InvoiceID;
+      const xeroInvoiceId = data?.invoice?.Invoices?.[0]?.InvoiceID;
       
       toast({
         title: "Invoice sent to Xero",

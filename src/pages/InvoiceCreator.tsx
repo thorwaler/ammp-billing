@@ -1,9 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { UpcomingInvoicesList } from "@/components/invoices/UpcomingInvoicesList";
 import { InvoiceCalculatorDialog } from "@/components/invoices/InvoiceCalculatorDialog";
 import { Button } from "@/components/ui/button";
-import { FileText, Calculator, Plus } from "lucide-react";
+import { FileText, Calculator, Plus, History } from "lucide-react";
 
 interface UpcomingInvoice {
   customerId: string;
@@ -19,6 +20,7 @@ interface UpcomingInvoice {
 }
 
 const InvoiceCreator = () => {
+  const navigate = useNavigate();
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<UpcomingInvoice | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -52,10 +54,16 @@ const InvoiceCreator = () => {
               Create and manage customer invoices based on contracts and usage
             </p>
           </div>
-          <Button onClick={handleOpenBlankCalculator} variant="outline" size="sm">
-            <Calculator className="h-4 w-4 mr-2" />
-            Calculator
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={() => navigate('/invoice-history')} variant="outline" size="sm">
+              <History className="h-4 w-4 mr-2" />
+              History
+            </Button>
+            <Button onClick={handleOpenBlankCalculator} variant="outline" size="sm">
+              <Calculator className="h-4 w-4 mr-2" />
+              Calculator
+            </Button>
+          </div>
         </div>
 
         {/* Action Bar */}
