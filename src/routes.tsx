@@ -10,6 +10,7 @@ import NotFound from "./pages/NotFound";
 import UserManagement from "./pages/UserManagement";
 import ContractDetails from "./pages/ContractDetails";
 import Integrations from "./pages/Integrations";
+import Notifications from "./pages/Notifications";
 
 const AppRoutes = () => (
   <BrowserRouter>
@@ -23,6 +24,7 @@ const AppRoutes = () => (
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
+      <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </BrowserRouter>

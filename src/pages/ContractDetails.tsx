@@ -576,6 +576,57 @@ const ContractDetails = () => {
                     {contract.minimum_annual_value?.toLocaleString() || '0'}
                   </p>
                 </div>
+              ) : contract.package === "capped" ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Fixed Annual Fee</p>
+                    <p className="font-medium">
+                      {contract.currency === 'EUR' ? '€' : '$'}
+                      {contract.minimum_annual_value?.toLocaleString() || '0'}
+                    </p>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Maximum MW Cap</p>
+                    <p className="font-medium">{contract.max_mw?.toLocaleString() || '0'} MW</p>
+                  </div>
+                  
+                  {customer && contract.max_mw && (
+                    <>
+                      <Separator />
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">Current MW vs Cap</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <div className="flex justify-between text-xs mb-1">
+                              <span>{customer.mwp_managed?.toFixed(2) || 0} MW</span>
+                              <span>{contract.max_mw?.toFixed(2)} MW</span>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all ${
+                                  (customer.mwp_managed || 0) > contract.max_mw ? 'bg-destructive' :
+                                  (customer.mwp_managed || 0) / contract.max_mw > 0.8 ? 'bg-yellow-500' :
+                                  'bg-green-500'
+                                }`}
+                                style={{ 
+                                  width: `${Math.min(100, ((customer.mwp_managed || 0) / contract.max_mw) * 100)}%` 
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        {(customer.mwp_managed || 0) > contract.max_mw && (
+                          <p className="text-xs text-destructive font-medium">
+                            ⚠️ MW capacity exceeded by {((customer.mwp_managed || 0) - contract.max_mw).toFixed(2)} MW
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </>
               ) : (
                 <>
                   <div className="space-y-1">

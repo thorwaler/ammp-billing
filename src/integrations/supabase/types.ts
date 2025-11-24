@@ -83,6 +83,7 @@ export type Database = {
           customer_id: string
           id: string
           initial_mw: number
+          max_mw: number | null
           minimum_annual_value: number | null
           minimum_charge: number | null
           modules: Json | null
@@ -111,6 +112,7 @@ export type Database = {
           customer_id: string
           id?: string
           initial_mw: number
+          max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
           modules?: Json | null
@@ -139,6 +141,7 @@ export type Database = {
           customer_id?: string
           id?: string
           initial_mw?: number
+          max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
           modules?: Json | null
@@ -317,6 +320,56 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          contract_id: string | null
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          message: string
+          metadata: Json | null
+          severity: string | null
+          title: string
+          type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          contract_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message: string
+          metadata?: Json | null
+          severity?: string | null
+          title: string
+          type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          contract_id?: string | null
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          message?: string
+          metadata?: Json | null
+          severity?: string | null
+          title?: string
+          type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
             referencedColumns: ["id"]
           },
         ]

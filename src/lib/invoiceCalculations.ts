@@ -232,6 +232,10 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     result.moduleCosts = moduleCosts;
     
     result.totalMWCost = breakdown.ongrid.cost + breakdown.hybrid.cost + totalMWCost;
+  } else if (packageType === 'capped') {
+    // Capped package - fixed annual fee regardless of MW
+    const minimumValue = minimumAnnualValue || 0;
+    result.starterPackageCost = minimumValue * frequencyMultiplier;
   } else {
     // Pro or Custom - calculate module costs
     const { moduleCosts, totalMWCost } = calculateModuleCosts(params);

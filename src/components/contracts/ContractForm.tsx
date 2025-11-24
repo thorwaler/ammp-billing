@@ -47,7 +47,8 @@ const contractFormSchema = z.object({
   signedDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped"]),
+  maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
   addonCustomPricing: z.record(z.coerce.number().optional()).optional(),
@@ -606,6 +607,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         volume_discounts: data.volumeDiscounts || {},
         minimum_charge: data.minimumCharge || 0,
         minimum_annual_value: data.minimumAnnualValue || 0,
+        max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
         user_id: user.id,
@@ -896,6 +898,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="pro">AMMP OS Pro (Per MW pricing, min €5000/year)</SelectItem>
                       <SelectItem value="custom">Custom/Legacy</SelectItem>
                       <SelectItem value="hybrid_tiered">Hybrid Tiered (Different pricing for on-grid vs hybrid sites)</SelectItem>
+                      <SelectItem value="capped">Capped Package (Fixed annual fee with MW cap)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -905,6 +908,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "AMMP OS Pro: Pricing per MW based on modules chosen, with a minimum of €5,000 per year." :
                       watchPackage === "hybrid_tiered" ? 
                       "Hybrid Tiered: Set different rates for on-grid and hybrid sites (with battery/genset)." :
+                      watchPackage === "capped" ?
+                      "Capped Package: Fixed annual fee with a maximum MW cap. Notifications will alert when MW exceeds the cap." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -912,7 +917,61 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               )}
             />
             
-            {/* Package Selector Component - Modules & Addons */}
+            {/* Capped Package Fields */}
+            {watchPackage === "capped" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-semibold text-sm">Capped Package Configuration</h3>
+                <p className="text-xs text-muted-foreground">
+                  Set a fixed annual fee with a maximum MW capacity. You'll receive notifications when the MW cap is approached or exceeded.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="minimumAnnualValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fixed Annual Fee ({form.watch("currency")})</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="e.g., 10000"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          The fixed annual fee for this contract
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="maxMw"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Maximum MW Cap</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            step="0.01"
+                            placeholder="e.g., 50"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          MW capacity limit for this contract
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {/* Package Selector Component - Modules & Addons (hidden for capped) */}
+            {watchPackage !== "capped" && (
             <ContractPackageSelector
               selectedPackage={watchPackage || ""}
               selectedModules={watchModules || []}
@@ -957,6 +1016,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 />
               )}
             />
+            )}
             
             {/* Hybrid Tiered Pricing Section */}
             {watchPackage === "hybrid_tiered" && (
