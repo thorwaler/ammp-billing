@@ -340,6 +340,15 @@ const Customers = () => {
     } else if (filterTab === "no-contracts") {
       // Show customers that have no contract AND are not inactive
       filtered = filtered.filter(c => !c.contractId && c.status !== "inactive");
+    } else if (filterTab === "has-ammp") {
+      // Show all customers with AMMP org ID, regardless of sync status
+      filtered = filtered.filter(c => c.ammpOrgId);
+    } else if (filterTab === "no-ammp") {
+      // Show all customers without AMMP org ID
+      filtered = filtered.filter(c => !c.ammpOrgId);
+    } else if (filterTab === "ammp-synced") {
+      // Show only customers with AMMP org ID AND have been synced at least once
+      filtered = filtered.filter(c => c.ammpOrgId && c.ammpSyncStatus !== 'never_synced');
     }
     
     // Apply search filter
@@ -524,6 +533,15 @@ const Customers = () => {
             </TabsTrigger>
             <TabsTrigger value="inactive">
               Inactive ({customersData.filter(c => c.status === "inactive").length})
+            </TabsTrigger>
+            <TabsTrigger value="has-ammp">
+              Has AMMP ({customersData.filter(c => c.ammpOrgId).length})
+            </TabsTrigger>
+            <TabsTrigger value="no-ammp">
+              No AMMP ({customersData.filter(c => !c.ammpOrgId).length})
+            </TabsTrigger>
+            <TabsTrigger value="ammp-synced">
+              AMMP Synced ({customersData.filter(c => c.ammpOrgId && c.ammpSyncStatus !== 'never_synced').length})
             </TabsTrigger>
           </TabsList>
         </Tabs>
