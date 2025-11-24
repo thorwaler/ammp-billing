@@ -483,7 +483,6 @@ export function InvoiceCalculator({
       // No module-based charges for Starter package
     } else if (selectedCustomer.package === 'hybrid_tiered') {
       // Hybrid Tiered package - uses fixed per-MWp rates for ongrid vs hybrid
-      // Modules are not factored into base pricing for this package type
       const capabilities = selectedCustomer.ammpCapabilities;
       const ongridPrice = selectedCustomer.customPricing?.ongrid_per_mwp || 0;
       const hybridPrice = selectedCustomer.customPricing?.hybrid_per_mwp || 0;
@@ -495,11 +494,31 @@ export function InvoiceCalculator({
         const ongridCost = ongridMW * ongridPrice * frequencyMultiplier;
         const hybridCost = hybridMW * hybridPrice * frequencyMultiplier;
         
-        calculationResult.totalMWCost = ongridCost + hybridCost;
         calculationResult.hybridTieredBreakdown = {
           ongrid: { mw: ongridMW, cost: ongridCost, rate: ongridPrice },
           hybrid: { mw: hybridMW, cost: hybridCost, rate: hybridPrice }
         };
+        
+        // Calculate module costs (exclude Technical Monitoring - already covered by hybrid pricing)
+        const selectedModules = modules.filter(m => 
+          m.selected && m.id !== 'technicalMonitoring'
+        );
+        
+        calculationResult.moduleCosts = selectedModules.map(module => ({
+          moduleId: module.id,
+          moduleName: module.name,
+          cost: module.price * totalMW * frequencyMultiplier,
+          rate: module.price,
+          mw: totalMW
+        }));
+        
+        const moduleTotalCost = calculationResult.moduleCosts.reduce(
+          (sum, item) => sum + item.cost, 
+          0
+        );
+        
+        // Total = hybrid breakdown + modules
+        calculationResult.totalMWCost = ongridCost + hybridCost + moduleTotalCost;
       } else {
         // Fallback if no AMMP data
         calculationResult.totalMWCost = totalMW * ongridPrice * frequencyMultiplier;
