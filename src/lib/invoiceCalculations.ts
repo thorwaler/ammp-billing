@@ -1,5 +1,14 @@
 // Shared invoice calculation logic
-import { MODULES, ADDONS, getAddonPrice, calculateTieredPrice, type ComplexityLevel, type PricingTier } from "@/data/pricingData";
+import { 
+  MODULES, 
+  ADDONS, 
+  getAddonPrice, 
+  calculateTieredPrice, 
+  type ComplexityLevel, 
+  type PricingTier,
+  type DiscountTier,
+  type MinimumChargeTier 
+} from "@/data/pricingData";
 
 export interface CalculationParams {
   packageType: string;
@@ -17,6 +26,8 @@ export interface CalculationParams {
   };
   minimumAnnualValue?: number;
   minimumCharge?: number;
+  minimumChargeTiers?: MinimumChargeTier[];
+  portfolioDiscountTiers?: DiscountTier[];
   sitesUnderThreshold?: number;
   frequencyMultiplier: number;
   billingFrequency?: string;
@@ -133,13 +144,25 @@ export function calculateAddonCosts(
 
 /**
  * Calculate minimum charges based on sites under threshold
+ * Now supports both legacy minimumCharge and new tiered system
  */
 export function calculateMinimumCharges(
   minimumCharge: number | undefined,
   sitesUnderThreshold: number | undefined,
-  frequencyMultiplier: number
+  frequencyMultiplier: number,
+  totalMW?: number,
+  minimumChargeTiers?: MinimumChargeTier[]
 ): number {
-  if (!minimumCharge || !sitesUnderThreshold) return 0;
+  if (!sitesUnderThreshold) return 0;
+  
+  // Use tiered system if available
+  if (minimumChargeTiers && minimumChargeTiers.length > 0 && totalMW !== undefined) {
+    const applicableCharge = getApplicableMinimumCharge(totalMW, minimumChargeTiers);
+    return applicableCharge * sitesUnderThreshold * frequencyMultiplier;
+  }
+  
+  // Fallback to legacy system
+  if (!minimumCharge) return 0;
   return minimumCharge * sitesUnderThreshold * frequencyMultiplier;
 }
 
@@ -254,11 +277,13 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   // Calculate addon costs
   result.addonCosts = calculateAddonCosts(selectedAddons, frequencyMultiplier, params.billingFrequency);
   
-  // Calculate minimum charges
+  // Calculate minimum charges (with tier support)
   result.minimumCharges = calculateMinimumCharges(
     minimumCharge,
     sitesUnderThreshold,
-    frequencyMultiplier
+    frequencyMultiplier,
+    totalMW,
+    params.minimumChargeTiers
   );
   
   // Calculate total
@@ -317,4 +342,38 @@ export function calculateProrationMultiplier(
   
   const standardDays = periodDays[frequency] || 365;
   return days / standardDays;
+}
+
+/**
+ * Helper to get applicable discount based on MW and discount tiers
+ */
+export function getApplicableDiscount(
+  totalMW: number,
+  discountTiers?: DiscountTier[]
+): number {
+  if (!discountTiers || discountTiers.length === 0) return 0;
+  
+  const applicableTier = discountTiers.find(tier => 
+    totalMW >= tier.minMW && 
+    (tier.maxMW === null || totalMW <= tier.maxMW)
+  );
+  
+  return applicableTier ? applicableTier.discountPercent : 0;
+}
+
+/**
+ * Helper to get applicable minimum charge based on MW and minimum charge tiers
+ */
+export function getApplicableMinimumCharge(
+  totalMW: number,
+  minimumChargeTiers?: MinimumChargeTier[]
+): number {
+  if (!minimumChargeTiers || minimumChargeTiers.length === 0) return 0;
+  
+  const applicableTier = minimumChargeTiers.find(tier => 
+    totalMW >= tier.minMW && 
+    (tier.maxMW === null || totalMW <= tier.maxMW)
+  );
+  
+  return applicableTier ? applicableTier.chargePerSite : 0;
 }

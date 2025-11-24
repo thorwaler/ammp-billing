@@ -31,6 +31,20 @@ export interface AddonDefinition {
   ammpSourceField?: string;
 }
 
+export interface DiscountTier {
+  minMW: number;
+  maxMW: number | null;
+  discountPercent: number;
+  label: string;
+}
+
+export interface MinimumChargeTier {
+  minMW: number;
+  maxMW: number | null;
+  chargePerSite: number;
+  label: string;
+}
+
 export const MODULES: ModuleDefinition[] = [
   { 
     id: "technicalMonitoring", 
@@ -59,6 +73,22 @@ export const MODULES: ModuleDefinition[] = [
     available: true, 
     trial: true 
   },
+];
+
+export const DEFAULT_PORTFOLIO_DISCOUNT_TIERS: DiscountTier[] = [
+  { minMW: 0, maxMW: 49.99, discountPercent: 0, label: "0-49 MW" },
+  { minMW: 50, maxMW: 99.99, discountPercent: 5, label: "50-99 MW" },
+  { minMW: 100, maxMW: 149.99, discountPercent: 10, label: "100-149 MW" },
+  { minMW: 150, maxMW: 199.99, discountPercent: 15, label: "150-199 MW" },
+  { minMW: 200, maxMW: null, discountPercent: 20, label: "200+ MW" }
+];
+
+export const DEFAULT_MINIMUM_CHARGE_TIERS: MinimumChargeTier[] = [
+  { minMW: 0, maxMW: 49.99, chargePerSite: 0, label: "0-49 MW" },
+  { minMW: 50, maxMW: 99.99, chargePerSite: 0, label: "50-99 MW" },
+  { minMW: 100, maxMW: 149.99, chargePerSite: 0, label: "100-149 MW" },
+  { minMW: 150, maxMW: 199.99, chargePerSite: 0, label: "150-199 MW" },
+  { minMW: 200, maxMW: null, chargePerSite: 0, label: "200+ MW" }
 ];
 
 export const ADDONS: AddonDefinition[] = [

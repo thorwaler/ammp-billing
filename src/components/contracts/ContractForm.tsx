@@ -6,7 +6,18 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ContractPackageSelector } from "@/components/contracts/ContractPackageSelector";
 import { ContractPdfUploader } from "@/components/contracts/ContractPdfUploader";
-import { MODULES, ADDONS, type ComplexityLevel, type PricingTier } from "@/data/pricingData";
+import { DiscountTierEditor } from "@/components/contracts/DiscountTierEditor";
+import { MinimumChargeTierEditor } from "@/components/contracts/MinimumChargeTierEditor";
+import { 
+  MODULES, 
+  ADDONS, 
+  type ComplexityLevel, 
+  type PricingTier,
+  type DiscountTier,
+  type MinimumChargeTier,
+  DEFAULT_PORTFOLIO_DISCOUNT_TIERS,
+  DEFAULT_MINIMUM_CHARGE_TIERS
+} from "@/data/pricingData";
 import {
   Select,
   SelectContent,
@@ -70,7 +81,9 @@ const contractFormSchema = z.object({
     portfolio150MW: z.coerce.number().optional(),
     portfolio200MW: z.coerce.number().optional(),
   }).optional(),
+  portfolioDiscountTiers: z.array(z.any()).optional(),
   minimumCharge: z.coerce.number().optional(),
+  minimumChargeTiers: z.array(z.any()).optional(),
   minimumAnnualValue: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
@@ -119,6 +132,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [addonCustomPrices, setAddonCustomPrices] = useState<{[key: string]: number | undefined}>({});
   const [addonQuantities, setAddonQuantities] = useState<{[key: string]: number | undefined}>({});
   const [addonCustomTiers, setAddonCustomTiers] = useState<Record<string, PricingTier[]>>({});
+  const [portfolioDiscountTiers, setPortfolioDiscountTiers] = useState<DiscountTier[]>(DEFAULT_PORTFOLIO_DISCOUNT_TIERS);
+  const [minimumChargeTiers, setMinimumChargeTiers] = useState<MinimumChargeTier[]>(DEFAULT_MINIMUM_CHARGE_TIERS);
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
@@ -172,7 +187,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         portfolio150MW: 15,
         portfolio200MW: 20,
       },
+      portfolioDiscountTiers: DEFAULT_PORTFOLIO_DISCOUNT_TIERS,
       minimumCharge: 0,
+      minimumChargeTiers: DEFAULT_MINIMUM_CHARGE_TIERS,
       minimumAnnualValue: 0,
       notes: "",
     },
@@ -183,6 +200,36 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
     if (existingContract) {
       setSelectedPackage(existingContract.package);
       setSelectedModules(existingContract.modules || []);
+      
+      // Initialize portfolio discount tiers
+      if ((existingContract as any).portfolioDiscountTiers) {
+        setPortfolioDiscountTiers((existingContract as any).portfolioDiscountTiers);
+      } else if (existingContract.volumeDiscounts) {
+        // Migrate old volume discounts to tier format if needed
+        const oldDiscounts = existingContract.volumeDiscounts as any;
+        setPortfolioDiscountTiers([
+          { minMW: 0, maxMW: 49.99, discountPercent: 0, label: "0-49 MW" },
+          { minMW: 50, maxMW: 99.99, discountPercent: oldDiscounts.portfolio50MW || 5, label: "50-99 MW" },
+          { minMW: 100, maxMW: 149.99, discountPercent: oldDiscounts.portfolio100MW || 10, label: "100-149 MW" },
+          { minMW: 150, maxMW: 199.99, discountPercent: oldDiscounts.portfolio150MW || 15, label: "150-199 MW" },
+          { minMW: 200, maxMW: null, discountPercent: oldDiscounts.portfolio200MW || 20, label: "200+ MW" }
+        ]);
+      }
+      
+      // Initialize minimum charge tiers
+      if ((existingContract as any).minimumChargeTiers) {
+        setMinimumChargeTiers((existingContract as any).minimumChargeTiers);
+      } else if (existingContract.minimumCharge) {
+        // Migrate old minimum charge to tier format if needed
+        const charge = existingContract.minimumCharge;
+        setMinimumChargeTiers([
+          { minMW: 0, maxMW: 49.99, chargePerSite: charge, label: "0-49 MW" },
+          { minMW: 50, maxMW: 99.99, chargePerSite: charge, label: "50-99 MW" },
+          { minMW: 100, maxMW: 149.99, chargePerSite: charge, label: "100-149 MW" },
+          { minMW: 150, maxMW: 199.99, chargePerSite: charge, label: "150-199 MW" },
+          { minMW: 200, maxMW: null, chargePerSite: charge, label: "200+ MW" }
+        ]);
+      }
       
       // Initialize addon states
       const addons = existingContract.addons || [];
@@ -321,6 +368,36 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         setAddonCustomPrices(customPriceMap);
         setAddonQuantities(quantityMap);
         setAddonCustomTiers(customTiersMap);
+        
+        // Load portfolio discount tiers
+        if ((contract as any).portfolio_discount_tiers && Array.isArray((contract as any).portfolio_discount_tiers)) {
+          setPortfolioDiscountTiers((contract as any).portfolio_discount_tiers);
+        } else if (contract.volume_discounts) {
+          // Migrate old volume discounts to tier format
+          const oldDiscounts = contract.volume_discounts as any;
+          setPortfolioDiscountTiers([
+            { minMW: 0, maxMW: 49.99, discountPercent: 0, label: "0-49 MW" },
+            { minMW: 50, maxMW: 99.99, discountPercent: oldDiscounts.portfolio50MW || 5, label: "50-99 MW" },
+            { minMW: 100, maxMW: 149.99, discountPercent: oldDiscounts.portfolio100MW || 10, label: "100-149 MW" },
+            { minMW: 150, maxMW: 199.99, discountPercent: oldDiscounts.portfolio150MW || 15, label: "150-199 MW" },
+            { minMW: 200, maxMW: null, discountPercent: oldDiscounts.portfolio200MW || 20, label: "200+ MW" }
+          ]);
+        }
+        
+        // Load minimum charge tiers
+        if ((contract as any).minimum_charge_tiers && Array.isArray((contract as any).minimum_charge_tiers)) {
+          setMinimumChargeTiers((contract as any).minimum_charge_tiers);
+        } else if (contract.minimum_charge) {
+          // Migrate old minimum charge to tier format
+          const charge = contract.minimum_charge;
+          setMinimumChargeTiers([
+            { minMW: 0, maxMW: 49.99, chargePerSite: charge, label: "0-49 MW" },
+            { minMW: 50, maxMW: 99.99, chargePerSite: charge, label: "50-99 MW" },
+            { minMW: 100, maxMW: 149.99, chargePerSite: charge, label: "100-149 MW" },
+            { minMW: 150, maxMW: 199.99, chargePerSite: charge, label: "150-199 MW" },
+            { minMW: 200, maxMW: null, chargePerSite: charge, label: "200+ MW" }
+          ]);
+        }
 
       } catch (error) {
         console.error('Error loading contract:', error);
@@ -608,7 +685,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         addons: enhancedAddons,
         custom_pricing: data.customPricing || {},
         volume_discounts: data.volumeDiscounts || {},
+        portfolio_discount_tiers: portfolioDiscountTiers,
         minimum_charge: data.minimumCharge || 0,
+        minimum_charge_tiers: minimumChargeTiers,
         minimum_annual_value: data.minimumAnnualValue || 0,
         max_mw: data.maxMw || null,
         notes: data.notes || '',
@@ -1047,23 +1126,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             
             <FormField
               control={form.control}
-              name="minimumCharge"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Minimum Charge per Site</FormLabel>
-                  <FormControl>
-                    <Input type="number" step="0.01" min="0" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Minimum charge to be applied per site (if applicable)
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={form.control}
               name="minimumAnnualValue"
               render={({ field }) => (
                 <FormItem>
@@ -1090,75 +1152,47 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               contractId={existingContractId || undefined}
             />
             
-            {/* Volume Discounts Section - Moved to bottom */}
-            <div className="border rounded-md p-4">
-              <h3 className="font-semibold mb-4">Volume Discounts</h3>
-              <div className="space-y-4">
-                <FormField
-                  control={form.control}
-                  name="volumeDiscounts.annualUpfrontDiscount"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Annual Upfront Payment Discount (%)</FormLabel>
-                      <FormControl>
-                        <Input type="number" step="0.1" min="0" max="100" {...field} />
-                      </FormControl>
-                      <FormDescription>
-                        Discount applied when customer pays annually upfront (default: 5%)
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Volume Discounts Section - Now using Tier Editors */}
+            <div className="space-y-4">
+              <DiscountTierEditor
+                tiers={portfolioDiscountTiers}
+                onTiersChange={setPortfolioDiscountTiers}
+                currentMW={form.watch("initialMW")}
+              />
+              
+              <div className="border rounded-md p-4">
+                <h3 className="font-semibold mb-4">Other Discounts</h3>
+                <div className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="volumeDiscounts.siteSizeThreshold"
+                    name="volumeDiscounts.annualUpfrontDiscount"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Site Size Threshold (MW)</FormLabel>
+                        <FormLabel>Annual Upfront Payment Discount (%)</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.1" min="0" {...field} />
+                          <Input type="number" step="0.1" min="0" max="100" {...field} />
                         </FormControl>
                         <FormDescription>
-                          Minimum site size for discount (default: 3MW)
+                          Discount applied when customer pays annually upfront (default: 5%)
                         </FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   
-                  <FormField
-                    control={form.control}
-                    name="volumeDiscounts.siteSizeDiscount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Site Size Discount (%)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.1" min="0" max="100" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          Discount for sites above threshold
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <div>
-                  <Label className="mb-2 block">Portfolio Size Discounts (%)</Label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
-                      name="volumeDiscounts.portfolio50MW"
+                      name="volumeDiscounts.siteSizeThreshold"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">50MW+</FormLabel>
+                          <FormLabel>Site Size Threshold (MW)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.1" min="0" max="100" {...field} />
+                            <Input type="number" step="0.1" min="0" {...field} />
                           </FormControl>
+                          <FormDescription>
+                            Minimum site size for discount (default: 3MW)
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1166,41 +1200,16 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                     
                     <FormField
                       control={form.control}
-                      name="volumeDiscounts.portfolio100MW"
+                      name="volumeDiscounts.siteSizeDiscount"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">100MW+</FormLabel>
+                          <FormLabel>Site Size Discount (%)</FormLabel>
                           <FormControl>
                             <Input type="number" step="0.1" min="0" max="100" {...field} />
                           </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="volumeDiscounts.portfolio150MW"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">150MW+</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.1" min="0" max="100" {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="volumeDiscounts.portfolio200MW"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="text-xs">200MW+</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.1" min="0" max="100" {...field} />
-                          </FormControl>
+                          <FormDescription>
+                            Discount for sites above threshold
+                          </FormDescription>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1208,6 +1217,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   </div>
                 </div>
               </div>
+              
+              <MinimumChargeTierEditor
+                tiers={minimumChargeTiers}
+                onTiersChange={setMinimumChargeTiers}
+                currentMW={form.watch("initialMW")}
+                currencySymbol={form.watch("currency") === "USD" ? "$" : "€"}
+              />
             </div>
             
             <FormField
