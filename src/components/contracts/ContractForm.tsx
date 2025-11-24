@@ -922,51 +922,29 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
                 <h3 className="font-semibold text-sm">Capped Package Configuration</h3>
                 <p className="text-xs text-muted-foreground">
-                  Set a fixed annual fee with a maximum MW capacity. You'll receive notifications when the MW cap is approached or exceeded.
+                  Set a maximum MW capacity. You'll receive notifications when the MW cap is approached or exceeded.
                 </p>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="minimumAnnualValue"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Fixed Annual Fee ({form.watch("currency")})</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            placeholder="e.g., 10000"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          The fixed annual fee for this contract
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="maxMw"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Maximum MW Cap</FormLabel>
-                        <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01"
-                            placeholder="e.g., 50"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormDescription>
-                          MW capacity limit for this contract
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                <FormField
+                  control={form.control}
+                  name="maxMw"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Maximum MW Cap</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          step="0.01"
+                          placeholder="e.g., 50"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        MW capacity limit for this contract
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
             )}
             
@@ -1086,13 +1064,18 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               name="minimumAnnualValue"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Minimum Annual Contract Value</FormLabel>
+                  <FormLabel>
+                    {watchPackage === "capped" 
+                      ? `Fixed Annual Fee (${form.watch("currency")})` 
+                      : "Minimum Annual Contract Value"}
+                  </FormLabel>
                   <FormControl>
                     <Input type="number" step="0.01" min="0" {...field} />
                   </FormControl>
                   <FormDescription>
-                    Minimum annual value for this contract (e.g., €5,000 for Pro). 
-                    Will be pro-rated based on billing frequency.
+                    {watchPackage === "capped"
+                      ? "The fixed annual fee for this capped package contract"
+                      : "Minimum annual value for this contract (e.g., €5,000 for Pro). Will be pro-rated based on billing frequency."}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
