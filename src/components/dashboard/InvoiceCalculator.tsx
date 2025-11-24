@@ -517,7 +517,9 @@ export function InvoiceCalculator({
         return {
           moduleId: module.id,
           moduleName: module.name,
-          cost: price * totalMW * frequencyMultiplier
+          cost: price * totalMW * frequencyMultiplier,
+          rate: price,
+          mw: totalMW
         };
       });
       
@@ -1290,7 +1292,7 @@ export function InvoiceCalculator({
                 <div className="space-y-1 text-sm pl-2">
                   {result.moduleCosts.map((item) => (
                     <div key={item.moduleId} className="flex justify-between">
-                      <span>{item.moduleName}:</span>
+                      <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{item.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
                       <span>{formatCurrency(item.cost)}</span>
                     </div>
                   ))}

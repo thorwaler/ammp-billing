@@ -31,6 +31,8 @@ export interface CalculationResult {
     moduleId: string;
     moduleName: string;
     cost: number;
+    rate: number;
+    mw: number;
   }[];
   addonCosts: {
     addonId: string;
@@ -73,7 +75,9 @@ export function calculateModuleCosts(params: CalculationParams): {
     return {
       moduleId: module.id,
       moduleName: module.name,
-      cost: price * totalMW * frequencyMultiplier
+      cost: price * totalMW * frequencyMultiplier,
+      rate: price,
+      mw: totalMW
     };
   }).filter(Boolean) as CalculationResult['moduleCosts'];
   
