@@ -301,6 +301,7 @@ const ContractDetails = () => {
                     initialMW: contract.initial_mw,
                     billingFrequency: contract.billing_frequency || 'annual',
                     manualInvoicing: contract.manual_invoicing,
+                    nextInvoiceDate: contract.next_invoice_date,
                     customPricing: contract.custom_pricing,
                     volumeDiscounts: contract.volume_discounts,
                     minimumCharge: contract.minimum_charge,
@@ -314,7 +315,8 @@ const ContractDetails = () => {
                     notes: contract.notes,
                     contractStatus: contract.contract_status,
                     portfolioDiscountTiers: contract.portfolio_discount_tiers,
-                    minimumChargeTiers: contract.minimum_charge_tiers
+                    minimumChargeTiers: contract.minimum_charge_tiers,
+                    siteChargeFrequency: contract.site_charge_frequency
                   }}
                   onComplete={() => {
                     setShowEditDialog(false);
@@ -353,6 +355,7 @@ const ContractDetails = () => {
               initialMW: contract.initial_mw,
               billingFrequency: contract.billing_frequency || 'annual',
               manualInvoicing: contract.manual_invoicing,
+              nextInvoiceDate: contract.next_invoice_date,
               customPricing: contract.custom_pricing,
               volumeDiscounts: contract.volume_discounts,
               minimumCharge: contract.minimum_charge,
@@ -366,7 +369,8 @@ const ContractDetails = () => {
               notes: contract.notes,
               contractStatus: contract.contract_status,
               portfolioDiscountTiers: contract.portfolio_discount_tiers,
-              minimumChargeTiers: contract.minimum_charge_tiers
+              minimumChargeTiers: contract.minimum_charge_tiers,
+              siteChargeFrequency: contract.site_charge_frequency
             }}
             isExtending={true}
             onComplete={() => {

@@ -111,6 +111,7 @@ interface ContractFormProps {
     initialMW: number;
     billingFrequency: string;
     manualInvoicing?: boolean;
+    nextInvoiceDate?: string;
     customPricing?: any;
     volumeDiscounts?: any;
     minimumCharge?: number;
@@ -160,6 +161,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       currency: existingContract.currency as "USD" | "EUR",
       billingFrequency: existingContract.billingFrequency as any,
       manualInvoicing: existingContract.manualInvoicing || false,
+      nextInvoiceDate: existingContract.nextInvoiceDate?.split('T')[0] || "",
       package: existingContract.package as any,
       maxMw: existingContract.maxMw,
       modules: existingContract.modules || [],
