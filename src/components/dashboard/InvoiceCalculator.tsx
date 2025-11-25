@@ -1453,7 +1453,7 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {result.minimumContractAdjustment && result.minimumContractAdjustment > 0 && (
+            {result.minimumContractAdjustment > 0 && (
               <div className="flex justify-between text-sm text-orange-600 dark:text-orange-400 mb-3">
                 <span>Minimum Contract Value Adjustment:</span>
                 <span className="font-medium">
