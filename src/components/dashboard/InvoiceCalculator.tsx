@@ -556,11 +556,8 @@ export function InvoiceCalculator({
       const moduleTotalCost = calculationResult.moduleCosts.reduce((sum, item) => sum + item.cost, 0);
       calculationResult.totalMWCost = moduleTotalCost;
       
-      // Ensure minimum annual contract value for Pro package
-      const proMinimum = selectedCustomer.minimumAnnualValue || 5000;
-      if (selectedCustomer.package === 'pro' && moduleTotalCost < proMinimum * frequencyMultiplier) {
-        calculationResult.totalMWCost = proMinimum * frequencyMultiplier;
-      }
+      // Note: Minimum annual contract value for Pro/Custom packages is now handled
+      // by the shared calculateInvoice() function via minimumContractAdjustment
     }
     
     // Prepare asset breakdown for site-level pricing
@@ -603,57 +600,18 @@ export function InvoiceCalculator({
     
     calculationResult = calculateInvoice(params);
     
-    // Calculate addon costs (legacy code - now handled in shared function)
-    const selectedAddons = addons.filter(a => a.selected);
-    
-    calculationResult.addonCosts = selectedAddons.map(addon => {
-      let addonPrice = 0;
-      
-      // Handle tiered pricing first
-      if (addon.tieredPricing && addon.quantity) {
-        const tierCalc = calculateTieredPrice(addon, addon.quantity, addon.customTiers);
-        
-        // Satellite Data API uses monthly pricing, multiply by period months
-        // Other addons are one-off costs, no multiplication needed
-        const priceMultiplier = addon.id === 'satelliteDataAPI' 
-          ? getPeriodMonthsMultiplier(billingFrequency)
-          : 1;
-        
-        return {
-          addonId: addon.id,
-          addonName: addon.name,
-          cost: tierCalc.totalPrice * priceMultiplier,
-          quantity: addon.quantity,
-          tierApplied: tierCalc.appliedTier,
-          pricePerUnit: tierCalc.pricePerUnit
-        };
-      }
-      
-      // Check for custom price override
-      if (addon.customPrice != null) {
-        addonPrice = addon.customPrice;
-      } else if (addon.complexityPricing && addon.complexity) {
-        if (addon.complexity === 'low' && addon.lowPrice) {
-          addonPrice = addon.lowPrice;
-        } else if (addon.complexity === 'medium' && addon.mediumPrice) {
-          addonPrice = addon.mediumPrice;
-        } else if (addon.complexity === 'high' && addon.highPrice) {
-          addonPrice = addon.highPrice;
-        }
-      } else if (addon.price) {
-        addonPrice = addon.price;
-      }
-      
-      const quantity = addon.quantity || 1;
-      
-      // One-off costs, no frequency multiplication
-      return {
-        addonId: addon.id,
-        addonName: addon.name,
-        cost: addonPrice * quantity,
-        quantity
-      };
+    // Debug logging for minimum contract adjustment
+    console.log('Invoice Calculation Debug:', {
+      package: selectedCustomer.package,
+      minimumAnnualValue: selectedCustomer.minimumAnnualValue,
+      frequencyMultiplier,
+      baseCost: calculationResult.totalMWCost + calculationResult.minimumCharges,
+      minimumContractAdjustment: calculationResult.minimumContractAdjustment,
+      totalPrice: calculationResult.totalPrice
     });
+    
+    // Note: Addon costs are now calculated by the shared calculateInvoice() function
+    // No need to recalculate them here
     
       // Store result with invoice period
       setResult({ ...calculationResult, invoicePeriod } as any);
