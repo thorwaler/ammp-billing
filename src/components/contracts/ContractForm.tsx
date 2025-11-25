@@ -124,11 +124,12 @@ interface ContractFormProps {
   onComplete?: () => void;
   onCancel?: () => void;
   isExtending?: boolean;
+  isNewContract?: boolean;
 }
 
 // Module and addon definitions now imported from shared data file
 
-export function ContractForm({ existingCustomer, existingContract, onComplete, onCancel, isExtending }: ContractFormProps) {
+export function ContractForm({ existingCustomer, existingContract, onComplete, onCancel, isExtending, isNewContract }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
@@ -289,7 +290,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
 
   // Load existing contract data if editing (only when no existingContract prop is provided)
   useEffect(() => {
-    if (existingContract) return; // Skip if we already have contract data from props
+    if (existingContract || isNewContract) return; // Skip if we already have contract data from props OR if explicitly creating a new contract
     
     const loadExistingContract = async () => {
       if (!existingCustomer?.id) return;
