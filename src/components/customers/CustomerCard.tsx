@@ -3,7 +3,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart, MoreHorizontal, CheckCircle2, AlertCircle } from "lucide-react";
+import { FileText, BarChart, MoreHorizontal, CheckCircle2, AlertCircle, PlusCircle } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
@@ -41,6 +41,7 @@ interface CustomerCardProps {
   lastInvoiced?: string;
   contractId?: string;
   hasContract: boolean;
+  contractCount?: number;
   ammpOrgId?: string;
   ammpAssetIds?: string[];
   ammpCapabilities?: any;
@@ -65,6 +66,7 @@ export function CustomerCard({
   lastInvoiced,
   contractId,
   hasContract,
+  contractCount = 1,
   ammpOrgId,
   ammpAssetIds,
   ammpCapabilities,
@@ -76,6 +78,7 @@ export function CustomerCard({
 }: CustomerCardProps) {
   const [showEditForm, setShowEditForm] = useState(false);
   const [showContractForm, setShowContractForm] = useState(false);
+  const [showAddContractForm, setShowAddContractForm] = useState(false);
 
   const handleMarkInactive = async () => {
     try {
@@ -158,7 +161,14 @@ export function CustomerCard({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <CardTitle className="text-lg">{name}</CardTitle>
+          <div className="flex flex-col">
+            <CardTitle className="text-lg">{name}</CardTitle>
+            {contractCount > 1 && (
+              <span className="text-xs text-muted-foreground mt-1">
+                {contractCount} contracts
+              </span>
+            )}
+          </div>
           <div className="flex items-center space-x-2">
             <Badge 
               variant={
@@ -388,6 +398,31 @@ export function CustomerCard({
                         onContractCreated?.();
                       }}
                       onCancel={() => setShowContractForm(false)}
+                    />
+                  </DialogContent>
+                </Dialog>
+                <Dialog open={showAddContractForm} onOpenChange={setShowAddContractForm}>
+                  <DialogTrigger asChild>
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      className="w-full"
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      Add Contract
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Add New Contract: {name}</DialogTitle>
+                    </DialogHeader>
+                    <ContractForm 
+                      existingCustomer={{ id, name, location, mwpManaged }}
+                      onComplete={() => {
+                        setShowAddContractForm(false);
+                        onContractCreated?.();
+                      }}
+                      onCancel={() => setShowAddContractForm(false)}
                     />
                   </DialogContent>
                 </Dialog>

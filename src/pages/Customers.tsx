@@ -29,6 +29,7 @@ interface CustomerData {
   joinDate: string;
   lastInvoiced: string;
   contractId: string;
+  contractCount: number;
   package?: string;
   ammpOrgId?: string;
   ammpAssetIds?: string[];
@@ -207,6 +208,9 @@ const Customers = () => {
       const addons = Array.isArray(activeContract?.addons) ? (activeContract.addons as any[]).map((a: any) => a.id || a) : [];
       const mwpManaged = Number(c.mwp_managed) || 0;
       
+      // Count total contracts for this customer
+      const contractCount = c.contracts?.length || 0;
+      
       // Find the earliest contract signed date across ALL contracts
       const firstSignedDate = c.contracts && c.contracts.length > 0
         ? c.contracts
@@ -228,6 +232,7 @@ const Customers = () => {
         joinDate: firstSignedDate || c.join_date || new Date().toISOString(),
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
         contractId: activeContract?.id || '',
+        contractCount,
         package: activeContract?.package || undefined,
         ammpOrgId: c.ammp_org_id || undefined,
         ammpAssetIds: (Array.isArray(c.ammp_asset_ids) ? c.ammp_asset_ids : undefined) as string[] | undefined,
@@ -633,6 +638,7 @@ const Customers = () => {
               lastInvoiced={customer.lastInvoiced}
               contractId={customer.contractId}
               hasContract={!!customer.contractId}
+              contractCount={customer.contractCount}
               ammpOrgId={customer.ammpOrgId}
               ammpAssetIds={customer.ammpAssetIds}
               ammpCapabilities={customer.ammpCapabilities}
