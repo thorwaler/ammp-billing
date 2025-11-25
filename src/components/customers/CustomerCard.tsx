@@ -502,7 +502,9 @@ export function CustomerCard({
                   >
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium capitalize">{contract.package}</span>
+                        <span className="font-medium">
+                          {(contract as any).contract_name || `${contract.package} Contract`}
+                        </span>
                         <Badge 
                           variant={contract.contract_status === 'active' ? 'default' : 'outline'}
                           className={contract.contract_status === 'active' ? 'bg-green-600' : ''}
@@ -510,6 +512,9 @@ export function CustomerCard({
                           {contract.contract_status}
                         </Badge>
                       </div>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        Package: {contract.package}
+                      </span>
                       {contract.signed_date && (
                         <span className="text-sm text-muted-foreground">
                           Signed: {new Date(contract.signed_date).toLocaleDateString()}

@@ -237,8 +237,15 @@ const ContractDetails = () => {
           <div>
             <div className="flex items-center gap-2">
               <FileText className="h-8 w-8 text-primary" />
-              <h1 className="text-3xl font-bold tracking-tight">{companyName}</h1>
-              <Badge 
+              <div className="flex flex-col">
+                <h1 className="text-3xl font-bold tracking-tight">{companyName}</h1>
+                {(contract as any).contract_name && (
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    {(contract as any).contract_name}
+                  </p>
+                )}
+              </div>
+              <Badge
                 variant={
                   contract.contract_status === 'active' ? 'default' : 
                   contract.contract_status === 'pending' ? 'secondary' : 
