@@ -112,6 +112,7 @@ interface ContractFormProps {
     volumeDiscounts?: any;
     minimumCharge?: number;
     minimumAnnualValue?: number;
+    baseMonthlyPrice?: number;
     maxMw?: number;
     currency: string;
     signedDate?: string;
@@ -159,6 +160,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       volumeDiscounts: existingContract.volumeDiscounts,
       minimumCharge: existingContract.minimumCharge,
       minimumAnnualValue: existingContract.minimumAnnualValue,
+      baseMonthlyPrice: existingContract.baseMonthlyPrice,
       notes: existingContract.notes,
       signedDate: existingContract.signedDate?.split('T')[0] || "",
       periodStart: existingContract.periodStart?.split('T')[0] || "",
@@ -695,6 +697,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         minimum_charge: data.minimumCharge || 0,
         minimum_charge_tiers: minimumChargeTiers,
         minimum_annual_value: data.minimumAnnualValue || 0,
+        base_monthly_price: data.baseMonthlyPrice || 0,
         max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
