@@ -43,6 +43,7 @@ export interface CalculationParams {
   }>;
   enableSiteMinimumPricing?: boolean;
   baseMonthlyPrice?: number;
+  siteChargeFrequency?: "monthly" | "annual";
 }
 
 export interface SiteMinimumPricingResult {
@@ -110,16 +111,28 @@ export function calculateSiteMinimumPricing(
   perMWpRate: number,
   totalPortfolioMW: number,
   minimumChargeTiers: MinimumChargeTier[],
-  frequencyMultiplier: number
+  frequencyMultiplier: number,
+  siteChargeFrequency: "monthly" | "annual" = "annual",
+  billingFrequency?: string
 ): SiteMinimumPricingResult {
   const applicableMinCharge = getApplicableMinimumCharge(totalPortfolioMW, minimumChargeTiers);
+  
+  // Calculate charge multiplier based on frequency
+  let chargeMultiplier: number;
+  if (siteChargeFrequency === "monthly") {
+    // Monthly charges: multiply by number of months in billing period
+    chargeMultiplier = getPeriodMonthsMultiplier(billingFrequency || "annual");
+  } else {
+    // Annual charges: use frequency multiplier
+    chargeMultiplier = frequencyMultiplier;
+  }
   
   const sitesAboveThreshold: SiteMinimumPricingResult['sitesAboveThreshold'] = [];
   const sitesBelowThreshold: SiteMinimumPricingResult['sitesBelowThreshold'] = [];
   
   for (const asset of assetBreakdown) {
     const normalCost = asset.totalMW * perMWpRate * frequencyMultiplier;
-    const minimumCharge = applicableMinCharge * frequencyMultiplier;
+    const minimumCharge = applicableMinCharge * chargeMultiplier;
     
     if (normalCost < minimumCharge) {
       sitesBelowThreshold.push({
@@ -240,19 +253,31 @@ export function calculateMinimumCharges(
   sitesUnderThreshold: number | undefined,
   frequencyMultiplier: number,
   totalMW?: number,
-  minimumChargeTiers?: MinimumChargeTier[]
+  minimumChargeTiers?: MinimumChargeTier[],
+  siteChargeFrequency: "monthly" | "annual" = "annual",
+  billingFrequency?: string
 ): number {
   if (!sitesUnderThreshold) return 0;
+  
+  // Calculate charge multiplier based on frequency
+  let chargeMultiplier: number;
+  if (siteChargeFrequency === "monthly") {
+    // Monthly charges: multiply by number of months in billing period
+    chargeMultiplier = getPeriodMonthsMultiplier(billingFrequency || "annual");
+  } else {
+    // Annual charges: use frequency multiplier
+    chargeMultiplier = frequencyMultiplier;
+  }
   
   // Use tiered system if available
   if (minimumChargeTiers && minimumChargeTiers.length > 0 && totalMW !== undefined) {
     const applicableCharge = getApplicableMinimumCharge(totalMW, minimumChargeTiers);
-    return applicableCharge * sitesUnderThreshold * frequencyMultiplier;
+    return applicableCharge * sitesUnderThreshold * chargeMultiplier;
   }
   
   // Fallback to legacy system
   if (!minimumCharge) return 0;
-  return minimumCharge * sitesUnderThreshold * frequencyMultiplier;
+  return minimumCharge * sitesUnderThreshold * chargeMultiplier;
 }
 
 /**
@@ -381,7 +406,9 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
         perMWpRate,
         totalMW,
         params.minimumChargeTiers,
-        frequencyMultiplier
+        frequencyMultiplier,
+        params.siteChargeFrequency || "annual",
+        params.billingFrequency
       );
       
       // Replace totalMWCost and minimumCharges with site-aware calculation
@@ -401,7 +428,9 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       sitesUnderThreshold,
       frequencyMultiplier,
       totalMW,
-      params.minimumChargeTiers
+      params.minimumChargeTiers,
+      params.siteChargeFrequency || "annual",
+      params.billingFrequency
     );
   }
   

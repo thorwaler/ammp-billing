@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { MinimumChargeTier } from "@/data/pricingData";
+import type { MinimumChargeTier, SiteChargeFrequency } from "@/data/pricingData";
 
 interface MinimumChargeTierEditorProps {
   tiers: MinimumChargeTier[];
@@ -11,6 +11,7 @@ interface MinimumChargeTierEditorProps {
   currentMW?: number;
   currencySymbol?: string;
   disabled?: boolean;
+  frequency?: SiteChargeFrequency;
 }
 
 export function MinimumChargeTierEditor({
@@ -18,7 +19,8 @@ export function MinimumChargeTierEditor({
   onTiersChange,
   currentMW,
   currencySymbol = "€",
-  disabled = false
+  disabled = false,
+  frequency = "annual"
 }: MinimumChargeTierEditorProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -39,10 +41,12 @@ export function MinimumChargeTierEditor({
     onTiersChange(updatedTiers);
   };
 
+  const frequencyLabel = frequency === "monthly" ? "per site/month" : "per site/year";
+
   return (
     <div className="border rounded-md p-4">
       <div className="flex items-center justify-between mb-2">
-        <Label className="font-semibold">Minimum Charge Tiers (per site)</Label>
+        <Label className="font-semibold">Minimum Charge Tiers ({frequencyLabel})</Label>
         <Button
           type="button"
           variant="ghost"
@@ -66,7 +70,7 @@ export function MinimumChargeTierEditor({
 
       {!isExpanded && currentMW !== undefined && appliedTierIndex !== -1 && (
         <div className="text-sm text-muted-foreground">
-          Current: {tiers[appliedTierIndex].label} - {currencySymbol}{tiers[appliedTierIndex].chargePerSite} per site
+          Current: {tiers[appliedTierIndex].label} - {currencySymbol}{tiers[appliedTierIndex].chargePerSite} {frequencyLabel}
         </div>
       )}
 

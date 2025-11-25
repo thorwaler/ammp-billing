@@ -151,6 +151,7 @@ export const ADDONS: AddonDefinition[] = [
 export type PackageType = "starter" | "pro" | "custom" | "hybrid_tiered" | "capped";
 export type BillingFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ComplexityLevel = "low" | "medium" | "high";
+export type SiteChargeFrequency = "monthly" | "annual";
 
 // Helper functions
 export const getModuleById = (id: string): ModuleDefinition | undefined => {

@@ -93,6 +93,8 @@ const Customers = () => {
             custom_pricing,
             minimum_annual_value,
             minimum_charge,
+            minimum_charge_tiers,
+            site_charge_frequency,
             volume_discounts,
             currency,
             contract_status,
@@ -106,10 +108,34 @@ const Customers = () => {
       return;
     }
 
-        const calculateContractValue = (contract: any, mwpManaged: number) => {
+        const calculateContractValue = (contract: any, mwpManaged: number, ammpCapabilities?: any) => {
           if (!contract) return 0;
           
           let annualValue = 0;
+          
+          // Calculate site-based charges if minimum_charge_tiers has chargePerSite > 0
+          const minimumChargeTiers = contract.minimum_charge_tiers || [];
+          const totalSites = ammpCapabilities?.totalSites || 0;
+          const siteChargeFrequency = contract.site_charge_frequency || "annual";
+          
+          if (minimumChargeTiers.length > 0 && totalSites > 0) {
+            // Find applicable tier based on total MW
+            const applicableTier = minimumChargeTiers.find((tier: any) => 
+              mwpManaged >= tier.minMW && 
+              (tier.maxMW === null || mwpManaged <= tier.maxMW)
+            );
+            
+            if (applicableTier && applicableTier.chargePerSite > 0) {
+              // Annual site charge calculation based on frequency
+              if (siteChargeFrequency === "monthly") {
+                // Monthly charge: chargePerSite × totalSites × 12 months
+                annualValue += applicableTier.chargePerSite * totalSites * 12;
+              } else {
+                // Annual charge: chargePerSite × totalSites
+                annualValue += applicableTier.chargePerSite * totalSites;
+              }
+            }
+          }
           
           if (contract.package === 'starter') {
             // Starter package fixed annual cost
@@ -234,7 +260,7 @@ const Customers = () => {
         id: c.id,
         name: c.name,
         location: c.location || 'N/A',
-        contractValue: calculateContractValue(activeContract, mwpManaged),
+        contractValue: calculateContractValue(activeContract, mwpManaged, c.ammp_capabilities),
         contractCurrency: activeContract?.currency || 'USD',
         mwpManaged,
         status: (c.status || 'active') as "active" | "pending" | "inactive",
