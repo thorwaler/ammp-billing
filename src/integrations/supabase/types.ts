@@ -73,6 +73,7 @@ export type Database = {
       contracts: {
         Row: {
           addons: Json | null
+          base_monthly_price: number | null
           billing_frequency: string | null
           company_name: string
           contract_pdf_url: string | null
@@ -105,6 +106,7 @@ export type Database = {
         }
         Insert: {
           addons?: Json | null
+          base_monthly_price?: number | null
           billing_frequency?: string | null
           company_name: string
           contract_pdf_url?: string | null
@@ -137,6 +139,7 @@ export type Database = {
         }
         Update: {
           addons?: Json | null
+          base_monthly_price?: number | null
           billing_frequency?: string | null
           company_name?: string
           contract_pdf_url?: string | null

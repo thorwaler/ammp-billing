@@ -106,6 +106,7 @@ interface Customer {
   sites?: number;
   ammpCapabilities?: any;
   manualInvoicing?: boolean;
+  baseMonthlyPrice?: number;
 }
 
 // Default modules and addons from shared data
@@ -168,7 +169,8 @@ export function InvoiceCalculator({
             volume_discounts,
             currency,
             billing_frequency,
-            manual_invoicing
+            manual_invoicing,
+            base_monthly_price
           )
         `)
         .eq('user_id', user.id)
@@ -209,6 +211,7 @@ export function InvoiceCalculator({
             billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual',
             ammpCapabilities: c.ammp_capabilities || null,
             manualInvoicing: contract.manual_invoicing || false,
+            baseMonthlyPrice: Number(contract.base_monthly_price) || 0,
           };
         });
 
@@ -480,6 +483,8 @@ export function InvoiceCalculator({
       minimumCharges: 0,
       totalMWCost: 0,
       totalPrice: 0,
+      minimumContractAdjustment: 0,
+      basePricingCost: 0,
     };
     
     // Calculate costs based on package
@@ -598,7 +603,8 @@ export function InvoiceCalculator({
       billingFrequency,
       ammpCapabilities: selectedCustomer.ammpCapabilities,
       assetBreakdown,
-      enableSiteMinimumPricing: enableSiteMinPricing
+      enableSiteMinimumPricing: enableSiteMinPricing,
+      baseMonthlyPrice: selectedCustomer.baseMonthlyPrice,
     };
     
     calculationResult = calculateInvoice(params);
@@ -637,20 +643,37 @@ export function InvoiceCalculator({
     
     try {
       // Format invoice data for Xero API
-      const lineItems = [
-        ...result.moduleCosts.map(mc => ({
+      const lineItems = [];
+
+      // Add base pricing if applicable
+      if (result.basePricingCost > 0) {
+        lineItems.push({
+          Description: "Base Pricing",
+          Quantity: 1,
+          UnitAmount: result.basePricingCost,
+          AccountCode: "200"
+        });
+      }
+
+      // Add module costs
+      result.moduleCosts.forEach(mc => {
+        lineItems.push({
           Description: mc.moduleName,
           Quantity: 1,
           UnitAmount: mc.cost,
           AccountCode: "200" // Revenue account
-        })),
-        ...result.addonCosts.map(ac => ({
+        });
+      });
+      
+      // Add addon costs
+      result.addonCosts.forEach(ac => {
+        lineItems.push({
           Description: ac.addonName,
           Quantity: 1,
           UnitAmount: ac.cost,
           AccountCode: "200"
-        }))
-      ];
+        });
+      });
       
       if (result.starterPackageCost > 0) {
         lineItems.unshift({
@@ -1436,6 +1459,13 @@ export function InvoiceCalculator({
                 <span className="font-medium">
                   {formatCurrency(result.minimumContractAdjustment)}
                 </span>
+              </div>
+            )}
+            
+            {result.basePricingCost > 0 && (
+              <div className="flex justify-between text-sm mb-3">
+                <span>Base Pricing ({getPeriodMonthsMultiplier(billingFrequency)} months × {formatCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
+                <span>{formatCurrency(result.basePricingCost)}</span>
               </div>
             )}
             

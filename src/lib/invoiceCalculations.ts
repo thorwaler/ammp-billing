@@ -42,6 +42,7 @@ export interface CalculationParams {
     isHybrid?: boolean;
   }>;
   enableSiteMinimumPricing?: boolean;
+  baseMonthlyPrice?: number;
 }
 
 export interface SiteMinimumPricingResult {
@@ -91,7 +92,8 @@ export interface CalculationResult {
     hybrid: { mw: number; cost: number; rate: number };
   };
   siteMinimumPricingBreakdown?: SiteMinimumPricingResult;
-  minimumContractAdjustment?: number;
+  minimumContractAdjustment: number;
+  basePricingCost: number;
 }
 
 /**
@@ -318,7 +320,14 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     minimumCharges: 0,
     totalMWCost: 0,
     totalPrice: 0,
+    minimumContractAdjustment: 0,
+    basePricingCost: 0,
   };
+  
+  const periodMonths = getPeriodMonthsMultiplier(params.billingFrequency || 'annual');
+  
+  // Calculate base pricing (monthly × period months)
+  result.basePricingCost = (params.baseMonthlyPrice || 0) * periodMonths;
   
   // Calculate based on package type
   if (packageType === 'starter') {
@@ -410,9 +419,9 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     }
   }
   
-  // Calculate final total: base cost + addons
+  // Calculate final total: base cost + addons + base pricing
   const addonTotal = result.addonCosts.reduce((sum, item) => sum + item.cost, 0);
-  result.totalPrice = baseCost + addonTotal;
+  result.totalPrice = baseCost + addonTotal + result.basePricingCost;
   
   return result;
 }

@@ -86,6 +86,7 @@ const contractFormSchema = z.object({
   minimumCharge: z.coerce.number().optional(),
   minimumChargeTiers: z.array(z.any()).optional(),
   minimumAnnualValue: z.coerce.number().optional(),
+  baseMonthlyPrice: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -887,6 +888,29 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       Check if invoices for this contract are handled manually or automated directly in Xero. These will not be sent to Xero from this app.
                     </FormDescription>
                   </div>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="baseMonthlyPrice"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Base Monthly Price</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      {...field}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Fixed monthly base fee. This will appear as a separate line item on invoices and be multiplied by the billing period.
+                  </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />
