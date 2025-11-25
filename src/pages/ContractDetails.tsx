@@ -529,22 +529,6 @@ const ContractDetails = () => {
                 </div>
                 
                 <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Next Invoice Date</p>
-                  <p className="font-medium">
-                    {contract.next_invoice_date 
-                      ? formatDate(contract.next_invoice_date)
-                      : "Not set"}
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <p className="text-sm text-muted-foreground">Billing Frequency</p>
-                  <p className="font-medium capitalize">
-                    {contract.billing_frequency || 'Annual'}
-                  </p>
-                </div>
-                
-                <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Initial MW</p>
                   <p className="font-medium">{contract.initial_mw} MWp</p>
                 </div>
