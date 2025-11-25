@@ -12,6 +12,7 @@ interface InvoiceCalculatorDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   preselectedCustomerId?: string;
+  preselectedContractId?: string;
   prefilledDate?: Date;
   onInvoiceCreated?: () => void;
 }
@@ -20,6 +21,7 @@ export function InvoiceCalculatorDialog({
   open,
   onOpenChange,
   preselectedCustomerId,
+  preselectedContractId,
   prefilledDate,
   onInvoiceCreated,
 }: InvoiceCalculatorDialogProps) {
@@ -35,6 +37,7 @@ export function InvoiceCalculatorDialog({
         <ScrollArea className="max-h-[calc(90vh-80px)] px-6 pb-6">
           <InvoiceCalculator
             preselectedCustomerId={preselectedCustomerId}
+            preselectedContractId={preselectedContractId}
             prefilledDate={prefilledDate}
             onInvoiceCreated={() => {
               onInvoiceCreated?.();

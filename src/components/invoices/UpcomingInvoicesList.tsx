@@ -7,6 +7,7 @@ import { calculateInvoice } from "@/lib/invoiceCalculations";
 import type { MinimumChargeTier, DiscountTier } from "@/data/pricingData";
 
 interface UpcomingInvoice {
+  contractId: string;
   customerId: string;
   customerName: string;
   nextInvoiceDate: string;
@@ -92,6 +93,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             : [];
           
           return {
+            contractId: c.id,
             customerId: customer.id,
             customerName: customer.name,
             nextInvoiceDate: c.next_invoice_date!,
