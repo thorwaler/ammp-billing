@@ -24,6 +24,7 @@ interface UpcomingInvoice {
   customPricing: any;
   ammpCapabilities: any;
   manualInvoicing: boolean;
+  baseMonthlyPrice: number;
 }
 
 interface UpcomingInvoicesListProps {
@@ -62,6 +63,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           custom_pricing,
           initial_mw,
           manual_invoicing,
+          base_monthly_price,
           customers (
             id,
             name,
@@ -106,7 +108,8 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             minimumAnnualValue: Number(c.minimum_annual_value) || 0,
             customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {},
             ammpCapabilities: customer.ammp_capabilities || null,
-            manualInvoicing: c.manual_invoicing || false
+            manualInvoicing: c.manual_invoicing || false,
+            baseMonthlyPrice: Number(c.base_monthly_price) || 0,
           };
         });
 
@@ -169,7 +172,9 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       frequencyMultiplier: multiplier,
       ammpCapabilities: invoice.ammpCapabilities,
       assetBreakdown,
-      enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0
+      enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0,
+      baseMonthlyPrice: invoice.baseMonthlyPrice,
+      billingFrequency: invoice.billingFrequency,
     });
     
     return result.totalPrice;
