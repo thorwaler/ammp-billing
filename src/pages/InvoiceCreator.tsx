@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Calculator, Plus, History } from "lucide-react";
 
 interface UpcomingInvoice {
+  contractId: string;
   customerId: string;
   customerName: string;
   nextInvoiceDate: string;
@@ -88,6 +89,7 @@ const InvoiceCreator = () => {
           open={calculatorOpen}
           onOpenChange={setCalculatorOpen}
           preselectedCustomerId={selectedInvoice?.customerId}
+          preselectedContractId={selectedInvoice?.contractId}
           prefilledDate={selectedInvoice ? new Date(selectedInvoice.nextInvoiceDate) : undefined}
           onInvoiceCreated={handleInvoiceCreated}
         />

@@ -116,12 +116,14 @@ const defaultAddons: Addon[] = ADDONS.map(a => ({ ...a, selected: false }));
 
 interface InvoiceCalculatorProps {
   preselectedCustomerId?: string;
+  preselectedContractId?: string;
   prefilledDate?: Date;
   onInvoiceCreated?: () => void;
 }
 
 export function InvoiceCalculator({ 
-  preselectedCustomerId, 
+  preselectedCustomerId,
+  preselectedContractId,
   prefilledDate,
   onInvoiceCreated 
 }: InvoiceCalculatorProps = {}) {
@@ -187,7 +189,10 @@ export function InvoiceCalculator({
       const transformedCustomers: Customer[] = (data || [])
         .filter(c => c.contracts && c.contracts.length > 0)
         .map(c => {
-          const contract = c.contracts[0];
+          // Use preselected contract if provided, otherwise use first contract
+          const contract = preselectedContractId 
+            ? c.contracts.find((con: any) => con.id === preselectedContractId) || c.contracts[0]
+            : c.contracts[0];
           const modules = Array.isArray(contract.modules) ? contract.modules as string[] : [];
           // Keep full addon objects with custom tiers instead of just IDs
           const addons = Array.isArray(contract.addons) ? contract.addons : [];
