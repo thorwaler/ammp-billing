@@ -23,6 +23,7 @@ interface UpcomingInvoice {
   minimumAnnualValue: number;
   customPricing: any;
   ammpCapabilities: any;
+  manualInvoicing: boolean;
 }
 
 interface UpcomingInvoicesListProps {
@@ -60,6 +61,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           minimum_annual_value,
           custom_pricing,
           initial_mw,
+          manual_invoicing,
           customers (
             id,
             name,
@@ -103,7 +105,8 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             portfolioDiscountTiers,
             minimumAnnualValue: Number(c.minimum_annual_value) || 0,
             customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {},
-            ammpCapabilities: customer.ammp_capabilities || null
+            ammpCapabilities: customer.ammp_capabilities || null,
+            manualInvoicing: c.manual_invoicing || false
           };
         });
 
@@ -201,6 +204,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           currency={invoice.currency}
           packageType={invoice.packageType}
           estimatedAmount={calculateEstimatedAmount(invoice)}
+          manualInvoicing={invoice.manualInvoicing}
           onCreateInvoice={() => onCreateInvoice(invoice)}
         />
       ))}

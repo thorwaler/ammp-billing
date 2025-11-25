@@ -13,6 +13,7 @@ interface InvoiceCardProps {
   currency?: string;
   packageType: string;
   estimatedAmount: number;
+  manualInvoicing?: boolean;
   onCreateInvoice: () => void;
 }
 
@@ -23,6 +24,7 @@ export function InvoiceCard({
   currency = 'USD',
   packageType,
   estimatedAmount,
+  manualInvoicing = false,
   onCreateInvoice,
 }: InvoiceCardProps) {
   const { formatCurrency } = useCurrency();
@@ -67,6 +69,7 @@ export function InvoiceCard({
           <Badge variant="outline">{packageType}</Badge>
           <Badge variant="outline" className="capitalize">{billingFrequency}</Badge>
           <Badge variant="secondary">{currency}</Badge>
+          {manualInvoicing && <Badge className="bg-orange-500">Manual</Badge>}
         </div>
         
         <div className="flex items-center gap-2 text-lg font-semibold">
