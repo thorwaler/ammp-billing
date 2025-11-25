@@ -442,6 +442,7 @@ export function CustomerCard({
                     </DialogHeader>
                     <ContractForm 
                       existingCustomer={{ id, name, location, mwpManaged }}
+                      isNewContract={true}
                       onComplete={() => {
                         setShowAddContractForm(false);
                         onContractCreated?.();
