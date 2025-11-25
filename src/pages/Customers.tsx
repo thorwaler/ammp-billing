@@ -30,6 +30,15 @@ interface CustomerData {
   lastInvoiced: string;
   contractId: string;
   contractCount: number;
+  contracts: Array<{
+    id: string;
+    package: string;
+    contract_status: string;
+    signed_date?: string;
+    period_start?: string;
+    period_end?: string;
+    company_name?: string;
+  }>;
   package?: string;
   ammpOrgId?: string;
   ammpAssetIds?: string[];
@@ -233,6 +242,15 @@ const Customers = () => {
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
         contractId: activeContract?.id || '',
         contractCount,
+        contracts: (c.contracts || []).map((contract: any) => ({
+          id: contract.id,
+          package: contract.package,
+          contract_status: contract.contract_status,
+          signed_date: contract.signed_date,
+          period_start: contract.period_start,
+          period_end: contract.period_end,
+          company_name: c.name,
+        })),
         package: activeContract?.package || undefined,
         ammpOrgId: c.ammp_org_id || undefined,
         ammpAssetIds: (Array.isArray(c.ammp_asset_ids) ? c.ammp_asset_ids : undefined) as string[] | undefined,
@@ -639,13 +657,14 @@ const Customers = () => {
               contractId={customer.contractId}
               hasContract={!!customer.contractId}
               contractCount={customer.contractCount}
+              contracts={customer.contracts}
               ammpOrgId={customer.ammpOrgId}
               ammpAssetIds={customer.ammpAssetIds}
               ammpCapabilities={customer.ammpCapabilities}
               lastAmmpSync={customer.lastAmmpSync}
               ammpSyncStatus={customer.ammpSyncStatus}
-              onViewContract={() => navigate(`/contracts/${customer.contractId}`)} 
-              onViewDetails={() => navigate(`/customers/${customer.id}`)} 
+              onViewContract={() => navigate(`/contracts/${customer.contractId}`)}
+              onViewDetails={() => navigate(`/contracts/${customer.contractId}`)}
               onContractCreated={loadCustomers}
             />
           ))}
