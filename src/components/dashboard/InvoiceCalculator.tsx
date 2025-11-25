@@ -700,6 +700,16 @@ export function InvoiceCalculator({
         });
       }
       
+      // Add minimum contract adjustment if present
+      if (result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
+        lineItems.push({
+          Description: "Minimum Contract Value Adjustment",
+          Quantity: 1,
+          UnitAmount: result.minimumContractAdjustment,
+          AccountCode: "200"
+        });
+      }
+      
       if (result.minimumCharges > 0) {
         const siteCount = result.siteMinimumPricingBreakdown?.totalSitesOnMinimum || 0;
         lineItems.push({
