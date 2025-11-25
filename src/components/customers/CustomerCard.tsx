@@ -45,6 +45,7 @@ interface CustomerCardProps {
   contractCount?: number;
   contracts?: Array<{
     id: string;
+    contract_name?: string;
     package: string;
     contract_status: string;
     signed_date?: string;
@@ -503,7 +504,7 @@ export function CustomerCard({
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
                         <span className="font-medium">
-                          {(contract as any).contract_name || `${contract.package} Contract`}
+                          {contract.contract_name || `${contract.package} Contract`}
                         </span>
                         <Badge 
                           variant={contract.contract_status === 'active' ? 'default' : 'outline'}

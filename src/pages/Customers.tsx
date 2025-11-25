@@ -32,6 +32,7 @@ interface CustomerData {
   contractCount: number;
   contracts: Array<{
     id: string;
+    contract_name?: string;
     package: string;
     contract_status: string;
     signed_date?: string;
@@ -85,6 +86,7 @@ const Customers = () => {
           ammp_sync_status,
           contracts (
             id,
+            contract_name,
             package,
             modules,
             addons,
@@ -244,6 +246,7 @@ const Customers = () => {
         contractCount,
         contracts: (c.contracts || []).map((contract: any) => ({
           id: contract.id,
+          contract_name: contract.contract_name,
           package: contract.package,
           contract_status: contract.contract_status,
           signed_date: contract.signed_date,
