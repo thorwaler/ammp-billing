@@ -50,6 +50,7 @@ import { Badge } from "@/components/ui/badge";
 const optionalNumber = z.coerce.number().transform(val => isNaN(val) ? undefined : val).optional();
 
 const contractFormSchema = z.object({
+  contractName: z.string().optional(),
   companyName: z.string().min(2, { message: "Company name is required" }),
   initialMW: z.coerce.number().min(0, { message: "Initial MW is required" }),
   currency: z.enum(["USD", "EUR"]),
@@ -148,6 +149,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractFormSchema),
     defaultValues: existingContract ? {
+      contractName: (existingContract as any).contractName || "",
       companyName: existingCustomer?.name || "",
       initialMW: existingContract.initialMW,
       currency: existingContract.currency as "USD" | "EUR",
@@ -168,6 +170,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       periodEnd: existingContract.periodEnd?.split('T')[0] || "",
       contractStatus: existingContract.contractStatus as any,
     } : {
+      contractName: "",
       companyName: existingCustomer?.name || "",
       initialMW: existingCustomer?.mwpManaged || 0,
       currency: userCurrency || "EUR",
@@ -316,6 +319,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         setExistingContractId(contract.id);
 
         // Populate all form fields
+        form.setValue('contractName', (contract as any).contract_name || '');
         form.setValue('companyName', contract.company_name);
         form.setValue('initialMW', contract.initial_mw);
         form.setValue('currency', contract.currency as "USD" | "EUR");
@@ -681,6 +685,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       const contractData: any = {
         customer_id: customer.id,
         company_name: data.companyName,
+        contract_name: data.contractName || null,
         package: data.package,
         initial_mw: data.initialMW,
         currency: data.currency,
@@ -812,6 +817,26 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="contractName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Contract Name (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., Main Agreement 2024, Extension Contract" 
+                      {...field} 
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    A friendly name to identify this contract when there are multiple
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
