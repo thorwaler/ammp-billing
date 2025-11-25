@@ -991,7 +991,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       watchPackage === "hybrid_tiered" ? 
                       "Hybrid Tiered: Set different rates for on-grid and hybrid sites (with battery/genset)." :
                       watchPackage === "capped" ?
-                      "Capped Package: Fixed annual fee with a maximum MW cap. Notifications will alert when MW exceeds the cap." :
+                      "Capped Package: Fixed fee (pro-rated for selected billing frequency) with optional MW cap alerts." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -1004,24 +1004,24 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
                 <h3 className="font-semibold text-sm">Capped Package Configuration</h3>
                 <p className="text-xs text-muted-foreground">
-                  Set a maximum MW capacity. You'll receive notifications when the MW cap is approached or exceeded.
+                  Configure optional MW cap alerts. The fixed fee is pro-rated based on your selected billing frequency.
                 </p>
                 <FormField
                   control={form.control}
                   name="maxMw"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Maximum MW Cap</FormLabel>
+                      <FormLabel>Maximum MW Cap (Optional)</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
                           step="0.01"
-                          placeholder="e.g., 50"
+                          placeholder="Leave blank for unlimited capacity"
                           {...field}
                         />
                       </FormControl>
                       <FormDescription>
-                        MW capacity limit for this contract
+                        Set an MW limit to receive notifications when approached or exceeded. Leave blank for unlimited capacity.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
