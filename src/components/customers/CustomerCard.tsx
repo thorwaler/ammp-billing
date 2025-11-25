@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { FileText, BarChart, MoreHorizontal, CheckCircle2, AlertCircle, PlusCircle } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -42,6 +43,15 @@ interface CustomerCardProps {
   contractId?: string;
   hasContract: boolean;
   contractCount?: number;
+  contracts?: Array<{
+    id: string;
+    package: string;
+    contract_status: string;
+    signed_date?: string;
+    period_start?: string;
+    period_end?: string;
+    company_name?: string;
+  }>;
   ammpOrgId?: string;
   ammpAssetIds?: string[];
   ammpCapabilities?: any;
@@ -67,6 +77,7 @@ export function CustomerCard({
   contractId,
   hasContract,
   contractCount = 1,
+  contracts = [],
   ammpOrgId,
   ammpAssetIds,
   ammpCapabilities,
@@ -76,9 +87,11 @@ export function CustomerCard({
   onViewDetails,
   onContractCreated,
 }: CustomerCardProps) {
+  const navigate = useNavigate();
   const [showEditForm, setShowEditForm] = useState(false);
   const [showContractForm, setShowContractForm] = useState(false);
   const [showAddContractForm, setShowAddContractForm] = useState(false);
+  const [showContractSelector, setShowContractSelector] = useState(false);
 
   const handleMarkInactive = async () => {
     try {
@@ -364,24 +377,36 @@ export function CustomerCard({
               </div>
             </div>
           )}
-          <div className="flex gap-2 mt-2">
+          <div className="grid grid-cols-2 gap-2 mt-2">
             {hasContract ? (
               <>
                 <Button 
                   size="sm" 
-                  variant="outline" 
-                  className="w-full"
-                  onClick={onViewContract}
+                  variant="outline"
+                  onClick={() => {
+                    if (contractCount > 1) {
+                      setShowContractSelector(true);
+                    } else {
+                      onViewContract?.();
+                    }
+                  }}
                 >
                   <FileText className="mr-2 h-4 w-4" />
-                  View Contract
+                  {contractCount > 1 ? 'Contracts' : 'View'}
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={onViewDetails}
+                >
+                  <BarChart className="mr-2 h-4 w-4" />
+                  Details
                 </Button>
                 <Dialog open={showContractForm} onOpenChange={setShowContractForm}>
                   <DialogTrigger asChild>
                     <Button 
                       size="sm" 
-                      variant="outline" 
-                      className="w-full"
+                      variant="outline"
                     >
                       <FileText className="mr-2 h-4 w-4" />
                       Edit
@@ -405,11 +430,10 @@ export function CustomerCard({
                   <DialogTrigger asChild>
                     <Button 
                       size="sm" 
-                      variant="outline" 
-                      className="w-full"
+                      variant="outline"
                     >
                       <PlusCircle className="mr-2 h-4 w-4" />
-                      Add Contract
+                      Add
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
@@ -428,38 +452,83 @@ export function CustomerCard({
                 </Dialog>
               </>
             ) : (
-              <Dialog open={showContractForm} onOpenChange={setShowContractForm}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="w-full">
-                    <FileText className="mr-2 h-4 w-4" />
-                    Setup Contract
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Create Contract: {name}</DialogTitle>
-                  </DialogHeader>
-                  <ContractForm 
-                    existingCustomer={{ id, name, location, mwpManaged }}
-                    onComplete={() => {
-                      setShowContractForm(false);
-                      onContractCreated?.();
-                    }}
-                    onCancel={() => setShowContractForm(false)}
-                  />
-                </DialogContent>
-              </Dialog>
+              <>
+                <Dialog open={showContractForm} onOpenChange={setShowContractForm}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="col-span-2">
+                      <FileText className="mr-2 h-4 w-4" />
+                      Setup Contract
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle>Create Contract: {name}</DialogTitle>
+                    </DialogHeader>
+                    <ContractForm 
+                      existingCustomer={{ id, name, location, mwpManaged }}
+                      onComplete={() => {
+                        setShowContractForm(false);
+                        onContractCreated?.();
+                      }}
+                      onCancel={() => setShowContractForm(false)}
+                    />
+                  </DialogContent>
+                </Dialog>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  className="col-span-2"
+                  onClick={onViewDetails}
+                >
+                  <BarChart className="mr-2 h-4 w-4" />
+                  Details
+                </Button>
+              </>
             )}
-            <Button 
-              size="sm" 
-              variant="outline" 
-              className="w-full"
-              onClick={onViewDetails}
-            >
-              <BarChart className="mr-2 h-4 w-4" />
-              Details
-            </Button>
           </div>
+          
+          {/* Contract Selector Dialog */}
+          <Dialog open={showContractSelector} onOpenChange={setShowContractSelector}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Select Contract - {name}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                {contracts.map((contract) => (
+                  <div 
+                    key={contract.id} 
+                    className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium capitalize">{contract.package}</span>
+                        <Badge 
+                          variant={contract.contract_status === 'active' ? 'default' : 'outline'}
+                          className={contract.contract_status === 'active' ? 'bg-green-600' : ''}
+                        >
+                          {contract.contract_status}
+                        </Badge>
+                      </div>
+                      {contract.signed_date && (
+                        <span className="text-sm text-muted-foreground">
+                          Signed: {new Date(contract.signed_date).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        navigate(`/contracts/${contract.id}`);
+                        setShowContractSelector(false);
+                      }}
+                    >
+                      View
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </CardContent>
     </Card>
