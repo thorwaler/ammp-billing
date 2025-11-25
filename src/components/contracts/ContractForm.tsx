@@ -103,6 +103,7 @@ interface ContractFormProps {
   };
   existingContract?: {
     id: string;
+    contractName?: string;
     package: string;
     modules: any[];
     addons: any[];
@@ -121,6 +122,8 @@ interface ContractFormProps {
     periodEnd?: string;
     notes?: string;
     contractStatus?: string;
+    portfolioDiscountTiers?: any[];
+    minimumChargeTiers?: any[];
   };
   onComplete?: () => void;
   onCancel?: () => void;
