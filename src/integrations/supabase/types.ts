@@ -101,6 +101,7 @@ export type Database = {
           period_start: string | null
           portfolio_discount_tiers: Json | null
           signed_date: string | null
+          site_charge_frequency: string | null
           updated_at: string
           user_id: string
           volume_discounts: Json | null
@@ -135,6 +136,7 @@ export type Database = {
           period_start?: string | null
           portfolio_discount_tiers?: Json | null
           signed_date?: string | null
+          site_charge_frequency?: string | null
           updated_at?: string
           user_id: string
           volume_discounts?: Json | null
@@ -169,6 +171,7 @@ export type Database = {
           period_start?: string | null
           portfolio_discount_tiers?: Json | null
           signed_date?: string | null
+          site_charge_frequency?: string | null
           updated_at?: string
           user_id?: string
           volume_discounts?: Json | null

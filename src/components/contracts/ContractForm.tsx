@@ -86,6 +86,7 @@ const contractFormSchema = z.object({
   portfolioDiscountTiers: z.array(z.any()).optional(),
   minimumCharge: z.coerce.number().optional(),
   minimumChargeTiers: z.array(z.any()).optional(),
+  siteChargeFrequency: z.enum(["monthly", "annual"]).optional(),
   minimumAnnualValue: z.coerce.number().optional(),
   baseMonthlyPrice: z.coerce.number().optional(),
   notes: z.string().optional(),
@@ -124,6 +125,7 @@ interface ContractFormProps {
     contractStatus?: string;
     portfolioDiscountTiers?: any[];
     minimumChargeTiers?: any[];
+    siteChargeFrequency?: string;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -167,6 +169,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       minimumCharge: existingContract.minimumCharge,
       minimumAnnualValue: existingContract.minimumAnnualValue,
       baseMonthlyPrice: existingContract.baseMonthlyPrice,
+      siteChargeFrequency: (existingContract.siteChargeFrequency as any) || "annual",
       notes: existingContract.notes,
       signedDate: existingContract.signedDate?.split('T')[0] || "",
       periodStart: existingContract.periodStart?.split('T')[0] || "",
@@ -204,6 +207,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       portfolioDiscountTiers: DEFAULT_PORTFOLIO_DISCOUNT_TIERS,
       minimumCharge: 0,
       minimumChargeTiers: DEFAULT_MINIMUM_CHARGE_TIERS,
+      siteChargeFrequency: "annual",
       minimumAnnualValue: 0,
       notes: "",
     },
@@ -705,6 +709,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         portfolio_discount_tiers: portfolioDiscountTiers,
         minimum_charge: data.minimumCharge || 0,
         minimum_charge_tiers: minimumChargeTiers,
+        site_charge_frequency: data.siteChargeFrequency || "annual",
         minimum_annual_value: data.minimumAnnualValue || 0,
         base_monthly_price: data.baseMonthlyPrice || 0,
         max_mw: data.maxMw || null,
@@ -1302,11 +1307,37 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </div>
               </div>
               
+              <FormField
+                control={form.control}
+                name="siteChargeFrequency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Site Charge Frequency</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "annual"}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select frequency" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="monthly">Monthly</SelectItem>
+                        <SelectItem value="annual">Annual</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Is the per-site charge monthly or annual?
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
               <MinimumChargeTierEditor
                 tiers={minimumChargeTiers}
                 onTiersChange={setMinimumChargeTiers}
                 currentMW={form.watch("initialMW")}
                 currencySymbol={form.watch("currency") === "USD" ? "$" : "€"}
+                frequency={form.watch("siteChargeFrequency") as any}
               />
             </div>
             

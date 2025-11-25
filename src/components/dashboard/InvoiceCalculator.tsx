@@ -107,6 +107,7 @@ interface Customer {
   ammpCapabilities?: any;
   manualInvoicing?: boolean;
   baseMonthlyPrice?: number;
+  siteChargeFrequency?: 'monthly' | 'annual';
 }
 
 // Default modules and addons from shared data
@@ -164,6 +165,7 @@ export function InvoiceCalculator({
             custom_pricing,
             minimum_charge,
             minimum_charge_tiers,
+            site_charge_frequency,
             portfolio_discount_tiers,
             minimum_annual_value,
             volume_discounts,
@@ -193,6 +195,7 @@ export function InvoiceCalculator({
           const volumeDiscounts = typeof contract.volume_discounts === 'object' && contract.volume_discounts !== null ? contract.volume_discounts as any : {};
           const minimumChargeTiers = Array.isArray(contract.minimum_charge_tiers) ? contract.minimum_charge_tiers : [];
           const portfolioDiscountTiers = Array.isArray(contract.portfolio_discount_tiers) ? contract.portfolio_discount_tiers : [];
+          const siteChargeFrequency = contract.site_charge_frequency || "annual";
           
           return {
             id: c.id,
@@ -212,6 +215,7 @@ export function InvoiceCalculator({
             ammpCapabilities: c.ammp_capabilities || null,
             manualInvoicing: contract.manual_invoicing || false,
             baseMonthlyPrice: Number(contract.base_monthly_price) || 0,
+            siteChargeFrequency: siteChargeFrequency as 'monthly' | 'annual',
           };
         });
 
@@ -605,6 +609,7 @@ export function InvoiceCalculator({
       assetBreakdown,
       enableSiteMinimumPricing: enableSiteMinPricing,
       baseMonthlyPrice: selectedCustomer.baseMonthlyPrice,
+      siteChargeFrequency: (selectedCustomer as any).siteChargeFrequency || "annual",
     };
     
     calculationResult = calculateInvoice(params);
