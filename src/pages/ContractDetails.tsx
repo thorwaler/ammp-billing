@@ -292,6 +292,30 @@ const ContractDetails = () => {
                     location: customer.location,
                     mwpManaged: customer.mwp_managed
                   } : undefined}
+                  existingContract={{
+                    id: contract.id,
+                    contractName: contract.contract_name,
+                    package: contract.package,
+                    modules: contract.modules || [],
+                    addons: contract.addons || [],
+                    initialMW: contract.initial_mw,
+                    billingFrequency: contract.billing_frequency || 'annual',
+                    manualInvoicing: contract.manual_invoicing,
+                    customPricing: contract.custom_pricing,
+                    volumeDiscounts: contract.volume_discounts,
+                    minimumCharge: contract.minimum_charge,
+                    minimumAnnualValue: contract.minimum_annual_value,
+                    baseMonthlyPrice: contract.base_monthly_price,
+                    maxMw: contract.max_mw,
+                    currency: contract.currency || 'EUR',
+                    signedDate: contract.signed_date,
+                    periodStart: contract.period_start,
+                    periodEnd: contract.period_end,
+                    notes: contract.notes,
+                    contractStatus: contract.contract_status,
+                    portfolioDiscountTiers: contract.portfolio_discount_tiers,
+                    minimumChargeTiers: contract.minimum_charge_tiers
+                  }}
                   onComplete={() => {
                     setShowEditDialog(false);
                     loadContractData();
@@ -322,21 +346,27 @@ const ContractDetails = () => {
             }}
             existingContract={{
               id: contract.id,
+              contractName: contract.contract_name,
               package: contract.package,
               modules: contract.modules || [],
               addons: contract.addons || [],
               initialMW: contract.initial_mw,
               billingFrequency: contract.billing_frequency || 'annual',
+              manualInvoicing: contract.manual_invoicing,
               customPricing: contract.custom_pricing,
               volumeDiscounts: contract.volume_discounts,
               minimumCharge: contract.minimum_charge,
               minimumAnnualValue: contract.minimum_annual_value,
+              baseMonthlyPrice: contract.base_monthly_price,
+              maxMw: contract.max_mw,
               currency: contract.currency || 'EUR',
               signedDate: contract.signed_date,
               periodStart: contract.period_start,
               periodEnd: contract.period_end,
               notes: contract.notes,
-              contractStatus: contract.contract_status
+              contractStatus: contract.contract_status,
+              portfolioDiscountTiers: contract.portfolio_discount_tiers,
+              minimumChargeTiers: contract.minimum_charge_tiers
             }}
             isExtending={true}
             onComplete={() => {
