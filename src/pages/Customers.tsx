@@ -112,6 +112,7 @@ const Customers = () => {
           if (!contract) return 0;
           
           let annualValue = 0;
+          let siteCharges = 0;
           
           // Calculate site-based charges if minimum_charge_tiers has chargePerSite > 0
           const minimumChargeTiers = contract.minimum_charge_tiers || [];
@@ -129,10 +130,10 @@ const Customers = () => {
               // Annual site charge calculation based on frequency
               if (siteChargeFrequency === "monthly") {
                 // Monthly charge: chargePerSite × totalSites × 12 months
-                annualValue += applicableTier.chargePerSite * totalSites * 12;
+                siteCharges = applicableTier.chargePerSite * totalSites * 12;
               } else {
                 // Annual charge: chargePerSite × totalSites
-                annualValue += applicableTier.chargePerSite * totalSites;
+                siteCharges = applicableTier.chargePerSite * totalSites;
               }
             }
           }
@@ -235,7 +236,8 @@ const Customers = () => {
             annualValue = Math.max(annualValue, minimumValue);
           }
           
-          return annualValue;
+          // Add site charges to the final annual value
+          return annualValue + siteCharges;
         };
 
     const transformed: CustomerData[] = (data || []).map(c => {
