@@ -105,6 +105,7 @@ interface Customer {
   currency: 'USD' | 'EUR';
   sites?: number;
   ammpCapabilities?: any;
+  manualInvoicing?: boolean;
 }
 
 // Default modules and addons from shared data
@@ -166,7 +167,8 @@ export function InvoiceCalculator({
             minimum_annual_value,
             volume_discounts,
             currency,
-            billing_frequency
+            billing_frequency,
+            manual_invoicing
           )
         `)
         .eq('user_id', user.id)
@@ -206,6 +208,7 @@ export function InvoiceCalculator({
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
             billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual',
             ammpCapabilities: c.ammp_capabilities || null,
+            manualInvoicing: contract.manual_invoicing || false,
           };
         });
 
@@ -1443,23 +1446,31 @@ export function InvoiceCalculator({
               <span>{formatCurrency(result.totalPrice)}</span>
             </div>
             
-            <Button 
-              className="w-full mt-4" 
-              onClick={handleSendToXero}
-              disabled={isSending}
-            >
-              {isSending ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Send to Xero
-                </>
-              )}
-            </Button>
+            {selectedCustomer?.manualInvoicing ? (
+              <div className="mt-4 p-3 bg-muted rounded-md border">
+                <p className="text-sm text-muted-foreground">
+                  ⓘ This contract is set up for manual invoicing. The invoice will be saved to history but not sent to Xero.
+                </p>
+              </div>
+            ) : (
+              <Button 
+                className="w-full mt-4" 
+                onClick={handleSendToXero}
+                disabled={isSending}
+              >
+                {isSending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-2 h-4 w-4" />
+                    Send to Xero
+                  </>
+                )}
+              </Button>
+            )}
           </div>
         )}
       </CardContent>

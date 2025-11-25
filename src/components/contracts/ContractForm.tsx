@@ -54,6 +54,7 @@ const contractFormSchema = z.object({
   initialMW: z.coerce.number().min(0, { message: "Initial MW is required" }),
   currency: z.enum(["USD", "EUR"]),
   billingFrequency: z.enum(["monthly", "quarterly", "biannual", "annual"]),
+  manualInvoicing: z.boolean().optional(),
   nextInvoiceDate: z.string().optional(),
   signedDate: z.string().optional(),
   periodStart: z.string().optional(),
@@ -105,6 +106,7 @@ interface ContractFormProps {
     addons: any[];
     initialMW: number;
     billingFrequency: string;
+    manualInvoicing?: boolean;
     customPricing?: any;
     volumeDiscounts?: any;
     minimumCharge?: number;
@@ -147,6 +149,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       initialMW: existingContract.initialMW,
       currency: existingContract.currency as "USD" | "EUR",
       billingFrequency: existingContract.billingFrequency as any,
+      manualInvoicing: existingContract.manualInvoicing || false,
       package: existingContract.package as any,
       maxMw: existingContract.maxMw,
       modules: existingContract.modules || [],
@@ -165,6 +168,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       initialMW: existingCustomer?.mwpManaged || 0,
       currency: userCurrency || "EUR",
       billingFrequency: "annual",
+      manualInvoicing: false,
       nextInvoiceDate: "",
       signedDate: "",
       periodStart: "",
@@ -677,6 +681,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         initial_mw: data.initialMW,
         currency: data.currency,
         billing_frequency: data.billingFrequency,
+        manual_invoicing: data.manualInvoicing || false,
         next_invoice_date: data.nextInvoiceDate || null,
         signed_date: data.signedDate || null,
         period_start: data.periodStart || null,
@@ -862,6 +867,29 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="manualInvoicing"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>
+                      Manual Invoicing
+                    </FormLabel>
+                    <FormDescription>
+                      Check if invoices for this contract are handled manually or automated directly in Xero. These will not be sent to Xero from this app.
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

@@ -83,6 +83,7 @@ export type Database = {
           customer_id: string
           id: string
           initial_mw: number
+          manual_invoicing: boolean | null
           max_mw: number | null
           minimum_annual_value: number | null
           minimum_charge: number | null
@@ -114,6 +115,7 @@ export type Database = {
           customer_id: string
           id?: string
           initial_mw: number
+          manual_invoicing?: boolean | null
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
@@ -145,6 +147,7 @@ export type Database = {
           customer_id?: string
           id?: string
           initial_mw?: number
+          manual_invoicing?: boolean | null
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
