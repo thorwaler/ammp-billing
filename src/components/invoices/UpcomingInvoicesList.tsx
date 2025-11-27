@@ -26,6 +26,7 @@ interface UpcomingInvoice {
   ammpCapabilities: any;
   manualInvoicing: boolean;
   baseMonthlyPrice: number;
+  siteChargeFrequency: "monthly" | "annual";
 }
 
 interface UpcomingInvoicesListProps {
@@ -65,6 +66,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           initial_mw,
           manual_invoicing,
           base_monthly_price,
+          site_charge_frequency,
           customers (
             id,
             name,
@@ -112,6 +114,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             ammpCapabilities: customer.ammp_capabilities || null,
             manualInvoicing: c.manual_invoicing || false,
             baseMonthlyPrice: Number(c.base_monthly_price) || 0,
+            siteChargeFrequency: (c.site_charge_frequency as "monthly" | "annual") || "annual",
           };
         });
 
@@ -177,6 +180,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0,
       baseMonthlyPrice: invoice.baseMonthlyPrice,
       billingFrequency: invoice.billingFrequency,
+      siteChargeFrequency: invoice.siteChargeFrequency,
     });
     
     return result.totalPrice;
