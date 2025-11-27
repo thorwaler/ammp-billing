@@ -11,7 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { toast } from "@/hooks/use-toast";
-import { Loader2, RefreshCw, AlertCircle, Copy, Zap, Battery, Activity, Database, ChevronDown, AlertTriangle } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle, Copy, Zap, Battery, Activity, Database, ChevronDown, AlertTriangle, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { syncCustomerAMMPData, calculateCapabilities } from "@/services/ammp/ammpService";
 import { dataApiClient } from "@/services/ammp/dataApiClient";
@@ -219,6 +219,24 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     toast({
       title: "Copied",
       description: "Asset ID copied to clipboard",
+    });
+  };
+
+  const handleClearAmmpData = () => {
+    // Clear all AMMP-related state
+    setFormData(prev => ({
+      ...prev,
+      ammpOrgId: "",
+      mwpManaged: "", // Reset MWp too
+    }));
+    setSyncedAssets([]);
+    setSyncedCapabilities(null);
+    setSyncAnomalies(null);
+    setAssetsWithDevices(new Map());
+    
+    toast({
+      title: "AMMP Data Cleared",
+      description: "All AMMP integration data has been removed from this customer.",
     });
   };
 
@@ -449,9 +467,21 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
             <div className="space-y-3 p-4 border rounded-lg bg-muted/50">
               <div className="flex items-center justify-between">
                 <Label className="text-base font-semibold">AMMP Synced Assets</Label>
-                <span className="text-sm text-muted-foreground">
-                  {syncedAssets.length} total
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {syncedAssets.length} total
+                  </span>
+                  <Button 
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleClearAmmpData}
+                    className="text-destructive hover:text-destructive h-8"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Clear
+                  </Button>
+                </div>
               </div>
               
               {/* Summary Stats */}
