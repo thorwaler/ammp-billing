@@ -1,5 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import { CalculationResult } from "./invoiceCalculations";
+import { CalculationResult, getFrequencyMultiplier } from "./invoiceCalculations";
 import { format, startOfYear, endOfYear } from "date-fns";
 
 export interface SupportDocumentData {
@@ -44,6 +44,16 @@ export interface SupportDocumentData {
     totalPerMonth: number;
   }[];
   solcastTotal?: number;
+  
+  // Other addons (excluding Solcast)
+  addonsBreakdown?: {
+    addonId: string;
+    addonName: string;
+    quantity?: number;
+    pricePerUnit?: number;
+    totalCost: number;
+  }[];
+  addonsTotal?: number;
   
   // Validation
   calculatedTotal: number;
@@ -103,9 +113,9 @@ export async function generateSupportDocumentData(
   let solcastBreakdown: SupportDocumentData['solcastBreakdown'];
   let solcastTotal = 0;
 
-  const solcastAddon = calculationResult.addonCosts.find(a => a.addonId === 'solcast');
+  const solcastAddon = calculationResult.addonCosts.find(a => a.addonId === 'satelliteDataAPI');
   if (solcastAddon && solcastAddon.cost > 0) {
-    const solcastSiteCount = selectedAddons.find(a => a.id === 'solcast')?.quantity || 0;
+    const solcastSiteCount = selectedAddons.find(a => a.id === 'satelliteDataAPI')?.quantity || 0;
     solcastBreakdown = generateSolcastBreakdown(
       billingFrequency,
       solcastSiteCount,
@@ -115,9 +125,25 @@ export async function generateSupportDocumentData(
     solcastTotal = solcastAddon.cost;
   }
 
+  // Generate other addons breakdown (excluding Solcast/Satellite Data API)
+  const addonsBreakdown = calculationResult.addonCosts
+    .filter(addon => addon.cost > 0 && addon.addonId !== 'satelliteDataAPI')
+    .map(addon => ({
+      addonId: addon.addonId,
+      addonName: addon.addonName,
+      quantity: addon.quantity,
+      pricePerUnit: addon.pricePerUnit,
+      totalCost: addon.cost
+    }));
+  const addonsTotal = addonsBreakdown.reduce((sum, a) => sum + a.totalCost, 0);
+
   // Calculate total including all addon costs and validate
+  // Asset breakdown is annual - multiply by frequency multiplier for period comparison
+  const frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
+  const assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
+  
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
-  const calculatedTotal = assetBreakdownTotal + 
+  const calculatedTotal = assetBreakdownPeriodTotal + 
     calculationResult.minimumCharges + 
     calculationResult.minimumContractAdjustment +
     calculationResult.basePricingCost +
@@ -138,6 +164,8 @@ export async function generateSupportDocumentData(
     assetBreakdownTotal,
     solcastBreakdown,
     solcastTotal,
+    addonsBreakdown,
+    addonsTotal,
     calculatedTotal,
     invoiceTotal,
     totalsMatch
@@ -179,9 +207,9 @@ function groupInvoicesByPeriod(
       };
     }
 
-    // Parse addon data to separate solcast
+    // Parse addon data to separate Satellite Data API (solcast)
     const addonsData = invoice.addons_data as any[] || [];
-    const solcastAddon = addonsData.find((a: any) => a.addonId === 'solcast');
+    const solcastAddon = addonsData.find((a: any) => a.addonId === 'satelliteDataAPI');
     const solcastFee = solcastAddon?.cost || 0;
 
     grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee;
