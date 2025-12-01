@@ -326,14 +326,23 @@ function getMonthsForPeriod(
   
   // If we have period dates from contract, use them directly
   if (periodStart && periodEnd) {
-    const start = new Date(periodStart);
-    const end = new Date(periodEnd);
+    // Parse dates as local to avoid timezone shifts
+    // Extract YYYY-MM-DD portion to create local dates
+    const startStr = periodStart.split('T')[0] || periodStart.substring(0, 10);
+    const endStr = periodEnd.split('T')[0] || periodEnd.substring(0, 10);
+    
+    // Create dates as local (not UTC) by parsing YYYY-MM-DD format
+    const [startYear, startMonth, startDay] = startStr.split('-').map(Number);
+    const [endYear, endMonth, endDay] = endStr.split('-').map(Number);
+    
+    const start = new Date(startYear, startMonth - 1, startDay);
+    const end = new Date(endYear, endMonth - 1, endDay);
     
     // Generate months from period start to period end
     let current = new Date(start.getFullYear(), start.getMonth(), 1);
-    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+    const endMonthDate = new Date(end.getFullYear(), end.getMonth(), 1);
     
-    while (current <= endMonth) {
+    while (current <= endMonthDate) {
       months.push(format(current, 'MMM yyyy'));
       current.setMonth(current.getMonth() + 1);
     }
