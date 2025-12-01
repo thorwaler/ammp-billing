@@ -1612,12 +1612,12 @@ export function InvoiceCalculator({
       )}
       
       {/* Support Document Download Dialog */}
-      {supportDocumentData && selectedCustomer && (
+      {supportDocumentData && (
         <SupportDocumentDownloadDialog
           open={downloadDialogOpen}
           onOpenChange={setDownloadDialogOpen}
           documentData={supportDocumentData}
-          customerName={selectedCustomer.name}
+          customerName={supportDocumentData.customerName}
           invoicePeriod={supportDocumentData.invoicePeriod}
         />
       )}
