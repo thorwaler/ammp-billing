@@ -115,11 +115,13 @@ export async function generateSupportDocumentData(
     solcastTotal = solcastAddon.cost;
   }
 
-  // Calculate total and validate
-  const calculatedTotal = assetBreakdownTotal + solcastTotal + 
+  // Calculate total including all addon costs and validate
+  const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
+  const calculatedTotal = assetBreakdownTotal + 
     calculationResult.minimumCharges + 
     calculationResult.minimumContractAdjustment +
-    calculationResult.basePricingCost;
+    calculationResult.basePricingCost +
+    totalAddonCosts;
   
   const invoiceTotal = calculationResult.totalPrice;
   const totalsMatch = Math.abs(calculatedTotal - invoiceTotal) < 0.01;
