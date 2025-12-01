@@ -776,6 +776,9 @@ export function InvoiceCalculator({
             break;
         }
         
+        // Subtract 1 day to get the last day of the period (not first day of next)
+        nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+        
         await supabase
           .from('contracts')
           .update({
