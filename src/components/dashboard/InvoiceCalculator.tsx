@@ -432,23 +432,36 @@ export function InvoiceCalculator({
   const getInvoicePeriodText = () => {
     if (!invoiceDate) return "";
     
-    const startDate = new Date(invoiceDate);
-    const endDate = new Date(invoiceDate);
+    // Use contract period dates if available (preferred)
+    if (selectedCustomer?.periodStart && selectedCustomer?.periodEnd) {
+      const startDate = new Date(selectedCustomer.periodStart);
+      const endDate = new Date(selectedCustomer.periodEnd);
+      return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
+    }
+    
+    // Fallback: Calculate period with proper month boundaries
+    const invoiceDateObj = new Date(invoiceDate);
+    let startDate: Date;
+    let endDate: Date;
     
     if (billingFrequency === "quarterly") {
-      // Quarterly is retrospective: period ends on invoice date, starts 3 months prior
-      startDate.setMonth(startDate.getMonth() - 3);
+      // Quarterly is retrospective: period ends in the month before invoice, starts 3 months prior
+      // End date: last day of the previous month
+      endDate = new Date(invoiceDateObj.getFullYear(), invoiceDateObj.getMonth(), 0); // Last day of previous month
+      // Start date: 1st of the month, 3 months before end month
+      startDate = new Date(endDate.getFullYear(), endDate.getMonth() - 2, 1); // 1st of start month
     } else if (billingFrequency === "monthly") {
-      // Forward-looking for other frequencies
-      endDate.setMonth(endDate.getMonth() + 1);
-      endDate.setDate(endDate.getDate() - 1);
+      // Monthly: current month
+      startDate = new Date(invoiceDateObj.getFullYear(), invoiceDateObj.getMonth(), 1);
+      endDate = new Date(invoiceDateObj.getFullYear(), invoiceDateObj.getMonth() + 1, 0); // Last day of month
     } else if (billingFrequency === "biannual") {
-      endDate.setMonth(endDate.getMonth() + 6);
-      endDate.setDate(endDate.getDate() - 1);
+      // Biannual: 6 month period starting from current month
+      startDate = new Date(invoiceDateObj.getFullYear(), invoiceDateObj.getMonth(), 1);
+      endDate = new Date(invoiceDateObj.getFullYear(), invoiceDateObj.getMonth() + 6, 0); // Last day of 6th month
     } else {
-      // Annual
-      endDate.setFullYear(endDate.getFullYear() + 1);
-      endDate.setDate(endDate.getDate() - 1);
+      // Annual: 12 month period starting from current month
+      startDate = new Date(invoiceDateObj.getFullYear(), invoiceDateObj.getMonth(), 1);
+      endDate = new Date(invoiceDateObj.getFullYear() + 1, invoiceDateObj.getMonth(), 0); // Last day before anniversary
     }
     
     return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
