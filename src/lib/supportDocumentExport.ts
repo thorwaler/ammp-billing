@@ -74,6 +74,22 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
     XLSX.utils.book_append_sheet(workbook, wsSolcast, 'Solcast');
   }
 
+  // Sheet 4: Other Addons (if applicable)
+  if (data.addonsBreakdown && data.addonsBreakdown.length > 0) {
+    const addonsData = [
+      ['Addon', 'Quantity', `Price per Unit (${data.currency})`, `Total (${data.currency})`],
+      ...data.addonsBreakdown.map(addon => [
+        addon.addonName,
+        addon.quantity || '-',
+        addon.pricePerUnit || '-',
+        addon.totalCost
+      ]),
+      ['', '', 'Total:', data.addonsTotal || 0]
+    ];
+    const wsAddons = XLSX.utils.aoa_to_sheet(addonsData);
+    XLSX.utils.book_append_sheet(workbook, wsAddons, 'Other Addons');
+  }
+
   // Export file
   XLSX.writeFile(workbook, filename);
 }
