@@ -284,6 +284,7 @@ export type Database = {
           modules_data: Json | null
           mw_change: number | null
           mw_managed: number
+          support_document_data: Json | null
           total_mw: number
           updated_at: string | null
           user_id: string
@@ -302,6 +303,7 @@ export type Database = {
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed: number
+          support_document_data?: Json | null
           total_mw: number
           updated_at?: string | null
           user_id: string
@@ -320,6 +322,7 @@ export type Database = {
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed?: number
+          support_document_data?: Json | null
           total_mw?: number
           updated_at?: string | null
           user_id?: string

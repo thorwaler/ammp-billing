@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { generateSupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { exportToExcel, exportToPDF, generateFilename } from "@/lib/supportDocumentExport";
 import { SupportDocument } from "@/components/invoices/SupportDocument";
+import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
 import { getApplicableDiscount } from "@/lib/invoiceCalculations";
 import { 
   Select,
@@ -151,6 +152,8 @@ export function InvoiceCalculator({
   const { formatCurrency } = useCurrency();
   const [supportDocumentData, setSupportDocumentData] = useState<any>(null);
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
 
   // Load customers from database on mount
   useEffect(() => {
@@ -791,7 +794,7 @@ export function InvoiceCalculator({
           .eq('contract_status', 'active')
           .maybeSingle();
         
-        const { error: invoiceError } = await supabase
+        const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')
           .insert([{
             user_id: user.id,
@@ -807,12 +810,17 @@ export function InvoiceCalculator({
             currency: selectedCustomer.currency,
             modules_data: modules.filter(m => m.selected) as any,
             addons_data: addons.filter(a => a.selected) as any
-          }]);
+          }])
+          .select()
+          .single();
 
         if (invoiceError) {
           console.error('Failed to save invoice record:', invoiceError);
           // Don't fail the whole operation, just log
         } else {
+          // Store invoice ID for support document generation
+          setLastCreatedInvoiceId(insertedInvoice.id);
+          
           // Check MW capacity for capped contracts
           if (contractData?.id) {
             await monitorMWAndNotify(
@@ -823,8 +831,8 @@ export function InvoiceCalculator({
             );
           }
           
-          // Generate support document after successful invoice creation
-          await generateAndExportSupportDocument();
+          // Generate support document data and store it
+          await generateAndStoreSupportDocument(insertedInvoice.id);
         }
       }
       
@@ -906,7 +914,7 @@ export function InvoiceCalculator({
 
   const isProPackage = selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'custom';
 
-  const generateAndExportSupportDocument = async () => {
+  const generateAndStoreSupportDocument = async (invoiceId: string) => {
     if (!result || !selectedCustomer || !invoiceDate) return;
     
     setGeneratingSupportDoc(true);
@@ -943,28 +951,26 @@ export function InvoiceCalculator({
         return;
       }
       
-      setSupportDocumentData(docData);
+      // Store support document data in database
+      const { error: updateError } = await supabase
+        .from('invoices')
+        .update({ support_document_data: docData as any })
+        .eq('id', invoiceId);
       
-      // Generate filenames
-      const pdfFilename = generateFilename(selectedCustomer.name, docData.invoicePeriod, 'pdf');
-      const xlsxFilename = generateFilename(selectedCustomer.name, docData.invoicePeriod, 'xlsx');
-      
-      // Wait a moment for the component to render
-      setTimeout(() => {
-        // Export Excel
-        exportToExcel(docData, xlsxFilename);
-        
-        // Export PDF
-        exportToPDF('support-document', pdfFilename);
-        
+      if (updateError) {
+        console.error('Failed to store support document data:', updateError);
         toast({
-          title: "Support Documents Generated",
-          description: "PDF and Excel files have been downloaded.",
+          title: "Support Document Warning",
+          description: "Failed to store support document data. You can still download it from invoice history later.",
+          variant: "destructive",
         });
-        
-        setGeneratingSupportDoc(false);
-        setSupportDocumentData(null);
-      }, 500);
+      } else {
+        // Store data and open download dialog
+        setSupportDocumentData(docData);
+        setDownloadDialogOpen(true);
+      }
+      
+      setGeneratingSupportDoc(false);
       
     } catch (error) {
       console.error('Error generating support document:', error);
@@ -1599,6 +1605,17 @@ export function InvoiceCalculator({
         <div className="hidden">
           <SupportDocument data={supportDocumentData} />
         </div>
+      )}
+      
+      {/* Support Document Download Dialog */}
+      {supportDocumentData && selectedCustomer && (
+        <SupportDocumentDownloadDialog
+          open={downloadDialogOpen}
+          onOpenChange={setDownloadDialogOpen}
+          documentData={supportDocumentData}
+          customerName={selectedCustomer.name}
+          invoicePeriod={supportDocumentData.invoicePeriod}
+        />
       )}
     </Card>
   );

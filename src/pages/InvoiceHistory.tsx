@@ -10,9 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { InvoiceDetailsDialog } from "@/components/invoices/InvoiceDetailsDialog";
+import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
+import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Trash2, Eye, ExternalLink, Filter } from "lucide-react";
+import { Trash2, Eye, ExternalLink, Filter, FileText } from "lucide-react";
 
 interface Invoice {
   id: string;
@@ -28,6 +30,7 @@ interface Invoice {
   mw_change: number;
   modules_data: any;
   addons_data: any;
+  support_document_data: SupportDocumentData | null;
   customer: {
     name: string;
   };
@@ -43,6 +46,7 @@ export default function InvoiceHistory() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -66,7 +70,7 @@ export default function InvoiceHistory() {
         .order('invoice_date', { ascending: false });
 
       if (error) throw error;
-      setInvoices(data || []);
+      setInvoices((data || []) as unknown as Invoice[]);
     } catch (error) {
       console.error('Error fetching invoices:', error);
       toast.error('Failed to load invoice history');
@@ -91,6 +95,15 @@ export default function InvoiceHistory() {
     }
 
     setFilteredInvoices(filtered);
+  };
+
+  const handleDownloadSupportDoc = (invoice: Invoice) => {
+    if (!invoice.support_document_data) {
+      toast.error("No support document available for this invoice");
+      return;
+    }
+    setSelectedInvoice(invoice);
+    setDownloadDialogOpen(true);
   };
 
   const handleDeleteInvoice = async () => {
@@ -263,6 +276,15 @@ export default function InvoiceHistory() {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => handleDownloadSupportDoc(invoice)}
+                              disabled={!invoice.support_document_data}
+                              title={invoice.support_document_data ? "Download Support Document" : "No support document"}
+                            >
+                              <FileText className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => {
                                 setSelectedInvoice(invoice);
                                 setDetailsDialogOpen(true);
@@ -314,11 +336,23 @@ export default function InvoiceHistory() {
       </AlertDialog>
 
       {selectedInvoice && (
-        <InvoiceDetailsDialog
-          open={detailsDialogOpen}
-          onOpenChange={setDetailsDialogOpen}
-          invoice={selectedInvoice}
-        />
+        <>
+          <InvoiceDetailsDialog
+            open={detailsDialogOpen}
+            onOpenChange={setDetailsDialogOpen}
+            invoice={selectedInvoice}
+          />
+          
+          {selectedInvoice.support_document_data && (
+            <SupportDocumentDownloadDialog
+              open={downloadDialogOpen}
+              onOpenChange={setDownloadDialogOpen}
+              documentData={selectedInvoice.support_document_data}
+              customerName={selectedInvoice.customer.name}
+              invoicePeriod={format(new Date(selectedInvoice.invoice_date), 'MMM yyyy')}
+            />
+          )}
+        </>
       )}
     </Layout>
   );
