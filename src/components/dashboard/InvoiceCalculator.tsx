@@ -183,7 +183,9 @@ export function InvoiceCalculator({
             currency,
             billing_frequency,
             manual_invoicing,
-            base_monthly_price
+            base_monthly_price,
+            period_start,
+            period_end
           )
         `)
         .eq('user_id', user.id)
@@ -230,6 +232,8 @@ export function InvoiceCalculator({
             manualInvoicing: contract.manual_invoicing || false,
             baseMonthlyPrice: Number(contract.base_monthly_price) || 0,
             siteChargeFrequency: siteChargeFrequency as 'monthly' | 'annual',
+            periodStart: contract.period_start,
+            periodEnd: contract.period_end,
           };
         });
 
@@ -937,7 +941,9 @@ export function InvoiceCalculator({
         selectedCustomer.ammpCapabilities,
         selectedCustomer.package,
         billingFrequency,
-        discountPercent
+        discountPercent,
+        selectedCustomer.periodStart,
+        selectedCustomer.periodEnd
       );
       
       // Validate totals (show warning but continue)

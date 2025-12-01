@@ -75,7 +75,9 @@ export async function generateSupportDocumentData(
   ammpCapabilities: any,
   packageType: string,
   billingFrequency: string,
-  discountPercent: number = 0
+  discountPercent: number = 0,
+  periodStart?: string,
+  periodEnd?: string
 ): Promise<SupportDocumentData> {
   
   // Fetch year-to-date invoices
@@ -120,7 +122,9 @@ export async function generateSupportDocumentData(
       billingFrequency,
       solcastSiteCount,
       solcastAddon.pricePerUnit || 0,
-      invoiceDate
+      invoiceDate,
+      periodStart,
+      periodEnd
     );
     solcastTotal = solcastAddon.cost;
   }
@@ -295,9 +299,11 @@ function generateSolcastBreakdown(
   billingFrequency: string,
   siteCount: number,
   pricePerSite: number,
-  invoiceDate: Date
+  invoiceDate: Date,
+  periodStart?: string,
+  periodEnd?: string
 ): SupportDocumentData['solcastBreakdown'] {
-  const months = getMonthsForPeriod(billingFrequency, invoiceDate);
+  const months = getMonthsForPeriod(billingFrequency, invoiceDate, periodStart, periodEnd);
   
   return months.map(month => ({
     month,
@@ -310,8 +316,32 @@ function generateSolcastBreakdown(
 /**
  * Get list of months for the billing period
  */
-function getMonthsForPeriod(billingFrequency: string, invoiceDate: Date): string[] {
+function getMonthsForPeriod(
+  billingFrequency: string, 
+  invoiceDate: Date,
+  periodStart?: string,
+  periodEnd?: string
+): string[] {
   const months: string[] = [];
+  
+  // If we have period dates from contract, use them directly
+  if (periodStart && periodEnd) {
+    const start = new Date(periodStart);
+    const end = new Date(periodEnd);
+    
+    // Generate months from period start to period end
+    let current = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+    
+    while (current <= endMonth) {
+      months.push(format(current, 'MMM yyyy'));
+      current.setMonth(current.getMonth() + 1);
+    }
+    
+    return months;
+  }
+  
+  // Fallback: calculate based on billing frequency
   const startMonth = invoiceDate.getMonth();
   const year = invoiceDate.getFullYear();
 
