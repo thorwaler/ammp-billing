@@ -2,6 +2,8 @@ import * as XLSX from 'xlsx';
 import { SupportDocumentData } from './supportDocumentGenerator';
 import { format } from 'date-fns';
 
+export type ExportFormat = 'xlsx' | 'pdf' | 'both';
+
 /**
  * Export support document as Excel file
  */
