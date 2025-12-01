@@ -5,9 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Calculator, Send, ArrowRight, CalendarIcon, Loader2, ArrowUp, ArrowDown } from "lucide-react";
+import { Calculator, Send, ArrowRight, CalendarIcon, Loader2, ArrowUp, ArrowDown, FileText, Download } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
+import { generateSupportDocumentData } from "@/lib/supportDocumentGenerator";
+import { exportToExcel, exportToPDF, generateFilename } from "@/lib/supportDocumentExport";
+import { SupportDocument } from "@/components/invoices/SupportDocument";
+import { getApplicableDiscount } from "@/lib/invoiceCalculations";
 import { 
   Select,
   SelectContent,
@@ -145,6 +149,8 @@ export function InvoiceCalculator({
   const [mwChange, setMwChange] = useState<number>(0);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { formatCurrency } = useCurrency();
+  const [supportDocumentData, setSupportDocumentData] = useState<any>(null);
+  const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
 
   // Load customers from database on mount
   useEffect(() => {
@@ -816,6 +822,9 @@ export function InvoiceCalculator({
               Number(mwManaged)
             );
           }
+          
+          // Generate support document after successful invoice creation
+          await generateAndExportSupportDocument();
         }
       }
       
@@ -897,6 +906,76 @@ export function InvoiceCalculator({
 
   const isProPackage = selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'custom';
 
+  const generateAndExportSupportDocument = async () => {
+    if (!result || !selectedCustomer || !invoiceDate) return;
+    
+    setGeneratingSupportDoc(true);
+    
+    try {
+      // Calculate discount percentage
+      const discountPercent = selectedCustomer.portfolioDiscountTiers && selectedCustomer.portfolioDiscountTiers.length > 0
+        ? getApplicableDiscount(Number(mwManaged), selectedCustomer.portfolioDiscountTiers)
+        : 0;
+      
+      // Generate support document data
+      const docData = await generateSupportDocumentData(
+        selectedCustomer.id,
+        selectedCustomer.name,
+        selectedCustomer.currency,
+        invoiceDate,
+        result,
+        modules.filter(m => m.selected).map(m => m.id),
+        addons.filter(a => a.selected).map(a => ({ id: a.id, quantity: a.quantity })),
+        selectedCustomer.ammpCapabilities,
+        selectedCustomer.package,
+        billingFrequency,
+        discountPercent
+      );
+      
+      // Validate totals
+      if (!docData.totalsMatch) {
+        toast({
+          title: "Total Mismatch Warning",
+          description: `Support document total (${formatCurrency(docData.calculatedTotal)}) does not match invoice total (${formatCurrency(docData.invoiceTotal)}). Please review the calculation.`,
+          variant: "destructive",
+        });
+        setGeneratingSupportDoc(false);
+        return;
+      }
+      
+      setSupportDocumentData(docData);
+      
+      // Generate filenames
+      const pdfFilename = generateFilename(selectedCustomer.name, docData.invoicePeriod, 'pdf');
+      const xlsxFilename = generateFilename(selectedCustomer.name, docData.invoicePeriod, 'xlsx');
+      
+      // Wait a moment for the component to render
+      setTimeout(() => {
+        // Export Excel
+        exportToExcel(docData, xlsxFilename);
+        
+        // Export PDF
+        exportToPDF('support-document', pdfFilename);
+        
+        toast({
+          title: "Support Documents Generated",
+          description: "PDF and Excel files have been downloaded.",
+        });
+        
+        setGeneratingSupportDoc(false);
+        setSupportDocumentData(null);
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error generating support document:', error);
+      toast({
+        title: "Support Document Error",
+        description: "Failed to generate support document. The invoice was still created successfully.",
+        variant: "destructive",
+      });
+      setGeneratingSupportDoc(false);
+    }
+  };
 
   return (
     <Card>
@@ -1496,12 +1575,12 @@ export function InvoiceCalculator({
               <Button 
                 className="w-full mt-4" 
                 onClick={handleSendToXero}
-                disabled={isSending}
+                disabled={isSending || generatingSupportDoc}
               >
-                {isSending ? (
+                {isSending || generatingSupportDoc ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
+                    {generatingSupportDoc ? 'Generating Documents...' : 'Sending...'}
                   </>
                 ) : (
                   <>
@@ -1514,6 +1593,13 @@ export function InvoiceCalculator({
           </div>
         )}
       </CardContent>
+      
+      {/* Hidden support document for PDF export */}
+      {supportDocumentData && (
+        <div className="hidden">
+          <SupportDocument data={supportDocumentData} />
+        </div>
+      )}
     </Card>
   );
 }
