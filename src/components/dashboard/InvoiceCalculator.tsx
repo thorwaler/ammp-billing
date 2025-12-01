@@ -425,7 +425,8 @@ export function InvoiceCalculator({
     mwManaged,         // MW value changes
     modules,           // Module selection changes
     addons,            // Addon selection/quantity changes
-    invoiceDate
+    invoiceDate,
+    selectedCustomer   // Customer data including period dates
   ]);
 
   // Calculation helper - now using shared logic
@@ -434,8 +435,18 @@ export function InvoiceCalculator({
     
     // Use contract period dates if available (preferred)
     if (selectedCustomer?.periodStart && selectedCustomer?.periodEnd) {
-      const startDate = new Date(selectedCustomer.periodStart);
-      const endDate = new Date(selectedCustomer.periodEnd);
+      // Parse dates as local to avoid timezone shifts
+      // Extract YYYY-MM-DD portion to create local dates
+      const startStr = selectedCustomer.periodStart.split('T')[0] || selectedCustomer.periodStart.substring(0, 10);
+      const endStr = selectedCustomer.periodEnd.split('T')[0] || selectedCustomer.periodEnd.substring(0, 10);
+      
+      // Create dates as local (not UTC) by parsing YYYY-MM-DD format
+      const [startYear, startMonth, startDay] = startStr.split('-').map(Number);
+      const [endYear, endMonth, endDay] = endStr.split('-').map(Number);
+      
+      const startDate = new Date(startYear, startMonth - 1, startDay);
+      const endDate = new Date(endYear, endMonth - 1, endDay);
+      
       return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
     }
     
