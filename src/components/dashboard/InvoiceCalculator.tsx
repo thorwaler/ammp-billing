@@ -940,18 +940,16 @@ export function InvoiceCalculator({
         discountPercent
       );
       
-      // Validate totals
+      // Validate totals (show warning but continue)
       if (!docData.totalsMatch) {
         toast({
-          title: "Total Mismatch Warning",
-          description: `Support document total (${formatCurrency(docData.calculatedTotal)}) does not match invoice total (${formatCurrency(docData.invoiceTotal)}). Please review the calculation.`,
-          variant: "destructive",
+          title: "Total Mismatch Note",
+          description: `Calculated breakdown (${formatCurrency(docData.calculatedTotal)}) differs from invoice total (${formatCurrency(docData.invoiceTotal)}). This may be due to rounding or custom pricing.`,
+          variant: "default",
         });
-        setGeneratingSupportDoc(false);
-        return;
       }
       
-      // Store support document data in database
+      // Store support document data in database (always)
       const { error: updateError } = await supabase
         .from('invoices')
         .update({ support_document_data: docData as any })
