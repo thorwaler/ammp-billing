@@ -124,13 +124,15 @@ interface InvoiceCalculatorProps {
   preselectedContractId?: string;
   prefilledDate?: Date;
   onInvoiceCreated?: () => void;
+  onSupportDocumentReady?: (data: any) => void;
 }
 
 export function InvoiceCalculator({ 
   preselectedCustomerId,
   preselectedContractId,
   prefilledDate,
-  onInvoiceCreated 
+  onInvoiceCreated,
+  onSupportDocumentReady
 }: InvoiceCalculatorProps = {}) {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [customer, setCustomer] = useState("");
@@ -150,9 +152,7 @@ export function InvoiceCalculator({
   const [mwChange, setMwChange] = useState<number>(0);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { formatCurrency } = useCurrency();
-  const [supportDocumentData, setSupportDocumentData] = useState<any>(null);
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
-  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
 
   // Load customers from database on mount
@@ -969,9 +969,8 @@ export function InvoiceCalculator({
           variant: "destructive",
         });
       } else {
-        // Store data and open download dialog
-        setSupportDocumentData(docData);
-        setDownloadDialogOpen(true);
+        // Notify parent component about support document ready
+        onSupportDocumentReady?.(docData);
       }
       
       setGeneratingSupportDoc(false);
@@ -1603,24 +1602,6 @@ export function InvoiceCalculator({
           </div>
         )}
       </CardContent>
-      
-      {/* Hidden support document for PDF export */}
-      {supportDocumentData && (
-        <div className="hidden">
-          <SupportDocument data={supportDocumentData} />
-        </div>
-      )}
-      
-      {/* Support Document Download Dialog */}
-      {supportDocumentData && (
-        <SupportDocumentDownloadDialog
-          open={downloadDialogOpen}
-          onOpenChange={setDownloadDialogOpen}
-          documentData={supportDocumentData}
-          customerName={supportDocumentData.customerName}
-          invoicePeriod={supportDocumentData.invoicePeriod}
-        />
-      )}
     </Card>
   );
 }
