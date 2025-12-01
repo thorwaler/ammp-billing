@@ -129,7 +129,7 @@ export function InvoiceDetailsDialog({
                       {modules.map((module: any, index: number) => (
                         <div key={index} className="flex justify-between items-center py-2 px-3 bg-muted/50 rounded">
                           <span>{module.name}</span>
-                          <span className="font-medium">{formatCurrency(module.cost || 0)}</span>
+                          <span className="font-medium">{formatCurrency(module.cost || module.price || 0)}</span>
                         </div>
                       ))}
                     </div>
@@ -148,7 +148,7 @@ export function InvoiceDetailsDialog({
                               <p className="text-sm text-muted-foreground">Quantity: {addon.quantity}</p>
                             )}
                           </div>
-                          <span className="font-medium">{formatCurrency(addon.cost || 0)}</span>
+                          <span className="font-medium">{formatCurrency(addon.cost || addon.calculatedTieredPrice?.totalPrice || 0)}</span>
                         </div>
                       ))}
                     </div>

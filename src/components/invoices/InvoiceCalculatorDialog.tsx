@@ -41,7 +41,7 @@ export function InvoiceCalculatorDialog({
             prefilledDate={prefilledDate}
             onInvoiceCreated={() => {
               onInvoiceCreated?.();
-              onOpenChange(false);
+              // Don't close immediately - let download dialog show first
             }}
           />
         </ScrollArea>
