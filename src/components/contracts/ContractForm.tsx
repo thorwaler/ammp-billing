@@ -60,7 +60,7 @@ const contractFormSchema = z.object({
   signedDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc"]),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -700,20 +700,21 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         currency: data.currency,
         billing_frequency: data.billingFrequency,
         manual_invoicing: data.manualInvoicing || false,
-        next_invoice_date: data.nextInvoiceDate || null,
+        // POC contracts don't have invoicing
+        next_invoice_date: data.package === 'poc' ? null : (data.nextInvoiceDate || null),
         signed_date: data.signedDate || null,
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
-        modules: data.modules || [],
-        addons: enhancedAddons,
-        custom_pricing: data.customPricing || {},
-        volume_discounts: data.volumeDiscounts || {},
-        portfolio_discount_tiers: portfolioDiscountTiers,
-        minimum_charge: data.minimumCharge || 0,
-        minimum_charge_tiers: minimumChargeTiers,
+        modules: data.package === 'poc' ? [] : (data.modules || []),
+        addons: data.package === 'poc' ? [] : enhancedAddons,
+        custom_pricing: data.package === 'poc' ? {} : (data.customPricing || {}),
+        volume_discounts: data.package === 'poc' ? {} : (data.volumeDiscounts || {}),
+        portfolio_discount_tiers: data.package === 'poc' ? [] : portfolioDiscountTiers,
+        minimum_charge: data.package === 'poc' ? 0 : (data.minimumCharge || 0),
+        minimum_charge_tiers: data.package === 'poc' ? [] : minimumChargeTiers,
         site_charge_frequency: data.siteChargeFrequency || "annual",
-        minimum_annual_value: data.minimumAnnualValue || 0,
-        base_monthly_price: data.baseMonthlyPrice || 0,
+        minimum_annual_value: data.package === 'poc' ? 0 : (data.minimumAnnualValue || 0),
+        base_monthly_price: data.package === 'poc' ? 0 : (data.baseMonthlyPrice || 0),
         max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
@@ -848,6 +849,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               )}
             />
 
+            {/* Billing fields - hidden for POC */}
+            {watchPackage !== "poc" && (
+              <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField
                 control={form.control}
@@ -976,6 +980,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </FormItem>
               )}
             />
+              </>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <FormField
@@ -1072,6 +1078,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="custom">Custom/Legacy</SelectItem>
                       <SelectItem value="hybrid_tiered">Hybrid Tiered (Different pricing for on-grid vs hybrid sites)</SelectItem>
                       <SelectItem value="capped">Capped Package (Fixed annual fee with MW cap)</SelectItem>
+                      <SelectItem value="poc">POC/Trial (No billing - expiry tracking only)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -1083,6 +1090,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "Hybrid Tiered: Set different rates for on-grid and hybrid sites (with battery/genset)." :
                       watchPackage === "capped" ?
                       "Capped Package: Fixed fee (pro-rated for selected billing frequency) with optional MW cap alerts." :
+                      watchPackage === "poc" ?
+                      "POC/Trial: Track proof-of-concept trials with expiry notifications. No invoicing or billing." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -1121,8 +1130,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
             
-            {/* Package Selector Component - Modules & Addons (hidden for capped) */}
-            {watchPackage !== "capped" && (
+            {/* Package Selector Component - Modules & Addons (hidden for capped and poc) */}
+            {watchPackage !== "capped" && watchPackage !== "poc" && (
             <ContractPackageSelector
               selectedPackage={watchPackage || ""}
               selectedModules={watchModules || []}
@@ -1215,6 +1224,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
             
+            {/* Pricing fields - hidden for POC */}
+            {watchPackage !== "poc" && (
+              <>
             <FormField
               control={form.control}
               name="minimumAnnualValue"
@@ -1342,6 +1354,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 frequency={form.watch("siteChargeFrequency") as any}
               />
             </div>
+              </>
+            )}
             
             <FormField
               control={form.control}

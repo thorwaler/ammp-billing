@@ -148,7 +148,7 @@ export const ADDONS: AddonDefinition[] = [
 ];
 
 // Package type definitions
-export type PackageType = "starter" | "pro" | "custom" | "hybrid_tiered" | "capped";
+export type PackageType = "starter" | "pro" | "custom" | "hybrid_tiered" | "capped" | "poc";
 export type BillingFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ComplexityLevel = "low" | "medium" | "high";
 export type SiteChargeFrequency = "monthly" | "annual";

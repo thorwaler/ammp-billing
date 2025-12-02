@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, Info, Trash2, XCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, Trash2, XCircle, Clock, CalendarX } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -18,6 +18,14 @@ export const NotificationItem = ({
   const navigate = useNavigate();
 
   const getSeverityIcon = () => {
+    // Special icons for contract expiration notifications
+    if (notification.type === 'contract_expired') {
+      return <CalendarX className="h-5 w-5 text-destructive" />;
+    }
+    if (notification.type === 'contract_expiring_soon') {
+      return <Clock className="h-5 w-5 text-yellow-500" />;
+    }
+    
     switch (notification.severity) {
       case 'error':
         return <XCircle className="h-5 w-5 text-destructive" />;

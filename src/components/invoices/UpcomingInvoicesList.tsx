@@ -76,6 +76,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
         `)
         .eq('user_id', user.id)
         .eq('contract_status', 'active')
+        .neq('package', 'poc')
         .not('next_invoice_date', 'is', null)
         .order('next_invoice_date', { ascending: true });
 
