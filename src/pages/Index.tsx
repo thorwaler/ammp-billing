@@ -4,7 +4,7 @@ import Layout from "@/components/layout/Layout";
 import StatCard from "@/components/dashboard/StatCard";
 import RecentActivity from "@/components/dashboard/RecentActivity";
 import InvoiceCalculator from "@/components/dashboard/InvoiceCalculator";
-import { Users, FileText, BarChart4, TrendingUp, PlusCircle } from "lucide-react";
+import { Users, FileText, BarChart4, TrendingUp, PlusCircle, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
@@ -87,7 +87,7 @@ const Index = () => {
         </div>
 
         {/* Stats Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <StatCard
             title="Total Customers"
             value={isLoading ? "..." : String(stats?.totalCustomers || 0)}
@@ -115,6 +115,13 @@ const Index = () => {
             icon={TrendingUp}
             trend={(stats?.mwAddedThisYear || 0) > 0 ? "up" : "neutral"}
             description="Based on AMMP asset onboarding dates"
+          />
+          <StatCard
+            title="Annual Recurring Revenue"
+            value={isLoading ? "..." : `€${(stats?.totalARR || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+            icon={DollarSign}
+            trend="neutral"
+            description="Total ARR from active contracts"
           />
         </div>
 
