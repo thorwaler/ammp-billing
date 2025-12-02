@@ -9,8 +9,12 @@ import { supabase } from '@/integrations/supabase/client';
 /**
  * Calculate capabilities for a single asset
  * Uses single API call to /assets/{assetId}/devices which returns asset + devices
+ * Optionally accepts pre-fetched metadata (e.g., created date) to avoid extra API calls
  */
-export async function calculateCapabilities(assetId: string): Promise<AssetCapabilities> {
+export async function calculateCapabilities(
+  assetId: string,
+  assetMetadata?: { created?: string }
+): Promise<AssetCapabilities> {
   const asset = await dataApiClient.getAsset(assetId);
   
   // Defensive check: ensure we got a valid asset object
@@ -31,6 +35,9 @@ export async function calculateCapabilities(assetId: string): Promise<AssetCapab
     d.device_type === 'fuel_sensor' || d.device_type === 'genset'
   );
 
+  // Use pre-fetched metadata if provided, otherwise try asset.created (may be null)
+  const onboardingDate = assetMetadata?.created || asset.created || null;
+
   return {
     assetId: asset.asset_id,
     assetName: asset.asset_name,
@@ -38,7 +45,7 @@ export async function calculateCapabilities(assetId: string): Promise<AssetCapab
     hasSolcast,
     hasBattery,
     hasGenset,
-    onboardingDate: asset.created || null,  // Capture creation date from AMMP API
+    onboardingDate,
     deviceCount: devices.length,
     devices,
   };
@@ -134,13 +141,14 @@ export function detectSyncAnomalies(capabilities: AssetCapabilities[]): SyncAnom
 /**
  * Sync customer AMMP data by org_id
  * Fetches all assets for an org, calculates capabilities, and stores in database
+ * Uses smart caching to only fetch metadata for assets missing onboardingDate
  */
 export async function syncCustomerAMMPData(
   customerId: string, 
   orgId: string,
   onProgress?: (current: number, total: number, assetName: string) => void
 ) {
-  // 1. Fetch all assets
+  // 1. Fetch all assets from AMMP
   const allAssets = await dataApiClient.listAssets();
   const orgAssets = allAssets.filter(a => a.org_id === orgId);
   
@@ -148,20 +156,80 @@ export async function syncCustomerAMMPData(
     throw new Error(`No assets found for org_id: ${orgId}`);
   }
 
-  // 2. Calculate capabilities in batches (parallel processing with progress tracking)
-  const BATCH_SIZE = 10; // Process 10 assets concurrently
+  // 2. Fetch existing customer capabilities to check for cached onboardingDates
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+
+  const { data: existingCustomer } = await supabase
+    .from('customers')
+    .select('ammp_capabilities')
+    .eq('id', customerId)
+    .eq('user_id', user.id)
+    .single();
+
+  const existingCapabilities = (existingCustomer?.ammp_capabilities as any)?.assetBreakdown || [];
+  
+  // Build a map of existing onboardingDates
+  const cachedOnboardingDates: Record<string, string | null> = {};
+  for (const asset of existingCapabilities) {
+    if (asset.assetId && asset.onboardingDate) {
+      cachedOnboardingDates[asset.assetId] = asset.onboardingDate;
+    }
+  }
+
+  // 3. Identify assets that need metadata fetch (missing onboardingDate)
+  const assetsMissingMetadata = orgAssets.filter(a => !cachedOnboardingDates[a.asset_id]);
+  
+  console.log(`[AMMP Sync] ${orgAssets.length} total assets, ${assetsMissingMetadata.length} need metadata fetch`);
+
+  // 4. Batch fetch metadata ONLY for assets that need it
+  const METADATA_BATCH_SIZE = 10;
+  const fetchedMetadata: Record<string, string | null> = {};
+
+  for (let i = 0; i < assetsMissingMetadata.length; i += METADATA_BATCH_SIZE) {
+    const batch = assetsMissingMetadata.slice(i, i + METADATA_BATCH_SIZE);
+    
+    const metadataPromises = batch.map(async (asset) => {
+      try {
+        const metadata = await dataApiClient.getAssetMetadata(asset.asset_id);
+        return { assetId: asset.asset_id, created: metadata.created || null };
+      } catch (error) {
+        console.warn(`[AMMP Sync] Failed to fetch metadata for ${asset.asset_id}:`, error);
+        return { assetId: asset.asset_id, created: null };
+      }
+    });
+    
+    const results = await Promise.all(metadataPromises);
+    for (const result of results) {
+      fetchedMetadata[result.assetId] = result.created;
+    }
+  }
+
+  // 5. Combine cached and newly fetched metadata
+  const assetMetadataMap: Record<string, { created?: string }> = {};
+  for (const asset of orgAssets) {
+    const cachedDate = cachedOnboardingDates[asset.asset_id];
+    const fetchedDate = fetchedMetadata[asset.asset_id];
+    const created = cachedDate || fetchedDate || undefined;
+    if (created) {
+      assetMetadataMap[asset.asset_id] = { created };
+    }
+  }
+
+  // 6. Calculate capabilities in batches (parallel processing with progress tracking)
+  const BATCH_SIZE = 10;
   const capabilities: AssetCapabilities[] = [];
 
   for (let i = 0; i < orgAssets.length; i += BATCH_SIZE) {
     const batch = orgAssets.slice(i, i + BATCH_SIZE);
     
-    // Process batch in parallel
+    // Process batch in parallel, passing pre-fetched metadata
     const batchPromises = batch.map(async (asset, batchIndex) => {
       const globalIndex = i + batchIndex;
       if (onProgress) {
         onProgress(globalIndex + 1, orgAssets.length, asset.asset_name);
       }
-      return calculateCapabilities(asset.asset_id);
+      return calculateCapabilities(asset.asset_id, assetMetadataMap[asset.asset_id]);
     });
     
     const batchResults = await Promise.all(batchPromises);
@@ -191,7 +259,7 @@ export async function syncCustomerAMMPData(
     }))
   };
   
-  // 4. Detect anomalies
+  // 9. Detect anomalies
   const anomalies = detectSyncAnomalies(capabilities);
   
   // Log warnings to console for debugging
@@ -199,10 +267,7 @@ export async function syncCustomerAMMPData(
     console.warn('[AMMP Sync] Anomalies detected:', anomalies);
   }
   
-  // 5. Store in database
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
-
+  // 10. Store in database (user already fetched earlier)
   const { error } = await supabase
     .from('customers')
     .update({
