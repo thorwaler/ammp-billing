@@ -189,6 +189,11 @@ export async function syncCustomerAMMPData(
   for (let i = 0; i < assetsMissingMetadata.length; i += METADATA_BATCH_SIZE) {
     const batch = assetsMissingMetadata.slice(i, i + METADATA_BATCH_SIZE);
     
+    // Report progress for metadata fetch phase
+    if (onProgress) {
+      onProgress(i + 1, assetsMissingMetadata.length, `Fetching metadata: ${batch[0]?.asset_name || 'assets'}`);
+    }
+    
     const metadataPromises = batch.map(async (asset) => {
       try {
         const metadata = await dataApiClient.getAssetMetadata(asset.asset_id);
@@ -223,12 +228,13 @@ export async function syncCustomerAMMPData(
   for (let i = 0; i < orgAssets.length; i += BATCH_SIZE) {
     const batch = orgAssets.slice(i, i + BATCH_SIZE);
     
+    // Report progress for capability calculation phase
+    if (onProgress) {
+      onProgress(i + 1, orgAssets.length, `Syncing: ${batch[0]?.asset_name || 'assets'}`);
+    }
+    
     // Process batch in parallel, passing pre-fetched metadata
-    const batchPromises = batch.map(async (asset, batchIndex) => {
-      const globalIndex = i + batchIndex;
-      if (onProgress) {
-        onProgress(globalIndex + 1, orgAssets.length, asset.asset_name);
-      }
+    const batchPromises = batch.map(async (asset) => {
       return calculateCapabilities(asset.asset_id, assetMetadataMap[asset.asset_id]);
     });
     
