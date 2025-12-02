@@ -31,14 +31,24 @@ import {
   getCustomerGrowthByQuarter, 
   getMWpByCustomer,
   getMonthlyRevenue,
+  getProjectedRevenueByMonth,
   MWGrowthData,
   CustomerGrowthData,
   CustomerMWData,
+  ProjectedRevenueData,
+  ActualRevenueData,
   ReportFilters as AnalyticsFilters
 } from "@/services/analytics/dashboardAnalytics";
 import { ReportsFilters, ReportFilters } from "@/components/reports/ReportsFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+
+interface CombinedRevenueData {
+  month: string;
+  monthKey: string;
+  projected: number;
+  actual: number;
+}
 
 const Reports = () => {
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
@@ -47,7 +57,8 @@ const Reports = () => {
   const [mwGrowthData, setMwGrowthData] = useState<MWGrowthData[]>([]);
   const [customerGrowthData, setCustomerGrowthData] = useState<CustomerGrowthData[]>([]);
   const [mwpByCustomer, setMwpByCustomer] = useState<CustomerMWData[]>([]);
-  const [revenueData, setRevenueData] = useState<{ month: string; revenue: number }[]>([]);
+  const [projectedRevenueData, setProjectedRevenueData] = useState<ProjectedRevenueData[]>([]);
+  const [combinedRevenueData, setCombinedRevenueData] = useState<CombinedRevenueData[]>([]);
   
   // Filter state
   const [filters, setFilters] = useState<ReportFilters>({});
@@ -75,20 +86,35 @@ const Reports = () => {
         customerIds: filters.customerIds,
       };
 
-      const [mwGrowth, customerGrowth, customerMWp, revenue] = await Promise.all([
+      const [mwGrowth, customerGrowth, customerMWp, projected, actual] = await Promise.all([
         getMWGrowthByMonth(analyticsFilters),
         getCustomerGrowthByQuarter(analyticsFilters),
         getMWpByCustomer(8, analyticsFilters),
+        getProjectedRevenueByMonth(12, analyticsFilters),
         getMonthlyRevenue(analyticsFilters),
       ]);
       
       setMwGrowthData(mwGrowth);
       setCustomerGrowthData(customerGrowth);
       setMwpByCustomer(customerMWp);
-      setRevenueData(revenue.map(r => ({ 
-        month: r.month, 
-        revenue: convertToDisplayCurrency(r.revenue) 
+      
+      // Set projected revenue with currency conversion
+      setProjectedRevenueData(projected.map(p => ({
+        ...p,
+        projected: convertToDisplayCurrency(p.projected)
       })));
+      
+      // Combine projected and actual for comparison chart
+      const combined: CombinedRevenueData[] = projected.map(p => {
+        const actualEntry = actual.find(a => a.monthKey === p.monthKey);
+        return {
+          month: p.month,
+          monthKey: p.monthKey,
+          projected: convertToDisplayCurrency(p.projected),
+          actual: actualEntry ? convertToDisplayCurrency(actualEntry.actual) : 0,
+        };
+      });
+      setCombinedRevenueData(combined);
     } catch (error) {
       console.error('Error fetching report data:', error);
     } finally {
@@ -243,31 +269,60 @@ const Reports = () => {
             </CardContent>
           </Card>
 
-          {/* Monthly Revenue */}
+          {/* Revenue Forecast */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
                 <PieChart className="h-5 w-5 text-ammp-blue" />
-                Monthly Revenue
+                Revenue Forecast (Next 12 Months)
               </CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
                 <Skeleton className="h-[300px] w-full" />
-              ) : revenueData.length > 0 ? (
+              ) : projectedRevenueData.length > 0 ? (
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={revenueData}>
+                    <BarChart data={projectedRevenueData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
-                      <YAxis />
+                      <YAxis tickFormatter={(value) => formatCurrency(value)} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend />
-                      <Bar dataKey="revenue" name="Revenue" fill="#0F4C81" />
+                      <Bar dataKey="projected" name="Projected Revenue" fill="#0F4C81" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
-              ) : renderEmptyState("Create invoices to see revenue trends.")}
+              ) : renderEmptyState("Add contracts with billing schedules to see revenue forecast.")}
+            </CardContent>
+          </Card>
+
+          {/* Actual vs Projected Revenue */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <LineChart className="h-5 w-5 text-ammp-blue" />
+                Actual vs Projected Revenue
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : combinedRevenueData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={combinedRevenueData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar dataKey="actual" name="Actual Revenue" fill="#1A7D7D" />
+                      <Bar dataKey="projected" name="Projected Revenue" fill="#0F4C81" opacity={0.5} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Add contracts to see revenue comparison.")}
             </CardContent>
           </Card>
 
