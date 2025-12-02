@@ -184,6 +184,12 @@ export function CustomerCard({
             )}
           </div>
           <div className="flex items-center space-x-2">
+            {/* POC Badge - shown separately */}
+            {packageType === 'poc' && hasContract && (
+              <Badge variant="outline" className="bg-purple-600/20 text-purple-400 border-purple-500">
+                POC
+              </Badge>
+            )}
             <Badge 
               variant={
                 status === 'inactive' ? 'outline' : 

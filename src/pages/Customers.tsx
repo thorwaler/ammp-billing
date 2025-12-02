@@ -111,6 +111,9 @@ const Customers = () => {
         const calculateContractValue = (contract: any, mwpManaged: number, ammpCapabilities?: any) => {
           if (!contract) return 0;
           
+          // POC contracts have no billing value
+          if (contract.package === 'poc') return 0;
+          
           let annualValue = 0;
           let siteCharges = 0;
           

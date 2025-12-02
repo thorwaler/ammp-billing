@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { getTotalMWAdded } from "@/lib/invoiceAnalytics";
+import { useAuth } from "@/contexts/AuthContext";
+import { checkAllContractExpirations } from "@/utils/contractExpiration";
 
 const customers = [
   {
@@ -66,6 +68,7 @@ const Index = () => {
   const navigate = useNavigate();
   const quarterRange = getCurrentQuarterRange();
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
+  const { user } = useAuth();
   const [mwGrowthThisYear, setMwGrowthThisYear] = useState<number>(0);
   
   // Fetch MW growth data
@@ -82,6 +85,15 @@ const Index = () => {
     };
     fetchMWGrowth();
   }, []);
+  
+  // Check contract expirations on dashboard load
+  useEffect(() => {
+    if (user?.id) {
+      checkAllContractExpirations(user.id).catch(err => {
+        console.error('Error checking contract expirations:', err);
+      });
+    }
+  }, [user?.id]);
   
   const handleAddContract = () => {
     navigate("/contracts");
