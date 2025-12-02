@@ -58,6 +58,7 @@ const contractFormSchema = z.object({
   manualInvoicing: z.boolean().optional(),
   nextInvoiceDate: z.string().optional(),
   signedDate: z.string().optional(),
+  contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
   package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc"]),
@@ -127,6 +128,7 @@ interface ContractFormProps {
     portfolioDiscountTiers?: any[];
     minimumChargeTiers?: any[];
     siteChargeFrequency?: string;
+    contractExpiryDate?: string;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -174,6 +176,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       siteChargeFrequency: (existingContract.siteChargeFrequency as any) || "annual",
       notes: existingContract.notes,
       signedDate: existingContract.signedDate?.split('T')[0] || "",
+      contractExpiryDate: existingContract.contractExpiryDate?.split('T')[0] || "",
       periodStart: existingContract.periodStart?.split('T')[0] || "",
       periodEnd: existingContract.periodEnd?.split('T')[0] || "",
       contractStatus: existingContract.contractStatus as any,
@@ -186,6 +189,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       manualInvoicing: false,
       nextInvoiceDate: "",
       signedDate: "",
+      contractExpiryDate: "",
       periodStart: "",
       periodEnd: "",
       package: "pro" as const,
@@ -335,6 +339,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         form.setValue('billingFrequency', contract.billing_frequency as "monthly" | "quarterly" | "biannual" | "annual");
         form.setValue('nextInvoiceDate', contract.next_invoice_date ? contract.next_invoice_date.split('T')[0] : '');
         form.setValue('signedDate', (contract as any).signed_date ? (contract as any).signed_date.split('T')[0] : '');
+        form.setValue('contractExpiryDate', (contract as any).contract_expiry_date ? (contract as any).contract_expiry_date.split('T')[0] : '');
         form.setValue('periodStart', (contract as any).period_start ? (contract as any).period_start.split('T')[0] : '');
         form.setValue('periodEnd', (contract as any).period_end ? (contract as any).period_end.split('T')[0] : '');
         form.setValue('package', contract.package as "starter" | "pro" | "custom");
@@ -703,6 +708,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         // POC contracts don't have invoicing
         next_invoice_date: data.package === 'poc' ? null : (data.nextInvoiceDate || null),
         signed_date: data.signedDate || null,
+        contract_expiry_date: data.contractExpiryDate || null,
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
         modules: data.package === 'poc' ? [] : (data.modules || []),
@@ -983,7 +989,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Contract-level dates */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
                 name="signedDate"
@@ -1009,12 +1016,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
 
               <FormField
                 control={form.control}
-                name="periodStart"
+                name="contractExpiryDate"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel className="flex items-center gap-2">
                       <CalendarIcon className="h-4 w-4" />
-                      Period Start Date
+                      Contract Expiry Date
                     </FormLabel>
                     <FormControl>
                       <Input
@@ -1023,36 +1030,64 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       />
                     </FormControl>
                     <FormDescription>
-                      Start of current billing period
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="periodEnd"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="flex items-center gap-2">
-                      <CalendarIcon className="h-4 w-4" />
-                      Period End Date
-                    </FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      End of current billing period
+                      When the contract term ends (triggers expiration notifications)
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            {/* Billing period dates - hidden for POC */}
+            {watchPackage !== 'poc' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="periodStart"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        Billing Period Start
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Start of current billing period
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="periodEnd"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2">
+                        <CalendarIcon className="h-4 w-4" />
+                        Billing Period End
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          type="date"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        End of current billing period
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
             
             <FormField
               control={form.control}

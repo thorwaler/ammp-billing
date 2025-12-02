@@ -54,17 +54,17 @@ export const checkAllContractExpirations = async (userId: string) => {
   // Fetch all active contracts with expiry dates
   const { data: contracts } = await supabase
     .from('contracts')
-    .select('id, company_name, contract_name, period_end')
+    .select('id, company_name, contract_name, contract_expiry_date')
     .eq('user_id', userId)
     .eq('contract_status', 'active')
-    .not('period_end', 'is', null);
+    .not('contract_expiry_date', 'is', null);
 
   if (!contracts) return;
 
   for (const contract of contracts) {
-    if (!contract.period_end) continue;
+    if (!(contract as any).contract_expiry_date) continue;
     
-    const result = checkContractExpiration(contract.period_end);
+    const result = checkContractExpiration((contract as any).contract_expiry_date);
     
     // Only process if expired or expiring soon
     if (!result.isExpired && !result.isExpiringSoon) continue;

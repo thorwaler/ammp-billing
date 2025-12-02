@@ -76,6 +76,7 @@ export type Database = {
           base_monthly_price: number | null
           billing_frequency: string | null
           company_name: string
+          contract_expiry_date: string | null
           contract_name: string | null
           contract_pdf_url: string | null
           contract_status: string | null
@@ -111,6 +112,7 @@ export type Database = {
           base_monthly_price?: number | null
           billing_frequency?: string | null
           company_name: string
+          contract_expiry_date?: string | null
           contract_name?: string | null
           contract_pdf_url?: string | null
           contract_status?: string | null
@@ -146,6 +148,7 @@ export type Database = {
           base_monthly_price?: number | null
           billing_frequency?: string | null
           company_name?: string
+          contract_expiry_date?: string | null
           contract_name?: string | null
           contract_pdf_url?: string | null
           contract_status?: string | null
