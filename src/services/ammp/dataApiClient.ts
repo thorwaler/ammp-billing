@@ -91,6 +91,13 @@ export const dataApiClient = {
   },
 
   /**
+   * Get asset metadata only (for fetching created date without devices)
+   */
+  async getAssetMetadata(assetId: string): Promise<AssetResponse> {
+    return request<AssetResponse>(`/assets/${assetId}`);
+  },
+
+  /**
    * Get devices for an asset
    */
   async getAssetDevices(assetId: string): Promise<DeviceResponse[]> {
