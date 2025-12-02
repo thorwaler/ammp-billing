@@ -15,6 +15,7 @@ export interface DashboardStats {
   customersAddedThisQuarter: number;
   contractsAddedThisQuarter: number;
   mwAddedThisQuarter: number;
+  totalARR: number;
 }
 
 export interface MWGrowthData {
@@ -152,6 +153,9 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .neq('package', 'poc')
     .gte('created_at', startOfQuarter.toISOString());
 
+  // Calculate total ARR
+  const totalARR = await calculateTotalARR(user.id);
+
   return {
     totalCustomers,
     activeContracts: activeContracts || 0,
@@ -160,7 +164,98 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     customersAddedThisQuarter,
     contractsAddedThisQuarter: contractsAddedThisQuarter || 0,
     mwAddedThisQuarter,
+    totalARR,
   };
+}
+
+/**
+ * Calculate total ARR (Annual Recurring Revenue) from all active non-POC contracts
+ */
+async function calculateTotalARR(userId: string): Promise<number> {
+  // Fetch all active non-POC contracts with pricing data
+  const { data: contracts } = await supabase
+    .from('contracts')
+    .select(`
+      id,
+      customer_id,
+      package,
+      billing_frequency,
+      initial_mw,
+      modules,
+      addons,
+      minimum_annual_value,
+      minimum_charge_tiers,
+      portfolio_discount_tiers,
+      custom_pricing,
+      base_monthly_price,
+      site_charge_frequency
+    `)
+    .eq('user_id', userId)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
+
+  if (!contracts || contracts.length === 0) return 0;
+
+  // Fetch customer AMMP capabilities for accurate MW calculation
+  const customerIds = [...new Set(contracts.map(c => c.customer_id))];
+  const { data: customers } = await supabase
+    .from('customers')
+    .select('id, ammp_capabilities, mwp_managed')
+    .in('id', customerIds);
+
+  const customerMap = new Map(customers?.map(c => [c.id, c]) || []);
+
+  let totalARR = 0;
+
+  for (const contract of contracts) {
+    const customer = customerMap.get(contract.customer_id);
+    if (!customer) continue;
+
+    // Get AMMP capabilities for accurate calculation
+    const ammpCapabilities = customer.ammp_capabilities as any;
+    const assetBreakdown = ammpCapabilities?.assetBreakdown || [];
+    
+    // Calculate MW - use AMMP data if available, otherwise initial_mw
+    const totalMW = assetBreakdown.length > 0
+      ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
+      : contract.initial_mw || 0;
+
+    try {
+      // For starter/capped packages, use minimum_annual_value + base_monthly_price * 12
+      if (contract.package === 'starter' || contract.package === 'capped') {
+        const annualBase = contract.minimum_annual_value || 0;
+        const monthlyBase = contract.base_monthly_price || 0;
+        totalARR += annualBase + (monthlyBase * 12);
+      } else if (totalMW > 0) {
+        // For pro/custom/hybrid_tiered, calculate annual value (frequencyMultiplier = 1)
+        const result = calculateInvoice({
+          packageType: contract.package as any,
+          totalMW,
+          selectedModules: (contract.modules as string[]) || [],
+          selectedAddons: ((contract.addons as any[]) || []).map((a: any) => ({
+            id: a.id || a.addonId,
+            quantity: a.quantity || 1,
+            complexity: a.complexity,
+            customPrice: a.customPrice,
+            customTiers: a.customTiers,
+          })),
+          frequencyMultiplier: 1, // Annual calculation
+          customPricing: contract.custom_pricing as any,
+          portfolioDiscountTiers: (contract.portfolio_discount_tiers as any[]) || [],
+          minimumChargeTiers: (contract.minimum_charge_tiers as any[]) || [],
+          minimumAnnualValue: contract.minimum_annual_value || 0,
+          ammpCapabilities: ammpCapabilities || undefined,
+          siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
+          baseMonthlyPrice: contract.base_monthly_price || 0,
+        });
+        totalARR += result.totalPrice;
+      }
+    } catch (error) {
+      console.error('Error calculating ARR for contract:', contract.id, error);
+    }
+  }
+
+  return totalARR;
 }
 
 export interface ReportFilters {
