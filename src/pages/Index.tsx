@@ -1,44 +1,15 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import StatCard from "@/components/dashboard/StatCard";
 import RecentActivity from "@/components/dashboard/RecentActivity";
-import CustomerCard from "@/components/customers/CustomerCard";
 import InvoiceCalculator from "@/components/dashboard/InvoiceCalculator";
 import { Users, FileText, BarChart4, TrendingUp, PlusCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "@/hooks/use-toast";
-import { useCurrency } from "@/contexts/CurrencyContext";
-import { getTotalMWAdded } from "@/lib/invoiceAnalytics";
 import { useAuth } from "@/contexts/AuthContext";
 import { checkAllContractExpirations } from "@/utils/contractExpiration";
-
-const customers = [
-  {
-    id: "cust-001",  // Added id property
-    name: "Solar Universe Inc.",
-    location: "California, USA",
-    contractValueUSD: 45000,
-    mwpManaged: 42.5,
-    status: "active" as const,
-    modules: ["technicalMonitoring"],
-    addOns: ["tmCustomDashboards"],
-    hasContract: true,
-  },
-  {
-    id: "cust-002",  // Added id property
-    name: "GreenPower Systems",
-    location: "Texas, USA",
-    contractValueUSD: 42500,
-    mwpManaged: 35.2,
-    status: "active" as const,
-    modules: ["technicalMonitoring", "energySavingsHub"],
-    addOns: [],
-    hasContract: true,
-  },
-];
+import { getDashboardStats, DashboardStats } from "@/services/analytics/dashboardAnalytics";
 
 // Current quarter calculation
 const getCurrentQuarter = () => {
@@ -51,12 +22,11 @@ const getCurrentQuarterRange = () => {
   const currentQuarter = getCurrentQuarter();
   const year = now.getFullYear();
   
-  // Calculate start and end dates for the quarter
   const startMonth = (currentQuarter - 1) * 3;
   const endMonth = startMonth + 2;
   
   const startDate = new Date(year, startMonth, 1);
-  const endDate = new Date(year, endMonth + 1, 0); // Last day of end month
+  const endDate = new Date(year, endMonth + 1, 0);
   
   return {
     start: startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -67,24 +37,28 @@ const getCurrentQuarterRange = () => {
 const Index = () => {
   const navigate = useNavigate();
   const quarterRange = getCurrentQuarterRange();
-  const { formatCurrency, convertToDisplayCurrency } = useCurrency();
   const { user } = useAuth();
-  const [mwGrowthThisYear, setMwGrowthThisYear] = useState<number>(0);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   
-  // Fetch MW growth data
+  // Fetch real dashboard stats
   useEffect(() => {
-    const fetchMWGrowth = async () => {
+    const fetchStats = async () => {
       try {
-        const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-        const today = new Date();
-        const growth = await getTotalMWAdded(startOfYear, today);
-        setMwGrowthThisYear(growth);
+        setIsLoading(true);
+        const dashboardStats = await getDashboardStats();
+        setStats(dashboardStats);
       } catch (error) {
-        console.error('Error fetching MW growth:', error);
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
-    fetchMWGrowth();
-  }, []);
+    
+    if (user?.id) {
+      fetchStats();
+    }
+  }, [user?.id]);
   
   // Check contract expirations on dashboard load
   useEffect(() => {
@@ -97,7 +71,6 @@ const Index = () => {
   
   const handleAddContract = () => {
     navigate("/contracts");
-    // Small delay to open the dialog after navigation
     setTimeout(() => {
       document.getElementById("add-contract-button")?.click();
     }, 100);
@@ -117,31 +90,31 @@ const Index = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
             title="Total Customers"
-            value="12"
+            value={isLoading ? "..." : String(stats?.totalCustomers || 0)}
             icon={Users}
-            trend="up"
-            trendValue="+2 this quarter"
+            trend={stats?.customersAddedThisQuarter ? "up" : "neutral"}
+            trendValue={stats?.customersAddedThisQuarter ? `+${stats.customersAddedThisQuarter} this quarter` : "No change"}
           />
           <StatCard
             title="Active Contracts"
-            value="28"
+            value={isLoading ? "..." : String(stats?.activeContracts || 0)}
             icon={FileText}
-            trend="up"
-            trendValue="+3 this quarter"
+            trend={stats?.contractsAddedThisQuarter ? "up" : "neutral"}
+            trendValue={stats?.contractsAddedThisQuarter ? `+${stats.contractsAddedThisQuarter} this quarter` : "No change"}
           />
           <StatCard
             title="Total MWp Managed"
-            value="254.8"
+            value={isLoading ? "..." : (stats?.totalMWpManaged?.toFixed(1) || "0")}
             icon={BarChart4}
-            trend="up"
-            trendValue="+15.3 this quarter"
+            trend={stats?.mwAddedThisQuarter ? "up" : "neutral"}
+            trendValue={stats?.mwAddedThisQuarter ? `+${stats.mwAddedThisQuarter.toFixed(1)} this quarter` : "No change"}
           />
           <StatCard
             title="MW Added This Year"
-            value={`${mwGrowthThisYear.toFixed(1)} MW`}
+            value={isLoading ? "..." : `${(stats?.mwAddedThisYear || 0).toFixed(1)} MW`}
             icon={TrendingUp}
-            trend={mwGrowthThisYear > 0 ? "up" : "neutral"}
-            description="New capacity added through invoices"
+            trend={(stats?.mwAddedThisYear || 0) > 0 ? "up" : "neutral"}
+            description="Based on AMMP asset onboarding dates"
           />
         </div>
 
@@ -183,21 +156,10 @@ const Index = () => {
           </p>
         </div>
 
-        {/* Customers and Calculator */}
+        {/* Invoice Calculator */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2">
-            <div>
-              <h2 className="text-xl font-semibold mb-4">Key Customers</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {customers.map((customer) => (
-                  <CustomerCard 
-                    key={customer.name} 
-                    {...customer}
-                    contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValueUSD))}/MWp`}
-                  />
-                ))}
-              </div>
-            </div>
+            {/* Placeholder for future content */}
           </div>
           <div>
             <InvoiceCalculator />

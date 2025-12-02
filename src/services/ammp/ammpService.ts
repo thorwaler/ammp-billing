@@ -38,7 +38,7 @@ export async function calculateCapabilities(assetId: string): Promise<AssetCapab
     hasSolcast,
     hasBattery,
     hasGenset,
-    onboardingDate: null,
+    onboardingDate: asset.created || null,  // Capture creation date from AMMP API
     deviceCount: devices.length,
     devices,
   };
@@ -187,6 +187,7 @@ export async function syncCustomerAMMPData(
       isHybrid: c.hasBattery || c.hasGenset,
       hasSolcast: c.hasSolcast,
       deviceCount: c.deviceCount,
+      onboardingDate: c.onboardingDate,  // Include creation date in breakdown
     }))
   };
   
