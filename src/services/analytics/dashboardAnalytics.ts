@@ -4,6 +4,8 @@
  */
 
 import { supabase } from '@/integrations/supabase/client';
+import { calculateInvoice, getFrequencyMultiplier } from '@/lib/invoiceCalculations';
+import { addMonths, format } from 'date-fns';
 
 export interface DashboardStats {
   totalCustomers: number;
@@ -35,6 +37,18 @@ export interface AssetOnboardingData {
   assetName: string;
   totalMW: number;
   onboardingDate: string;
+}
+
+export interface ProjectedRevenueData {
+  month: string;
+  monthKey: string;
+  projected: number;
+}
+
+export interface ActualRevenueData {
+  month: string;
+  monthKey: string;
+  actual: number;
 }
 
 /**
@@ -345,9 +359,9 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
 }
 
 /**
- * Get monthly revenue from invoices
+ * Get monthly revenue from invoices with month keys for alignment
  */
-export async function getMonthlyRevenue(filters?: ReportFilters): Promise<{ month: string; revenue: number }[]> {
+export async function getMonthlyRevenue(filters?: ReportFilters): Promise<ActualRevenueData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -385,11 +399,181 @@ export async function getMonthlyRevenue(filters?: ReportFilters): Promise<{ mont
   // Sort and format
   const sortedMonths = Array.from(monthlyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   
-  return sortedMonths.map(([month, revenue]) => {
-    const [year, monthNum] = month.split('-');
+  return sortedMonths.map(([monthKey, revenue]) => {
+    const [year, monthNum] = monthKey.split('-');
     const monthName = new Date(parseInt(year), parseInt(monthNum) - 1).toLocaleDateString('en-US', { 
-      month: 'short'
+      month: 'short',
+      year: '2-digit'
     });
-    return { month: monthName, revenue: parseFloat(revenue.toFixed(2)) };
+    return { month: monthName, monthKey, actual: parseFloat(revenue.toFixed(2)) };
   });
+}
+
+/**
+ * Get projected revenue by month based on contract billing cycles
+ */
+export async function getProjectedRevenueByMonth(
+  monthsAhead: number = 12,
+  filters?: ReportFilters
+): Promise<ProjectedRevenueData[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Get customer IDs with non-POC contracts if filtering by customer
+  const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
+  if (customerIdsWithContracts.length === 0) return [];
+
+  // Fetch active non-POC contracts with all pricing data
+  let query = supabase
+    .from('contracts')
+    .select(`
+      id,
+      customer_id,
+      package,
+      billing_frequency,
+      next_invoice_date,
+      initial_mw,
+      modules,
+      addons,
+      minimum_annual_value,
+      minimum_charge_tiers,
+      portfolio_discount_tiers,
+      custom_pricing,
+      base_monthly_price,
+      site_charge_frequency,
+      currency
+    `)
+    .eq('user_id', user.id)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    const filteredIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
+    if (filteredIds.length === 0) return [];
+    query = query.in('customer_id', filteredIds);
+  }
+
+  const { data: contracts } = await query;
+  if (!contracts || contracts.length === 0) return [];
+
+  // Fetch customer AMMP capabilities for accurate MW calculation
+  const customerIds = [...new Set(contracts.map(c => c.customer_id))];
+  const { data: customers } = await supabase
+    .from('customers')
+    .select('id, ammp_capabilities, mwp_managed')
+    .in('id', customerIds);
+
+  const customerMap = new Map(customers?.map(c => [c.id, c]) || []);
+
+  // Calculate projected invoices for each contract
+  const now = new Date();
+  const endOfForecast = addMonths(now, monthsAhead);
+  const monthlyProjected = new Map<string, number>();
+
+  // Billing frequency to months mapping
+  const frequencyToMonths: Record<string, number> = {
+    monthly: 1,
+    quarterly: 3,
+    biannual: 6,
+    annual: 12,
+  };
+
+  for (const contract of contracts) {
+    const customer = customerMap.get(contract.customer_id);
+    if (!customer) continue;
+
+    // Get AMMP capabilities for accurate calculation
+    const ammpCapabilities = customer.ammp_capabilities as any;
+    const assetBreakdown = ammpCapabilities?.assetBreakdown || [];
+    
+    // Calculate MW - use AMMP data if available, otherwise initial_mw
+    const totalMW = assetBreakdown.length > 0
+      ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
+      : contract.initial_mw || 0;
+
+    if (totalMW === 0) continue;
+
+    // Determine billing frequency and interval
+    const billingFrequency = contract.billing_frequency || 'annual';
+    const monthsPerInvoice = frequencyToMonths[billingFrequency] || 12;
+    const frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
+
+    // Calculate per-invoice amount using the invoice calculation logic
+    let perInvoiceAmount = 0;
+
+    try {
+      // For starter/capped packages, use minimum_annual_value * frequency multiplier
+      if (contract.package === 'starter' || contract.package === 'capped') {
+        const basePrice = contract.minimum_annual_value || 0;
+        const monthlyBase = contract.base_monthly_price || 0;
+        perInvoiceAmount = (basePrice * frequencyMultiplier) + (monthlyBase * monthsPerInvoice);
+      } else {
+        // For pro/custom/hybrid_tiered, use full calculation
+        const result = calculateInvoice({
+          packageType: contract.package as any,
+          totalMW,
+          selectedModules: (contract.modules as string[]) || [],
+          selectedAddons: ((contract.addons as any[]) || []).map((a: any) => ({
+            id: a.id || a.addonId,
+            quantity: a.quantity || 1,
+            complexity: a.complexity,
+            customPrice: a.customPrice,
+            customTiers: a.customTiers,
+          })),
+          frequencyMultiplier,
+          customPricing: contract.custom_pricing as any,
+          portfolioDiscountTiers: (contract.portfolio_discount_tiers as any[]) || [],
+          minimumChargeTiers: (contract.minimum_charge_tiers as any[]) || [],
+          minimumAnnualValue: contract.minimum_annual_value || 0,
+          ammpCapabilities: ammpCapabilities || undefined,
+          siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
+          baseMonthlyPrice: contract.base_monthly_price || 0,
+        });
+        perInvoiceAmount = result.totalPrice;
+      }
+    } catch (error) {
+      console.error('Error calculating invoice for contract:', contract.id, error);
+      continue;
+    }
+
+    if (perInvoiceAmount <= 0) continue;
+
+    // Project invoice dates forward from next_invoice_date
+    let invoiceDate = contract.next_invoice_date 
+      ? new Date(contract.next_invoice_date)
+      : now;
+
+    // If next_invoice_date is in the past, move it forward to current period
+    while (invoiceDate < now) {
+      invoiceDate = addMonths(invoiceDate, monthsPerInvoice);
+    }
+
+    // Generate projected invoices for the forecast period
+    while (invoiceDate <= endOfForecast) {
+      const monthKey = format(invoiceDate, 'yyyy-MM');
+      monthlyProjected.set(monthKey, (monthlyProjected.get(monthKey) || 0) + perInvoiceAmount);
+      invoiceDate = addMonths(invoiceDate, monthsPerInvoice);
+    }
+  }
+
+  // Generate all months in the forecast period (even if 0)
+  const result: ProjectedRevenueData[] = [];
+  let currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  
+  for (let i = 0; i < monthsAhead; i++) {
+    const monthKey = format(currentMonth, 'yyyy-MM');
+    const monthLabel = format(currentMonth, 'MMM yy');
+    const projected = monthlyProjected.get(monthKey) || 0;
+    
+    result.push({
+      month: monthLabel,
+      monthKey,
+      projected: parseFloat(projected.toFixed(2)),
+    });
+    
+    currentMonth = addMonths(currentMonth, 1);
+  }
+
+  return result;
 }
