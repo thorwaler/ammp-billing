@@ -118,7 +118,7 @@ const Index = () => {
           />
           <StatCard
             title="Annual Recurring Revenue"
-            value={isLoading ? "..." : `€${(stats?.totalARR || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+            value={isLoading ? "..." : `€${((stats?.totalARR || 0) / 1000).toFixed(0)}k`}
             icon={DollarSign}
             trend="neutral"
             description="Total ARR from active contracts"
