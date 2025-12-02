@@ -38,6 +38,22 @@ export interface AssetOnboardingData {
 }
 
 /**
+ * Helper function to get customer IDs that have at least one active non-POC contract
+ */
+async function getCustomersWithNonPocContracts(userId: string): Promise<string[]> {
+  const { data: contracts } = await supabase
+    .from('contracts')
+    .select('customer_id')
+    .eq('user_id', userId)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
+  
+  // Return unique customer IDs
+  const customerIds = [...new Set(contracts?.map(c => c.customer_id) || [])];
+  return customerIds;
+}
+
+/**
  * Get dashboard statistics from real data
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -49,33 +65,48 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const currentQuarter = Math.floor(now.getMonth() / 3);
   const startOfQuarter = new Date(now.getFullYear(), currentQuarter * 3, 1);
 
-  // Get active customer count
-  const { count: totalCustomers } = await supabase
-    .from('customers')
-    .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('status', 'active');
-  // Get active contracts count
+  // Get customer IDs with non-POC contracts
+  const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
+
+  // Get active customer count (only those with non-POC contracts)
+  let totalCustomers = 0;
+  if (customerIdsWithContracts.length > 0) {
+    const { count } = await supabase
+      .from('customers')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .in('id', customerIdsWithContracts);
+    totalCustomers = count || 0;
+  }
+
+  // Get active non-POC contracts count
   const { count: activeContracts } = await supabase
     .from('contracts')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
-    .eq('contract_status', 'active');
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
 
-  // Get total MWp managed (active customers only)
-  const { data: customers } = await supabase
-    .from('customers')
-    .select('mwp_managed, join_date, ammp_capabilities')
-    .eq('user_id', user.id)
-    .eq('status', 'active');
+  // Get total MWp managed (active customers with non-POC contracts only)
+  let customers: any[] = [];
+  if (customerIdsWithContracts.length > 0) {
+    const { data } = await supabase
+      .from('customers')
+      .select('mwp_managed, join_date, ammp_capabilities')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .in('id', customerIdsWithContracts);
+    customers = data || [];
+  }
 
-  const totalMWpManaged = customers?.reduce((sum, c) => sum + (c.mwp_managed || 0), 0) || 0;
+  const totalMWpManaged = customers.reduce((sum, c) => sum + (c.mwp_managed || 0), 0);
 
   // Calculate MW added this year from AMMP asset creation dates
   let mwAddedThisYear = 0;
   let mwAddedThisQuarter = 0;
 
-  customers?.forEach(customer => {
+  customers.forEach(customer => {
     const capabilities = customer.ammp_capabilities as any;
     if (capabilities?.assetBreakdown) {
       capabilities.assetBreakdown.forEach((asset: any) => {
@@ -92,21 +123,22 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     }
   });
 
-  // Count customers added this quarter
-  const customersAddedThisQuarter = customers?.filter(c => {
+  // Count customers added this quarter (only those with non-POC contracts)
+  const customersAddedThisQuarter = customers.filter(c => {
     if (!c.join_date) return false;
     return new Date(c.join_date) >= startOfQuarter;
-  }).length || 0;
+  }).length;
 
-  // Get contracts added this quarter
+  // Get non-POC contracts added this quarter
   const { count: contractsAddedThisQuarter } = await supabase
     .from('contracts')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
+    .neq('package', 'poc')
     .gte('created_at', startOfQuarter.toISOString());
 
   return {
-    totalCustomers: totalCustomers || 0,
+    totalCustomers,
     activeContracts: activeContracts || 0,
     totalMWpManaged,
     mwAddedThisYear,
@@ -129,15 +161,27 @@ export async function getMWGrowthByMonth(filters?: ReportFilters): Promise<MWGro
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
+  // Get customer IDs with non-POC contracts
+  const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
+  if (customerIdsWithContracts.length === 0) return [];
+
   let query = supabase
     .from('customers')
     .select('id, ammp_capabilities')
     .eq('user_id', user.id)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .in('id', customerIdsWithContracts);
 
-  // Filter by customer IDs if specified
+  // Filter by customer IDs if specified (intersection with non-POC customers)
   if (filters?.customerIds && filters.customerIds.length > 0) {
-    query = query.in('id', filters.customerIds);
+    const filteredIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
+    if (filteredIds.length === 0) return [];
+    query = supabase
+      .from('customers')
+      .select('id, ammp_capabilities')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .in('id', filteredIds);
   }
 
   const { data: customers } = await query;
@@ -203,15 +247,27 @@ export async function getCustomerGrowthByQuarter(filters?: ReportFilters): Promi
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
+  // Get customer IDs with non-POC contracts
+  const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
+  if (customerIdsWithContracts.length === 0) return [];
+
   let query = supabase
     .from('customers')
     .select('id, join_date, created_at')
     .eq('user_id', user.id)
-    .eq('status', 'active');
+    .eq('status', 'active')
+    .in('id', customerIdsWithContracts);
 
-  // Filter by customer IDs if specified
+  // Filter by customer IDs if specified (intersection with non-POC customers)
   if (filters?.customerIds && filters.customerIds.length > 0) {
-    query = query.in('id', filters.customerIds);
+    const filteredIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
+    if (filteredIds.length === 0) return [];
+    query = supabase
+      .from('customers')
+      .select('id, join_date, created_at')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .in('id', filteredIds);
   }
 
   const { data: customers } = await query;
@@ -259,21 +315,27 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  let query = supabase
+  // Get customer IDs with non-POC contracts
+  const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
+  if (customerIdsWithContracts.length === 0) return [];
+
+  let customerIds = customerIdsWithContracts;
+
+  // Filter by customer IDs if specified (intersection with non-POC customers)
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    customerIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
+    if (customerIds.length === 0) return [];
+  }
+
+  const { data: customers } = await supabase
     .from('customers')
     .select('id, name, mwp_managed')
     .eq('user_id', user.id)
     .eq('status', 'active')
+    .in('id', customerIds)
     .gt('mwp_managed', 0)
     .order('mwp_managed', { ascending: false })
     .limit(limit);
-
-  // Filter by customer IDs if specified
-  if (filters?.customerIds && filters.customerIds.length > 0) {
-    query = query.in('id', filters.customerIds);
-  }
-
-  const { data: customers } = await query;
 
   return customers?.map(c => ({
     name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
