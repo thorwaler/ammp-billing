@@ -129,11 +129,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     return new Date(c.join_date) >= startOfQuarter;
   }).length;
 
-  // Get non-POC contracts added this quarter
+  // Get active non-POC contracts added this quarter
   const { count: contractsAddedThisQuarter } = await supabase
     .from('contracts')
     .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
+    .eq('contract_status', 'active')
     .neq('package', 'poc')
     .gte('created_at', startOfQuarter.toISOString());
 
