@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -33,25 +33,53 @@ import {
   getMonthlyRevenue,
   MWGrowthData,
   CustomerGrowthData,
-  CustomerMWData
+  CustomerMWData,
+  ReportFilters as AnalyticsFilters
 } from "@/services/analytics/dashboardAnalytics";
+import { ReportsFilters, ReportFilters } from "@/components/reports/ReportsFilters";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const Reports = () => {
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [mwGrowthData, setMwGrowthData] = useState<MWGrowthData[]>([]);
   const [customerGrowthData, setCustomerGrowthData] = useState<CustomerGrowthData[]>([]);
   const [mwpByCustomer, setMwpByCustomer] = useState<CustomerMWData[]>([]);
   const [revenueData, setRevenueData] = useState<{ month: string; revenue: number }[]>([]);
+  
+  // Filter state
+  const [filters, setFilters] = useState<ReportFilters>({});
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
 
-  const fetchData = async () => {
+  // Fetch customers for filter dropdown
+  const fetchCustomers = useCallback(async () => {
+    if (!user) return;
+    
+    const { data } = await supabase
+      .from('customers')
+      .select('id, name')
+      .eq('user_id', user.id)
+      .order('name');
+    
+    setCustomers(data || []);
+  }, [user]);
+
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
+      const analyticsFilters: AnalyticsFilters = {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        customerIds: filters.customerIds,
+      };
+
       const [mwGrowth, customerGrowth, customerMWp, revenue] = await Promise.all([
-        getMWGrowthByMonth(),
-        getCustomerGrowthByQuarter(),
-        getMWpByCustomer(8),
-        getMonthlyRevenue(),
+        getMWGrowthByMonth(analyticsFilters),
+        getCustomerGrowthByQuarter(analyticsFilters),
+        getMWpByCustomer(8, analyticsFilters),
+        getMonthlyRevenue(analyticsFilters),
       ]);
       
       setMwGrowthData(mwGrowth);
@@ -66,11 +94,19 @@ const Reports = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filters, convertToDisplayCurrency]);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [fetchCustomers]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  const handleFiltersChange = (newFilters: ReportFilters) => {
+    setFilters(newFilters);
+  };
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -126,6 +162,14 @@ const Reports = () => {
             </Button>
           </div>
         </div>
+
+        {/* Filters */}
+        <ReportsFilters
+          customers={customers}
+          filters={filters}
+          onFiltersChange={handleFiltersChange}
+          isLoading={isLoading}
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* MW Growth Over Time */}
