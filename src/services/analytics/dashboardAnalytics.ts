@@ -49,12 +49,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const currentQuarter = Math.floor(now.getMonth() / 3);
   const startOfQuarter = new Date(now.getFullYear(), currentQuarter * 3, 1);
 
-  // Get customer count
+  // Get active customer count
   const { count: totalCustomers } = await supabase
     .from('customers')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id);
-
+    .eq('user_id', user.id)
+    .eq('status', 'active');
   // Get active contracts count
   const { count: activeContracts } = await supabase
     .from('contracts')
@@ -62,11 +62,12 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .eq('user_id', user.id)
     .eq('contract_status', 'active');
 
-  // Get total MWp managed
+  // Get total MWp managed (active customers only)
   const { data: customers } = await supabase
     .from('customers')
     .select('mwp_managed, join_date, ammp_capabilities')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('status', 'active');
 
   const totalMWpManaged = customers?.reduce((sum, c) => sum + (c.mwp_managed || 0), 0) || 0;
 
@@ -131,7 +132,8 @@ export async function getMWGrowthByMonth(filters?: ReportFilters): Promise<MWGro
   let query = supabase
     .from('customers')
     .select('id, ammp_capabilities')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('status', 'active');
 
   // Filter by customer IDs if specified
   if (filters?.customerIds && filters.customerIds.length > 0) {
@@ -204,7 +206,8 @@ export async function getCustomerGrowthByQuarter(filters?: ReportFilters): Promi
   let query = supabase
     .from('customers')
     .select('id, join_date, created_at')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .eq('status', 'active');
 
   // Filter by customer IDs if specified
   if (filters?.customerIds && filters.customerIds.length > 0) {
@@ -260,6 +263,7 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
     .from('customers')
     .select('id, name, mwp_managed')
     .eq('user_id', user.id)
+    .eq('status', 'active')
     .gt('mwp_managed', 0)
     .order('mwp_managed', { ascending: false })
     .limit(limit);
