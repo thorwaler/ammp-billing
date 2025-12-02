@@ -115,17 +115,30 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   };
 }
 
+export interface ReportFilters {
+  startDate?: Date;
+  endDate?: Date;
+  customerIds?: string[];
+}
+
 /**
  * Get MW growth over time from asset onboarding dates
  */
-export async function getMWGrowthByMonth(): Promise<MWGrowthData[]> {
+export async function getMWGrowthByMonth(filters?: ReportFilters): Promise<MWGrowthData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data: customers } = await supabase
+  let query = supabase
     .from('customers')
-    .select('ammp_capabilities')
+    .select('id, ammp_capabilities')
     .eq('user_id', user.id);
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('id', filters.customerIds);
+  }
+
+  const { data: customers } = await query;
 
   // Extract all asset onboarding data
   const assetData: AssetOnboardingData[] = [];
@@ -135,6 +148,12 @@ export async function getMWGrowthByMonth(): Promise<MWGrowthData[]> {
     if (capabilities?.assetBreakdown) {
       capabilities.assetBreakdown.forEach((asset: any) => {
         if (asset.onboardingDate && asset.totalMW) {
+          const onboardingDate = new Date(asset.onboardingDate);
+          
+          // Apply date filters
+          if (filters?.startDate && onboardingDate < filters.startDate) return;
+          if (filters?.endDate && onboardingDate > filters.endDate) return;
+          
           assetData.push({
             assetName: asset.assetName,
             totalMW: asset.totalMW,
@@ -178,14 +197,21 @@ export async function getMWGrowthByMonth(): Promise<MWGrowthData[]> {
 /**
  * Get customer growth by quarter
  */
-export async function getCustomerGrowthByQuarter(): Promise<CustomerGrowthData[]> {
+export async function getCustomerGrowthByQuarter(filters?: ReportFilters): Promise<CustomerGrowthData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data: customers } = await supabase
+  let query = supabase
     .from('customers')
-    .select('join_date, created_at')
+    .select('id, join_date, created_at')
     .eq('user_id', user.id);
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('id', filters.customerIds);
+  }
+
+  const { data: customers } = await query;
 
   // Group by quarter
   const quarterMap = new Map<string, number>();
@@ -194,6 +220,11 @@ export async function getCustomerGrowthByQuarter(): Promise<CustomerGrowthData[]
     const dateStr = customer.join_date || customer.created_at;
     if (dateStr) {
       const date = new Date(dateStr);
+      
+      // Apply date filters
+      if (filters?.startDate && date < filters.startDate) return;
+      if (filters?.endDate && date > filters.endDate) return;
+      
       const quarter = Math.floor(date.getMonth() / 3) + 1;
       const key = `Q${quarter} ${date.getFullYear()}`;
       quarterMap.set(key, (quarterMap.get(key) || 0) + 1);
@@ -221,17 +252,24 @@ export async function getCustomerGrowthByQuarter(): Promise<CustomerGrowthData[]
 /**
  * Get MWp by customer (top customers by capacity)
  */
-export async function getMWpByCustomer(limit = 10): Promise<CustomerMWData[]> {
+export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Promise<CustomerMWData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  const { data: customers } = await supabase
+  let query = supabase
     .from('customers')
-    .select('name, mwp_managed')
+    .select('id, name, mwp_managed')
     .eq('user_id', user.id)
     .gt('mwp_managed', 0)
     .order('mwp_managed', { ascending: false })
     .limit(limit);
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('id', filters.customerIds);
+  }
+
+  const { data: customers } = await query;
 
   return customers?.map(c => ({
     name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
@@ -242,19 +280,31 @@ export async function getMWpByCustomer(limit = 10): Promise<CustomerMWData[]> {
 /**
  * Get monthly revenue from invoices
  */
-export async function getMonthlyRevenue(): Promise<{ month: string; revenue: number }[]> {
+export async function getMonthlyRevenue(filters?: ReportFilters): Promise<{ month: string; revenue: number }[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  // Get invoices from the last 12 months
-  const oneYearAgo = new Date();
-  oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+  // Default to last 12 months if no filter specified
+  const startDate = filters?.startDate || (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d;
+  })();
+  const endDate = filters?.endDate || new Date();
 
-  const { data: invoices } = await supabase
+  let query = supabase
     .from('invoices')
-    .select('invoice_date, invoice_amount')
+    .select('invoice_date, invoice_amount, customer_id')
     .eq('user_id', user.id)
-    .gte('invoice_date', oneYearAgo.toISOString());
+    .gte('invoice_date', startDate.toISOString())
+    .lte('invoice_date', endDate.toISOString());
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('customer_id', filters.customerIds);
+  }
+
+  const { data: invoices } = await query;
 
   // Group by month
   const monthlyMap = new Map<string, number>();
