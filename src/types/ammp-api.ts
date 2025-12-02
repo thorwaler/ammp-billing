@@ -49,6 +49,10 @@ export interface AssetResponse {
   asset_specific_params?: any
   expected_pr?: number | null
   devices?: DeviceResponse[]  // Nested devices when fetching /assets/{id}/devices
+  created?: string  // Asset creation date from AMMP API (e.g., "2022-08-29T14:39:50.093000")
+  grid_type?: string
+  asset_timezone?: string
+  num_phases?: number | null
 }
 
 // Device metadata
@@ -133,6 +137,7 @@ export interface CustomerAMMPSummaryExtended {
     isHybrid: boolean
     hasSolcast: boolean
     deviceCount: number
+    onboardingDate: string | null  // Asset creation date from AMMP
   }>
 }
 

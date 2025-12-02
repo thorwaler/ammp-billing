@@ -1,4 +1,4 @@
-
+import { useState, useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -6,7 +6,8 @@ import {
   LineChart,
   PieChart,
   FileText,
-  DownloadCloud
+  DownloadCloud,
+  RefreshCw
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { 
@@ -20,51 +21,82 @@ import {
   ResponsiveContainer,
   LineChart as RechartsLineChart,
   Line,
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell
+  AreaChart,
+  Area
 } from 'recharts';
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { Skeleton } from "@/components/ui/skeleton";
+import { 
+  getMWGrowthByMonth, 
+  getCustomerGrowthByQuarter, 
+  getMWpByCustomer,
+  getMonthlyRevenue,
+  MWGrowthData,
+  CustomerGrowthData,
+  CustomerMWData
+} from "@/services/analytics/dashboardAnalytics";
 
 const Reports = () => {
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
-  
-  const monthlyData = [
-    { name: 'Jan', revenue: convertToDisplayCurrency(12000) },
-    { name: 'Feb', revenue: convertToDisplayCurrency(15000) },
-    { name: 'Mar', revenue: convertToDisplayCurrency(18000) },
-    { name: 'Apr', revenue: convertToDisplayCurrency(16500) },
-    { name: 'May', revenue: convertToDisplayCurrency(22000) },
-    { name: 'Jun', revenue: convertToDisplayCurrency(28000) },
-    { name: 'Jul', revenue: convertToDisplayCurrency(32000) },
-  ];
-  
-  const customerGrowthData = [
-    { name: 'Q1', customers: 6 },
-    { name: 'Q2', customers: 8 },
-    { name: 'Q3', customers: 10 },
-    { name: 'Q4', customers: 12 },
-  ];
-  
-  const addOnDistributionData = [
-    { name: 'Monitoring', value: 12 },
-    { name: 'Analytics', value: 8 },
-    { name: 'Reporting', value: 6 },
-    { name: 'Maintenance', value: 4 },
-  ];
-  
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
-  
-  const CustomTooltip = ({ active, payload }: any) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [mwGrowthData, setMwGrowthData] = useState<MWGrowthData[]>([]);
+  const [customerGrowthData, setCustomerGrowthData] = useState<CustomerGrowthData[]>([]);
+  const [mwpByCustomer, setMwpByCustomer] = useState<CustomerMWData[]>([]);
+  const [revenueData, setRevenueData] = useState<{ month: string; revenue: number }[]>([]);
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [mwGrowth, customerGrowth, customerMWp, revenue] = await Promise.all([
+        getMWGrowthByMonth(),
+        getCustomerGrowthByQuarter(),
+        getMWpByCustomer(8),
+        getMonthlyRevenue(),
+      ]);
+      
+      setMwGrowthData(mwGrowth);
+      setCustomerGrowthData(customerGrowth);
+      setMwpByCustomer(customerMWp);
+      setRevenueData(revenue.map(r => ({ 
+        month: r.month, 
+        revenue: convertToDisplayCurrency(r.revenue) 
+      })));
+    } catch (error) {
+      console.error('Error fetching report data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-background border rounded p-2">
-          <p className="text-sm">{`${payload[0].name}: ${formatCurrency(payload[0].value)}`}</p>
+        <div className="bg-background border rounded p-2 shadow-lg">
+          <p className="text-sm font-medium">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} className="text-sm" style={{ color: entry.color }}>
+              {entry.name}: {entry.name.toLowerCase().includes('revenue') 
+                ? formatCurrency(entry.value) 
+                : entry.name.toLowerCase().includes('mw') 
+                  ? `${entry.value} MW` 
+                  : entry.value}
+            </p>
+          ))}
         </div>
       );
     }
     return null;
   };
+
+  const renderEmptyState = (message: string) => (
+    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+      <p>{message}</p>
+    </div>
+  );
 
   return (
     <Layout>
@@ -76,10 +108,14 @@ const Reports = () => {
               Reports
             </h1>
             <p className="text-muted-foreground mt-1">
-              Business analytics and performance reporting
+              Business analytics and performance reporting (real data)
             </p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={fetchData} disabled={isLoading}>
+              <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
             <Button variant="outline">
               <FileText className="mr-2 h-4 w-4" />
               Generate Report
@@ -92,29 +128,43 @@ const Reports = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* MW Growth Over Time */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
                 <BarChartIcon className="h-5 w-5 text-ammp-blue" />
-                Monthly Revenue
+                MW Growth Over Time
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Bar dataKey="revenue" fill="#0F4C81" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : mwGrowthData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={mwGrowthData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Area 
+                        type="monotone" 
+                        dataKey="cumulativeMW" 
+                        name="Total MW" 
+                        stroke="#0F4C81" 
+                        fill="#0F4C81" 
+                        fillOpacity={0.3}
+                      />
+                      <Bar dataKey="mw" name="MW Added" fill="#1A7D7D" />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Sync AMMP data to see MW growth. Asset creation dates will be captured on sync.")}
             </CardContent>
           </Card>
 
+          {/* Customer Growth */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
@@ -123,60 +173,61 @@ const Reports = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsLineChart data={customerGrowthData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Line 
-                      type="monotone" 
-                      dataKey="customers" 
-                      stroke="#1A7D7D" 
-                      activeDot={{ r: 8 }} 
-                      strokeWidth={2}
-                    />
-                  </RechartsLineChart>
-                </ResponsiveContainer>
-              </div>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : customerGrowthData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <RechartsLineChart data={customerGrowthData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="quarter" />
+                      <YAxis />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Line 
+                        type="monotone" 
+                        dataKey="customers" 
+                        name="Total Customers"
+                        stroke="#1A7D7D" 
+                        activeDot={{ r: 8 }} 
+                        strokeWidth={2}
+                      />
+                    </RechartsLineChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Add customers with join dates to see growth trends.")}
             </CardContent>
           </Card>
 
+          {/* Monthly Revenue */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
                 <PieChart className="h-5 w-5 text-ammp-blue" />
-                Add-on Distribution
+                Monthly Revenue
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsPieChart>
-                    <Pie
-                      data={addOnDistributionData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                      label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    >
-                      {addOnDistributionData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
-              </div>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : revenueData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={revenueData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar dataKey="revenue" name="Revenue" fill="#0F4C81" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Create invoices to see revenue trends.")}
             </CardContent>
           </Card>
 
+          {/* MWp by Customer */}
           <Card>
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
@@ -185,29 +236,27 @@ const Reports = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    layout="vertical"
-                    data={[
-                      { name: 'Solar Universe', mwp: 42.5 },
-                      { name: 'GreenPower', mwp: 35.2 },
-                      { name: 'Solaris', mwp: 28.7 },
-                      { name: 'SunPeak', mwp: 22.3 },
-                      { name: 'EcoSun', mwp: 18.9 },
-                    ]}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={100} />
-                    <Tooltip 
-                      formatter={(value) => [`${value} MWp`, 'Capacity']}
-                    />
-                    <Legend />
-                    <Bar dataKey="mwp" fill="#3498DB" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : mwpByCustomer.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={mwpByCustomer}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis dataKey="name" type="category" width={100} />
+                      <Tooltip 
+                        formatter={(value) => [`${value} MWp`, 'Capacity']}
+                      />
+                      <Legend />
+                      <Bar dataKey="mwp" name="Capacity" fill="#3498DB" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Sync AMMP data to see customer capacity.")}
             </CardContent>
           </Card>
         </div>
