@@ -34,6 +34,9 @@ export async function calculateCapabilities(
   const hasGenset = devices.some(d => 
     d.device_type === 'fuel_sensor' || d.device_type === 'genset'
   );
+  const hasHybridEMS = devices.some(d => 
+    d.device_type === 'ems' && d.device_name?.toLowerCase().includes('hybrid')
+  );
 
   // Use pre-fetched metadata if provided, otherwise try asset.created (may be null)
   const onboardingDate = assetMetadata?.created || asset.created || null;
@@ -45,6 +48,7 @@ export async function calculateCapabilities(
     hasSolcast,
     hasBattery,
     hasGenset,
+    hasHybridEMS,
     onboardingDate,
     deviceCount: devices.length,
     devices,
@@ -243,8 +247,8 @@ export async function syncCustomerAMMPData(
   }
   
   // 3. Aggregate data
-  const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset);
-  const hybridSites = capabilities.filter(c => c.hasBattery || c.hasGenset);
+  const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset && !c.hasHybridEMS);
+  const hybridSites = capabilities.filter(c => c.hasBattery || c.hasGenset || c.hasHybridEMS);
   
   const summary = {
     totalMW: capabilities.reduce((sum, cap) => sum + cap.totalMW, 0),
@@ -258,7 +262,7 @@ export async function syncCustomerAMMPData(
       assetId: c.assetId,
       assetName: c.assetName,
       totalMW: c.totalMW,
-      isHybrid: c.hasBattery || c.hasGenset,
+      isHybrid: c.hasBattery || c.hasGenset || c.hasHybridEMS,
       hasSolcast: c.hasSolcast,
       deviceCount: c.deviceCount,
       onboardingDate: c.onboardingDate,  // Include creation date in breakdown
