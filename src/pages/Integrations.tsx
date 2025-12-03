@@ -13,7 +13,7 @@ const Integrations = () => {
             Integrations
           </h1>
           <p className="text-muted-foreground mt-1">
-            Connect AMMP Contract Compass with your favorite tools
+            Connect AMMP Revenue & Invoicing with your favorite tools
           </p>
         </div>
 
