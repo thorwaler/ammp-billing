@@ -1241,16 +1241,13 @@ export function InvoiceCalculator({
               <div className="space-y-2">
                 <Label>Add-ons (independent of modules)</Label>
                 <div className="border rounded-md p-3 space-y-2">
-                  {addons
-                    .filter(addon => !addon.requiresPro || isProPackage)
-                    .map(addon => (
+                  {addons.map(addon => (
                       <div key={addon.id} className="space-y-2">
                         <div className="flex items-center space-x-2">
                           <Checkbox 
                             id={`addon-${addon.id}`}
                             checked={addon.selected}
                             onCheckedChange={() => handleAddonToggle(addon.id)}
-                            disabled={addon.requiresPro && !isProPackage}
                           />
                           <Label 
                             htmlFor={`addon-${addon.id}`}
