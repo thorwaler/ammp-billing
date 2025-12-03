@@ -81,8 +81,11 @@ export function TierPricingEditor({
                 type="number"
                 value={tier.minQuantity}
                 onChange={(e) => {
-                  const newTiers = [...tiers];
-                  newTiers[index].minQuantity = Number(e.target.value) || 0;
+                  const newTiers = tiers.map((t, i) => 
+                    i === index 
+                      ? { ...t, minQuantity: Number(e.target.value) || 0 }
+                      : { ...t }
+                  );
                   onTiersChange(newTiers);
                 }}
                 className="h-7 text-xs"
@@ -95,8 +98,11 @@ export function TierPricingEditor({
                 placeholder="∞"
                 value={tier.maxQuantity ?? ''}
                 onChange={(e) => {
-                  const newTiers = [...tiers];
-                  newTiers[index].maxQuantity = e.target.value ? Number(e.target.value) : null;
+                  const newTiers = tiers.map((t, i) => 
+                    i === index 
+                      ? { ...t, maxQuantity: e.target.value ? Number(e.target.value) : null }
+                      : { ...t }
+                  );
                   onTiersChange(newTiers);
                 }}
                 className="h-7 text-xs"
@@ -111,8 +117,11 @@ export function TierPricingEditor({
                   step="0.01"
                   value={tier.pricePerUnit}
                   onChange={(e) => {
-                    const newTiers = [...tiers];
-                    newTiers[index].pricePerUnit = Number(e.target.value) || 0;
+                    const newTiers = tiers.map((t, i) => 
+                      i === index 
+                        ? { ...t, pricePerUnit: Number(e.target.value) || 0 }
+                        : { ...t }
+                    );
                     onTiersChange(newTiers);
                   }}
                   className="h-7 text-xs"
@@ -125,8 +134,11 @@ export function TierPricingEditor({
                 type="text"
                 value={tier.label}
                 onChange={(e) => {
-                  const newTiers = [...tiers];
-                  newTiers[index].label = e.target.value;
+                  const newTiers = tiers.map((t, i) => 
+                    i === index 
+                      ? { ...t, label: e.target.value }
+                      : { ...t }
+                  );
                   onTiersChange(newTiers);
                 }}
                 className="h-7 text-xs"
