@@ -7,9 +7,13 @@ import {
   PieChart,
   FileText,
   DownloadCloud,
-  RefreshCw
+  RefreshCw,
+  TrendingUp,
+  DollarSign
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { 
   BarChart, 
   Bar, 
@@ -32,22 +36,28 @@ import {
   getMWpByCustomer,
   getMonthlyRevenue,
   getProjectedRevenueByMonth,
+  getARRvsNRRByMonth,
+  getTotalARRFromInvoices,
+  getTotalNRRFromInvoices,
   MWGrowthData,
   CustomerGrowthData,
   CustomerMWData,
   ProjectedRevenueData,
   ActualRevenueData,
+  ARRvsNRRData,
   ReportFilters as AnalyticsFilters
 } from "@/services/analytics/dashboardAnalytics";
 import { ReportsFilters, ReportFilters } from "@/components/reports/ReportsFilters";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import StatCard from "@/components/dashboard/StatCard";
 
 interface CombinedRevenueData {
   month: string;
   monthKey: string;
   projected: number;
   actual: number;
+  actualARR: number;
 }
 
 const Reports = () => {
@@ -59,6 +69,10 @@ const Reports = () => {
   const [mwpByCustomer, setMwpByCustomer] = useState<CustomerMWData[]>([]);
   const [projectedRevenueData, setProjectedRevenueData] = useState<ProjectedRevenueData[]>([]);
   const [combinedRevenueData, setCombinedRevenueData] = useState<CombinedRevenueData[]>([]);
+  const [arrNrrData, setArrNrrData] = useState<ARRvsNRRData[]>([]);
+  const [totalARR, setTotalARR] = useState(0);
+  const [totalNRR, setTotalNRR] = useState(0);
+  const [showARROnly, setShowARROnly] = useState(false);
   
   // Filter state
   const [filters, setFilters] = useState<ReportFilters>({});
@@ -86,17 +100,33 @@ const Reports = () => {
         customerIds: filters.customerIds,
       };
 
-      const [mwGrowth, customerGrowth, customerMWp, projected, actual] = await Promise.all([
+      // Default date range for ARR/NRR totals if no filter
+      const startDate = filters.startDate || new Date(new Date().getFullYear(), 0, 1);
+      const endDate = filters.endDate || new Date();
+
+      const [mwGrowth, customerGrowth, customerMWp, projected, actual, arrNrr, arrTotal, nrrTotal] = await Promise.all([
         getMWGrowthByMonth(analyticsFilters),
         getCustomerGrowthByQuarter(analyticsFilters),
         getMWpByCustomer(8, analyticsFilters),
         getProjectedRevenueByMonth(12, analyticsFilters),
         getMonthlyRevenue(analyticsFilters),
+        getARRvsNRRByMonth(analyticsFilters),
+        getTotalARRFromInvoices(startDate, endDate),
+        getTotalNRRFromInvoices(startDate, endDate),
       ]);
       
       setMwGrowthData(mwGrowth);
       setCustomerGrowthData(customerGrowth);
       setMwpByCustomer(customerMWp);
+      setTotalARR(convertToDisplayCurrency(arrTotal));
+      setTotalNRR(convertToDisplayCurrency(nrrTotal));
+      
+      // Set ARR vs NRR data with currency conversion
+      setArrNrrData(arrNrr.map(d => ({
+        ...d,
+        arr: convertToDisplayCurrency(d.arr),
+        nrr: convertToDisplayCurrency(d.nrr),
+      })));
       
       // Set projected revenue with currency conversion
       setProjectedRevenueData(projected.map(p => ({
@@ -107,11 +137,13 @@ const Reports = () => {
       // Combine projected and actual for comparison chart
       const combined: CombinedRevenueData[] = projected.map(p => {
         const actualEntry = actual.find(a => a.monthKey === p.monthKey);
+        const arrEntry = arrNrr.find(a => a.monthKey === p.monthKey);
         return {
           month: p.month,
           monthKey: p.monthKey,
           projected: convertToDisplayCurrency(p.projected),
           actual: actualEntry ? convertToDisplayCurrency(actualEntry.actual) : 0,
+          actualARR: arrEntry ? convertToDisplayCurrency(arrEntry.arr) : 0,
         };
       });
       setCombinedRevenueData(combined);
@@ -134,6 +166,10 @@ const Reports = () => {
     setFilters(newFilters);
   };
 
+  const arrPercentage = totalARR + totalNRR > 0 
+    ? Math.round((totalARR / (totalARR + totalNRR)) * 100) 
+    : 0;
+
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
@@ -141,7 +177,7 @@ const Reports = () => {
           <p className="text-sm font-medium">{label}</p>
           {payload.map((entry: any, index: number) => (
             <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {entry.name.toLowerCase().includes('revenue') 
+              {entry.name}: {entry.name.toLowerCase().includes('revenue') || entry.name.toLowerCase().includes('arr') || entry.name.toLowerCase().includes('nrr')
                 ? formatCurrency(entry.value) 
                 : entry.name.toLowerCase().includes('mw') 
                   ? `${entry.value} MW` 
@@ -197,7 +233,77 @@ const Reports = () => {
           isLoading={isLoading}
         />
 
+        {/* ARR/NRR Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard
+            title="Total ARR"
+            value={formatCurrency(totalARR)}
+            description="Platform fees from invoices"
+            icon={TrendingUp}
+            className="border-l-4 border-l-ammp-teal"
+          />
+          <StatCard
+            title="Total NRR"
+            value={formatCurrency(totalNRR)}
+            description="Implementation fees from invoices"
+            icon={DollarSign}
+            className="border-l-4 border-l-orange-500"
+          />
+          <StatCard
+            title="ARR % of Total"
+            value={`${arrPercentage}%`}
+            description="Recurring revenue ratio"
+            icon={PieChart}
+            className="border-l-4 border-l-ammp-blue"
+          />
+        </div>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* ARR vs NRR Stacked Area Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-ammp-teal" />
+                ARR vs NRR by Month
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : arrNrrData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={arrNrrData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Area 
+                        type="monotone" 
+                        dataKey="arr" 
+                        name="ARR (Platform Fees)" 
+                        stackId="1"
+                        stroke="#1A7D7D" 
+                        fill="#1A7D7D" 
+                        fillOpacity={0.6}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="nrr" 
+                        name="NRR (Implementation)" 
+                        stackId="1"
+                        stroke="#F97316" 
+                        fill="#F97316" 
+                        fillOpacity={0.6}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Create invoices to see ARR vs NRR breakdown.")}
+            </CardContent>
+          </Card>
+
           {/* MW Growth Over Time */}
           <Card>
             <CardHeader>
@@ -299,11 +405,21 @@ const Reports = () => {
 
           {/* Actual vs Projected Revenue */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-xl flex items-center gap-2">
                 <LineChart className="h-5 w-5 text-ammp-blue" />
                 Actual vs Projected Revenue
               </CardTitle>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="arr-only"
+                  checked={showARROnly}
+                  onCheckedChange={setShowARROnly}
+                />
+                <Label htmlFor="arr-only" className="text-sm text-muted-foreground">
+                  ARR Only
+                </Label>
+              </div>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -319,8 +435,8 @@ const Reports = () => {
                       <Legend />
                       <Line 
                         type="monotone" 
-                        dataKey="actual" 
-                        name="Actual Revenue" 
+                        dataKey={showARROnly ? "actualARR" : "actual"}
+                        name={showARROnly ? "Actual ARR" : "Actual Revenue"} 
                         stroke="#1A7D7D" 
                         strokeWidth={2}
                         dot={{ r: 4 }}
