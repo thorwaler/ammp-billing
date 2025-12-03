@@ -309,7 +309,7 @@ const XeroIntegration = () => {
                 <div className="space-y-0.5">
                   <Label>Enable Integration</Label>
                   <p className="text-sm text-muted-foreground">
-                    Allow Contract Compass to send invoices to Xero
+                    Allow AMMP to send invoices to Xero
                   </p>
                 </div>
                 <Switch

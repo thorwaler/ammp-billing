@@ -117,7 +117,7 @@ export default function Auth() {
           <div className="flex items-center justify-center mb-4">
             <span className="text-3xl font-bold text-ammp-blue">AMMP</span>
           </div>
-          <CardTitle className="text-2xl">Contract Compass</CardTitle>
+          <CardTitle className="text-2xl">Revenue & Invoicing</CardTitle>
           <CardDescription>
             Manage your contracts, customers and invoices
           </CardDescription>

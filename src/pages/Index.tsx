@@ -95,7 +95,7 @@ const Index = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground mt-2">
-            Welcome to AMMP Contract Compass. Manage your contracts, customers and invoices.
+            Welcome to AMMP Revenue & Invoicing. Manage your contracts, customers and invoices.
           </p>
         </div>
 
