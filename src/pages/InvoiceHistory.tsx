@@ -11,10 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { InvoiceDetailsDialog } from "@/components/invoices/InvoiceDetailsDialog";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
+import { XeroSyncDialog } from "@/components/invoices/XeroSyncDialog";
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, Loader2 } from "lucide-react";
+import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw } from "lucide-react";
 
 interface Invoice {
   id: string;
@@ -55,6 +56,7 @@ export default function InvoiceHistory() {
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -110,15 +112,18 @@ export default function InvoiceHistory() {
     setFilteredInvoices(filtered);
   };
 
-  const handleSyncFromXero = async () => {
+  const handleSyncFromXero = async (fromDate: string | null) => {
     setSyncing(true);
     try {
-      const { data, error } = await supabase.functions.invoke('xero-sync-invoices');
+      const { data, error } = await supabase.functions.invoke('xero-sync-invoices', {
+        body: { fromDate }
+      });
       
       if (error) throw error;
       
       toast.success(`Synced ${data.syncedCount} new invoices from Xero`);
       fetchInvoices();
+      setSyncDialogOpen(false);
     } catch (error: any) {
       console.error('Error syncing from Xero:', error);
       toast.error(error.message || 'Failed to sync from Xero');
@@ -228,12 +233,8 @@ export default function InvoiceHistory() {
             <h1 className="text-3xl font-bold tracking-tight">Invoice History</h1>
             <p className="text-muted-foreground">View and manage all your invoices</p>
           </div>
-          <Button onClick={handleSyncFromXero} disabled={syncing} variant="outline">
-            {syncing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
+          <Button onClick={() => setSyncDialogOpen(true)} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
             Sync from Xero
           </Button>
         </div>
@@ -456,6 +457,13 @@ export default function InvoiceHistory() {
           )}
         </>
       )}
+
+      <XeroSyncDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        onSync={handleSyncFromXero}
+        syncing={syncing}
+      />
     </Layout>
   );
 }

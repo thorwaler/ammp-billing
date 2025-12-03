@@ -101,6 +101,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // Parse request body for fromDate parameter
+    let fromDate: string | null = null;
+    try {
+      const body = await req.json();
+      fromDate = body?.fromDate || null;
+    } catch {
+      // No body or invalid JSON, use default (no date filter)
+    }
+
     // Get auth header from request
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -116,7 +125,7 @@ Deno.serve(async (req) => {
       throw new Error('Not authenticated');
     }
 
-    console.log('Syncing Xero invoices for user:', user.id);
+    console.log('Syncing Xero invoices for user:', user.id, 'fromDate:', fromDate);
 
     // Get valid access token
     const { accessToken, tenantId } = await getValidAccessToken(supabase, user.id);
@@ -142,17 +151,28 @@ Deno.serve(async (req) => {
 
     const existingXeroIds = new Set(existingInvoices?.map(inv => inv.xero_invoice_id) || []);
 
+    // Build Xero API URL with optional date filter
+    let whereClause = 'Type=="ACCREC"';
+    if (fromDate) {
+      // Parse the date and format for Xero API
+      const dateParts = fromDate.split('-');
+      const year = dateParts[0];
+      const month = dateParts[1];
+      const day = dateParts[2];
+      whereClause += ` AND Date >= DateTime(${year}, ${month}, ${day})`;
+    }
+    
+    const xeroUrl = `https://api.xero.com/api.xro/2.0/Invoices?Statuses=AUTHORISED,PAID&where=${encodeURIComponent(whereClause)}`;
+    console.log('Xero API URL:', xeroUrl);
+
     // Fetch invoices from Xero (ACCREC = Accounts Receivable)
-    const xeroResponse = await fetch(
-      'https://api.xero.com/api.xro/2.0/Invoices?Statuses=AUTHORISED,PAID&where=Type=="ACCREC"',
-      {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'xero-tenant-id': tenantId,
-          'Accept': 'application/json',
-        },
-      }
-    );
+    const xeroResponse = await fetch(xeroUrl, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'xero-tenant-id': tenantId,
+        'Accept': 'application/json',
+      },
+    });
 
     if (!xeroResponse.ok) {
       const errorText = await xeroResponse.text();
@@ -163,7 +183,7 @@ Deno.serve(async (req) => {
     const xeroData = await xeroResponse.json();
     const xeroInvoices = xeroData.Invoices || [];
     
-    console.log(`Found ${xeroInvoices.length} invoices in Xero`);
+    console.log(`Found ${xeroInvoices.length} invoices in Xero (filtered by date: ${fromDate || 'all time'})`);
 
     // Get all customers to match by name
     const { data: customers } = await supabase
