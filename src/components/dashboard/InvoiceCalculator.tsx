@@ -706,34 +706,40 @@ export function InvoiceCalculator({
     try {
       // Format invoice data for Xero API
       const lineItems = [];
+      
+      // Account code constants:
+      // 1002 = Platform Fees (ARR - MW-based pricing)
+      // 1000 = Implementation Fees (NRR - addons)
+      const ACCOUNT_PLATFORM_FEES = "1002";
+      const ACCOUNT_IMPLEMENTATION_FEES = "1000";
 
-      // Add base pricing if applicable
+      // Add base pricing if applicable (Platform Fee - ARR)
       if (result.basePricingCost > 0) {
         lineItems.push({
           Description: "Base Pricing",
           Quantity: 1,
           UnitAmount: result.basePricingCost,
-          AccountCode: "200"
+          AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
 
-      // Add module costs
+      // Add module costs (Platform Fees - ARR)
       result.moduleCosts.forEach(mc => {
         lineItems.push({
           Description: mc.moduleName,
           Quantity: 1,
           UnitAmount: mc.cost,
-          AccountCode: "200" // Revenue account
+          AccountCode: ACCOUNT_PLATFORM_FEES
         });
       });
       
-      // Add addon costs
+      // Add addon costs (Implementation Fees - NRR)
       result.addonCosts.forEach(ac => {
         lineItems.push({
           Description: ac.addonName,
           Quantity: 1,
           UnitAmount: ac.cost,
-          AccountCode: "200"
+          AccountCode: ACCOUNT_IMPLEMENTATION_FEES
         });
       });
       
@@ -742,17 +748,17 @@ export function InvoiceCalculator({
           Description: "AMMP OS Starter Package",
           Quantity: 1,
           UnitAmount: result.starterPackageCost,
-          AccountCode: "200"
+          AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
       
-      // Add minimum contract adjustment if present
+      // Add minimum contract adjustment if present (Platform Fee - ARR)
       if (result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
         lineItems.push({
           Description: "Minimum Contract Value Adjustment",
           Quantity: 1,
           UnitAmount: result.minimumContractAdjustment,
-          AccountCode: "200"
+          AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
       
@@ -764,11 +770,11 @@ export function InvoiceCalculator({
             : "Minimum Charges",
           Quantity: 1,
           UnitAmount: result.minimumCharges,
-          AccountCode: "200"
+          AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
       
-      // Add retainer cost
+      // Add retainer cost (Platform Fee - ARR)
       if (result.retainerCost > 0) {
         const description = result.retainerMinimumApplied
           ? `Retainer (Minimum charge applied)`
@@ -777,9 +783,20 @@ export function InvoiceCalculator({
           Description: description,
           Quantity: 1,
           UnitAmount: result.retainerCost,
-          AccountCode: "200"
+          AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
+      
+      // Calculate ARR (Platform Fees - all MW-based pricing)
+      const arrAmount = (result.basePricingCost || 0) +
+        (result.starterPackageCost || 0) +
+        result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
+        (result.minimumContractAdjustment || 0) +
+        (result.minimumCharges || 0) +
+        (result.retainerCost || 0);
+
+      // Calculate NRR (Implementation Fees - all addons)
+      const nrrAmount = result.addonCosts.reduce((sum, ac) => sum + ac.cost, 0);
       
       const xeroInvoice = {
         Type: "ACCREC",
@@ -853,6 +870,15 @@ export function InvoiceCalculator({
           .eq('contract_status', 'active')
           .maybeSingle();
         
+        // Recalculate ARR/NRR for storage
+        const storedArrAmount = (result.basePricingCost || 0) +
+          (result.starterPackageCost || 0) +
+          result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
+          (result.minimumContractAdjustment || 0) +
+          (result.minimumCharges || 0) +
+          (result.retainerCost || 0);
+        const storedNrrAmount = result.addonCosts.reduce((sum, ac) => sum + ac.cost, 0);
+
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')
           .insert([{
@@ -868,7 +894,11 @@ export function InvoiceCalculator({
             invoice_amount: result.totalPrice,
             currency: selectedCustomer.currency,
             modules_data: modules.filter(m => m.selected) as any,
-            addons_data: addons.filter(a => a.selected) as any
+            addons_data: addons.filter(a => a.selected) as any,
+            source: 'internal',
+            arr_amount: storedArrAmount,
+            nrr_amount: storedNrrAmount,
+            xero_line_items: lineItems
           }])
           .select()
           .single();
