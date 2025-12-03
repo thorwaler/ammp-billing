@@ -44,6 +44,9 @@ export interface CalculationParams {
   enableSiteMinimumPricing?: boolean;
   baseMonthlyPrice?: number;
   siteChargeFrequency?: "monthly" | "annual";
+  retainerHours?: number;
+  retainerHourlyRate?: number;
+  retainerMinimumValue?: number;
 }
 
 export interface SiteMinimumPricingResult {
@@ -95,6 +98,9 @@ export interface CalculationResult {
   siteMinimumPricingBreakdown?: SiteMinimumPricingResult;
   minimumContractAdjustment: number;
   basePricingCost: number;
+  retainerCost: number;
+  retainerCalculatedCost: number;
+  retainerMinimumApplied: boolean;
 }
 
 /**
@@ -347,6 +353,9 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     totalPrice: 0,
     minimumContractAdjustment: 0,
     basePricingCost: 0,
+    retainerCost: 0,
+    retainerCalculatedCost: 0,
+    retainerMinimumApplied: false,
   };
   
   const periodMonths = getPeriodMonthsMultiplier(params.billingFrequency || 'annual');
@@ -448,9 +457,18 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     }
   }
   
-  // Calculate final total: base cost + addons + base pricing
+  // Calculate retainer cost
+  const calculatedRetainer = (params.retainerHours || 0) * (params.retainerHourlyRate || 0);
+  const retainerMinimum = params.retainerMinimumValue || 0;
+  const hasRetainer = (params.retainerHours && params.retainerHours > 0) || retainerMinimum > 0;
+  
+  result.retainerCalculatedCost = calculatedRetainer;
+  result.retainerMinimumApplied = hasRetainer && calculatedRetainer < retainerMinimum;
+  result.retainerCost = hasRetainer ? Math.max(calculatedRetainer, retainerMinimum) : 0;
+  
+  // Calculate final total: base cost + addons + base pricing + retainer
   const addonTotal = result.addonCosts.reduce((sum, item) => sum + item.cost, 0);
-  result.totalPrice = baseCost + addonTotal + result.basePricingCost;
+  result.totalPrice = baseCost + addonTotal + result.basePricingCost + result.retainerCost;
   
   return result;
 }

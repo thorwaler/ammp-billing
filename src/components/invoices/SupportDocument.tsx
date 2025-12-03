@@ -132,6 +132,37 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* Retainer Hours (if applicable) */}
+      {data.retainerBreakdown && data.retainerBreakdown.totalCost > 0 && (
+        <section className="mb-6">
+          <h2 className="text-base font-bold mb-3">Retainer Hours</h2>
+          <table className="w-full border-collapse border border-border text-xs">
+            <thead>
+              <tr className="bg-muted">
+                <th className="border border-border p-1 text-left">Description</th>
+                <th className="border border-border p-1 text-right">Calculated</th>
+                <th className="border border-border p-1 text-right">Minimum</th>
+                <th className="border border-border p-1 text-right">Total ({data.currency})</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="border border-border p-1">Retainer (per period)</td>
+                <td className="border border-border p-1 text-right">{formatCurrency(data.retainerBreakdown.calculatedCost)}</td>
+                <td className="border border-border p-1 text-right">{formatCurrency(data.retainerBreakdown.minimumValue)}</td>
+                <td className="border border-border p-1 text-right font-medium">
+                  {formatCurrency(data.retainerBreakdown.totalCost)}
+                  {data.retainerBreakdown.minimumApplied && " *"}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          {data.retainerBreakdown.minimumApplied && (
+            <p className="text-xs text-muted-foreground mt-1">* Minimum value applied</p>
+          )}
+        </section>
+      )}
+
       {/* Asset Breakdown */}
       <section className="mb-6">
         <h2 className="text-base font-bold mb-3">Monitoring Fee Price Breakdown</h2>

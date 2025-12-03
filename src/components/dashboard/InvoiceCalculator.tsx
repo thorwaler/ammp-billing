@@ -113,6 +113,9 @@ interface Customer {
   manualInvoicing?: boolean;
   baseMonthlyPrice?: number;
   siteChargeFrequency?: 'monthly' | 'annual';
+  retainerHours?: number;
+  retainerHourlyRate?: number;
+  retainerMinimumValue?: number;
 }
 
 // Default modules and addons from shared data
@@ -185,7 +188,10 @@ export function InvoiceCalculator({
             manual_invoicing,
             base_monthly_price,
             period_start,
-            period_end
+            period_end,
+            retainer_hours,
+            retainer_hourly_rate,
+            retainer_minimum_value
           )
         `)
         .eq('user_id', user.id)
@@ -234,6 +240,9 @@ export function InvoiceCalculator({
             siteChargeFrequency: siteChargeFrequency as 'monthly' | 'annual',
             periodStart: contract.period_start,
             periodEnd: contract.period_end,
+            retainerHours: Number((contract as any).retainer_hours) || 0,
+            retainerHourlyRate: Number((contract as any).retainer_hourly_rate) || 0,
+            retainerMinimumValue: Number((contract as any).retainer_minimum_value) || 0,
           };
         });
 
@@ -531,6 +540,9 @@ export function InvoiceCalculator({
       totalPrice: 0,
       minimumContractAdjustment: 0,
       basePricingCost: 0,
+      retainerCost: 0,
+      retainerCalculatedCost: 0,
+      retainerMinimumApplied: false,
     };
     
     // Calculate costs based on package
@@ -652,6 +664,9 @@ export function InvoiceCalculator({
       enableSiteMinimumPricing: enableSiteMinPricing,
       baseMonthlyPrice: selectedCustomer.baseMonthlyPrice,
       siteChargeFrequency: (selectedCustomer as any).siteChargeFrequency || "annual",
+      retainerHours: selectedCustomer.retainerHours,
+      retainerHourlyRate: selectedCustomer.retainerHourlyRate,
+      retainerMinimumValue: selectedCustomer.retainerMinimumValue,
     };
     
     calculationResult = calculateInvoice(params);
@@ -749,6 +764,19 @@ export function InvoiceCalculator({
             : "Minimum Charges",
           Quantity: 1,
           UnitAmount: result.minimumCharges,
+          AccountCode: "200"
+        });
+      }
+      
+      // Add retainer cost
+      if (result.retainerCost > 0) {
+        const description = result.retainerMinimumApplied
+          ? `Retainer (Minimum charge applied)`
+          : `Retainer Hours (${selectedCustomer.retainerHours || 0} hours)`;
+        lineItems.push({
+          Description: description,
+          Quantity: 1,
+          UnitAmount: result.retainerCost,
           AccountCode: "200"
         });
       }
@@ -1591,6 +1619,19 @@ export function InvoiceCalculator({
               <div className="flex justify-between text-sm mb-3">
                 <span>Base Pricing ({getPeriodMonthsMultiplier(billingFrequency)} months × {formatCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
                 <span>{formatCurrency(result.basePricingCost)}</span>
+              </div>
+            )}
+            
+            {result.retainerCost > 0 && (
+              <div className="flex justify-between text-sm mb-3">
+                <span>
+                  Retainer Hours
+                  {result.retainerMinimumApplied 
+                    ? ' (Minimum applied)'
+                    : ` (${selectedCustomer.retainerHours || 0} hrs × ${formatCurrency(selectedCustomer.retainerHourlyRate || 0)}/hr)`
+                  }:
+                </span>
+                <span>{formatCurrency(result.retainerCost)}</span>
               </div>
             )}
             
