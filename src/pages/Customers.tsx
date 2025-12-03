@@ -5,7 +5,8 @@ import Layout from "@/components/layout/Layout";
 import CustomerCard from "@/components/customers/CustomerCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PlusCircle, Search, Users, RefreshCw, Loader2, AlertCircle } from "lucide-react";
+import { PlusCircle, Search, Users, RefreshCw, Loader2, AlertCircle, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -60,6 +61,8 @@ const Customers = () => {
   const [isAmmpSyncing, setIsAmmpSyncing] = useState(false);
   const [customersData, setCustomersData] = useState<CustomerData[]>([]);
   const [filterTab, setFilterTab] = useState("all");
+  const [sortField, setSortField] = useState<string>("name");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const navigate = useNavigate();
   const { formatCurrency, convertToDisplayCurrency } = useCurrency();
 
@@ -475,6 +478,36 @@ const Customers = () => {
       );
     }
     
+    // Apply sorting
+    filtered = [...filtered].sort((a, b) => {
+      let comparison = 0;
+      
+      switch (sortField) {
+        case "name":
+          comparison = a.name.localeCompare(b.name);
+          break;
+        case "contractValue":
+          comparison = a.contractValue - b.contractValue;
+          break;
+        case "mwpManaged":
+          comparison = a.mwpManaged - b.mwpManaged;
+          break;
+        case "joinDate":
+          comparison = new Date(a.joinDate).getTime() - new Date(b.joinDate).getTime();
+          break;
+        case "lastInvoiced":
+          comparison = new Date(a.lastInvoiced).getTime() - new Date(b.lastInvoiced).getTime();
+          break;
+        case "location":
+          comparison = a.location.localeCompare(b.location);
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      return sortDirection === "asc" ? comparison : -comparison;
+    });
+    
     return filtered;
   };
 
@@ -662,15 +695,47 @@ const Customers = () => {
           </TabsList>
         </Tabs>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-          <Input
-            placeholder="Search customers by name or location..."
-            className="pl-10"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        {/* Search and Sort */}
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search customers by name or location..."
+              className="pl-10"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          
+          <div className="flex gap-2">
+            <Select value={sortField} onValueChange={setSortField}>
+              <SelectTrigger className="w-[160px]">
+                <ArrowUpDown className="mr-2 h-4 w-4" />
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name">Name</SelectItem>
+                <SelectItem value="contractValue">Contract Value</SelectItem>
+                <SelectItem value="mwpManaged">MWp Managed</SelectItem>
+                <SelectItem value="joinDate">Join Date</SelectItem>
+                <SelectItem value="lastInvoiced">Last Invoiced</SelectItem>
+                <SelectItem value="location">Location</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => setSortDirection(prev => prev === "asc" ? "desc" : "asc")}
+              title={sortDirection === "asc" ? "Ascending" : "Descending"}
+            >
+              {sortDirection === "asc" ? (
+                <ArrowUp className="h-4 w-4" />
+              ) : (
+                <ArrowDown className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
