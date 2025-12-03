@@ -76,6 +76,7 @@ export interface AssetCapabilities {
   hasSolcast: boolean
   hasBattery: boolean
   hasGenset: boolean
+  hasHybridEMS: boolean
   onboardingDate: string | null
   deviceCount: number
   devices: DeviceResponse[]
