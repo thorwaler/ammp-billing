@@ -311,15 +311,32 @@ const Reports = () => {
               ) : combinedRevenueData.length > 0 ? (
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={combinedRevenueData}>
+                    <RechartsLineChart data={combinedRevenueData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="month" />
                       <YAxis tickFormatter={(value) => formatCurrency(value)} />
                       <Tooltip content={<CustomTooltip />} />
                       <Legend />
-                      <Bar dataKey="actual" name="Actual Revenue" fill="#1A7D7D" />
-                      <Bar dataKey="projected" name="Projected Revenue" fill="#0F4C81" opacity={0.5} />
-                    </BarChart>
+                      <Line 
+                        type="monotone" 
+                        dataKey="actual" 
+                        name="Actual Revenue" 
+                        stroke="#1A7D7D" 
+                        strokeWidth={2}
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="projected" 
+                        name="Projected Revenue" 
+                        stroke="#0F4C81" 
+                        strokeWidth={2}
+                        strokeDasharray="5 5"
+                        dot={{ r: 4 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    </RechartsLineChart>
                   </ResponsiveContainer>
                 </div>
               ) : renderEmptyState("Add contracts to see revenue comparison.")}
