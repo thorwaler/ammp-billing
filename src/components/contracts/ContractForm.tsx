@@ -842,7 +842,52 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   </FormItem>
                 )}
               />
-            </div>
+          </div>
+
+            <FormField
+              control={form.control}
+              name="package"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Package</FormLabel>
+                  <Select 
+                    onValueChange={(value) => {
+                      field.onChange(value);
+                      handlePackageChange(value);
+                    }} 
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select package" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="starter">AMMP OS Starter (Max 5MW, 20 sites, €3000/year)</SelectItem>
+                      <SelectItem value="pro">AMMP OS Pro (Per MW pricing, min €5000/year)</SelectItem>
+                      <SelectItem value="custom">Custom/Legacy</SelectItem>
+                      <SelectItem value="hybrid_tiered">Hybrid Tiered (Different pricing for on-grid vs hybrid sites)</SelectItem>
+                      <SelectItem value="capped">Capped Package (Fixed annual fee with MW cap)</SelectItem>
+                      <SelectItem value="poc">POC/Trial (No billing - expiry tracking only)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {watchPackage === "starter" ? 
+                      "AMMP OS Starter: Max 5MW, max 20 sites, €3000 per year flat fee. Only have access to Technical Monitoring Module." :
+                      watchPackage === "pro" ? 
+                      "AMMP OS Pro: Pricing per MW based on modules chosen, with a minimum of €5,000 per year." :
+                      watchPackage === "hybrid_tiered" ? 
+                      "Hybrid Tiered: Set different rates for on-grid and hybrid sites (with battery/genset)." :
+                      watchPackage === "capped" ?
+                      "Capped Package: Fixed fee (pro-rated for selected billing frequency) with optional MW cap alerts." :
+                      watchPackage === "poc" ?
+                      "POC/Trial: Track proof-of-concept trials with expiry notifications. No invoicing or billing." :
+                      "Custom/Legacy: Use custom pricing for this customer."}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}
@@ -1169,51 +1214,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 />
               </div>
             )}
-            
-            <FormField
-              control={form.control}
-              name="package"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Package</FormLabel>
-                  <Select 
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      handlePackageChange(value);
-                    }} 
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select package" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="starter">AMMP OS Starter (Max 5MW, 20 sites, €3000/year)</SelectItem>
-                      <SelectItem value="pro">AMMP OS Pro (Per MW pricing, min €5000/year)</SelectItem>
-                      <SelectItem value="custom">Custom/Legacy</SelectItem>
-                      <SelectItem value="hybrid_tiered">Hybrid Tiered (Different pricing for on-grid vs hybrid sites)</SelectItem>
-                      <SelectItem value="capped">Capped Package (Fixed annual fee with MW cap)</SelectItem>
-                      <SelectItem value="poc">POC/Trial (No billing - expiry tracking only)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    {watchPackage === "starter" ? 
-                      "AMMP OS Starter: Max 5MW, max 20 sites, €3000 per year flat fee. Only have access to Technical Monitoring Module." :
-                      watchPackage === "pro" ? 
-                      "AMMP OS Pro: Pricing per MW based on modules chosen, with a minimum of €5,000 per year." :
-                      watchPackage === "hybrid_tiered" ? 
-                      "Hybrid Tiered: Set different rates for on-grid and hybrid sites (with battery/genset)." :
-                      watchPackage === "capped" ?
-                      "Capped Package: Fixed fee (pro-rated for selected billing frequency) with optional MW cap alerts." :
-                      watchPackage === "poc" ?
-                      "POC/Trial: Track proof-of-concept trials with expiry notifications. No invoicing or billing." :
-                      "Custom/Legacy: Use custom pricing for this customer."}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
             
             {/* Capped Package Fields */}
             {watchPackage === "capped" && (
