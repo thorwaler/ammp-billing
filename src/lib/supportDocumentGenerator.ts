@@ -55,6 +55,16 @@ export interface SupportDocumentData {
   }[];
   addonsTotal?: number;
   
+  // Retainer breakdown (if applicable)
+  retainerBreakdown?: {
+    hours: number;
+    hourlyRate: number;
+    minimumValue: number;
+    calculatedCost: number;
+    totalCost: number;
+    minimumApplied: boolean;
+  };
+  
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
@@ -141,6 +151,19 @@ export async function generateSupportDocumentData(
     }));
   const addonsTotal = addonsBreakdown.reduce((sum, a) => sum + a.totalCost, 0);
 
+  // Generate retainer breakdown if applicable
+  let retainerBreakdown: SupportDocumentData['retainerBreakdown'];
+  if (calculationResult.retainerCost > 0) {
+    retainerBreakdown = {
+      hours: 0, // Will be passed from params
+      hourlyRate: 0,
+      minimumValue: 0,
+      calculatedCost: calculationResult.retainerCalculatedCost,
+      totalCost: calculationResult.retainerCost,
+      minimumApplied: calculationResult.retainerMinimumApplied
+    };
+  }
+
   // Calculate total including all addon costs and validate
   // Asset breakdown is annual - multiply by frequency multiplier for period comparison
   const frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
@@ -151,6 +174,7 @@ export async function generateSupportDocumentData(
     calculationResult.minimumCharges + 
     calculationResult.minimumContractAdjustment +
     calculationResult.basePricingCost +
+    calculationResult.retainerCost +
     totalAddonCosts;
   
   const invoiceTotal = calculationResult.totalPrice;
@@ -170,6 +194,7 @@ export async function generateSupportDocumentData(
     solcastTotal,
     addonsBreakdown,
     addonsTotal,
+    retainerBreakdown,
     calculatedTotal,
     invoiceTotal,
     totalsMatch

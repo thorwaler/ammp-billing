@@ -101,6 +101,9 @@ export type Database = {
           period_end: string | null
           period_start: string | null
           portfolio_discount_tiers: Json | null
+          retainer_hourly_rate: number | null
+          retainer_hours: number | null
+          retainer_minimum_value: number | null
           signed_date: string | null
           site_charge_frequency: string | null
           updated_at: string
@@ -137,6 +140,9 @@ export type Database = {
           period_end?: string | null
           period_start?: string | null
           portfolio_discount_tiers?: Json | null
+          retainer_hourly_rate?: number | null
+          retainer_hours?: number | null
+          retainer_minimum_value?: number | null
           signed_date?: string | null
           site_charge_frequency?: string | null
           updated_at?: string
@@ -173,6 +179,9 @@ export type Database = {
           period_end?: string | null
           period_start?: string | null
           portfolio_discount_tiers?: Json | null
+          retainer_hourly_rate?: number | null
+          retainer_hours?: number | null
+          retainer_minimum_value?: number | null
           signed_date?: string | null
           site_charge_frequency?: string | null
           updated_at?: string

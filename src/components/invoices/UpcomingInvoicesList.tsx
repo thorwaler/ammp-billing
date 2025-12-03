@@ -27,6 +27,9 @@ interface UpcomingInvoice {
   manualInvoicing: boolean;
   baseMonthlyPrice: number;
   siteChargeFrequency: "monthly" | "annual";
+  retainerHours: number;
+  retainerHourlyRate: number;
+  retainerMinimumValue: number;
 }
 
 interface UpcomingInvoicesListProps {
@@ -64,10 +67,13 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           minimum_annual_value,
           custom_pricing,
           initial_mw,
-          manual_invoicing,
-          base_monthly_price,
-          site_charge_frequency,
-          customers (
+            manual_invoicing,
+            base_monthly_price,
+            site_charge_frequency,
+            retainer_hours,
+            retainer_hourly_rate,
+            retainer_minimum_value,
+            customers (
             id,
             name,
             mwp_managed,
@@ -116,6 +122,9 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             manualInvoicing: c.manual_invoicing || false,
             baseMonthlyPrice: Number(c.base_monthly_price) || 0,
             siteChargeFrequency: (c.site_charge_frequency as "monthly" | "annual") || "annual",
+            retainerHours: Number((c as any).retainer_hours) || 0,
+            retainerHourlyRate: Number((c as any).retainer_hourly_rate) || 0,
+            retainerMinimumValue: Number((c as any).retainer_minimum_value) || 0,
           };
         });
 
@@ -182,6 +191,9 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       baseMonthlyPrice: invoice.baseMonthlyPrice,
       billingFrequency: invoice.billingFrequency,
       siteChargeFrequency: invoice.siteChargeFrequency,
+      retainerHours: invoice.retainerHours,
+      retainerHourlyRate: invoice.retainerHourlyRate,
+      retainerMinimumValue: invoice.retainerMinimumValue,
     });
     
     return result.totalPrice;

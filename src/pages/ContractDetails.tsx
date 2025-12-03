@@ -317,7 +317,10 @@ const ContractDetails = () => {
                     contractStatus: contract.contract_status,
                     portfolioDiscountTiers: contract.portfolio_discount_tiers,
                     minimumChargeTiers: contract.minimum_charge_tiers,
-                    siteChargeFrequency: contract.site_charge_frequency
+                    siteChargeFrequency: contract.site_charge_frequency,
+                    retainerHours: contract.retainer_hours,
+                    retainerHourlyRate: contract.retainer_hourly_rate,
+                    retainerMinimumValue: contract.retainer_minimum_value
                   }}
                   onComplete={() => {
                     setShowEditDialog(false);
@@ -371,9 +374,12 @@ const ContractDetails = () => {
               notes: contract.notes,
               contractStatus: contract.contract_status,
               portfolioDiscountTiers: contract.portfolio_discount_tiers,
-              minimumChargeTiers: contract.minimum_charge_tiers,
-              siteChargeFrequency: contract.site_charge_frequency
-            }}
+                    minimumChargeTiers: contract.minimum_charge_tiers,
+                    siteChargeFrequency: contract.site_charge_frequency,
+                    retainerHours: contract.retainer_hours,
+                    retainerHourlyRate: contract.retainer_hourly_rate,
+                    retainerMinimumValue: contract.retainer_minimum_value
+                  }}
             isExtending={true}
             onComplete={() => {
               setShowExtendDialog(false);

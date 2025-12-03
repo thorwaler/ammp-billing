@@ -90,6 +90,9 @@ const contractFormSchema = z.object({
   siteChargeFrequency: z.enum(["monthly", "annual"]).optional(),
   minimumAnnualValue: z.coerce.number().optional(),
   baseMonthlyPrice: z.coerce.number().optional(),
+  retainerHours: z.coerce.number().optional(),
+  retainerHourlyRate: z.coerce.number().optional(),
+  retainerMinimumValue: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -118,6 +121,9 @@ interface ContractFormProps {
     minimumCharge?: number;
     minimumAnnualValue?: number;
     baseMonthlyPrice?: number;
+    retainerHours?: number;
+    retainerHourlyRate?: number;
+    retainerMinimumValue?: number;
     maxMw?: number;
     currency: string;
     signedDate?: string;
@@ -721,6 +727,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         site_charge_frequency: data.siteChargeFrequency || "annual",
         minimum_annual_value: data.package === 'poc' ? 0 : (data.minimumAnnualValue || 0),
         base_monthly_price: data.package === 'poc' ? 0 : (data.baseMonthlyPrice || 0),
+        retainer_hours: data.package === 'poc' ? null : (data.retainerHours || null),
+        retainer_hourly_rate: data.package === 'poc' ? null : (data.retainerHourlyRate || null),
+        retainer_minimum_value: data.package === 'poc' ? null : (data.retainerMinimumValue || null),
         max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
@@ -963,6 +972,78 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </FormItem>
               )}
             />
+
+            {/* Retainer Hours Section */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <FormField
+                control={form.control}
+                name="retainerHours"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Retainer Hours (per period)</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="0"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Hours included per billing period
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="retainerHourlyRate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Retainer Hourly Rate ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Hourly rate for retainer hours
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={form.control}
+                name="retainerMinimumValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Retainer Minimum ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        {...field}
+                        onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      Minimum retainer charge per period (optional)
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
