@@ -285,6 +285,7 @@ export type Database = {
       invoices: {
         Row: {
           addons_data: Json | null
+          arr_amount: number | null
           billing_frequency: string
           contract_id: string | null
           created_at: string | null
@@ -296,14 +297,22 @@ export type Database = {
           modules_data: Json | null
           mw_change: number | null
           mw_managed: number
+          nrr_amount: number | null
+          source: string | null
           support_document_data: Json | null
           total_mw: number
           updated_at: string | null
           user_id: string
+          xero_contact_name: string | null
           xero_invoice_id: string | null
+          xero_line_items: Json | null
+          xero_reference: string | null
+          xero_status: string | null
+          xero_synced_at: string | null
         }
         Insert: {
           addons_data?: Json | null
+          arr_amount?: number | null
           billing_frequency: string
           contract_id?: string | null
           created_at?: string | null
@@ -315,14 +324,22 @@ export type Database = {
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed: number
+          nrr_amount?: number | null
+          source?: string | null
           support_document_data?: Json | null
           total_mw: number
           updated_at?: string | null
           user_id: string
+          xero_contact_name?: string | null
           xero_invoice_id?: string | null
+          xero_line_items?: Json | null
+          xero_reference?: string | null
+          xero_status?: string | null
+          xero_synced_at?: string | null
         }
         Update: {
           addons_data?: Json | null
+          arr_amount?: number | null
           billing_frequency?: string
           contract_id?: string | null
           created_at?: string | null
@@ -334,11 +351,18 @@ export type Database = {
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed?: number
+          nrr_amount?: number | null
+          source?: string | null
           support_document_data?: Json | null
           total_mw?: number
           updated_at?: string | null
           user_id?: string
+          xero_contact_name?: string | null
           xero_invoice_id?: string | null
+          xero_line_items?: Json | null
+          xero_reference?: string | null
+          xero_status?: string | null
+          xero_synced_at?: string | null
         }
         Relationships: [
           {
@@ -434,6 +458,36 @@ export type Database = {
           id?: string
           phone?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      revenue_account_mappings: {
+        Row: {
+          account_code: string
+          account_name: string | null
+          created_at: string | null
+          id: string
+          revenue_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          account_code: string
+          account_name?: string | null
+          created_at?: string | null
+          id?: string
+          revenue_type?: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          account_code?: string
+          account_name?: string | null
+          created_at?: string | null
+          id?: string
+          revenue_type?: string
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }

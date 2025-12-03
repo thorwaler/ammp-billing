@@ -469,6 +469,14 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
   })) || [];
 }
 
+export interface ARRvsNRRData {
+  month: string;
+  monthKey: string;
+  arr: number;
+  nrr: number;
+  total: number;
+}
+
 /**
  * Get monthly revenue from invoices with month keys for alignment
  */
@@ -518,6 +526,102 @@ export async function getMonthlyRevenue(filters?: ReportFilters): Promise<Actual
     });
     return { month: monthName, monthKey, actual: parseFloat(revenue.toFixed(2)) };
   });
+}
+
+/**
+ * Get ARR vs NRR breakdown by month from invoices
+ */
+export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvsNRRData[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Default to last 12 months if no filter specified
+  const startDate = filters?.startDate || (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 1);
+    return d;
+  })();
+  const endDate = filters?.endDate || new Date();
+
+  let query = supabase
+    .from('invoices')
+    .select('invoice_date, invoice_amount, arr_amount, nrr_amount, customer_id')
+    .eq('user_id', user.id)
+    .gte('invoice_date', startDate.toISOString())
+    .lte('invoice_date', endDate.toISOString());
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('customer_id', filters.customerIds);
+  }
+
+  const { data: invoices } = await query;
+
+  // Group by month
+  const monthlyMap = new Map<string, { arr: number; nrr: number; total: number }>();
+  
+  invoices?.forEach((invoice: any) => {
+    const date = new Date(invoice.invoice_date);
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const existing = monthlyMap.get(monthKey) || { arr: 0, nrr: 0, total: 0 };
+    monthlyMap.set(monthKey, {
+      arr: existing.arr + (invoice.arr_amount || 0),
+      nrr: existing.nrr + (invoice.nrr_amount || 0),
+      total: existing.total + invoice.invoice_amount,
+    });
+  });
+
+  // Sort and format
+  const sortedMonths = Array.from(monthlyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  
+  return sortedMonths.map(([monthKey, data]) => {
+    const [year, monthNum] = monthKey.split('-');
+    const monthName = new Date(parseInt(year), parseInt(monthNum) - 1).toLocaleDateString('en-US', { 
+      month: 'short',
+      year: '2-digit'
+    });
+    return {
+      month: monthName,
+      monthKey,
+      arr: parseFloat(data.arr.toFixed(2)),
+      nrr: parseFloat(data.nrr.toFixed(2)),
+      total: parseFloat(data.total.toFixed(2)),
+    };
+  });
+}
+
+/**
+ * Get total ARR from invoices in date range
+ */
+export async function getTotalARRFromInvoices(startDate: Date, endDate: Date): Promise<number> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { data: invoices } = await supabase
+    .from('invoices')
+    .select('arr_amount')
+    .eq('user_id', user.id)
+    .gte('invoice_date', startDate.toISOString())
+    .lte('invoice_date', endDate.toISOString());
+
+  return invoices?.reduce((sum, inv: any) => sum + (inv.arr_amount || 0), 0) || 0;
+}
+
+/**
+ * Get total NRR from invoices in date range
+ */
+export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): Promise<number> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { data: invoices } = await supabase
+    .from('invoices')
+    .select('nrr_amount')
+    .eq('user_id', user.id)
+    .gte('invoice_date', startDate.toISOString())
+    .lte('invoice_date', endDate.toISOString());
+
+  return invoices?.reduce((sum, inv: any) => sum + (inv.nrr_amount || 0), 0) || 0;
 }
 
 /**

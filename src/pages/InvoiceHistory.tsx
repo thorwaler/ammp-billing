@@ -14,7 +14,7 @@ import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocu
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Trash2, Eye, ExternalLink, Filter, FileText } from "lucide-react";
+import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, Loader2 } from "lucide-react";
 
 interface Invoice {
   id: string;
@@ -31,9 +31,15 @@ interface Invoice {
   modules_data: any;
   addons_data: any;
   support_document_data: SupportDocumentData | null;
+  source: string;
+  arr_amount: number;
+  nrr_amount: number;
+  xero_reference: string | null;
+  xero_status: string | null;
+  xero_contact_name: string | null;
   customer: {
     name: string;
-  };
+  } | null;
 }
 
 export default function InvoiceHistory() {
@@ -41,8 +47,10 @@ export default function InvoiceHistory() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [xeroFilter, setXeroFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -56,7 +64,7 @@ export default function InvoiceHistory() {
 
   useEffect(() => {
     filterInvoices();
-  }, [searchQuery, xeroFilter, invoices]);
+  }, [searchQuery, xeroFilter, sourceFilter, invoices]);
 
   const fetchInvoices = async () => {
     try {
@@ -83,9 +91,10 @@ export default function InvoiceHistory() {
     let filtered = [...invoices];
 
     if (searchQuery) {
-      filtered = filtered.filter(inv => 
-        inv.customer.name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = filtered.filter(inv => {
+        const customerName = inv.customer?.name || inv.xero_contact_name || '';
+        return customerName.toLowerCase().includes(searchQuery.toLowerCase());
+      });
     }
 
     if (xeroFilter !== "all") {
@@ -94,7 +103,28 @@ export default function InvoiceHistory() {
       );
     }
 
+    if (sourceFilter !== "all") {
+      filtered = filtered.filter(inv => inv.source === sourceFilter);
+    }
+
     setFilteredInvoices(filtered);
+  };
+
+  const handleSyncFromXero = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('xero-sync-invoices');
+      
+      if (error) throw error;
+      
+      toast.success(`Synced ${data.syncedCount} new invoices from Xero`);
+      fetchInvoices();
+    } catch (error: any) {
+      console.error('Error syncing from Xero:', error);
+      toast.error(error.message || 'Failed to sync from Xero');
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleDownloadSupportDoc = (invoice: Invoice) => {
@@ -186,12 +216,60 @@ export default function InvoiceHistory() {
     }).format(amount);
   };
 
+  // Calculate totals
+  const totalARR = filteredInvoices.reduce((sum, inv) => sum + (inv.arr_amount || 0), 0);
+  const totalNRR = filteredInvoices.reduce((sum, inv) => sum + (inv.nrr_amount || 0), 0);
+
   return (
     <Layout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Invoice History</h1>
-          <p className="text-muted-foreground">View and manage all your invoices</p>
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Invoice History</h1>
+            <p className="text-muted-foreground">View and manage all your invoices</p>
+          </div>
+          <Button onClick={handleSyncFromXero} disabled={syncing} variant="outline">
+            {syncing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Sync from Xero
+          </Button>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{formatCurrency(totalARR + totalNRR, 'EUR')}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">ARR (Platform Fees)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(totalARR, 'EUR')}</p>
+              <p className="text-xs text-muted-foreground">
+                {totalARR + totalNRR > 0 ? ((totalARR / (totalARR + totalNRR)) * 100).toFixed(1) : 0}% of total
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">NRR (Implementation)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-orange-500">{formatCurrency(totalNRR, 'EUR')}</p>
+              <p className="text-xs text-muted-foreground">
+                {totalARR + totalNRR > 0 ? ((totalNRR / (totalARR + totalNRR)) * 100).toFixed(1) : 0}% of total
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
         <Card>
@@ -203,13 +281,23 @@ export default function InvoiceHistory() {
                   {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''} found
                 </CardDescription>
               </div>
-              <div className="flex gap-2 w-full sm:w-auto">
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 <Input
                   placeholder="Search customers..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full sm:w-64"
+                  className="w-full sm:w-48"
                 />
+                <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                  <SelectTrigger className="w-[120px]">
+                    <SelectValue placeholder="Source" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sources</SelectItem>
+                    <SelectItem value="internal">Internal</SelectItem>
+                    <SelectItem value="xero">Xero</SelectItem>
+                  </SelectContent>
+                </Select>
                 <Select value={xeroFilter} onValueChange={setXeroFilter}>
                   <SelectTrigger className="w-[140px]">
                     <Filter className="h-4 w-4 mr-2" />
@@ -230,15 +318,17 @@ export default function InvoiceHistory() {
             ) : filteredInvoices.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">No invoices found</div>
             ) : (
-              <div className="rounded-md border">
+              <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
                       <TableHead>Customer</TableHead>
-                      <TableHead>Frequency</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
-                      <TableHead>Xero Status</TableHead>
+                      <TableHead className="text-right">ARR</TableHead>
+                      <TableHead className="text-right">NRR</TableHead>
+                      <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -248,15 +338,27 @@ export default function InvoiceHistory() {
                         <TableCell className="font-medium">
                           {format(new Date(invoice.invoice_date), 'MMM dd, yyyy')}
                         </TableCell>
-                        <TableCell>{invoice.customer.name}</TableCell>
-                        <TableCell className="capitalize">{invoice.billing_frequency}</TableCell>
+                        <TableCell>
+                          {invoice.customer?.name || invoice.xero_contact_name || 'Unknown'}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={invoice.source === 'xero' ? 'secondary' : 'outline'}>
+                            {invoice.source === 'xero' ? 'Xero' : 'Internal'}
+                          </Badge>
+                        </TableCell>
                         <TableCell className="text-right font-medium">
                           {formatCurrency(invoice.invoice_amount, invoice.currency)}
+                        </TableCell>
+                        <TableCell className="text-right text-primary">
+                          {formatCurrency(invoice.arr_amount || 0, invoice.currency)}
+                        </TableCell>
+                        <TableCell className="text-right text-orange-500">
+                          {formatCurrency(invoice.nrr_amount || 0, invoice.currency)}
                         </TableCell>
                         <TableCell>
                           {invoice.xero_invoice_id ? (
                             <Badge variant="default" className="flex items-center gap-1 w-fit">
-                              Sent
+                              {invoice.xero_status || 'Sent'}
                               <a 
                                 href={`https://go.xero.com/AccountsReceivable/View.aspx?InvoiceID=${invoice.xero_invoice_id}`}
                                 target="_blank"
@@ -348,7 +450,7 @@ export default function InvoiceHistory() {
               open={downloadDialogOpen}
               onOpenChange={setDownloadDialogOpen}
               documentData={selectedInvoice.support_document_data}
-              customerName={selectedInvoice.customer.name}
+              customerName={selectedInvoice.customer?.name || selectedInvoice.xero_contact_name || 'Unknown'}
               invoicePeriod={format(new Date(selectedInvoice.invoice_date), 'MMM yyyy')}
             />
           )}
