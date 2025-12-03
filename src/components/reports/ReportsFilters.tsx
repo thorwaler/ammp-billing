@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, subDays, subMonths, subYears, startOfYear } from "date-fns";
-import { CalendarIcon, Filter, X, Check } from "lucide-react";
+import { CalendarIcon, Filter, X, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import {
@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Input } from "@/components/ui/input";
 
 export interface ReportFilters {
   startDate?: Date;
@@ -59,6 +60,11 @@ export function ReportsFilters({
   const [customStartOpen, setCustomStartOpen] = useState(false);
   const [customEndOpen, setCustomEndOpen] = useState(false);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
+  const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+
+  const filteredCustomers = customers.filter((customer) =>
+    customer.name.toLowerCase().includes(customerSearchQuery.toLowerCase())
+  );
 
   const handleTimePresetChange = (preset: TimePreset) => {
     setTimePreset(preset);
@@ -224,7 +230,10 @@ export function ReportsFilters({
       </div>
 
       {/* Customer Multi-Select */}
-      <Popover open={customerDropdownOpen} onOpenChange={setCustomerDropdownOpen}>
+      <Popover open={customerDropdownOpen} onOpenChange={(open) => {
+        setCustomerDropdownOpen(open);
+        if (!open) setCustomerSearchQuery("");
+      }}>
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -240,6 +249,17 @@ export function ReportsFilters({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[250px] p-0" align="start">
+          <div className="p-2 border-b">
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search customers..."
+                value={customerSearchQuery}
+                onChange={(e) => setCustomerSearchQuery(e.target.value)}
+                className="h-8 pl-8"
+              />
+            </div>
+          </div>
           <div className="p-2 border-b flex items-center justify-between">
             <Button
               variant="ghost"
@@ -263,7 +283,7 @@ export function ReportsFilters({
           </div>
           <ScrollArea className="h-[200px]">
             <div className="p-2 space-y-1">
-              {customers.map((customer) => (
+              {filteredCustomers.map((customer) => (
                 <div
                   key={customer.id}
                   className="flex items-center space-x-2 p-2 rounded hover:bg-muted cursor-pointer"
@@ -279,9 +299,9 @@ export function ReportsFilters({
                   )}
                 </div>
               ))}
-              {customers.length === 0 && (
+              {filteredCustomers.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
-                  No customers found
+                  {customerSearchQuery ? "No matching customers" : "No customers found"}
                 </p>
               )}
             </div>
