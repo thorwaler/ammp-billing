@@ -8,6 +8,7 @@ import { Users, FileText, BarChart4, TrendingUp, PlusCircle, DollarSign } from "
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { checkAllContractExpirations } from "@/utils/contractExpiration";
 import { getDashboardStats, DashboardStats } from "@/services/analytics/dashboardAnalytics";
 
@@ -38,8 +39,20 @@ const Index = () => {
   const navigate = useNavigate();
   const quarterRange = getCurrentQuarterRange();
   const { user } = useAuth();
+  const { currency, convertToDisplayCurrency } = useCurrency();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Calculate total ARR in display currency
+  const displayARR = (() => {
+    if (!stats?.totalARR) return 0;
+    const { eurTotal, usdTotal } = stats.totalARR;
+    const eurInDisplay = convertToDisplayCurrency(eurTotal, "EUR");
+    const usdInDisplay = convertToDisplayCurrency(usdTotal, "USD");
+    return eurInDisplay + usdInDisplay;
+  })();
+  
+  const currencySymbol = currency === "EUR" ? "€" : "$";
   
   // Fetch real dashboard stats
   useEffect(() => {
@@ -118,7 +131,7 @@ const Index = () => {
           />
           <StatCard
             title="Annual Recurring Revenue"
-            value={isLoading ? "..." : `€${((stats?.totalARR || 0) / 1000).toFixed(0)}k`}
+            value={isLoading ? "..." : `${currencySymbol}${(displayARR / 1000).toFixed(0)}k`}
             icon={DollarSign}
             trend="neutral"
             description="Total ARR from active contracts"

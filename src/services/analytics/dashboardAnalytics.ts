@@ -7,6 +7,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { calculateInvoice, getFrequencyMultiplier } from '@/lib/invoiceCalculations';
 import { addMonths, format } from 'date-fns';
 
+export interface ARRByCurrency {
+  eurTotal: number;
+  usdTotal: number;
+}
+
 export interface DashboardStats {
   totalCustomers: number;
   activeContracts: number;
@@ -15,7 +20,7 @@ export interface DashboardStats {
   customersAddedThisQuarter: number;
   contractsAddedThisQuarter: number;
   mwAddedThisQuarter: number;
-  totalARR: number;
+  totalARR: ARRByCurrency;
 }
 
 export interface MWGrowthData {
@@ -171,7 +176,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 /**
  * Calculate total ARR (Annual Recurring Revenue) from all active non-POC contracts
  */
-async function calculateTotalARR(userId: string): Promise<number> {
+async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
   // Fetch all active non-POC contracts with pricing data
   const { data: contracts } = await supabase
     .from('contracts')
@@ -188,13 +193,14 @@ async function calculateTotalARR(userId: string): Promise<number> {
       portfolio_discount_tiers,
       custom_pricing,
       base_monthly_price,
-      site_charge_frequency
+      site_charge_frequency,
+      currency
     `)
     .eq('user_id', userId)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 
-  if (!contracts || contracts.length === 0) return 0;
+  if (!contracts || contracts.length === 0) return { eurTotal: 0, usdTotal: 0 };
 
   // Fetch customer AMMP capabilities for accurate MW calculation
   const customerIds = [...new Set(contracts.map(c => c.customer_id))];
@@ -205,7 +211,8 @@ async function calculateTotalARR(userId: string): Promise<number> {
 
   const customerMap = new Map(customers?.map(c => [c.id, c]) || []);
 
-  let totalARR = 0;
+  let eurTotal = 0;
+  let usdTotal = 0;
 
   for (const contract of contracts) {
     const customer = customerMap.get(contract.customer_id);
@@ -220,12 +227,14 @@ async function calculateTotalARR(userId: string): Promise<number> {
       ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
       : contract.initial_mw || 0;
 
+    let annualValue = 0;
+
     try {
       // For starter/capped packages, use minimum_annual_value + base_monthly_price * 12
       if (contract.package === 'starter' || contract.package === 'capped') {
         const annualBase = contract.minimum_annual_value || 0;
         const monthlyBase = contract.base_monthly_price || 0;
-        totalARR += annualBase + (monthlyBase * 12);
+        annualValue = annualBase + (monthlyBase * 12);
       } else if (totalMW > 0) {
         // For pro/custom/hybrid_tiered, calculate annual value (frequencyMultiplier = 1)
         const result = calculateInvoice({
@@ -248,14 +257,21 @@ async function calculateTotalARR(userId: string): Promise<number> {
           siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
           baseMonthlyPrice: contract.base_monthly_price || 0,
         });
-        totalARR += result.totalPrice;
+        annualValue = result.totalPrice;
+      }
+
+      // Add to appropriate currency bucket
+      if (contract.currency === 'USD') {
+        usdTotal += annualValue;
+      } else {
+        eurTotal += annualValue; // Default to EUR
       }
     } catch (error) {
       console.error('Error calculating ARR for contract:', contract.id, error);
     }
   }
 
-  return totalARR;
+  return { eurTotal, usdTotal };
 }
 
 export interface ReportFilters {
