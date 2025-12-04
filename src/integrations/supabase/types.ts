@@ -306,6 +306,8 @@ export type Database = {
           total_mw: number
           updated_at: string | null
           user_id: string
+          xero_amount_credited: number | null
+          xero_amount_credited_eur: number | null
           xero_contact_name: string | null
           xero_invoice_id: string | null
           xero_line_items: Json | null
@@ -336,6 +338,8 @@ export type Database = {
           total_mw: number
           updated_at?: string | null
           user_id: string
+          xero_amount_credited?: number | null
+          xero_amount_credited_eur?: number | null
           xero_contact_name?: string | null
           xero_invoice_id?: string | null
           xero_line_items?: Json | null
@@ -366,6 +370,8 @@ export type Database = {
           total_mw?: number
           updated_at?: string | null
           user_id?: string
+          xero_amount_credited?: number | null
+          xero_amount_credited_eur?: number | null
           xero_contact_name?: string | null
           xero_invoice_id?: string | null
           xero_line_items?: Json | null
