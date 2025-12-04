@@ -76,6 +76,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             customers (
             id,
             name,
+            nickname,
             mwp_managed,
             ammp_capabilities
           )
@@ -104,7 +105,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           return {
             contractId: c.id,
             customerId: customer.id,
-            customerName: customer.name,
+            customerName: customer.nickname || customer.name,
             nextInvoiceDate: c.next_invoice_date!,
             billingFrequency: c.billing_frequency || 'annual',
             currency: c.currency || 'EUR',

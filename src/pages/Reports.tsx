@@ -79,7 +79,7 @@ const Reports = () => {
   
   // Filter state
   const [filters, setFilters] = useState<ReportFilters>({});
-  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string; nickname?: string | null }[]>([]);
 
   // Fetch customers for filter dropdown
   const fetchCustomers = useCallback(async () => {
@@ -87,7 +87,7 @@ const Reports = () => {
     
     const { data } = await supabase
       .from('customers')
-      .select('id, name')
+      .select('id, name, nickname')
       .eq('user_id', user.id)
       .order('name');
     

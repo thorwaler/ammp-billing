@@ -1,4 +1,3 @@
-
 import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +13,7 @@ import ContractForm from "../contracts/ContractForm";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getModuleById, getAddonById } from "@/data/pricingData";
+import { getCustomerDisplayName } from "@/utils/customerUtils";
 
 const getDisplayName = (id: string, isModule: boolean): string => {
   // Special case for Satellite Data API
@@ -31,6 +31,7 @@ const getDisplayName = (id: string, isModule: boolean): string => {
 interface CustomerCardProps {
   id: string;
   name: string;
+  nickname?: string | null;
   location: string;
   contractValue: string;
   mwpManaged: number;
@@ -66,6 +67,7 @@ interface CustomerCardProps {
 export function CustomerCard({
   id,
   name,
+  nickname,
   location,
   contractValue,
   mwpManaged,
@@ -88,6 +90,7 @@ export function CustomerCard({
   onViewDetails,
   onContractCreated,
 }: CustomerCardProps) {
+  const displayName = getCustomerDisplayName({ name, nickname });
   const navigate = useNavigate();
   const [showEditForm, setShowEditForm] = useState(false);
   const [showContractForm, setShowContractForm] = useState(false);
@@ -176,7 +179,7 @@ export function CustomerCard({
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="flex flex-col">
-            <CardTitle className="text-lg">{name}</CardTitle>
+            <CardTitle className="text-lg">{displayName}</CardTitle>
             {contractCount > 1 && (
               <span className="text-xs text-muted-foreground mt-1">
                 {contractCount} contracts
@@ -240,7 +243,7 @@ export function CustomerCard({
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                      <DialogTitle>Edit Customer: {name}</DialogTitle>
+                      <DialogTitle>Edit Customer: {displayName}</DialogTitle>
                     </DialogHeader>
                     <CustomerForm 
                       onComplete={() => {
@@ -250,6 +253,7 @@ export function CustomerCard({
                       existingCustomer={{
                         id,
                         name,
+                        nickname,
                         location,
                         mwpManaged,
                         status,
@@ -421,10 +425,10 @@ export function CustomerCard({
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                      <DialogTitle>Edit Contract: {name}</DialogTitle>
+                      <DialogTitle>Edit Contract: {displayName}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, location, mwpManaged }}
+                      existingCustomer={{ id, name, nickname, location, mwpManaged }}
                       onComplete={() => {
                         setShowContractForm(false);
                         onContractCreated?.();
@@ -445,10 +449,10 @@ export function CustomerCard({
                   </DialogTrigger>
                   <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
-                      <DialogTitle>Add New Contract: {name}</DialogTitle>
+                      <DialogTitle>Add New Contract: {displayName}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, location, mwpManaged }}
+                      existingCustomer={{ id, name, nickname, location, mwpManaged }}
                       isNewContract={true}
                       onComplete={() => {
                         setShowAddContractForm(false);
