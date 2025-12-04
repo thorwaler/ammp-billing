@@ -220,14 +220,14 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {invoices.map((invoice) => (
         <InvoiceCard
-          key={invoice.customerId}
-          contractId={invoice.customerId}
+          key={invoice.contractId}
+          contractId={invoice.contractId}
           customerName={invoice.customerName}
           nextInvoiceDate={invoice.nextInvoiceDate}
           billingFrequency={invoice.billingFrequency}
           currency={invoice.currency}
           packageType={invoice.packageType}
-          estimatedAmount={calculateEstimatedAmount(invoice)}
+          estimatedAmount={invoice.packageType === 'per_site' ? null : calculateEstimatedAmount(invoice)}
           manualInvoicing={invoice.manualInvoicing}
           onCreateInvoice={() => onCreateInvoice(invoice)}
         />
