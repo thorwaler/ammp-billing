@@ -12,7 +12,7 @@ interface InvoiceCardProps {
   billingFrequency: string;
   currency?: string;
   packageType: string;
-  estimatedAmount: number;
+  estimatedAmount: number | null;
   manualInvoicing?: boolean;
   onCreateInvoice: () => void;
 }
@@ -73,9 +73,15 @@ export function InvoiceCard({
         </div>
         
         <div className="flex items-center gap-2 text-lg font-semibold">
-          <span className="text-muted-foreground">{currencySymbol}</span>
-          <span>{estimatedAmount.toLocaleString()}</span>
-          <span className="text-sm text-muted-foreground font-normal">estimated</span>
+          {estimatedAmount !== null ? (
+            <>
+              <span className="text-muted-foreground">{currencySymbol}</span>
+              <span>{estimatedAmount.toLocaleString()}</span>
+              <span className="text-sm text-muted-foreground font-normal">estimated</span>
+            </>
+          ) : (
+            <span className="text-sm text-muted-foreground font-normal">Check for sites due</span>
+          )}
         </div>
         
         <Button onClick={onCreateInvoice} className="w-full" size="sm">

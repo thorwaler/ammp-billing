@@ -519,6 +519,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       // Per-site package - set defaults
       form.setValue("onboardingFeePerSite", 1000);
       form.setValue("annualFeePerSite", 1000);
+      form.setValue("billingFrequency", "monthly"); // Per-site contracts are checked monthly
       form.setValue("modules", []);
       setShowCustomPricing(false);
     } else {
@@ -1002,6 +1003,34 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       </FormItem>
                     )}
                   />
+
+                  <FormField
+                    control={form.control}
+                    name="nextInvoiceDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <CalendarIcon className="h-4 w-4" />
+                          Next Invoice Check Date
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Monthly check for sites due for onboarding or annual renewal
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
+                  <p className="font-medium mb-1">Monthly Invoice Check</p>
+                  <p>Per-site contracts appear in the invoice creator every month to capture new site onboarding fees and annual renewal anniversaries as they occur.</p>
                 </div>
               </>
             )}
