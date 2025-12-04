@@ -212,7 +212,7 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Build Xero API URL with optional date filter
+    // Build Xero API where clause with optional date filter
     let whereClause = 'Type=="ACCREC"';
     if (fromDate) {
       // Parse the date and format for Xero API
@@ -223,28 +223,46 @@ Deno.serve(async (req) => {
       whereClause += ` AND Date >= DateTime(${year}, ${month}, ${day})`;
     }
     
-    const xeroUrl = `https://api.xero.com/api.xro/2.0/Invoices?Statuses=AUTHORISED,PAID&where=${encodeURIComponent(whereClause)}`;
-    console.log('Xero API URL:', xeroUrl);
-
-    // Fetch invoices from Xero (ACCREC = Accounts Receivable)
-    const xeroResponse = await fetch(xeroUrl, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'xero-tenant-id': tenantId,
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!xeroResponse.ok) {
-      const errorText = await xeroResponse.text();
-      console.error('Xero API error:', errorText);
-      throw new Error(`Xero API error: ${xeroResponse.status}`);
-    }
-
-    const xeroData = await xeroResponse.json();
-    const xeroInvoices = xeroData.Invoices || [];
+    // Fetch ALL invoices from Xero with pagination (100 per page limit)
+    let allXeroInvoices: any[] = [];
+    let page = 1;
+    let hasMorePages = true;
     
-    console.log(`Found ${xeroInvoices.length} invoices in Xero (filtered by date: ${fromDate || 'all time'})`);
+    while (hasMorePages) {
+      const xeroUrl = `https://api.xero.com/api.xro/2.0/Invoices?Statuses=AUTHORISED,PAID&page=${page}&where=${encodeURIComponent(whereClause)}`;
+      console.log(`Fetching Xero invoices page ${page}...`);
+
+      const xeroResponse = await fetch(xeroUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'xero-tenant-id': tenantId,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!xeroResponse.ok) {
+        const errorText = await xeroResponse.text();
+        console.error('Xero API error:', errorText);
+        throw new Error(`Xero API error: ${xeroResponse.status}`);
+      }
+
+      const xeroData = await xeroResponse.json();
+      const pageInvoices = xeroData.Invoices || [];
+      
+      console.log(`Page ${page}: fetched ${pageInvoices.length} invoices`);
+      
+      allXeroInvoices = [...allXeroInvoices, ...pageInvoices];
+      
+      // Xero returns max 100 invoices per page - if we get less, we've reached the end
+      if (pageInvoices.length < 100) {
+        hasMorePages = false;
+      } else {
+        page++;
+      }
+    }
+    
+    const xeroInvoices = allXeroInvoices;
+    console.log(`Found ${xeroInvoices.length} total invoices across ${page} page(s) (filtered by date: ${fromDate || 'all time'})`);
 
     // Get all customers to match by name
     const { data: customers } = await supabase
