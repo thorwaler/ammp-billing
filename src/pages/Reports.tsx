@@ -39,9 +39,11 @@ import {
   getARRvsNRRByMonth,
   getTotalARRFromInvoices,
   getTotalNRRFromInvoices,
+  getRevenueByCustomer,
   MWGrowthData,
   CustomerGrowthData,
   CustomerMWData,
+  CustomerRevenueData,
   ProjectedRevenueData,
   ActualRevenueData,
   ARRvsNRRData,
@@ -67,6 +69,7 @@ const Reports = () => {
   const [mwGrowthData, setMwGrowthData] = useState<MWGrowthData[]>([]);
   const [customerGrowthData, setCustomerGrowthData] = useState<CustomerGrowthData[]>([]);
   const [mwpByCustomer, setMwpByCustomer] = useState<CustomerMWData[]>([]);
+  const [revenueByCustomer, setRevenueByCustomer] = useState<CustomerRevenueData[]>([]);
   const [projectedRevenueData, setProjectedRevenueData] = useState<ProjectedRevenueData[]>([]);
   const [combinedRevenueData, setCombinedRevenueData] = useState<CombinedRevenueData[]>([]);
   const [arrNrrData, setArrNrrData] = useState<ARRvsNRRData[]>([]);
@@ -104,10 +107,11 @@ const Reports = () => {
       const startDate = filters.startDate || new Date(new Date().getFullYear(), 0, 1);
       const endDate = filters.endDate || new Date();
 
-      const [mwGrowth, customerGrowth, customerMWp, projected, actual, arrNrr, arrTotal, nrrTotal] = await Promise.all([
+      const [mwGrowth, customerGrowth, customerMWp, customerRevenue, projected, actual, arrNrr, arrTotal, nrrTotal] = await Promise.all([
         getMWGrowthByMonth(analyticsFilters),
         getCustomerGrowthByQuarter(analyticsFilters),
         getMWpByCustomer(8, analyticsFilters),
+        getRevenueByCustomer(8, analyticsFilters),
         getProjectedRevenueByMonth(12, analyticsFilters),
         getMonthlyRevenue(analyticsFilters),
         getARRvsNRRByMonth(analyticsFilters),
@@ -118,6 +122,12 @@ const Reports = () => {
       setMwGrowthData(mwGrowth);
       setCustomerGrowthData(customerGrowth);
       setMwpByCustomer(customerMWp);
+      setRevenueByCustomer(customerRevenue.map(r => ({
+        ...r,
+        total: convertToDisplayCurrency(r.total),
+        arr: convertToDisplayCurrency(r.arr),
+        nrr: convertToDisplayCurrency(r.nrr),
+      })));
       setTotalARR(convertToDisplayCurrency(arrTotal));
       setTotalNRR(convertToDisplayCurrency(nrrTotal));
       
@@ -489,6 +499,38 @@ const Reports = () => {
                   </ResponsiveContainer>
                 </div>
               ) : renderEmptyState("Sync AMMP data to see customer capacity.")}
+            </CardContent>
+          </Card>
+
+          {/* Revenue by Customer */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-ammp-teal" />
+                Revenue by Customer
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : revenueByCustomer.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={revenueByCustomer}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis dataKey="name" type="category" width={120} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar dataKey="arr" name="ARR (Platform Fees)" stackId="a" fill="#1A7D7D" />
+                      <Bar dataKey="nrr" name="NRR (Implementation)" stackId="a" fill="#F97316" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Create invoices to see revenue by customer.")}
             </CardContent>
           </Card>
         </div>
