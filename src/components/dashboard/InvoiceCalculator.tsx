@@ -116,6 +116,10 @@ interface Customer {
   retainerHours?: number;
   retainerHourlyRate?: number;
   retainerMinimumValue?: number;
+  // Per-site package fields
+  onboardingFeePerSite?: number;
+  annualFeePerSite?: number;
+  contractId?: string;
 }
 
 // Default modules and addons from shared data
@@ -191,7 +195,9 @@ export function InvoiceCalculator({
             period_end,
             retainer_hours,
             retainer_hourly_rate,
-            retainer_minimum_value
+            retainer_minimum_value,
+            onboarding_fee_per_site,
+            annual_fee_per_site
           )
         `)
         .eq('user_id', user.id)
@@ -222,7 +228,7 @@ export function InvoiceCalculator({
           return {
             id: c.id,
             name: c.name,
-            package: contract.package as 'starter' | 'pro' | 'custom' | 'hybrid_tiered',
+            package: contract.package as PackageType,
             mwManaged: Number(c.mwp_managed) || 0,
             modules,
             addons,
@@ -243,6 +249,10 @@ export function InvoiceCalculator({
             retainerHours: Number((contract as any).retainer_hours) || 0,
             retainerHourlyRate: Number((contract as any).retainer_hourly_rate) || 0,
             retainerMinimumValue: Number((contract as any).retainer_minimum_value) || 0,
+            // Per-site package fields
+            onboardingFeePerSite: Number((contract as any).onboarding_fee_per_site) || 1000,
+            annualFeePerSite: Number((contract as any).annual_fee_per_site) || 1000,
+            contractId: contract.id,
           };
         });
 

@@ -10,6 +10,25 @@ import {
   type MinimumChargeTier 
 } from "@/data/pricingData";
 
+export interface SiteBillingItem {
+  assetId: string;
+  assetName: string;
+  capacityKwp?: number;
+  onboardingDate?: string;
+  needsOnboarding: boolean;
+  needsAnnualRenewal: boolean;
+  onboardingFee?: number;
+  annualFee?: number;
+}
+
+export interface PerSiteCalculationResult {
+  onboardingCost: number;
+  annualSubscriptionCost: number;
+  sitesOnboarded: number;
+  sitesRenewed: number;
+  siteBreakdown: SiteBillingItem[];
+}
+
 export interface CalculationParams {
   packageType: string;
   totalMW: number;
@@ -47,6 +66,10 @@ export interface CalculationParams {
   retainerHours?: number;
   retainerHourlyRate?: number;
   retainerMinimumValue?: number;
+  // Per-site package fields
+  onboardingFeePerSite?: number;
+  annualFeePerSite?: number;
+  sitesToBill?: SiteBillingItem[];
 }
 
 export interface SiteMinimumPricingResult {
@@ -101,6 +124,8 @@ export interface CalculationResult {
   retainerCost: number;
   retainerCalculatedCost: number;
   retainerMinimumApplied: boolean;
+  // Per-site package results
+  perSiteBreakdown?: PerSiteCalculationResult;
 }
 
 /**
@@ -364,7 +389,48 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   result.basePricingCost = (params.baseMonthlyPrice || 0) * periodMonths;
   
   // Calculate based on package type
-  if (packageType === 'starter') {
+  if (packageType === 'per_site') {
+    // Per-site billing (UNHCR-style) - calculate based on site billing status
+    const onboardingFee = params.onboardingFeePerSite || 1000;
+    const annualFee = params.annualFeePerSite || 1000;
+    const sitesToBill = params.sitesToBill || [];
+    
+    let totalOnboarding = 0;
+    let totalAnnual = 0;
+    let sitesOnboarded = 0;
+    let sitesRenewed = 0;
+    
+    const siteBreakdown: SiteBillingItem[] = sitesToBill.map(site => {
+      const onboardingCost = site.needsOnboarding ? onboardingFee : 0;
+      const annualCost = site.needsAnnualRenewal ? annualFee : 0;
+      
+      if (site.needsOnboarding) {
+        totalOnboarding += onboardingFee;
+        sitesOnboarded++;
+      }
+      if (site.needsAnnualRenewal) {
+        totalAnnual += annualFee;
+        sitesRenewed++;
+      }
+      
+      return {
+        ...site,
+        onboardingFee: onboardingCost,
+        annualFee: annualCost
+      };
+    });
+    
+    result.perSiteBreakdown = {
+      onboardingCost: totalOnboarding,
+      annualSubscriptionCost: totalAnnual,
+      sitesOnboarded,
+      sitesRenewed,
+      siteBreakdown
+    };
+    
+    // For per-site, the "totalMWCost" represents the total site fees
+    result.totalMWCost = totalOnboarding + totalAnnual;
+  } else if (packageType === 'starter') {
     // Starter package - flat fee
     const minimumValue = minimumAnnualValue || 3000;
     result.starterPackageCost = minimumValue * frequencyMultiplier;
