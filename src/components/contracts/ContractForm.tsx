@@ -61,7 +61,7 @@ const contractFormSchema = z.object({
   contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc", "per_site"]),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -93,6 +93,9 @@ const contractFormSchema = z.object({
   retainerHours: z.coerce.number().optional(),
   retainerHourlyRate: z.coerce.number().optional(),
   retainerMinimumValue: z.coerce.number().optional(),
+  // Per-site package fields
+  onboardingFeePerSite: z.coerce.number().optional(),
+  annualFeePerSite: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -124,6 +127,8 @@ interface ContractFormProps {
     retainerHours?: number;
     retainerHourlyRate?: number;
     retainerMinimumValue?: number;
+    onboardingFeePerSite?: number;
+    annualFeePerSite?: number;
     maxMw?: number;
     currency: string;
     signedDate?: string;
@@ -510,6 +515,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       const filteredModules = currentModules.filter(id => id !== "technicalMonitoring");
       form.setValue("modules", filteredModules);
       setShowCustomPricing(false);
+    } else if (value === "per_site") {
+      // Per-site package - set defaults
+      form.setValue("onboardingFeePerSite", 1000);
+      form.setValue("annualFeePerSite", 1000);
+      form.setValue("modules", []);
+      setShowCustomPricing(false);
     } else {
       setShowCustomPricing(false);
     }
@@ -717,19 +728,22 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         contract_expiry_date: data.contractExpiryDate || null,
         period_start: data.periodStart || null,
         period_end: data.periodEnd || null,
-        modules: data.package === 'poc' ? [] : (data.modules || []),
-        addons: data.package === 'poc' ? [] : enhancedAddons,
-        custom_pricing: data.package === 'poc' ? {} : (data.customPricing || {}),
-        volume_discounts: data.package === 'poc' ? {} : (data.volumeDiscounts || {}),
-        portfolio_discount_tiers: data.package === 'poc' ? [] : portfolioDiscountTiers,
-        minimum_charge: data.package === 'poc' ? 0 : (data.minimumCharge || 0),
-        minimum_charge_tiers: data.package === 'poc' ? [] : minimumChargeTiers,
+        modules: (data.package === 'poc' || data.package === 'per_site') ? [] : (data.modules || []),
+        addons: (data.package === 'poc' || data.package === 'per_site') ? [] : enhancedAddons,
+        custom_pricing: (data.package === 'poc' || data.package === 'per_site') ? {} : (data.customPricing || {}),
+        volume_discounts: (data.package === 'poc' || data.package === 'per_site') ? {} : (data.volumeDiscounts || {}),
+        portfolio_discount_tiers: (data.package === 'poc' || data.package === 'per_site') ? [] : portfolioDiscountTiers,
+        minimum_charge: (data.package === 'poc' || data.package === 'per_site') ? 0 : (data.minimumCharge || 0),
+        minimum_charge_tiers: (data.package === 'poc' || data.package === 'per_site') ? [] : minimumChargeTiers,
         site_charge_frequency: data.siteChargeFrequency || "annual",
-        minimum_annual_value: data.package === 'poc' ? 0 : (data.minimumAnnualValue || 0),
-        base_monthly_price: data.package === 'poc' ? 0 : (data.baseMonthlyPrice || 0),
-        retainer_hours: data.package === 'poc' ? null : (data.retainerHours || null),
-        retainer_hourly_rate: data.package === 'poc' ? null : (data.retainerHourlyRate || null),
-        retainer_minimum_value: data.package === 'poc' ? null : (data.retainerMinimumValue || null),
+        minimum_annual_value: (data.package === 'poc' || data.package === 'per_site') ? 0 : (data.minimumAnnualValue || 0),
+        base_monthly_price: (data.package === 'poc' || data.package === 'per_site') ? 0 : (data.baseMonthlyPrice || 0),
+        retainer_hours: (data.package === 'poc' || data.package === 'per_site') ? null : (data.retainerHours || null),
+        retainer_hourly_rate: (data.package === 'poc' || data.package === 'per_site') ? null : (data.retainerHourlyRate || null),
+        retainer_minimum_value: (data.package === 'poc' || data.package === 'per_site') ? null : (data.retainerMinimumValue || null),
+        // Per-site package fields
+        onboarding_fee_per_site: data.package === 'per_site' ? (data.onboardingFeePerSite || 1000) : null,
+        annual_fee_per_site: data.package === 'per_site' ? (data.annualFeePerSite || 1000) : null,
         max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
@@ -869,6 +883,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="hybrid_tiered">Hybrid Tiered (Different pricing for on-grid vs hybrid sites)</SelectItem>
                       <SelectItem value="capped">Capped Package (Fixed annual fee with MW cap)</SelectItem>
                       <SelectItem value="poc">POC/Trial (No billing - expiry tracking only)</SelectItem>
+                      <SelectItem value="per_site">Per-Site (Fixed fees per site for onboarding + annual subscription)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -882,6 +897,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "Capped Package: Fixed fee (pro-rated for selected billing frequency) with optional MW cap alerts." :
                       watchPackage === "poc" ?
                       "POC/Trial: Track proof-of-concept trials with expiry notifications. No invoicing or billing." :
+                      watchPackage === "per_site" ?
+                      "Per-Site: Fixed fee per site for onboarding (one-time) and annual subscription. Sites are billed individually on their anniversary." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -909,8 +926,88 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               )}
             />
 
-            {/* Billing fields - hidden for POC */}
-            {watchPackage !== "poc" && (
+            {/* Per-site package fields */}
+            {watchPackage === "per_site" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" />
+                          Contract Currency
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="USD">USD ($)</SelectItem>
+                            <SelectItem value="EUR">EUR (€)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="onboardingFeePerSite"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Onboarding Fee Per Site ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="1000"
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          One-time setup fee charged when a site is onboarded
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="annualFeePerSite"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Annual Fee Per Site ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="1000"
+                            {...field}
+                            onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Annual subscription fee charged on each site's anniversary
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Billing fields - hidden for POC and per_site */}
+            {watchPackage !== "poc" && watchPackage !== "per_site" && (
               <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField

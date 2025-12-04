@@ -148,7 +148,13 @@ export const ADDONS: AddonDefinition[] = [
 ];
 
 // Package type definitions
-export type PackageType = "starter" | "pro" | "custom" | "hybrid_tiered" | "capped" | "poc";
+export type PackageType = "starter" | "pro" | "custom" | "hybrid_tiered" | "capped" | "poc" | "per_site";
+
+// Per-site pricing defaults (for UNHCR-style contracts)
+export const DEFAULT_PER_SITE_PRICING = {
+  onboardingFeePerSite: 1000,  // One-off setup cost per site
+  annualFeePerSite: 1000       // Annual subscription per site
+};
 export type BillingFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ComplexityLevel = "low" | "medium" | "high";
 export type SiteChargeFrequency = "monthly" | "annual";

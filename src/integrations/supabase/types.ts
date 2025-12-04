@@ -73,6 +73,7 @@ export type Database = {
       contracts: {
         Row: {
           addons: Json | null
+          annual_fee_per_site: number | null
           base_monthly_price: number | null
           billing_frequency: string | null
           company_name: string
@@ -97,6 +98,7 @@ export type Database = {
           ocr_data: Json | null
           ocr_processed_at: string | null
           ocr_status: string | null
+          onboarding_fee_per_site: number | null
           package: string
           period_end: string | null
           period_start: string | null
@@ -112,6 +114,7 @@ export type Database = {
         }
         Insert: {
           addons?: Json | null
+          annual_fee_per_site?: number | null
           base_monthly_price?: number | null
           billing_frequency?: string | null
           company_name: string
@@ -136,6 +139,7 @@ export type Database = {
           ocr_data?: Json | null
           ocr_processed_at?: string | null
           ocr_status?: string | null
+          onboarding_fee_per_site?: number | null
           package: string
           period_end?: string | null
           period_start?: string | null
@@ -151,6 +155,7 @@ export type Database = {
         }
         Update: {
           addons?: Json | null
+          annual_fee_per_site?: number | null
           base_monthly_price?: number | null
           billing_frequency?: string | null
           company_name?: string
@@ -175,6 +180,7 @@ export type Database = {
           ocr_data?: Json | null
           ocr_processed_at?: string | null
           ocr_status?: string | null
+          onboarding_fee_per_site?: number | null
           package?: string
           period_end?: string | null
           period_start?: string | null
@@ -505,6 +511,92 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      site_billing_status: {
+        Row: {
+          asset_capacity_kwp: number | null
+          asset_id: string
+          asset_name: string
+          contract_id: string
+          created_at: string | null
+          customer_id: string
+          id: string
+          last_annual_invoice_id: string | null
+          last_annual_payment_date: string | null
+          next_annual_due_date: string | null
+          onboarding_date: string | null
+          onboarding_fee_paid: boolean | null
+          onboarding_fee_paid_date: string | null
+          onboarding_invoice_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          asset_capacity_kwp?: number | null
+          asset_id: string
+          asset_name: string
+          contract_id: string
+          created_at?: string | null
+          customer_id: string
+          id?: string
+          last_annual_invoice_id?: string | null
+          last_annual_payment_date?: string | null
+          next_annual_due_date?: string | null
+          onboarding_date?: string | null
+          onboarding_fee_paid?: boolean | null
+          onboarding_fee_paid_date?: string | null
+          onboarding_invoice_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          asset_capacity_kwp?: number | null
+          asset_id?: string
+          asset_name?: string
+          contract_id?: string
+          created_at?: string | null
+          customer_id?: string
+          id?: string
+          last_annual_invoice_id?: string | null
+          last_annual_payment_date?: string | null
+          next_annual_due_date?: string | null
+          onboarding_date?: string | null
+          onboarding_fee_paid?: boolean | null
+          onboarding_fee_paid_date?: string | null
+          onboarding_invoice_id?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "site_billing_status_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_billing_status_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_billing_status_last_annual_invoice_id_fkey"
+            columns: ["last_annual_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "site_billing_status_onboarding_invoice_id_fkey"
+            columns: ["onboarding_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_roles: {
         Row: {
