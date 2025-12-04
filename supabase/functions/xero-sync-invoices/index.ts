@@ -268,10 +268,16 @@ Deno.serve(async (req) => {
       const currencyRate = xeroInv.CurrencyRate || null;
       const invoiceTotal = xeroInv.Total || 0;
       
+      // Get credit note amount (if any)
+      const amountCredited = xeroInv.AmountCredited || 0;
+      const amountCreditedEur = convertToEUR(amountCredited, currencyCode, currencyRate);
+      
       // Convert all amounts to EUR
       const invoiceAmountEur = convertToEUR(invoiceTotal, currencyCode, currencyRate);
       const arrAmountEur = convertToEUR(arrAmount, currencyCode, currencyRate);
       const nrrAmountEur = convertToEUR(nrrAmount, currencyCode, currencyRate);
+      
+      console.log(`Invoice ${xeroInv.InvoiceNumber}: Total=${invoiceTotal}, Credited=${amountCredited}, Currency=${currencyCode}`);
 
       // Insert invoice
       const { error: insertError } = await supabase
@@ -297,6 +303,8 @@ Deno.serve(async (req) => {
           arr_amount_eur: arrAmountEur,
           nrr_amount: nrrAmount,
           nrr_amount_eur: nrrAmountEur,
+          xero_amount_credited: amountCredited,
+          xero_amount_credited_eur: amountCreditedEur,
         });
 
       if (insertError) {

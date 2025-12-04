@@ -545,7 +545,7 @@ export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvs
 
   let query = supabase
     .from('invoices')
-    .select('invoice_date, invoice_amount, arr_amount, nrr_amount, customer_id')
+    .select('invoice_date, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customer_id')
     .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
@@ -557,17 +557,27 @@ export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvs
 
   const { data: invoices } = await query;
 
-  // Group by month
+  // Group by month (using net amounts after credits)
   const monthlyMap = new Map<string, { arr: number; nrr: number; total: number }>();
   
   invoices?.forEach((invoice: any) => {
     const date = new Date(invoice.invoice_date);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     const existing = monthlyMap.get(monthKey) || { arr: 0, nrr: 0, total: 0 };
+    
+    // Calculate net amounts (subtract credits proportionally)
+    const totalAmount = invoice.invoice_amount_eur || 0;
+    const creditAmount = invoice.xero_amount_credited_eur || 0;
+    const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
+    
+    const netArr = (invoice.arr_amount_eur || 0) * (1 - creditRatio);
+    const netNrr = (invoice.nrr_amount_eur || 0) * (1 - creditRatio);
+    const netTotal = totalAmount - creditAmount;
+    
     monthlyMap.set(monthKey, {
-      arr: existing.arr + (invoice.arr_amount || 0),
-      nrr: existing.nrr + (invoice.nrr_amount || 0),
-      total: existing.total + invoice.invoice_amount,
+      arr: existing.arr + netArr,
+      nrr: existing.nrr + netNrr,
+      total: existing.total + netTotal,
     });
   });
 
@@ -599,12 +609,19 @@ export async function getTotalARRFromInvoices(startDate: Date, endDate: Date): P
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('arr_amount_eur')
+    .select('arr_amount_eur, invoice_amount_eur, xero_amount_credited_eur')
     .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
-  return invoices?.reduce((sum, inv: any) => sum + (inv.arr_amount_eur || 0), 0) || 0;
+  // Calculate net ARR (subtract credits proportionally)
+  return invoices?.reduce((sum, inv: any) => {
+    const totalAmount = inv.invoice_amount_eur || 0;
+    const creditAmount = inv.xero_amount_credited_eur || 0;
+    const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
+    const netArr = (inv.arr_amount_eur || 0) * (1 - creditRatio);
+    return sum + netArr;
+  }, 0) || 0;
 }
 
 /**
@@ -616,12 +633,19 @@ export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): P
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('nrr_amount_eur')
+    .select('nrr_amount_eur, invoice_amount_eur, xero_amount_credited_eur')
     .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
-  return invoices?.reduce((sum, inv: any) => sum + (inv.nrr_amount_eur || 0), 0) || 0;
+  // Calculate net NRR (subtract credits proportionally)
+  return invoices?.reduce((sum, inv: any) => {
+    const totalAmount = inv.invoice_amount_eur || 0;
+    const creditAmount = inv.xero_amount_credited_eur || 0;
+    const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
+    const netNrr = (inv.nrr_amount_eur || 0) * (1 - creditRatio);
+    return sum + netNrr;
+  }, 0) || 0;
 }
 
 /**
