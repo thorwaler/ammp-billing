@@ -20,6 +20,7 @@ import { toast } from "@/hooks/use-toast";
 interface CustomerData {
   id: string;
   name: string;
+  nickname?: string | null;
   location: string;
   contractValue: number;
   contractCurrency: string;
@@ -76,6 +77,7 @@ const Customers = () => {
         .select(`
           id,
           name,
+          nickname,
           location,
           mwp_managed,
           status,
@@ -267,6 +269,7 @@ const Customers = () => {
       return {
         id: c.id,
         name: c.name,
+        nickname: c.nickname || null,
         location: c.location || 'N/A',
         contractValue: calculateContractValue(activeContract, mwpManaged, c.ammp_capabilities),
         contractCurrency: activeContract?.currency || 'USD',
@@ -638,17 +641,18 @@ const Customers = () => {
                         <DialogTrigger asChild>
                           <Button variant="outline" className="w-full justify-start">
                             <Users className="mr-2 h-4 w-4" />
-                            {customer.name} - {customer.mwpManaged} MWp
+                            {customer.nickname || customer.name} - {customer.mwpManaged} MWp
                           </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
                           <DialogHeader>
-                            <DialogTitle>Setup Contract: {customer.name}</DialogTitle>
+                            <DialogTitle>Setup Contract: {customer.nickname || customer.name}</DialogTitle>
                           </DialogHeader>
                           <ContractForm 
                             existingCustomer={{ 
                               id: customer.id, 
-                              name: customer.name, 
+                              name: customer.name,
+                              nickname: customer.nickname,
                               location: customer.location, 
                               mwpManaged: customer.mwpManaged 
                             }}
@@ -744,6 +748,7 @@ const Customers = () => {
               key={customer.id} 
               id={customer.id}
               name={customer.name}
+              nickname={customer.nickname}
               location={customer.location}
               contractValue={`${formatCurrency(convertToDisplayCurrency(customer.contractValue, customer.contractCurrency))}/year`}
               mwpManaged={customer.mwpManaged}

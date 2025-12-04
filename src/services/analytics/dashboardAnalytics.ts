@@ -462,7 +462,7 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
 
   const { data: customers } = await supabase
     .from('customers')
-    .select('id, name, mwp_managed')
+    .select('id, name, nickname, mwp_managed')
     .eq('user_id', user.id)
     .eq('status', 'active')
     .in('id', customerIds)
@@ -470,10 +470,13 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
     .order('mwp_managed', { ascending: false })
     .limit(limit);
 
-  return customers?.map(c => ({
-    name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
-    mwp: parseFloat((c.mwp_managed || 0).toFixed(2)),
-  })) || [];
+  return customers?.map(c => {
+    const displayName = c.nickname || c.name;
+    return {
+      name: displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName,
+      mwp: parseFloat((c.mwp_managed || 0).toFixed(2)),
+    };
+  }) || [];
 }
 
 export interface ARRvsNRRData {
@@ -665,7 +668,7 @@ export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters):
   // Build query with date range if specified
   let query = supabase
     .from('invoices')
-    .select('customer_id, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customers!inner(name)')
+    .select('customer_id, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customers!inner(name, nickname)')
     .eq('user_id', user.id);
 
   if (filters?.startDate) {
@@ -686,8 +689,8 @@ export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters):
 
   invoices.forEach((invoice: any) => {
     const customerId = invoice.customer_id;
-    const customerName = invoice.customers?.name || 'Unknown';
-    const existing = customerMap.get(customerId) || { name: customerName, total: 0, arr: 0, nrr: 0 };
+    const customerDisplayName = invoice.customers?.nickname || invoice.customers?.name || 'Unknown';
+    const existing = customerMap.get(customerId) || { name: customerDisplayName, total: 0, arr: 0, nrr: 0 };
 
     // Calculate net amounts (subtract credits proportionally)
     const totalAmount = invoice.invoice_amount_eur || 0;
@@ -699,7 +702,7 @@ export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters):
     const netTotal = totalAmount - creditAmount;
 
     customerMap.set(customerId, {
-      name: customerName,
+      name: customerDisplayName,
       total: existing.total + netTotal,
       arr: existing.arr + netArr,
       nrr: existing.nrr + netNrr,

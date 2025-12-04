@@ -29,6 +29,7 @@ export interface ReportFilters {
 interface Customer {
   id: string;
   name: string;
+  nickname?: string | null;
 }
 
 interface ReportsFiltersProps {
@@ -62,9 +63,10 @@ export function ReportsFilters({
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
 
-  const filteredCustomers = customers.filter((customer) =>
-    customer.name.toLowerCase().includes(customerSearchQuery.toLowerCase())
-  );
+  const filteredCustomers = customers.filter((customer) => {
+    const displayName = customer.nickname || customer.name;
+    return displayName.toLowerCase().includes(customerSearchQuery.toLowerCase());
+  });
 
   const handleTimePresetChange = (preset: TimePreset) => {
     setTimePreset(preset);
@@ -138,7 +140,10 @@ export function ReportsFilters({
     selectedCustomerCount === 0
       ? "All Customers"
       : selectedCustomerCount === 1
-      ? customers.find((c) => c.id === filters.customerIds?.[0])?.name || "1 customer"
+      ? (() => {
+          const c = customers.find((c) => c.id === filters.customerIds?.[0]);
+          return c?.nickname || c?.name || "1 customer";
+        })()
       : `${selectedCustomerCount} customers`;
 
   return (
@@ -283,22 +288,25 @@ export function ReportsFilters({
           </div>
           <ScrollArea className="h-[200px]">
             <div className="p-2 space-y-1">
-              {filteredCustomers.map((customer) => (
-                <div
-                  key={customer.id}
-                  className="flex items-center space-x-2 p-2 rounded hover:bg-muted cursor-pointer"
-                  onClick={() => handleCustomerToggle(customer.id)}
-                >
-                  <Checkbox
-                    checked={filters.customerIds?.includes(customer.id) || false}
-                    onCheckedChange={() => handleCustomerToggle(customer.id)}
-                  />
-                  <span className="text-sm truncate flex-1">{customer.name}</span>
-                  {filters.customerIds?.includes(customer.id) && (
-                    <Check className="h-4 w-4 text-primary" />
-                  )}
-                </div>
-              ))}
+              {filteredCustomers.map((customer) => {
+                const displayName = customer.nickname || customer.name;
+                return (
+                  <div
+                    key={customer.id}
+                    className="flex items-center space-x-2 p-2 rounded hover:bg-muted cursor-pointer"
+                    onClick={() => handleCustomerToggle(customer.id)}
+                  >
+                    <Checkbox
+                      checked={filters.customerIds?.includes(customer.id) || false}
+                      onCheckedChange={() => handleCustomerToggle(customer.id)}
+                    />
+                    <span className="text-sm truncate flex-1">{displayName}</span>
+                    {filters.customerIds?.includes(customer.id) && (
+                      <Check className="h-4 w-4 text-primary" />
+                    )}
+                  </div>
+                );
+              })}
               {filteredCustomers.length === 0 && (
                 <p className="text-sm text-muted-foreground text-center py-4">
                   {customerSearchQuery ? "No matching customers" : "No customers found"}

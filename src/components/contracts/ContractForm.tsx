@@ -106,6 +106,7 @@ interface ContractFormProps {
   existingCustomer?: {
     id: string;
     name: string;
+    nickname?: string | null;
     location?: string;
     mwpManaged: number;
   };

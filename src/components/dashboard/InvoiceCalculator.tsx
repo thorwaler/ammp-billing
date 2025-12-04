@@ -92,6 +92,7 @@ interface ContractAddon {
 interface Customer {
   id: string;
   name: string;
+  nickname?: string | null;
   mwManaged: number;
   lastInvoiced?: string;
   signedDate?: string;
@@ -179,6 +180,7 @@ export function InvoiceCalculator({
         .select(`
         id,
           name,
+          nickname,
           mwp_managed,
           ammp_capabilities,
           contracts (
@@ -234,6 +236,7 @@ export function InvoiceCalculator({
           return {
             id: c.id,
             name: c.name,
+            nickname: c.nickname,
             package: contract.package as PackageType,
             mwManaged: Number(c.mwp_managed) || 0,
             modules,
@@ -1029,7 +1032,7 @@ export function InvoiceCalculator({
             await monitorMWAndNotify(
               user.id,
               contractData.id,
-              selectedCustomer.name,
+              selectedCustomer.nickname || selectedCustomer.name,
               Number(mwManaged)
             );
           }
@@ -1167,7 +1170,7 @@ export function InvoiceCalculator({
       // Generate support document data
       const docData = await generateSupportDocumentData(
         selectedCustomer.id,
-        selectedCustomer.name,
+        selectedCustomer.nickname || selectedCustomer.name,
         selectedCustomer.currency,
         invoiceDate,
         result,

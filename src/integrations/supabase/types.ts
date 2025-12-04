@@ -246,6 +246,7 @@ export type Database = {
           manual_status_override: boolean | null
           mwp_managed: number | null
           name: string
+          nickname: string | null
           status: string | null
           updated_at: string
           user_id: string
@@ -264,6 +265,7 @@ export type Database = {
           manual_status_override?: boolean | null
           mwp_managed?: number | null
           name: string
+          nickname?: string | null
           status?: string | null
           updated_at?: string
           user_id: string
@@ -282,6 +284,7 @@ export type Database = {
           manual_status_override?: boolean | null
           mwp_managed?: number | null
           name?: string
+          nickname?: string | null
           status?: string | null
           updated_at?: string
           user_id?: string

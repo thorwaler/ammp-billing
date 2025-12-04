@@ -39,6 +39,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   }>>(new Map());
   const [formData, setFormData] = useState({
     name: existingCustomer?.name || "",
+    nickname: existingCustomer?.nickname || "",
     location: existingCustomer?.location || "",
     mwpManaged: existingCustomer?.mwpManaged || "",
     status: existingCustomer?.status || "active",
@@ -263,6 +264,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       
       const customerData = {
         name: formData.name,
+        nickname: formData.nickname || null,
         location: formData.location,
         mwp_managed: syncedCapabilities 
           ? syncedCapabilities.totalMW 
@@ -324,6 +326,16 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
               onChange={handleInputChange}
               placeholder="Enter customer name"
               required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nickname">Display Name / Nickname (optional)</Label>
+            <Input
+              id="nickname"
+              name="nickname"
+              value={formData.nickname}
+              onChange={handleInputChange}
+              placeholder="e.g., UNHCR (shown in dashboards instead of official name)"
             />
           </div>
         </div>
