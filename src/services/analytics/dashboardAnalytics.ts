@@ -599,12 +599,12 @@ export async function getTotalARRFromInvoices(startDate: Date, endDate: Date): P
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('arr_amount')
+    .select('arr_amount_eur')
     .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
-  return invoices?.reduce((sum, inv: any) => sum + (inv.arr_amount || 0), 0) || 0;
+  return invoices?.reduce((sum, inv: any) => sum + (inv.arr_amount_eur || 0), 0) || 0;
 }
 
 /**
@@ -616,12 +616,12 @@ export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): P
 
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('nrr_amount')
+    .select('nrr_amount_eur')
     .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
-  return invoices?.reduce((sum, inv: any) => sum + (inv.nrr_amount || 0), 0) || 0;
+  return invoices?.reduce((sum, inv: any) => sum + (inv.nrr_amount_eur || 0), 0) || 0;
 }
 
 /**
