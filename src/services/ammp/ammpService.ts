@@ -292,8 +292,86 @@ export async function syncCustomerAMMPData(
     
   if (error) throw error;
   
+  // 11. Auto-populate site_billing_status for per_site contracts
+  await populateSiteBillingStatus(customerId, user.id, summary.assetBreakdown);
+  
   return {
     summary,
     anomalies,
   };
+}
+
+/**
+ * Auto-populate site_billing_status for customers with per_site contracts
+ * Creates/updates billing records for each asset
+ */
+async function populateSiteBillingStatus(
+  customerId: string,
+  userId: string,
+  assetBreakdown: Array<{
+    assetId: string;
+    assetName: string;
+    totalMW: number;
+    onboardingDate?: string | null;
+  }>
+) {
+  // Check if customer has a per_site contract
+  const { data: contracts } = await supabase
+    .from('contracts')
+    .select('id, onboarding_fee_per_site, annual_fee_per_site')
+    .eq('customer_id', customerId)
+    .eq('user_id', userId)
+    .eq('package', 'per_site')
+    .eq('contract_status', 'active');
+  
+  if (!contracts || contracts.length === 0) {
+    // No per_site contract, skip
+    return;
+  }
+  
+  const contract = contracts[0];
+  
+  // For each asset, create or update site_billing_status
+  for (const asset of assetBreakdown) {
+    // Check if record already exists
+    const { data: existing } = await supabase
+      .from('site_billing_status')
+      .select('id, onboarding_fee_paid')
+      .eq('asset_id', asset.assetId)
+      .eq('contract_id', contract.id)
+      .maybeSingle();
+    
+    if (existing) {
+      // Update existing record (only update name/capacity, preserve billing status)
+      await supabase
+        .from('site_billing_status')
+        .update({
+          asset_name: asset.assetName,
+          asset_capacity_kwp: asset.totalMW * 1000, // Convert MW to kWp
+          onboarding_date: asset.onboardingDate || null,
+        })
+        .eq('id', existing.id);
+    } else {
+      // Create new record
+      const onboardingDate = asset.onboardingDate ? new Date(asset.onboardingDate) : new Date();
+      const nextAnnualDue = new Date(onboardingDate);
+      nextAnnualDue.setFullYear(nextAnnualDue.getFullYear() + 1);
+      
+      await supabase
+        .from('site_billing_status')
+        .insert({
+          user_id: userId,
+          contract_id: contract.id,
+          customer_id: customerId,
+          asset_id: asset.assetId,
+          asset_name: asset.assetName,
+          asset_capacity_kwp: asset.totalMW * 1000,
+          onboarding_date: onboardingDate.toISOString(),
+          onboarding_fee_paid: false,
+          next_annual_due_date: nextAnnualDue.toISOString(),
+        });
+    }
+  }
+  
+  console.log(`[AMMP Sync] Populated site_billing_status for ${assetBreakdown.length} assets`);
 }

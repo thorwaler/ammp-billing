@@ -12,7 +12,8 @@ import { generateSupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { exportToExcel, exportToPDF, generateFilename } from "@/lib/supportDocumentExport";
 import { SupportDocument } from "@/components/invoices/SupportDocument";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
-import { getApplicableDiscount } from "@/lib/invoiceCalculations";
+import { getApplicableDiscount, SiteBillingItem } from "@/lib/invoiceCalculations";
+import { SiteBillingSelector } from "@/components/invoices/SiteBillingSelector";
 import { 
   Select,
   SelectContent,
@@ -161,6 +162,11 @@ export function InvoiceCalculator({
   const { formatCurrency } = useCurrency();
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
+  
+  // Per-site billing state
+  const [siteBillingData, setSiteBillingData] = useState<SiteBillingItem[]>([]);
+  const [selectedSitesToBill, setSelectedSitesToBill] = useState<SiteBillingItem[]>([]);
+  const [loadingSiteBilling, setLoadingSiteBilling] = useState(false);
 
   // Load customers from database on mount
   useEffect(() => {
@@ -428,6 +434,74 @@ export function InvoiceCalculator({
     }
   }, [customer, customers]);
 
+  // Fetch site billing status for per_site packages
+  useEffect(() => {
+    const fetchSiteBillingStatus = async () => {
+      if (!selectedCustomer || selectedCustomer.package !== 'per_site' || !selectedCustomer.contractId) {
+        setSiteBillingData([]);
+        setSelectedSitesToBill([]);
+        return;
+      }
+      
+      setLoadingSiteBilling(true);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        const { data: sites, error } = await supabase
+          .from('site_billing_status')
+          .select('*')
+          .eq('contract_id', selectedCustomer.contractId)
+          .eq('user_id', user.id);
+        
+        if (error) {
+          console.error('Error fetching site billing status:', error);
+          return;
+        }
+        
+        if (!sites || sites.length === 0) {
+          // No site billing records - might need AMMP sync
+          console.log('No site billing records found for contract');
+          setSiteBillingData([]);
+          setSelectedSitesToBill([]);
+          return;
+        }
+        
+        // Determine which sites need billing
+        const currentDate = invoiceDate || new Date();
+        
+        const siteBillingItems: SiteBillingItem[] = sites.map(site => {
+          const needsOnboarding = !site.onboarding_fee_paid;
+          const needsAnnualRenewal = site.next_annual_due_date 
+            ? new Date(site.next_annual_due_date) <= currentDate
+            : false;
+          
+          return {
+            assetId: site.asset_id,
+            assetName: site.asset_name,
+            capacityKwp: site.asset_capacity_kwp || undefined,
+            onboardingDate: site.onboarding_date || undefined,
+            needsOnboarding,
+            needsAnnualRenewal
+          };
+        });
+        
+        setSiteBillingData(siteBillingItems);
+        
+        // Auto-select sites that need billing
+        const sitesToBill = siteBillingItems.filter(s => s.needsOnboarding || s.needsAnnualRenewal);
+        setSelectedSitesToBill(sitesToBill);
+        
+      } catch (error) {
+        console.error('Error fetching site billing status:', error);
+      } finally {
+        setLoadingSiteBilling(false);
+      }
+    };
+    
+    fetchSiteBillingStatus();
+  }, [selectedCustomer?.id, selectedCustomer?.package, selectedCustomer?.contractId, invoiceDate]);
+
   // Auto-calculate when key fields change
   useEffect(() => {
     // Only auto-calculate if we have the minimum required data
@@ -677,6 +751,10 @@ export function InvoiceCalculator({
       retainerHours: selectedCustomer.retainerHours,
       retainerHourlyRate: selectedCustomer.retainerHourlyRate,
       retainerMinimumValue: selectedCustomer.retainerMinimumValue,
+      // Per-site package fields
+      onboardingFeePerSite: selectedCustomer.onboardingFeePerSite,
+      annualFeePerSite: selectedCustomer.annualFeePerSite,
+      sitesToBill: selectedCustomer.package === 'per_site' ? selectedSitesToBill : undefined,
     };
     
     calculationResult = calculateInvoice(params);
@@ -797,13 +875,36 @@ export function InvoiceCalculator({
         });
       }
       
+      // Add per-site billing line items (Platform Fee - ARR)
+      if (result.perSiteBreakdown) {
+        if (result.perSiteBreakdown.onboardingCost > 0) {
+          lineItems.push({
+            Description: `Site Onboarding Fees (${result.perSiteBreakdown.sitesOnboarded} sites)`,
+            Quantity: result.perSiteBreakdown.sitesOnboarded,
+            UnitAmount: selectedCustomer.onboardingFeePerSite || 1000,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+        if (result.perSiteBreakdown.annualSubscriptionCost > 0) {
+          lineItems.push({
+            Description: `Annual Subscription Fees (${result.perSiteBreakdown.sitesRenewed} sites)`,
+            Quantity: result.perSiteBreakdown.sitesRenewed,
+            UnitAmount: selectedCustomer.annualFeePerSite || 1000,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
+      
       // Calculate ARR (Platform Fees - all MW-based pricing)
       const arrAmount = (result.basePricingCost || 0) +
         (result.starterPackageCost || 0) +
         result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
         (result.minimumContractAdjustment || 0) +
         (result.minimumCharges || 0) +
-        (result.retainerCost || 0);
+        (result.retainerCost || 0) +
+        // Per-site fees are ARR
+        (result.perSiteBreakdown?.onboardingCost || 0) +
+        (result.perSiteBreakdown?.annualSubscriptionCost || 0);
 
       // Calculate NRR (Implementation Fees - all addons)
       const nrrAmount = result.addonCosts.reduce((sum, ac) => sum + ac.cost, 0);
@@ -886,7 +987,10 @@ export function InvoiceCalculator({
           result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
           (result.minimumContractAdjustment || 0) +
           (result.minimumCharges || 0) +
-          (result.retainerCost || 0);
+          (result.retainerCost || 0) +
+          // Per-site fees are ARR
+          (result.perSiteBreakdown?.onboardingCost || 0) +
+          (result.perSiteBreakdown?.annualSubscriptionCost || 0);
         const storedNrrAmount = result.addonCosts.reduce((sum, ac) => sum + ac.cost, 0);
 
         const { data: insertedInvoice, error: invoiceError } = await supabase
@@ -930,6 +1034,40 @@ export function InvoiceCalculator({
             );
           }
           
+          // Update site_billing_status for per_site packages
+          if (selectedCustomer.package === 'per_site' && selectedSitesToBill.length > 0) {
+            const now = new Date().toISOString();
+            
+            for (const site of selectedSitesToBill) {
+              const updates: any = {};
+              
+              if (site.needsOnboarding) {
+                updates.onboarding_fee_paid = true;
+                updates.onboarding_fee_paid_date = now;
+                updates.onboarding_invoice_id = insertedInvoice.id;
+              }
+              
+              if (site.needsAnnualRenewal) {
+                updates.last_annual_payment_date = now;
+                updates.last_annual_invoice_id = insertedInvoice.id;
+                // Set next annual due date to 1 year from now
+                const nextDue = new Date();
+                nextDue.setFullYear(nextDue.getFullYear() + 1);
+                updates.next_annual_due_date = nextDue.toISOString();
+              }
+              
+              if (Object.keys(updates).length > 0) {
+                await supabase
+                  .from('site_billing_status')
+                  .update(updates)
+                  .eq('asset_id', site.assetId)
+                  .eq('contract_id', selectedCustomer.contractId);
+              }
+            }
+            
+            console.log(`[Invoice] Updated site_billing_status for ${selectedSitesToBill.length} sites`);
+          }
+          
           // Generate support document data and store it
           await generateAndStoreSupportDocument(insertedInvoice.id);
         }
@@ -952,6 +1090,8 @@ export function InvoiceCalculator({
         setBillingFrequency("annual");
         setLastInvoiceMW(null);
         setMwChange(0);
+        setSiteBillingData([]);
+        setSelectedSitesToBill([]);
       }, 2000);
     } catch (error) {
       console.error('Error sending invoice to Xero:', error);
@@ -1223,7 +1363,36 @@ export function InvoiceCalculator({
                 )}
               </div>
               
-              {(selectedCustomer?.volumeDiscounts?.siteSizeDiscount != null && 
+              {/* Per-site billing selector for per_site packages */}
+              {selectedCustomer.package === 'per_site' && (
+                <div className="space-y-2">
+                  {loadingSiteBilling ? (
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading site billing status...
+                    </div>
+                  ) : siteBillingData.length === 0 ? (
+                    <Card className="border-dashed">
+                      <CardContent className="pt-6">
+                        <p className="text-muted-foreground text-center text-sm">
+                          No site billing records found. Please sync AMMP data first to populate site billing status.
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ) : (
+                    <SiteBillingSelector
+                      sites={siteBillingData}
+                      selectedSites={selectedSitesToBill}
+                      onSelectionChange={setSelectedSitesToBill}
+                      onboardingFee={selectedCustomer.onboardingFeePerSite || 1000}
+                      annualFee={selectedCustomer.annualFeePerSite || 1000}
+                      currency={selectedCustomer.currency}
+                    />
+                  )}
+                </div>
+              )}
+              
+              {(selectedCustomer?.volumeDiscounts?.siteSizeDiscount != null &&
                 selectedCustomer?.volumeDiscounts?.siteSizeDiscount > 0) && (
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -1541,6 +1710,27 @@ export function InvoiceCalculator({
                     <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.hybrid.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
                     <span>{formatCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Per-site billing breakdown */}
+            {result.perSiteBreakdown && (result.perSiteBreakdown.onboardingCost > 0 || result.perSiteBreakdown.annualSubscriptionCost > 0) && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm">Per-Site Billing:</h4>
+                <div className="space-y-1 text-sm pl-2">
+                  {result.perSiteBreakdown.onboardingCost > 0 && (
+                    <div className="flex justify-between">
+                      <span>Site Onboarding ({result.perSiteBreakdown.sitesOnboarded} sites × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.onboardingFeePerSite || 1000}):</span>
+                      <span>{formatCurrency(result.perSiteBreakdown.onboardingCost)}</span>
+                    </div>
+                  )}
+                  {result.perSiteBreakdown.annualSubscriptionCost > 0 && (
+                    <div className="flex justify-between">
+                      <span>Annual Subscription ({result.perSiteBreakdown.sitesRenewed} sites × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.annualFeePerSite || 1000}):</span>
+                      <span>{formatCurrency(result.perSiteBreakdown.annualSubscriptionCost)}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
