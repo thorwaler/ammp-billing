@@ -65,7 +65,7 @@ export async function getTotalMWAdded(
 }
 
 /**
- * Get total revenue between two dates
+ * Get total revenue between two dates (uses EUR amounts for currency-agnostic totals)
  */
 export async function getTotalRevenue(
   startDate: Date,
@@ -73,13 +73,14 @@ export async function getTotalRevenue(
 ): Promise<number> {
   const { data, error } = await supabase
     .from('invoices')
-    .select('invoice_amount')
+    .select('invoice_amount, invoice_amount_eur')
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
   if (error) throw error;
 
-  return data?.reduce((sum, inv) => sum + (inv.invoice_amount || 0), 0) || 0;
+  // Use EUR amount if available, fallback to original amount
+  return data?.reduce((sum, inv: any) => sum + (inv.invoice_amount_eur ?? inv.invoice_amount ?? 0), 0) || 0;
 }
 
 /**

@@ -109,6 +109,35 @@ function calculateARRNRR(lineItems: any[], accountMappings: Record<string, 'recu
   return { arrAmount, nrrAmount };
 }
 
+// Convert amount to EUR using Xero's currency rate
+function convertToEUR(amount: number, currencyCode: string, currencyRate: number | null): number {
+  if (currencyCode === 'EUR') return amount;
+  
+  // If Xero provides a currency rate (to base currency), use it
+  // Xero's CurrencyRate is the rate from invoice currency to org's base currency
+  if (currencyRate && currencyRate > 0) {
+    // If base currency is EUR, divide by rate
+    // CurrencyRate in Xero is typically "invoice currency / base currency"
+    return amount / currencyRate;
+  }
+  
+  // Fallback rates if no rate provided
+  const fallbackRates: Record<string, number> = {
+    'USD': 1.09,  // 1 EUR = 1.09 USD
+    'NGN': 1600,  // 1 EUR = 1600 NGN
+    'GBP': 0.86,  // 1 EUR = 0.86 GBP
+  };
+  
+  const rate = fallbackRates[currencyCode];
+  if (rate) {
+    return amount / rate;
+  }
+  
+  // If unknown currency, return original amount with warning
+  console.warn(`Unknown currency ${currencyCode}, no conversion applied`);
+  return amount;
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -232,6 +261,16 @@ Deno.serve(async (req) => {
       // Calculate ARR/NRR from line items
       const lineItems = xeroInv.LineItems || [];
       const { arrAmount, nrrAmount } = calculateARRNRR(lineItems, accountMappings);
+      
+      // Get currency info for EUR conversion
+      const currencyCode = xeroInv.CurrencyCode || 'EUR';
+      const currencyRate = xeroInv.CurrencyRate || null;
+      const invoiceTotal = xeroInv.Total || 0;
+      
+      // Convert all amounts to EUR
+      const invoiceAmountEur = convertToEUR(invoiceTotal, currencyCode, currencyRate);
+      const arrAmountEur = convertToEUR(arrAmount, currencyCode, currencyRate);
+      const nrrAmountEur = convertToEUR(nrrAmount, currencyCode, currencyRate);
 
       // Insert invoice
       const { error: insertError } = await supabase
@@ -240,11 +279,12 @@ Deno.serve(async (req) => {
           user_id: user.id,
           customer_id: customerId || null,
           invoice_date: parseXeroDate(xeroInv.Date) || new Date().toISOString().split('T')[0],
-          invoice_amount: xeroInv.Total || 0,
+          invoice_amount: invoiceTotal,
+          invoice_amount_eur: invoiceAmountEur,
           billing_frequency: 'unknown', // Can't determine from Xero
           mw_managed: 0,
           total_mw: 0,
-          currency: xeroInv.CurrencyCode || 'EUR',
+          currency: currencyCode,
           source: 'xero',
           xero_invoice_id: xeroInvoiceId,
           xero_reference: xeroInv.InvoiceNumber,
@@ -253,7 +293,9 @@ Deno.serve(async (req) => {
           xero_line_items: lineItems,
           xero_synced_at: new Date().toISOString(),
           arr_amount: arrAmount,
+          arr_amount_eur: arrAmountEur,
           nrr_amount: nrrAmount,
+          nrr_amount_eur: nrrAmountEur,
         });
 
       if (insertError) {

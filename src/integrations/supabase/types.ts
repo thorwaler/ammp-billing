@@ -286,6 +286,7 @@ export type Database = {
         Row: {
           addons_data: Json | null
           arr_amount: number | null
+          arr_amount_eur: number | null
           billing_frequency: string
           contract_id: string | null
           created_at: string | null
@@ -293,11 +294,13 @@ export type Database = {
           customer_id: string
           id: string
           invoice_amount: number
+          invoice_amount_eur: number | null
           invoice_date: string
           modules_data: Json | null
           mw_change: number | null
           mw_managed: number
           nrr_amount: number | null
+          nrr_amount_eur: number | null
           source: string | null
           support_document_data: Json | null
           total_mw: number
@@ -313,6 +316,7 @@ export type Database = {
         Insert: {
           addons_data?: Json | null
           arr_amount?: number | null
+          arr_amount_eur?: number | null
           billing_frequency: string
           contract_id?: string | null
           created_at?: string | null
@@ -320,11 +324,13 @@ export type Database = {
           customer_id: string
           id?: string
           invoice_amount: number
+          invoice_amount_eur?: number | null
           invoice_date: string
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed: number
           nrr_amount?: number | null
+          nrr_amount_eur?: number | null
           source?: string | null
           support_document_data?: Json | null
           total_mw: number
@@ -340,6 +346,7 @@ export type Database = {
         Update: {
           addons_data?: Json | null
           arr_amount?: number | null
+          arr_amount_eur?: number | null
           billing_frequency?: string
           contract_id?: string | null
           created_at?: string | null
@@ -347,11 +354,13 @@ export type Database = {
           customer_id?: string
           id?: string
           invoice_amount?: number
+          invoice_amount_eur?: number | null
           invoice_date?: string
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed?: number
           nrr_amount?: number | null
+          nrr_amount_eur?: number | null
           source?: string | null
           support_document_data?: Json | null
           total_mw?: number
