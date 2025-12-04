@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Layout } from "@/components/layout/Layout";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCurrency } from "@/contexts/CurrencyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -60,6 +61,7 @@ const getNetAmount = (grossAmount: number, grossTotal: number, creditAmount: num
 
 export default function InvoiceHistory() {
   const { user } = useAuth();
+  const { formatCurrency: formatDisplayCurrency, convertToDisplayCurrency } = useCurrency();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [filteredInvoices, setFilteredInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -304,7 +306,7 @@ export default function InvoiceHistory() {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(totalARR + totalNRR, 'EUR')}</p>
+              <p className="text-2xl font-bold">{formatDisplayCurrency(convertToDisplayCurrency(totalARR + totalNRR, "EUR"))}</p>
             </CardContent>
           </Card>
           <Card>
@@ -312,7 +314,7 @@ export default function InvoiceHistory() {
               <CardTitle className="text-sm font-medium text-muted-foreground">ARR (Platform Fees)</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-primary">{formatCurrency(totalARR, 'EUR')}</p>
+              <p className="text-2xl font-bold text-primary">{formatDisplayCurrency(convertToDisplayCurrency(totalARR, "EUR"))}</p>
               <p className="text-xs text-muted-foreground">
                 {totalARR + totalNRR > 0 ? ((totalARR / (totalARR + totalNRR)) * 100).toFixed(1) : 0}% of total
               </p>
@@ -323,7 +325,7 @@ export default function InvoiceHistory() {
               <CardTitle className="text-sm font-medium text-muted-foreground">NRR (Implementation)</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-orange-500">{formatCurrency(totalNRR, 'EUR')}</p>
+              <p className="text-2xl font-bold text-orange-500">{formatDisplayCurrency(convertToDisplayCurrency(totalNRR, "EUR"))}</p>
               <p className="text-xs text-muted-foreground">
                 {totalARR + totalNRR > 0 ? ((totalNRR / (totalARR + totalNRR)) * 100).toFixed(1) : 0}% of total
               </p>

@@ -124,24 +124,24 @@ const Reports = () => {
       setMwpByCustomer(customerMWp);
       setRevenueByCustomer(customerRevenue.map(r => ({
         ...r,
-        total: convertToDisplayCurrency(r.total),
-        arr: convertToDisplayCurrency(r.arr),
-        nrr: convertToDisplayCurrency(r.nrr),
+        total: convertToDisplayCurrency(r.total, "EUR"),
+        arr: convertToDisplayCurrency(r.arr, "EUR"),
+        nrr: convertToDisplayCurrency(r.nrr, "EUR"),
       })));
-      setTotalARR(convertToDisplayCurrency(arrTotal));
-      setTotalNRR(convertToDisplayCurrency(nrrTotal));
+      setTotalARR(convertToDisplayCurrency(arrTotal, "EUR"));
+      setTotalNRR(convertToDisplayCurrency(nrrTotal, "EUR"));
       
       // Set ARR vs NRR data with currency conversion
       setArrNrrData(arrNrr.map(d => ({
         ...d,
-        arr: convertToDisplayCurrency(d.arr),
-        nrr: convertToDisplayCurrency(d.nrr),
+        arr: convertToDisplayCurrency(d.arr, "EUR"),
+        nrr: convertToDisplayCurrency(d.nrr, "EUR"),
       })));
       
       // Set projected revenue with currency conversion
       setProjectedRevenueData(projected.map(p => ({
         ...p,
-        projected: convertToDisplayCurrency(p.projected)
+        projected: convertToDisplayCurrency(p.projected, "EUR")
       })));
       
       // Combine projected and actual for comparison chart
@@ -151,9 +151,9 @@ const Reports = () => {
         return {
           month: p.month,
           monthKey: p.monthKey,
-          projected: convertToDisplayCurrency(p.projected),
-          actual: actualEntry ? convertToDisplayCurrency(actualEntry.actual) : 0,
-          actualARR: arrEntry ? convertToDisplayCurrency(arrEntry.arr) : 0,
+          projected: convertToDisplayCurrency(p.projected, "EUR"),
+          actual: actualEntry ? convertToDisplayCurrency(actualEntry.actual, "EUR") : 0,
+          actualARR: arrEntry ? convertToDisplayCurrency(arrEntry.arr, "EUR") : 0,
         };
       });
       setCombinedRevenueData(combined);
