@@ -7,6 +7,7 @@ const corsHeaders = {
 
 // Account code to revenue type mapping
 const ACCOUNT_MAPPINGS: Record<string, 'recurring' | 'non_recurring'> = {
+  '1001': 'recurring',    // Revenue - Capacity-based Fees (ARR)
   '1002': 'recurring',    // Platform Fees (ARR)
   '1000': 'non_recurring', // Implementation Fees (NRR)
 };
