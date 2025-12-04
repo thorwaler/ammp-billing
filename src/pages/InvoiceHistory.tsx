@@ -41,6 +41,8 @@ interface Invoice {
   arr_amount_eur: number | null;
   nrr_amount: number;
   nrr_amount_eur: number | null;
+  xero_amount_credited: number | null;
+  xero_amount_credited_eur: number | null;
   xero_reference: string | null;
   xero_status: string | null;
   xero_contact_name: string | null;
@@ -48,6 +50,13 @@ interface Invoice {
     name: string;
   } | null;
 }
+
+// Helper to calculate net amount after credits
+const getNetAmount = (grossAmount: number, grossTotal: number, creditAmount: number): number => {
+  if (grossTotal <= 0) return grossAmount;
+  const creditRatio = creditAmount / grossTotal;
+  return grossAmount * (1 - creditRatio);
+};
 
 export default function InvoiceHistory() {
   const { user } = useAuth();
@@ -260,9 +269,19 @@ export default function InvoiceHistory() {
     }).format(amount);
   };
 
-  // Calculate totals using EUR amounts for accurate currency-agnostic totals
-  const totalARR = filteredInvoices.reduce((sum, inv) => sum + (inv.arr_amount_eur ?? inv.arr_amount ?? 0), 0);
-  const totalNRR = filteredInvoices.reduce((sum, inv) => sum + (inv.nrr_amount_eur ?? inv.nrr_amount ?? 0), 0);
+  // Calculate totals using EUR amounts with credits subtracted
+  const totalARR = filteredInvoices.reduce((sum, inv) => {
+    const grossArr = inv.arr_amount_eur ?? inv.arr_amount ?? 0;
+    const grossTotal = inv.invoice_amount_eur ?? inv.invoice_amount ?? 1;
+    const creditEur = inv.xero_amount_credited_eur ?? inv.xero_amount_credited ?? 0;
+    return sum + getNetAmount(grossArr, grossTotal, creditEur);
+  }, 0);
+  const totalNRR = filteredInvoices.reduce((sum, inv) => {
+    const grossNrr = inv.nrr_amount_eur ?? inv.nrr_amount ?? 0;
+    const grossTotal = inv.invoice_amount_eur ?? inv.invoice_amount ?? 1;
+    const creditEur = inv.xero_amount_credited_eur ?? inv.xero_amount_credited ?? 0;
+    return sum + getNetAmount(grossNrr, grossTotal, creditEur);
+  }, 0);
 
   return (
     <Layout>
@@ -407,8 +426,9 @@ export default function InvoiceHistory() {
                       <TableHead>Customer</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">ARR</TableHead>
-                      <TableHead className="text-right">NRR</TableHead>
+                      <TableHead className="text-right">Credit</TableHead>
+                      <TableHead className="text-right">ARR (Net)</TableHead>
+                      <TableHead className="text-right">NRR (Net)</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -430,11 +450,29 @@ export default function InvoiceHistory() {
                         <TableCell className="text-right font-medium">
                           {formatCurrency(invoice.invoice_amount, invoice.currency)}
                         </TableCell>
+                        <TableCell className="text-right">
+                          {(invoice.xero_amount_credited ?? 0) > 0 ? (
+                            <span className="text-destructive">
+                              -{formatCurrency(invoice.xero_amount_credited || 0, invoice.currency)}
+                              {(invoice.xero_amount_credited ?? 0) >= invoice.invoice_amount && (
+                                <Badge variant="destructive" className="ml-2 text-xs">Credited</Badge>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right text-primary">
-                          {formatCurrency(invoice.arr_amount || 0, invoice.currency)}
+                          {formatCurrency(
+                            getNetAmount(invoice.arr_amount || 0, invoice.invoice_amount, invoice.xero_amount_credited || 0),
+                            invoice.currency
+                          )}
                         </TableCell>
                         <TableCell className="text-right text-orange-500">
-                          {formatCurrency(invoice.nrr_amount || 0, invoice.currency)}
+                          {formatCurrency(
+                            getNetAmount(invoice.nrr_amount || 0, invoice.invoice_amount, invoice.xero_amount_credited || 0),
+                            invoice.currency
+                          )}
                         </TableCell>
                         <TableCell>
                           {invoice.xero_invoice_id ? (
