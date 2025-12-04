@@ -13,9 +13,12 @@ import { InvoiceDetailsDialog } from "@/components/invoices/InvoiceDetailsDialog
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
 import { XeroSyncDialog } from "@/components/invoices/XeroSyncDialog";
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { format } from "date-fns";
-import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw } from "lucide-react";
+import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter } from "date-fns";
+import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Invoice {
   id: string;
@@ -55,6 +58,9 @@ export default function InvoiceHistory() {
   const [searchQuery, setSearchQuery] = useState("");
   const [xeroFilter, setXeroFilter] = useState<string>("all");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("last12months");
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>();
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
@@ -69,7 +75,7 @@ export default function InvoiceHistory() {
 
   useEffect(() => {
     filterInvoices();
-  }, [searchQuery, xeroFilter, sourceFilter, invoices]);
+  }, [searchQuery, xeroFilter, sourceFilter, dateFilter, customStartDate, customEndDate, invoices]);
 
   const fetchInvoices = async () => {
     try {
@@ -92,8 +98,38 @@ export default function InvoiceHistory() {
     }
   };
 
+  const getDateRange = (): { start: Date | null; end: Date | null } => {
+    const now = new Date();
+    switch (dateFilter) {
+      case "lastMonth":
+        return { start: startOfMonth(subMonths(now, 1)), end: now };
+      case "lastQuarter":
+        return { start: subMonths(now, 3), end: now };
+      case "last6months":
+        return { start: subMonths(now, 6), end: now };
+      case "last12months":
+        return { start: subMonths(now, 12), end: now };
+      case "ytd":
+        return { start: startOfYear(now), end: now };
+      case "custom":
+        return { start: customStartDate || null, end: customEndDate || null };
+      case "all":
+      default:
+        return { start: null, end: null };
+    }
+  };
+
   const filterInvoices = () => {
     let filtered = [...invoices];
+
+    // Date filter
+    const { start, end } = getDateRange();
+    if (start) {
+      filtered = filtered.filter(inv => new Date(inv.invoice_date) >= start);
+    }
+    if (end) {
+      filtered = filtered.filter(inv => new Date(inv.invoice_date) <= end);
+    }
 
     if (searchQuery) {
       filtered = filtered.filter(inv => {
@@ -292,6 +328,47 @@ export default function InvoiceHistory() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full sm:w-48"
                 />
+                <Select value={dateFilter} onValueChange={setDateFilter}>
+                  <SelectTrigger className="w-[150px]">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Time</SelectItem>
+                    <SelectItem value="lastMonth">Last Month</SelectItem>
+                    <SelectItem value="lastQuarter">Last Quarter</SelectItem>
+                    <SelectItem value="last6months">Last 6 Months</SelectItem>
+                    <SelectItem value="last12months">Last 12 Months</SelectItem>
+                    <SelectItem value="ytd">Year to Date</SelectItem>
+                    <SelectItem value="custom">Custom Range</SelectItem>
+                  </SelectContent>
+                </Select>
+                {dateFilter === "custom" && (
+                  <>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-[130px] justify-start text-left font-normal", !customStartDate && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {customStartDate ? format(customStartDate, "MMM d, yyyy") : "Start"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={customStartDate} onSelect={setCustomStartDate} initialFocus className="pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" className={cn("w-[130px] justify-start text-left font-normal", !customEndDate && "text-muted-foreground")}>
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {customEndDate ? format(customEndDate, "MMM d, yyyy") : "End"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar mode="single" selected={customEndDate} onSelect={setCustomEndDate} initialFocus className="pointer-events-auto" />
+                      </PopoverContent>
+                    </Popover>
+                  </>
+                )}
                 <Select value={sourceFilter} onValueChange={setSourceFilter}>
                   <SelectTrigger className="w-[120px]">
                     <SelectValue placeholder="Source" />
