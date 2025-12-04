@@ -191,14 +191,26 @@ Deno.serve(async (req) => {
       accountMappings[mapping.account_code] = mapping.revenue_type;
     });
 
-    // Get existing Xero invoice IDs to avoid duplicates
+    // Get existing invoices with xero_invoice_id to check for duplicates and updates
     const { data: existingInvoices } = await supabase
       .from('invoices')
-      .select('xero_invoice_id')
+      .select('id, xero_invoice_id, source')
       .eq('user_id', user.id)
       .not('xero_invoice_id', 'is', null);
 
-    const existingXeroIds = new Set(existingInvoices?.map(inv => inv.xero_invoice_id) || []);
+    // Build maps for existing invoices
+    // Xero-only invoices (source='xero') - skip entirely
+    // Internal invoices with xero_invoice_id (source='internal') - update with latest Xero data
+    const xeroOnlyIds = new Set<string>();
+    const internalInvoiceMap = new Map<string, string>(); // xero_invoice_id -> local invoice id
+
+    existingInvoices?.forEach(inv => {
+      if (inv.source === 'xero') {
+        xeroOnlyIds.add(inv.xero_invoice_id);
+      } else if (inv.source === 'internal' && inv.xero_invoice_id) {
+        internalInvoiceMap.set(inv.xero_invoice_id, inv.id);
+      }
+    });
 
     // Build Xero API URL with optional date filter
     let whereClause = 'Type=="ACCREC"';
@@ -242,31 +254,22 @@ Deno.serve(async (req) => {
 
     const customerNameMap = new Map(customers?.map(c => [c.name.toLowerCase(), c.id]) || []);
 
-    // Process new invoices
+    // Process invoices
     let syncedCount = 0;
+    let updatedCount = 0;
     let skippedCount = 0;
 
     for (const xeroInv of xeroInvoices) {
       const xeroInvoiceId = xeroInv.InvoiceID;
-
-      // Skip if already exists
-      if (existingXeroIds.has(xeroInvoiceId)) {
-        skippedCount++;
-        continue;
-      }
-
-      // Try to match customer by name
-      const contactName = xeroInv.Contact?.Name || '';
-      const customerId = customerNameMap.get(contactName.toLowerCase());
-
-      // Calculate ARR/NRR from line items
-      const lineItems = xeroInv.LineItems || [];
-      const { arrAmount, nrrAmount } = calculateARRNRR(lineItems, accountMappings);
       
       // Get currency info for EUR conversion
       const currencyCode = xeroInv.CurrencyCode || 'EUR';
       const currencyRate = xeroInv.CurrencyRate || null;
       const invoiceTotal = xeroInv.Total || 0;
+      const lineItems = xeroInv.LineItems || [];
+      
+      // Calculate ARR/NRR from line items
+      const { arrAmount, nrrAmount } = calculateARRNRR(lineItems, accountMappings);
       
       // Get credit note amount (if any)
       const amountCredited = xeroInv.AmountCredited || 0;
@@ -277,9 +280,52 @@ Deno.serve(async (req) => {
       const arrAmountEur = convertToEUR(arrAmount, currencyCode, currencyRate);
       const nrrAmountEur = convertToEUR(nrrAmount, currencyCode, currencyRate);
       
-      console.log(`Invoice ${xeroInv.InvoiceNumber}: Total=${invoiceTotal}, Credited=${amountCredited}, Currency=${currencyCode}`);
+      // Check if this is an internal invoice that needs updating
+      if (internalInvoiceMap.has(xeroInvoiceId)) {
+        const localInvoiceId = internalInvoiceMap.get(xeroInvoiceId)!;
+        
+        console.log(`Updating internal invoice ${localInvoiceId} from Xero (${xeroInv.InvoiceNumber})`);
+        
+        // Update internal invoice with latest Xero data
+        const { error: updateError } = await supabase
+          .from('invoices')
+          .update({
+            invoice_amount: invoiceTotal,
+            invoice_amount_eur: invoiceAmountEur,
+            xero_status: xeroInv.Status,
+            xero_line_items: lineItems,
+            xero_synced_at: new Date().toISOString(),
+            arr_amount: arrAmount,
+            arr_amount_eur: arrAmountEur,
+            nrr_amount: nrrAmount,
+            nrr_amount_eur: nrrAmountEur,
+            xero_amount_credited: amountCredited,
+            xero_amount_credited_eur: amountCreditedEur,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', localInvoiceId);
 
-      // Insert invoice
+        if (updateError) {
+          console.error('Error updating internal invoice:', localInvoiceId, updateError);
+        } else {
+          updatedCount++;
+        }
+        continue;
+      }
+
+      // Skip if already synced as Xero-only invoice
+      if (xeroOnlyIds.has(xeroInvoiceId)) {
+        skippedCount++;
+        continue;
+      }
+
+      // Try to match customer by name
+      const contactName = xeroInv.Contact?.Name || '';
+      const customerId = customerNameMap.get(contactName.toLowerCase());
+      
+      console.log(`Inserting new invoice from Xero: ${xeroInv.InvoiceNumber} (Total=${invoiceTotal}, Credited=${amountCredited})`);
+
+      // Insert new invoice from Xero
       const { error: insertError } = await supabase
         .from('invoices')
         .insert({
@@ -314,12 +360,13 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Synced ${syncedCount} new invoices, skipped ${skippedCount} existing`);
+    console.log(`Synced ${syncedCount} new, updated ${updatedCount} internal, skipped ${skippedCount} existing`);
 
     return new Response(
       JSON.stringify({
         success: true,
         syncedCount,
+        updatedCount,
         skippedCount,
         totalInXero: xeroInvoices.length,
       }),

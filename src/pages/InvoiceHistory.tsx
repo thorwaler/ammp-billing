@@ -171,7 +171,17 @@ export default function InvoiceHistory() {
       
       if (error) throw error;
       
-      toast.success(`Synced ${data.syncedCount} new invoices from Xero`);
+      // Build descriptive message based on what happened
+      const parts: string[] = [];
+      if (data.syncedCount > 0) parts.push(`${data.syncedCount} new`);
+      if (data.updatedCount > 0) parts.push(`${data.updatedCount} updated`);
+      
+      if (parts.length > 0) {
+        toast.success(`Synced from Xero: ${parts.join(', ')} invoices`);
+      } else {
+        toast.info('No new or updated invoices found in Xero');
+      }
+      
       fetchInvoices();
       setSyncDialogOpen(false);
     } catch (error: any) {
