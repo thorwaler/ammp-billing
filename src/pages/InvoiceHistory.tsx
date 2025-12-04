@@ -23,6 +23,7 @@ interface Invoice {
   customer_id: string;
   contract_id: string | null;
   invoice_amount: number;
+  invoice_amount_eur: number | null;
   billing_frequency: string;
   xero_invoice_id: string | null;
   currency: string;
@@ -34,7 +35,9 @@ interface Invoice {
   support_document_data: SupportDocumentData | null;
   source: string;
   arr_amount: number;
+  arr_amount_eur: number | null;
   nrr_amount: number;
+  nrr_amount_eur: number | null;
   xero_reference: string | null;
   xero_status: string | null;
   xero_contact_name: string | null;
@@ -221,9 +224,9 @@ export default function InvoiceHistory() {
     }).format(amount);
   };
 
-  // Calculate totals
-  const totalARR = filteredInvoices.reduce((sum, inv) => sum + (inv.arr_amount || 0), 0);
-  const totalNRR = filteredInvoices.reduce((sum, inv) => sum + (inv.nrr_amount || 0), 0);
+  // Calculate totals using EUR amounts for accurate currency-agnostic totals
+  const totalARR = filteredInvoices.reduce((sum, inv) => sum + (inv.arr_amount_eur ?? inv.arr_amount ?? 0), 0);
+  const totalNRR = filteredInvoices.reduce((sum, inv) => sum + (inv.nrr_amount_eur ?? inv.nrr_amount ?? 0), 0);
 
   return (
     <Layout>
