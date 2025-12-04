@@ -39,6 +39,13 @@ export interface CustomerMWData {
   mwp: number;
 }
 
+export interface CustomerRevenueData {
+  name: string;
+  total: number;
+  arr: number;
+  nrr: number;
+}
+
 export interface AssetOnboardingData {
   assetName: string;
   totalMW: number;
@@ -646,6 +653,69 @@ export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): P
     const netNrr = (inv.nrr_amount_eur || 0) * (1 - creditRatio);
     return sum + netNrr;
   }, 0) || 0;
+}
+
+/**
+ * Get revenue by customer (top customers by total revenue)
+ */
+export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters): Promise<CustomerRevenueData[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Build query with date range if specified
+  let query = supabase
+    .from('invoices')
+    .select('customer_id, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customers!inner(name)')
+    .eq('user_id', user.id);
+
+  if (filters?.startDate) {
+    query = query.gte('invoice_date', filters.startDate.toISOString());
+  }
+  if (filters?.endDate) {
+    query = query.lte('invoice_date', filters.endDate.toISOString());
+  }
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('customer_id', filters.customerIds);
+  }
+
+  const { data: invoices } = await query;
+  if (!invoices || invoices.length === 0) return [];
+
+  // Group by customer and calculate net amounts
+  const customerMap = new Map<string, { name: string; total: number; arr: number; nrr: number }>();
+
+  invoices.forEach((invoice: any) => {
+    const customerId = invoice.customer_id;
+    const customerName = invoice.customers?.name || 'Unknown';
+    const existing = customerMap.get(customerId) || { name: customerName, total: 0, arr: 0, nrr: 0 };
+
+    // Calculate net amounts (subtract credits proportionally)
+    const totalAmount = invoice.invoice_amount_eur || 0;
+    const creditAmount = invoice.xero_amount_credited_eur || 0;
+    const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
+
+    const netArr = (invoice.arr_amount_eur || 0) * (1 - creditRatio);
+    const netNrr = (invoice.nrr_amount_eur || 0) * (1 - creditRatio);
+    const netTotal = totalAmount - creditAmount;
+
+    customerMap.set(customerId, {
+      name: customerName,
+      total: existing.total + netTotal,
+      arr: existing.arr + netArr,
+      nrr: existing.nrr + netNrr,
+    });
+  });
+
+  // Sort by total revenue and return top customers
+  return Array.from(customerMap.values())
+    .sort((a, b) => b.total - a.total)
+    .slice(0, limit)
+    .map(c => ({
+      name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
+      total: parseFloat(c.total.toFixed(2)),
+      arr: parseFloat(c.arr.toFixed(2)),
+      nrr: parseFloat(c.nrr.toFixed(2)),
+    }));
 }
 
 /**
