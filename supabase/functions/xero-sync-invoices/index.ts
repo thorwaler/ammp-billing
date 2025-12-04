@@ -11,6 +11,25 @@ const ACCOUNT_MAPPINGS: Record<string, 'recurring' | 'non_recurring'> = {
   '1000': 'non_recurring', // Implementation Fees (NRR)
 };
 
+// Parse Xero's Microsoft JSON date format: /Date(milliseconds+offset)/
+function parseXeroDate(xeroDate: string): string | null {
+  if (!xeroDate) return null;
+  
+  // Match pattern: /Date(1759881600000+0000)/ or /Date(1759881600000)/
+  const match = xeroDate.match(/\/Date\((\d+)([+-]\d{4})?\)\//);
+  if (!match) {
+    // If it's already a valid ISO date, return it
+    if (xeroDate.includes('-') || xeroDate.includes('T')) {
+      return xeroDate;
+    }
+    console.error('Could not parse Xero date:', xeroDate);
+    return null;
+  }
+  
+  const milliseconds = parseInt(match[1], 10);
+  return new Date(milliseconds).toISOString().split('T')[0]; // Return YYYY-MM-DD
+}
+
 async function getValidAccessToken(supabase: any, userId: string) {
   // Fetch the current Xero connection
   const { data: connection, error } = await supabase
@@ -220,7 +239,7 @@ Deno.serve(async (req) => {
         .insert({
           user_id: user.id,
           customer_id: customerId || null,
-          invoice_date: xeroInv.Date,
+          invoice_date: parseXeroDate(xeroInv.Date) || new Date().toISOString().split('T')[0],
           invoice_amount: xeroInv.Total || 0,
           billing_frequency: 'unknown', // Can't determine from Xero
           mw_managed: 0,
