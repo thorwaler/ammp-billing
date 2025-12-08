@@ -94,7 +94,7 @@ export default function InvoiceHistory() {
         .from('invoices')
         .select(`
           *,
-          customer:customers(name)
+          customer:customers(name, nickname)
         `)
         .eq('user_id', user?.id)
         .order('invoice_date', { ascending: false });
@@ -145,7 +145,9 @@ export default function InvoiceHistory() {
     if (searchQuery) {
       filtered = filtered.filter(inv => {
         const customerName = inv.customer?.name || inv.xero_contact_name || '';
-        return customerName.toLowerCase().includes(searchQuery.toLowerCase());
+        const customerNickname = (inv.customer as any)?.nickname || '';
+        return customerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               customerNickname.toLowerCase().includes(searchQuery.toLowerCase());
       });
     }
 
