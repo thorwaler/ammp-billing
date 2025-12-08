@@ -119,7 +119,8 @@ const Customers = () => {
           // POC contracts have no billing value
           if (contract.package === 'poc') return 0;
           
-          let annualValue = 0;
+          // Start with base monthly price if present (applies to all package types)
+          let annualValue = (contract.base_monthly_price || 0) * 12;
           let siteCharges = 0;
           
           // Calculate site-based charges if minimum_charge_tiers has chargePerSite > 0
@@ -249,10 +250,11 @@ const Customers = () => {
         };
 
     const transformed: CustomerData[] = (data || []).map(c => {
-      // Filter for active contract only (client-side filtering)
-      const activeContract = c.contracts?.find((contract: any) => contract.contract_status === 'active');
-      const modules = Array.isArray(activeContract?.modules) ? activeContract.modules as string[] : [];
-      const addons = Array.isArray(activeContract?.addons) ? (activeContract.addons as any[]).map((a: any) => a.id || a) : [];
+      // Get ALL active contracts (not just the first one)
+      const activeContracts = c.contracts?.filter((contract: any) => contract.contract_status === 'active') || [];
+      const firstActiveContract = activeContracts[0];
+      const modules = Array.isArray(firstActiveContract?.modules) ? firstActiveContract.modules as string[] : [];
+      const addons = Array.isArray(firstActiveContract?.addons) ? (firstActiveContract.addons as any[]).map((a: any) => a.id || a) : [];
       const mwpManaged = Number(c.mwp_managed) || 0;
       
       // Count total contracts for this customer
@@ -266,20 +268,27 @@ const Customers = () => {
             .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0]
         : null;
       
+      // Sum contract values from ALL active contracts
+      const totalContractValue = activeContracts.reduce((sum: number, contract: any) => 
+        sum + calculateContractValue(contract, mwpManaged, c.ammp_capabilities), 0);
+      
+      // Get currency from first active contract (for display purposes)
+      const contractCurrency = firstActiveContract?.currency || 'USD';
+      
       return {
         id: c.id,
         name: c.name,
         nickname: c.nickname || null,
         location: c.location || 'N/A',
-        contractValue: calculateContractValue(activeContract, mwpManaged, c.ammp_capabilities),
-        contractCurrency: activeContract?.currency || 'USD',
+        contractValue: totalContractValue,
+        contractCurrency,
         mwpManaged,
         status: (c.status || 'active') as "active" | "pending" | "inactive",
         modules: modules,
         addOns: addons,
         joinDate: firstSignedDate || c.join_date || new Date().toISOString(),
         lastInvoiced: c.last_invoiced || new Date().toISOString(),
-        contractId: activeContract?.id || '',
+        contractId: firstActiveContract?.id || '',
         contractCount,
         contracts: (c.contracts || []).map((contract: any) => ({
           id: contract.id,
@@ -291,7 +300,7 @@ const Customers = () => {
           period_end: contract.period_end,
           company_name: c.name,
         })),
-        package: activeContract?.package || undefined,
+        package: firstActiveContract?.package || undefined,
         ammpOrgId: c.ammp_org_id || undefined,
         ammpAssetIds: (Array.isArray(c.ammp_asset_ids) ? c.ammp_asset_ids : undefined) as string[] | undefined,
         ammpCapabilities: c.ammp_capabilities || undefined,
