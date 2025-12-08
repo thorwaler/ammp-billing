@@ -6,6 +6,54 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Input validation helpers
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_ROLES = ['admin', 'manager', 'viewer'] as const;
+const MAX_EMAIL_LENGTH = 255;
+const MAX_NAME_LENGTH = 100;
+const MIN_NAME_LENGTH = 1;
+
+function validateEmail(email: unknown): { valid: boolean; error?: string } {
+  if (typeof email !== 'string') {
+    return { valid: false, error: 'Email must be a string' };
+  }
+  const trimmed = email.trim();
+  if (trimmed.length === 0) {
+    return { valid: false, error: 'Email is required' };
+  }
+  if (trimmed.length > MAX_EMAIL_LENGTH) {
+    return { valid: false, error: `Email must be less than ${MAX_EMAIL_LENGTH} characters` };
+  }
+  if (!EMAIL_REGEX.test(trimmed)) {
+    return { valid: false, error: 'Invalid email format' };
+  }
+  return { valid: true };
+}
+
+function validateName(name: unknown): { valid: boolean; error?: string } {
+  if (typeof name !== 'string') {
+    return { valid: false, error: 'Name must be a string' };
+  }
+  const trimmed = name.trim();
+  if (trimmed.length < MIN_NAME_LENGTH) {
+    return { valid: false, error: 'Name is required' };
+  }
+  if (trimmed.length > MAX_NAME_LENGTH) {
+    return { valid: false, error: `Name must be less than ${MAX_NAME_LENGTH} characters` };
+  }
+  return { valid: true };
+}
+
+function validateRole(role: unknown): { valid: boolean; error?: string } {
+  if (typeof role !== 'string') {
+    return { valid: false, error: 'Role must be a string' };
+  }
+  if (!VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
+    return { valid: false, error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` };
+  }
+  return { valid: true };
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -53,28 +101,51 @@ serve(async (req) => {
       );
     }
 
-    // Parse request body
-    const { email, name, role } = await req.json();
-    
-    if (!email || !name || !role) {
+    // Parse and validate request body
+    let body;
+    try {
+      body = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: 'Email, name, and role are required' }),
+        JSON.stringify({ error: 'Invalid JSON body' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Validate role
-    const validRoles = ['admin', 'manager', 'viewer'];
-    if (!validRoles.includes(role)) {
+    const { email, name, role } = body;
+    
+    // Validate all inputs
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.valid) {
       return new Response(
-        JSON.stringify({ error: 'Invalid role. Must be admin, manager, or viewer' }),
+        JSON.stringify({ error: emailValidation.error }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const nameValidation = validateName(name);
+    if (!nameValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: nameValidation.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const roleValidation = validateRole(role);
+    if (!roleValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: roleValidation.error }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const sanitizedEmail = (email as string).trim().toLowerCase();
+    const sanitizedName = (name as string).trim();
+    const sanitizedRole = role as string;
 
     // Invite user - Supabase automatically sends a magic link email
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
-      data: { full_name: name }
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.inviteUserByEmail(sanitizedEmail, {
+      data: { full_name: sanitizedName }
     });
 
     if (createError) {
@@ -87,10 +158,10 @@ serve(async (req) => {
 
     // The handle_new_user trigger will create the profile and default role
     // But we need to update the role if it's not the default 'manager'
-    if (role !== 'manager') {
+    if (sanitizedRole !== 'manager') {
       const { error: roleError } = await supabaseAdmin
         .from('user_roles')
-        .update({ role })
+        .update({ role: sanitizedRole })
         .eq('user_id', newUser.user.id);
 
       if (roleError) {
@@ -101,14 +172,14 @@ serve(async (req) => {
     // Update the profile with the full name
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .update({ full_name: name })
+      .update({ full_name: sanitizedName })
       .eq('id', newUser.user.id);
 
     if (profileError) {
       console.error('Error updating profile:', profileError);
     }
 
-    console.log(`User ${email} created by admin ${user.email} with role ${role}`);
+    console.log(`User ${sanitizedEmail} created by admin ${user.email} with role ${sanitizedRole}`);
 
     return new Response(
       JSON.stringify({ 
@@ -116,10 +187,10 @@ serve(async (req) => {
         user: {
           id: newUser.user.id,
           email: newUser.user.email,
-          name,
-          role
+          name: sanitizedName,
+          role: sanitizedRole
         },
-        message: `Invitation email sent to ${email}. They can click the link to set up their account.`
+        message: `Invitation email sent to ${sanitizedEmail}. They can click the link to set up their account.`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

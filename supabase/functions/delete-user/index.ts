@@ -6,6 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Input validation helpers
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function validateUuid(uuid: unknown): { valid: boolean; error?: string } {
+  if (typeof uuid !== 'string') {
+    return { valid: false, error: 'User ID must be a string' };
+  }
+  if (!UUID_REGEX.test(uuid)) {
+    return { valid: false, error: 'Invalid user ID format' };
+  }
+  return { valid: true };
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -53,12 +66,24 @@ serve(async (req) => {
       );
     }
 
-    // Parse request body
-    const { userId } = await req.json();
-    
-    if (!userId) {
+    // Parse and validate request body
+    let body;
+    try {
+      body = await req.json();
+    } catch {
       return new Response(
-        JSON.stringify({ error: 'User ID is required' }),
+        JSON.stringify({ error: 'Invalid JSON body' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const { userId } = body;
+    
+    // Validate user ID
+    const userIdValidation = validateUuid(userId);
+    if (!userIdValidation.valid) {
+      return new Response(
+        JSON.stringify({ error: userIdValidation.error }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
