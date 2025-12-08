@@ -124,22 +124,34 @@ const AmmpSyncSettings = () => {
         return nextSunday;
 
       case 'monthly_first':
-        return new Date(year, month + 1, 1, 2, 0, 0, 0);
+        // First day of current month at 2 AM UTC
+        const firstDayThisMonth = new Date(Date.UTC(year, month, 1, 2, 0, 0, 0));
+        if (now < firstDayThisMonth) {
+          return firstDayThisMonth;
+        }
+        // Already past, go to first day of next month
+        return new Date(Date.UTC(year, month + 1, 1, 2, 0, 0, 0));
 
       case 'monthly_last':
-        return new Date(year, month + 2, 0, 2, 0, 0, 0);
+        // Last day of current month (day 0 of next month = last day of current)
+        const lastDayThisMonth = new Date(Date.UTC(year, month + 1, 0, 2, 0, 0, 0));
+        if (now < lastDayThisMonth) {
+          return lastDayThisMonth;
+        }
+        // Already past this month's last day, go to next month's last day
+        return new Date(Date.UTC(year, month + 2, 0, 2, 0, 0, 0));
 
       case 'quarterly_last':
         const quarterEnds = [
-          new Date(year, 2, 31, 2, 0, 0, 0),
-          new Date(year, 5, 30, 2, 0, 0, 0),
-          new Date(year, 8, 30, 2, 0, 0, 0),
-          new Date(year, 11, 31, 2, 0, 0, 0),
+          new Date(Date.UTC(year, 2, 31, 2, 0, 0, 0)),  // Mar 31
+          new Date(Date.UTC(year, 5, 30, 2, 0, 0, 0)),  // Jun 30
+          new Date(Date.UTC(year, 8, 30, 2, 0, 0, 0)),  // Sep 30
+          new Date(Date.UTC(year, 11, 31, 2, 0, 0, 0)), // Dec 31
         ];
         for (const qEnd of quarterEnds) {
           if (qEnd > now) return qEnd;
         }
-        return new Date(year + 1, 2, 31, 2, 0, 0, 0);
+        return new Date(Date.UTC(year + 1, 2, 31, 2, 0, 0, 0));
 
       default:
         return null;
