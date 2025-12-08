@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./AuthContext";
 
@@ -88,7 +88,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     setExchangeRateState(rate);
   };
 
-  const convertToDisplayCurrency = (amount: number, sourceCurrency: string = "USD"): number => {
+  const convertToDisplayCurrency = useCallback((amount: number, sourceCurrency: string = "USD"): number => {
     // If source and display currency are the same, no conversion needed
     if (sourceCurrency === currency) {
       return amount;
@@ -105,9 +105,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     }
     
     return amount;
-  };
+  }, [currency, exchangeRate]);
 
-  const formatCurrency = (amount: number): string => {
+  const formatCurrency = useCallback((amount: number): string => {
     const symbol = currency === "EUR" ? "€" : "$";
     const formattedAmount = new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 0,
@@ -117,7 +117,7 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     return currency === "EUR" 
       ? `${symbol}${formattedAmount}` 
       : `${symbol}${formattedAmount}`;
-  };
+  }, [currency]);
 
   return (
     <CurrencyContext.Provider
