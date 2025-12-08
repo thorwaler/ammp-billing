@@ -17,6 +17,8 @@ const NOTIFICATION_TYPES = [
   { id: 'contract_expiring_soon', label: 'Contract Expiring Soon' },
   { id: 'mw_warning', label: 'MW Capacity Warning' },
   { id: 'mw_exceeded', label: 'MW Capacity Exceeded' },
+  { id: 'ammp_sync_complete', label: 'AMMP Sync Complete' },
+  { id: 'ammp_sync_failed', label: 'AMMP Sync Failed' },
 ];
 
 const SEVERITY_LEVELS = [
