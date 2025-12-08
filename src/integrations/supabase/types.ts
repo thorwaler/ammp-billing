@@ -429,6 +429,39 @@ export type Database = {
           },
         ]
       }
+      notification_settings: {
+        Row: {
+          created_at: string
+          id: string
+          min_severity: string | null
+          notification_types: string[] | null
+          updated_at: string
+          user_id: string
+          webhook_enabled: boolean | null
+          zapier_webhook_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          min_severity?: string | null
+          notification_types?: string[] | null
+          updated_at?: string
+          user_id: string
+          webhook_enabled?: boolean | null
+          zapier_webhook_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          min_severity?: string | null
+          notification_types?: string[] | null
+          updated_at?: string
+          user_id?: string
+          webhook_enabled?: boolean | null
+          zapier_webhook_url?: string | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           contract_id: string | null

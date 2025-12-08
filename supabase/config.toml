@@ -1,5 +1,8 @@
 project_id = "bxogdlfdgudllafzhusn"
 
+[functions.push-notification-webhook]
+verify_jwt = false
+
 [functions.xero-oauth-init]
 verify_jwt = true
 
