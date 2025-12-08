@@ -23,6 +23,7 @@ import { toast } from "@/hooks/use-toast";
 interface Contract {
   id: string;
   customer: string;
+  customerNickname?: string;
   contractValue: string;
   addOns: string[];
   uploadDate: string;
@@ -53,7 +54,8 @@ export function ContractList() {
           modules,
           addons,
           customers (
-            name
+            name,
+            nickname
           )
         `)
         .eq('user_id', user.id);
@@ -66,10 +68,12 @@ export function ContractList() {
       const transformed: Contract[] = (data || []).map(c => {
         const modules = Array.isArray(c.modules) ? c.modules as string[] : [];
         const addons = Array.isArray(c.addons) ? (c.addons as any[]).map((a: any) => a.id || a) : [];
+        const customerData = c.customers as any;
         
         return {
           id: c.id,
           customer: c.company_name,
+          customerNickname: customerData?.nickname || undefined,
           contractValue: "$0/MWp", // Calculate from modules
           addOns: [...modules, ...addons],
           uploadDate: c.created_at || new Date().toISOString(),
@@ -86,6 +90,7 @@ export function ContractList() {
   const filteredContracts = contracts.filter(
     (contract) =>
       contract.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contract.customerNickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       contract.id.toLowerCase().includes(searchTerm.toLowerCase())
   );
 

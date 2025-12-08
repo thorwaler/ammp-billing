@@ -357,6 +357,7 @@ const Customers = () => {
     if (searchTerm) {
       filtered = filtered.filter((customer) =>
         customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        customer.nickname?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         customer.location.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
