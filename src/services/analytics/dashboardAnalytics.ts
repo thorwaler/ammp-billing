@@ -250,6 +250,10 @@ export function calculateSingleContractARR(
         retainerHours: contract.retainer_hours || undefined,
         retainerHourlyRate: contract.retainer_hourly_rate || undefined,
         retainerMinimumValue: contract.retainer_minimum_value || undefined,
+        billingFrequency: 'annual',
+        sitesUnderThreshold: totalSites,
+        assetBreakdown: assetBreakdown.length > 0 ? assetBreakdown : undefined,
+        enableSiteMinimumPricing: assetBreakdown.length > 0,
       });
       annualValue = result.totalPrice;
     }
