@@ -19,6 +19,9 @@ export type Database = {
           api_key: string
           created_at: string
           id: string
+          last_sync_at: string | null
+          next_sync_at: string | null
+          sync_schedule: string | null
           updated_at: string
           user_id: string
         }
@@ -26,6 +29,9 @@ export type Database = {
           api_key: string
           created_at?: string
           id?: string
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          sync_schedule?: string | null
           updated_at?: string
           user_id: string
         }
@@ -33,6 +39,9 @@ export type Database = {
           api_key?: string
           created_at?: string
           id?: string
+          last_sync_at?: string | null
+          next_sync_at?: string | null
+          sync_schedule?: string | null
           updated_at?: string
           user_id?: string
         }
