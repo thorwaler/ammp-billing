@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
@@ -16,6 +15,7 @@ import ContractForm from "@/components/contracts/ContractForm";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { calculateSingleContractARR } from "@/services/analytics/dashboardAnalytics";
 
 interface CustomerData {
   id: string;
@@ -99,12 +99,18 @@ const Customers = () => {
             minimum_annual_value,
             minimum_charge,
             minimum_charge_tiers,
+            portfolio_discount_tiers,
             site_charge_frequency,
             volume_discounts,
             currency,
             contract_status,
             signed_date,
-            base_monthly_price
+            base_monthly_price,
+            initial_mw,
+            annual_fee_per_site,
+            retainer_hours,
+            retainer_hourly_rate,
+            retainer_minimum_value
           )
         `)
         .eq('user_id', user.id);
@@ -113,142 +119,6 @@ const Customers = () => {
       console.error('Error loading customers:', error);
       return;
     }
-
-        const calculateContractValue = (contract: any, mwpManaged: number, ammpCapabilities?: any) => {
-          if (!contract) return 0;
-          
-          // POC contracts have no billing value
-          if (contract.package === 'poc') return 0;
-          
-          // Start with base monthly price if present (applies to all package types)
-          let annualValue = (contract.base_monthly_price || 0) * 12;
-          let siteCharges = 0;
-          
-          // Calculate site-based charges if minimum_charge_tiers has chargePerSite > 0
-          const minimumChargeTiers = contract.minimum_charge_tiers || [];
-          const totalSites = ammpCapabilities?.totalSites || 0;
-          const siteChargeFrequency = contract.site_charge_frequency || "annual";
-          
-          if (minimumChargeTiers.length > 0 && totalSites > 0) {
-            // Find applicable tier based on total MW
-            const applicableTier = minimumChargeTiers.find((tier: any) => 
-              mwpManaged >= tier.minMW && 
-              (tier.maxMW === null || mwpManaged <= tier.maxMW)
-            );
-            
-            if (applicableTier && applicableTier.chargePerSite > 0) {
-              // Annual site charge calculation based on frequency
-              if (siteChargeFrequency === "monthly") {
-                // Monthly charge: chargePerSite × totalSites × 12 months
-                siteCharges = applicableTier.chargePerSite * totalSites * 12;
-              } else {
-                // Annual charge: chargePerSite × totalSites
-                siteCharges = applicableTier.chargePerSite * totalSites;
-              }
-            }
-          }
-          
-          if (contract.package === 'starter') {
-            // Starter package fixed annual cost
-            annualValue += contract.minimum_annual_value || 3000;
-          } else if (contract.package === 'hybrid_tiered') {
-            // Hybrid tiered package - use per-MWp rates
-            const ongridPrice = contract.custom_pricing?.ongrid_per_mwp || 0;
-            const hybridPrice = contract.custom_pricing?.hybrid_per_mwp || 0;
-            
-            // If AMMP capabilities available, use them to split MW
-            if (contract.ammp_capabilities?.ongridTotalMW !== undefined && 
-                contract.ammp_capabilities?.hybridTotalMW !== undefined) {
-              const ongridMW = contract.ammp_capabilities.ongridTotalMW;
-              const hybridMW = contract.ammp_capabilities.hybridTotalMW;
-              annualValue = (ongridMW * ongridPrice) + (hybridMW * hybridPrice);
-            } else {
-              // Fallback: treat all MW as ongrid
-              annualValue = mwpManaged * ongridPrice;
-            }
-            
-            // Add recurring addons (annual cost)
-            const addons = Array.isArray(contract.addons) ? contract.addons : [];
-            const recurringAddons = [
-              { id: 'satelliteDataAPI', pricePerMW: 6 },
-              { id: 'tmCustomDashboards', price: 1000 },
-              { id: 'tmCustomReports', price: 1500 },
-              { id: 'tmCustomAlerts', price: 150 },
-              { id: 'eshCustomDashboard', price: 1000 },
-              { id: 'eshCustomReport', price: 1500 },
-              { id: 'spCustomDashboard', price: 1000 },
-              { id: 'spCustomReport', price: 1500 }
-            ];
-            
-            addons.forEach((addon: any) => {
-              const addonId = typeof addon === 'string' ? addon : addon.id;
-              const addonConfig = recurringAddons.find(a => a.id === addonId);
-              if (addonConfig) {
-                if ('pricePerMW' in addonConfig) {
-                  annualValue += addonConfig.pricePerMW * mwpManaged;
-                } else {
-                  annualValue += addonConfig.price;
-                }
-              }
-            });
-            
-            // Use minimum_annual_value if specified and higher
-            const minimumValue = contract.minimum_annual_value || 0;
-            annualValue = Math.max(annualValue, minimumValue);
-          } else if (contract.package === 'capped') {
-            // Capped package - fixed annual fee
-            annualValue += contract.minimum_annual_value || 0;
-          } else {
-            // Pro or Custom package - calculate module costs (annual)
-            const defaultPrices: {[key: string]: number} = {
-              technicalMonitoring: 1000,
-              energySavingsHub: 500,
-              stakeholderPortal: 250,
-              control: 500
-            };
-            
-            const modules = Array.isArray(contract.modules) ? contract.modules : [];
-            const totalPerMwp = modules.reduce((sum: number, moduleId: string) => {
-              const customPrice = contract.custom_pricing?.[moduleId];
-              return sum + (customPrice || defaultPrices[moduleId] || 0);
-            }, 0);
-            
-            annualValue += totalPerMwp * mwpManaged;
-            
-            // Add recurring addons (annual cost)
-            const addons = Array.isArray(contract.addons) ? contract.addons : [];
-            const recurringAddons = [
-              { id: 'satelliteDataAPI', pricePerMW: 6 },
-              { id: 'tmCustomDashboards', price: 1000 },
-              { id: 'tmCustomReports', price: 1500 },
-              { id: 'tmCustomAlerts', price: 150 },
-              { id: 'eshCustomDashboard', price: 1000 },
-              { id: 'eshCustomReport', price: 1500 },
-              { id: 'spCustomDashboard', price: 1000 },
-              { id: 'spCustomReport', price: 1500 }
-            ];
-            
-            addons.forEach((addon: any) => {
-              const addonId = typeof addon === 'string' ? addon : addon.id;
-              const addonConfig = recurringAddons.find(a => a.id === addonId);
-              if (addonConfig) {
-                if ('pricePerMW' in addonConfig) {
-                  annualValue += addonConfig.pricePerMW * mwpManaged;
-                } else {
-                  annualValue += addonConfig.price;
-                }
-              }
-            });
-            
-            // Compare with minimum annual value and use the higher
-            const minimumValue = contract.minimum_annual_value || 
-              (contract.package === 'pro' ? 5000 : 0);
-            annualValue = Math.max(annualValue, minimumValue);
-          }
-          
-          // Add site charges to the final annual value
-          return annualValue + siteCharges;
-        };
 
     const transformed: CustomerData[] = (data || []).map(c => {
       // Get ALL active contracts (not just the first one)
@@ -269,9 +139,9 @@ const Customers = () => {
             .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0]
         : null;
       
-      // Sum contract values from ALL active contracts
+      // Sum contract values from ALL active contracts using the single source of truth
       const totalContractValue = activeContracts.reduce((sum: number, contract: any) => 
-        sum + calculateContractValue(contract, mwpManaged, c.ammp_capabilities), 0);
+        sum + calculateSingleContractARR(contract, c.ammp_capabilities), 0);
       
       // Get currency from first active contract (for display purposes)
       const contractCurrency = firstActiveContract?.currency || 'USD';

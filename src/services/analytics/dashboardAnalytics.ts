@@ -181,6 +181,93 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 }
 
 /**
+ * Calculate ARR for a single contract - the single source of truth for all ARR calculations
+ */
+export function calculateSingleContractARR(
+  contract: {
+    package: string;
+    initial_mw?: number | null;
+    modules?: any;
+    addons?: any;
+    minimum_annual_value?: number | null;
+    minimum_charge_tiers?: any;
+    portfolio_discount_tiers?: any;
+    custom_pricing?: any;
+    base_monthly_price?: number | null;
+    site_charge_frequency?: string | null;
+    annual_fee_per_site?: number | null;
+    retainer_hours?: number | null;
+    retainer_hourly_rate?: number | null;
+    retainer_minimum_value?: number | null;
+  },
+  ammpCapabilities?: any
+): number {
+  // POC contracts have no ARR
+  if (contract.package === 'poc') return 0;
+
+  const assetBreakdown = ammpCapabilities?.assetBreakdown || [];
+  const totalMW = assetBreakdown.length > 0
+    ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
+    : contract.initial_mw || 0;
+  const totalSites = ammpCapabilities?.totalSites || assetBreakdown.length || 0;
+
+  let annualValue = 0;
+
+  try {
+    // Handle starter/capped packages
+    if (contract.package === 'starter' || contract.package === 'capped') {
+      const annualBase = contract.minimum_annual_value || 0;
+      const monthlyBase = contract.base_monthly_price || 0;
+      annualValue = annualBase + (monthlyBase * 12);
+    } 
+    // Handle per_site package
+    else if (contract.package === 'per_site') {
+      const annualFeePerSite = contract.annual_fee_per_site || 1000;
+      annualValue = annualFeePerSite * totalSites;
+    }
+    // For pro/custom/hybrid_tiered - use calculateInvoice with frequencyMultiplier=1
+    else if (totalMW > 0) {
+      const result = calculateInvoice({
+        packageType: contract.package as any,
+        totalMW,
+        selectedModules: (contract.modules as string[]) || [],
+        selectedAddons: ((contract.addons as any[]) || []).map((a: any) => ({
+          id: a.id || a.addonId,
+          quantity: a.quantity || 1,
+          complexity: a.complexity,
+          customPrice: a.customPrice,
+          customTiers: a.customTiers,
+        })),
+        frequencyMultiplier: 1, // Annual calculation
+        customPricing: contract.custom_pricing as any,
+        portfolioDiscountTiers: (contract.portfolio_discount_tiers as any[]) || [],
+        minimumChargeTiers: (contract.minimum_charge_tiers as any[]) || [],
+        minimumAnnualValue: contract.minimum_annual_value || 0,
+        ammpCapabilities: ammpCapabilities || undefined,
+        siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
+        baseMonthlyPrice: contract.base_monthly_price || 0,
+        retainerHours: contract.retainer_hours || undefined,
+        retainerHourlyRate: contract.retainer_hourly_rate || undefined,
+        retainerMinimumValue: contract.retainer_minimum_value || undefined,
+      });
+      annualValue = result.totalPrice;
+    }
+
+    // Add retainer value for starter/capped/per_site if applicable
+    if ((contract.package === 'starter' || contract.package === 'capped' || contract.package === 'per_site') 
+        && contract.retainer_hours && contract.retainer_hourly_rate) {
+      const retainerCalculated = contract.retainer_hours * contract.retainer_hourly_rate;
+      const retainerMinimum = contract.retainer_minimum_value || 0;
+      annualValue += Math.max(retainerCalculated, retainerMinimum);
+    }
+  } catch (error) {
+    console.error('Error calculating ARR for contract:', error);
+  }
+
+  return annualValue;
+}
+
+/**
  * Calculate total ARR (Annual Recurring Revenue) from all active non-POC contracts
  */
 async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
@@ -201,7 +288,11 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       custom_pricing,
       base_monthly_price,
       site_charge_frequency,
-      currency
+      currency,
+      annual_fee_per_site,
+      retainer_hours,
+      retainer_hourly_rate,
+      retainer_minimum_value
     `)
     .eq('user_id', userId)
     .eq('contract_status', 'active')
@@ -225,56 +316,14 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
     const customer = customerMap.get(contract.customer_id);
     if (!customer) continue;
 
-    // Get AMMP capabilities for accurate calculation
     const ammpCapabilities = customer.ammp_capabilities as any;
-    const assetBreakdown = ammpCapabilities?.assetBreakdown || [];
-    
-    // Calculate MW - use AMMP data if available, otherwise initial_mw
-    const totalMW = assetBreakdown.length > 0
-      ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
-      : contract.initial_mw || 0;
+    const annualValue = calculateSingleContractARR(contract, ammpCapabilities);
 
-    let annualValue = 0;
-
-    try {
-      // For starter/capped packages, use minimum_annual_value + base_monthly_price * 12
-      if (contract.package === 'starter' || contract.package === 'capped') {
-        const annualBase = contract.minimum_annual_value || 0;
-        const monthlyBase = contract.base_monthly_price || 0;
-        annualValue = annualBase + (monthlyBase * 12);
-      } else if (totalMW > 0) {
-        // For pro/custom/hybrid_tiered, calculate annual value (frequencyMultiplier = 1)
-        const result = calculateInvoice({
-          packageType: contract.package as any,
-          totalMW,
-          selectedModules: (contract.modules as string[]) || [],
-          selectedAddons: ((contract.addons as any[]) || []).map((a: any) => ({
-            id: a.id || a.addonId,
-            quantity: a.quantity || 1,
-            complexity: a.complexity,
-            customPrice: a.customPrice,
-            customTiers: a.customTiers,
-          })),
-          frequencyMultiplier: 1, // Annual calculation
-          customPricing: contract.custom_pricing as any,
-          portfolioDiscountTiers: (contract.portfolio_discount_tiers as any[]) || [],
-          minimumChargeTiers: (contract.minimum_charge_tiers as any[]) || [],
-          minimumAnnualValue: contract.minimum_annual_value || 0,
-          ammpCapabilities: ammpCapabilities || undefined,
-          siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
-          baseMonthlyPrice: contract.base_monthly_price || 0,
-        });
-        annualValue = result.totalPrice;
-      }
-
-      // Add to appropriate currency bucket
-      if (contract.currency === 'USD') {
-        usdTotal += annualValue;
-      } else {
-        eurTotal += annualValue; // Default to EUR
-      }
-    } catch (error) {
-      console.error('Error calculating ARR for contract:', contract.id, error);
+    // Add to appropriate currency bucket
+    if (contract.currency === 'USD') {
+      usdTotal += annualValue;
+    } else {
+      eurTotal += annualValue; // Default to EUR
     }
   }
 
