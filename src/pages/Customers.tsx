@@ -103,7 +103,8 @@ const Customers = () => {
             volume_discounts,
             currency,
             contract_status,
-            signed_date
+            signed_date,
+            base_monthly_price
           )
         `)
         .eq('user_id', user.id);
