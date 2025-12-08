@@ -150,7 +150,7 @@ const Customers = () => {
           
           if (contract.package === 'starter') {
             // Starter package fixed annual cost
-            annualValue = contract.minimum_annual_value || 3000;
+            annualValue += contract.minimum_annual_value || 3000;
           } else if (contract.package === 'hybrid_tiered') {
             // Hybrid tiered package - use per-MWp rates
             const ongridPrice = contract.custom_pricing?.ongrid_per_mwp || 0;
@@ -197,7 +197,7 @@ const Customers = () => {
             annualValue = Math.max(annualValue, minimumValue);
           } else if (contract.package === 'capped') {
             // Capped package - fixed annual fee
-            annualValue = contract.minimum_annual_value || 0;
+            annualValue += contract.minimum_annual_value || 0;
           } else {
             // Pro or Custom package - calculate module costs (annual)
             const defaultPrices: {[key: string]: number} = {
@@ -213,7 +213,7 @@ const Customers = () => {
               return sum + (customPrice || defaultPrices[moduleId] || 0);
             }, 0);
             
-            annualValue = totalPerMwp * mwpManaged;
+            annualValue += totalPerMwp * mwpManaged;
             
             // Add recurring addons (annual cost)
             const addons = Array.isArray(contract.addons) ? contract.addons : [];
