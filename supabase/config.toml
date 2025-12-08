@@ -19,10 +19,10 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.ammp-token-exchange]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ammp-data-proxy]
-verify_jwt = false
+verify_jwt = true
 
 [functions.process-contract-ocr]
 verify_jwt = true

@@ -37,6 +37,10 @@ const AmmpIntegration = () => {
     }
   };
 
+  const handleDisconnect = async () => {
+    await disconnect();
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -60,7 +64,7 @@ const AmmpIntegration = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Enter AMMP API Key</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Your API key will be stored securely and used to authenticate with the AMMP Data API.
+                  Your API key will be stored securely on the server and used to authenticate with the AMMP Data API.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="space-y-2">
@@ -105,7 +109,7 @@ const AmmpIntegration = () => {
                 <Button onClick={testConnection} variant="outline" size="sm">
                   Test Connection
                 </Button>
-                <Button onClick={disconnect} variant="outline" size="sm">
+                <Button onClick={handleDisconnect} variant="outline" size="sm">
                   Disconnect
                 </Button>
               </div>

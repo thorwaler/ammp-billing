@@ -3,17 +3,13 @@
  */
 
 import { apiKeyService } from './apiKeyService';
-
-interface TokenResponse {
-  access_token: string;
-}
+import { supabase } from '@/integrations/supabase/client';
 
 interface TokenData {
   token: string;
   expiresAt: number;
 }
 
-const TOKEN_API_URL = 'https://data-api.ammp.io/v1/token';
 let cachedToken: TokenData | null = null;
 
 /**
@@ -40,10 +36,10 @@ function isTokenValid(tokenData: TokenData | null): boolean {
 
 /**
  * Exchange API key for Bearer token via backend proxy
+ * Now uses authenticated edge function
  */
 async function exchangeApiKeyForToken(apiKey: string): Promise<string> {
-  // Use backend edge function to avoid CORS issues
-  const { data, error } = await (await import('@/integrations/supabase/client')).supabase.functions.invoke(
+  const { data, error } = await supabase.functions.invoke(
     'ammp-token-exchange',
     {
       body: { apiKey }
@@ -78,7 +74,7 @@ export const authService = {
       return cachedToken!.token;
     }
 
-    const apiKey = apiKeyService.getApiKey();
+    const apiKey = await apiKeyService.getApiKey();
     if (!apiKey) {
       throw new Error('No API key found. Please connect to AMMP API first.');
     }
