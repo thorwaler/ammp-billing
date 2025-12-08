@@ -226,7 +226,8 @@ export function calculateSingleContractARR(
       annualValue = annualFeePerSite * totalSites;
     }
     // For pro/custom/hybrid_tiered - use calculateInvoice with frequencyMultiplier=1
-    else if (totalMW > 0) {
+    // Also run when there's a base_monthly_price or minimum_charge_tiers with sites (for metering/per-site contracts)
+    else if (totalMW > 0 || contract.base_monthly_price || ((contract.minimum_charge_tiers as any[])?.length > 0 && totalSites > 0)) {
       const result = calculateInvoice({
         packageType: contract.package as any,
         totalMW,
