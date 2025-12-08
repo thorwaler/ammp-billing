@@ -34,8 +34,8 @@ export function useAmmpConnection(): UseAmmpConnectionResult {
     setError(null);
 
     try {
-      // Store API key
-      apiKeyService.setApiKey(apiKey);
+      // Store API key securely in database
+      await apiKeyService.setApiKey(apiKey);
 
       // Exchange for Bearer token
       await authService.authenticate(apiKey);
@@ -56,7 +56,7 @@ export function useAmmpConnection(): UseAmmpConnectionResult {
       setAssets(null);
       
       // Clear stored credentials on failure
-      apiKeyService.removeApiKey();
+      await apiKeyService.removeApiKey();
       authService.clearToken();
 
       toast({
@@ -74,8 +74,8 @@ export function useAmmpConnection(): UseAmmpConnectionResult {
   /**
    * Disconnect and clear stored credentials
    */
-  const disconnect = () => {
-    apiKeyService.removeApiKey();
+  const disconnect = async () => {
+    await apiKeyService.removeApiKey();
     authService.clearToken();
     setIsConnected(false);
     setAssets(null);
@@ -117,15 +117,22 @@ export function useAmmpConnection(): UseAmmpConnectionResult {
   };
 
   /**
-   * Auto-connect on mount if API key exists
+   * Auto-connect on mount if API key exists in database
    */
   useEffect(() => {
     const autoConnect = async () => {
-      if (apiKeyService.hasApiKey() && !isConnected) {
-        const apiKey = apiKeyService.getApiKey();
+      const hasKey = await apiKeyService.hasApiKey();
+      if (hasKey && !isConnected) {
+        const apiKey = await apiKeyService.getApiKey();
         if (apiKey) {
           try {
-            await connect(apiKey);
+            // Exchange for Bearer token
+            await authService.authenticate(apiKey);
+            
+            // Test connection by fetching assets
+            const fetchedAssets = await dataApiClient.listAssets();
+            setAssets(fetchedAssets);
+            setIsConnected(true);
           } catch {
             // Silent fail on auto-connect
           }
