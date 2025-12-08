@@ -72,15 +72,9 @@ serve(async (req) => {
       );
     }
 
-    // Generate a random temporary password
-    const tempPassword = crypto.randomUUID().slice(0, 16) + 'Aa1!';
-
-    // Create the user using admin API
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password: tempPassword,
-      email_confirm: true, // Auto-confirm email
-      user_metadata: { full_name: name }
+    // Invite user - Supabase automatically sends a magic link email
+    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+      data: { full_name: name }
     });
 
     if (createError) {
@@ -125,7 +119,7 @@ serve(async (req) => {
           name,
           role
         },
-        message: `User ${email} has been created. They will need to reset their password on first login.`
+        message: `Invitation email sent to ${email}. They can click the link to set up their account.`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
