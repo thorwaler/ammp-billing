@@ -367,7 +367,9 @@ const ContractDetails = () => {
                     siteChargeFrequency: contract.site_charge_frequency,
                     retainerHours: contract.retainer_hours,
                     retainerHourlyRate: contract.retainer_hourly_rate,
-                    retainerMinimumValue: contract.retainer_minimum_value
+                    retainerMinimumValue: contract.retainer_minimum_value,
+                    ammpOrgId: contract.ammp_org_id,
+                    cachedCapabilities: contract.cached_capabilities
                   }}
                   onComplete={() => {
                     setShowEditDialog(false);
@@ -425,7 +427,9 @@ const ContractDetails = () => {
                     siteChargeFrequency: contract.site_charge_frequency,
                     retainerHours: contract.retainer_hours,
                     retainerHourlyRate: contract.retainer_hourly_rate,
-                    retainerMinimumValue: contract.retainer_minimum_value
+                    retainerMinimumValue: contract.retainer_minimum_value,
+                    ammpOrgId: contract.ammp_org_id,
+                    cachedCapabilities: contract.cached_capabilities
                   }}
             isExtending={true}
             onComplete={() => {
@@ -599,7 +603,7 @@ const ContractDetails = () => {
                 
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Current MW</p>
-                  <p className="font-medium">{customer?.mwp_managed || contract.initial_mw} MWp</p>
+                  <p className="font-medium">{cachedCapabilities?.totalMW?.toFixed(4) || contract.initial_mw} MWp</p>
                 </div>
                 
                 <div className="space-y-1">
@@ -786,6 +790,104 @@ const ContractDetails = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* AMMP Asset Breakdown Section */}
+        {cachedCapabilities?.assetBreakdown && cachedCapabilities.assetBreakdown.length > 0 && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-lg">Asset Breakdown</CardTitle>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  {contract.last_ammp_sync && (
+                    <span>Last sync: {formatDate(contract.last_ammp_sync)}</span>
+                  )}
+                  {contract.ammp_sync_status && (
+                    <Badge variant={contract.ammp_sync_status === 'completed' ? 'default' : 'secondary'}>
+                      {contract.ammp_sync_status}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {/* Summary Stats */}
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{cachedCapabilities.totalSites || 0}</p>
+                  <p className="text-xs text-muted-foreground">Total Sites</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{cachedCapabilities.totalMW?.toFixed(2) || 0}</p>
+                  <p className="text-xs text-muted-foreground">Total MW</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{cachedCapabilities.onGridSites || 0}</p>
+                  <p className="text-xs text-muted-foreground">On-Grid Sites</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{cachedCapabilities.hybridSites || 0}</p>
+                  <p className="text-xs text-muted-foreground">Hybrid Sites</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold">{cachedCapabilities.sitesWithSolcast || 0}</p>
+                  <p className="text-xs text-muted-foreground">With Solcast</p>
+                </div>
+              </div>
+
+              {/* Asset Table */}
+              <div className="max-h-96 overflow-auto border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 font-medium">Asset Name</th>
+                      <th className="text-right p-2 font-medium">MW</th>
+                      <th className="text-center p-2 font-medium">Hybrid</th>
+                      <th className="text-center p-2 font-medium">Solcast</th>
+                      <th className="text-right p-2 font-medium">Devices</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cachedCapabilities.assetBreakdown.map((asset: any) => (
+                      <tr key={asset.assetId} className="border-t hover:bg-muted/30">
+                        <td className="p-2">{asset.assetName}</td>
+                        <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
+                        <td className="p-2 text-center">
+                          {asset.isHybrid ? <Badge variant="outline" className="bg-purple-50">Yes</Badge> : '-'}
+                        </td>
+                        <td className="p-2 text-center">
+                          {asset.hasSolcast ? <Badge variant="outline" className="bg-blue-50">Yes</Badge> : '-'}
+                        </td>
+                        <td className="p-2 text-right">{asset.deviceCount || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* AMMP Configuration Info (when no assets synced yet) */}
+        {hasAMMPData && (!cachedCapabilities?.assetBreakdown || cachedCapabilities.assetBreakdown.length === 0) && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">AMMP Configuration</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2 text-sm">
+                {contract.ammp_org_id && (
+                  <p><span className="text-muted-foreground">Org ID:</span> {contract.ammp_org_id}</p>
+                )}
+                {contract.ammp_asset_group_id && (
+                  <p><span className="text-muted-foreground">Asset Group:</span> {contract.ammp_asset_group_name || contract.ammp_asset_group_id}</p>
+                )}
+                <p className="text-muted-foreground mt-4">
+                  Click "Sync AMMP" to fetch asset data for this contract.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Contract Amendments Section */}
         <ContractAmendments

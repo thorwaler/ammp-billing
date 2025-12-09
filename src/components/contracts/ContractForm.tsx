@@ -41,7 +41,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "@/hooks/use-toast";
-import { FileUp, Save, DollarSign, Calendar as CalendarIcon, Loader2, CheckCircle2 } from "lucide-react";
+import { FileUp, Save, DollarSign, Calendar as CalendarIcon, Loader2, CheckCircle2, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Badge } from "@/components/ui/badge";
@@ -165,6 +165,11 @@ interface ContractFormProps {
     siteSizeThresholdKwp?: number;
     belowThresholdPricePerMWp?: number;
     aboveThresholdPricePerMWp?: number;
+    // Contract-level AMMP fields
+    ammpOrgId?: string;
+    ammpSyncStatus?: string;
+    lastAmmpSync?: string;
+    cachedCapabilities?: any;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -2091,6 +2096,161 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               />
             </div>
               </>
+            )}
+            
+            {/* AMMP Configuration Section - show for all non-POC packages */}
+            {watchPackage !== "poc" && (
+              <div className="space-y-4 p-4 border rounded-lg bg-muted/20">
+                <h3 className="font-semibold">AMMP Configuration</h3>
+                <p className="text-sm text-muted-foreground">
+                  Configure AMMP integration for automatic asset syncing
+                </p>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="contractAmmpOrgId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>AMMP Organization ID</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., org_abc123" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Enter the AMMP organization ID to sync assets
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  {existingContractId && (
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={async () => {
+                          if (!existingContractId) return;
+                          try {
+                            const { data, error } = await supabase.functions.invoke('ammp-sync-contract', {
+                              body: { contractId: existingContractId }
+                            });
+                            if (error) throw error;
+                            if (data.success) {
+                              toast({
+                                title: "AMMP sync complete",
+                                description: `Synced ${data.totalSites} sites (${data.totalMW?.toFixed(4)} MW)`,
+                              });
+                            } else {
+                              throw new Error(data.error || 'Sync failed');
+                            }
+                          } catch (err: any) {
+                            toast({
+                              title: "Sync failed",
+                              description: err.message,
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        disabled={!form.watch('contractAmmpOrgId') && !form.watch('ammpAssetGroupId')}
+                      >
+                        <RefreshCw className="mr-2 h-4 w-4" />
+                        Sync from AMMP
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Asset Group Selectors - for Elum-style filtering */}
+                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || form.watch('ammpAssetGroupId')) && (
+                  <div className="space-y-4 mt-4 pt-4 border-t">
+                    <h4 className="text-sm font-medium">Asset Group Filtering</h4>
+                    <AssetGroupSelector
+                      value={form.watch('ammpAssetGroupId') || ''}
+                      onSelect={(id, name) => {
+                        form.setValue('ammpAssetGroupId', id);
+                        form.setValue('ammpAssetGroupName', name);
+                      }}
+                      label="Primary Asset Group"
+                      optional
+                      showClearButton
+                      onClear={() => {
+                        form.setValue('ammpAssetGroupId', '');
+                        form.setValue('ammpAssetGroupName', '');
+                      }}
+                    />
+                    
+                    <AssetGroupSelector
+                      value={form.watch('ammpAssetGroupIdAnd') || ''}
+                      onSelect={(id, name) => {
+                        form.setValue('ammpAssetGroupIdAnd', id);
+                        form.setValue('ammpAssetGroupNameAnd', name);
+                      }}
+                      label="Secondary Asset Group (AND)"
+                      optional
+                      showClearButton
+                      onClear={() => {
+                        form.setValue('ammpAssetGroupIdAnd', '');
+                        form.setValue('ammpAssetGroupNameAnd', '');
+                      }}
+                    />
+                    
+                    <AssetGroupSelector
+                      value={form.watch('ammpAssetGroupIdNot') || ''}
+                      onSelect={(id, name) => {
+                        form.setValue('ammpAssetGroupIdNot', id);
+                        form.setValue('ammpAssetGroupNameNot', name);
+                      }}
+                      label="Exclusion Asset Group (NOT)"
+                      optional
+                      showClearButton
+                      onClear={() => {
+                        form.setValue('ammpAssetGroupIdNot', '');
+                        form.setValue('ammpAssetGroupNameNot', '');
+                      }}
+                    />
+                  </div>
+                )}
+
+                {/* Show cached capabilities if available */}
+                {existingContract?.cachedCapabilities?.assetBreakdown && existingContract.cachedCapabilities.assetBreakdown.length > 0 && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-medium">Synced Assets</h4>
+                      <Badge variant="secondary">
+                        {existingContract.cachedCapabilities.totalSites} sites • {existingContract.cachedCapabilities.totalMW?.toFixed(2)} MW
+                      </Badge>
+                    </div>
+                    <div className="max-h-48 overflow-auto border rounded text-sm">
+                      <table className="w-full">
+                        <thead className="bg-muted sticky top-0">
+                          <tr>
+                            <th className="text-left p-1.5 font-medium">Asset</th>
+                            <th className="text-right p-1.5 font-medium">MW</th>
+                            <th className="text-center p-1.5 font-medium">Hybrid</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {existingContract.cachedCapabilities.assetBreakdown.slice(0, 20).map((asset: any) => (
+                            <tr key={asset.assetId} className="border-t">
+                              <td className="p-1.5">{asset.assetName}</td>
+                              <td className="p-1.5 text-right">{asset.totalMW?.toFixed(4)}</td>
+                              <td className="p-1.5 text-center">{asset.isHybrid ? '✓' : '-'}</td>
+                            </tr>
+                          ))}
+                          {existingContract.cachedCapabilities.assetBreakdown.length > 20 && (
+                            <tr className="border-t">
+                              <td colSpan={3} className="p-1.5 text-center text-muted-foreground">
+                                +{existingContract.cachedCapabilities.assetBreakdown.length - 20} more assets...
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
             
             <FormField
