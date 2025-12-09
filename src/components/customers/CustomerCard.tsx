@@ -1,4 +1,3 @@
-import { formatDistanceToNow } from "date-fns";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,12 +53,6 @@ interface CustomerCardProps {
     period_end?: string;
     company_name?: string;
   }>;
-  ammpOrgId?: string;
-  ammpAssetIds?: string[];
-  ammpCapabilities?: any;
-  lastAmmpSync?: string;
-  ammpSyncStatus?: string;
-  isWhitelabelPartner?: boolean;
   onViewContract?: () => void;
   onViewDetails?: () => void;
   onContractCreated?: () => void;
@@ -82,12 +75,6 @@ export function CustomerCard({
   hasContract,
   contractCount = 1,
   contracts = [],
-  ammpOrgId,
-  ammpAssetIds,
-  ammpCapabilities,
-  lastAmmpSync,
-  ammpSyncStatus,
-  isWhitelabelPartner,
   onViewContract,
   onViewDetails,
   onContractCreated,
@@ -189,12 +176,6 @@ export function CustomerCard({
             )}
           </div>
           <div className="flex items-center space-x-2">
-            {/* Whitelabel Partner Badge */}
-            {isWhitelabelPartner && (
-              <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
-                Whitelabel
-              </Badge>
-            )}
             {/* POC Badge - shown separately */}
             {packageType === 'poc' && hasContract && (
               <Badge variant="outline" className="bg-purple-600/20 text-purple-400 border-purple-500">
@@ -249,7 +230,7 @@ export function CustomerCard({
                       Edit Customer
                     </DropdownMenuItem>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Edit Customer: {displayName}</DialogTitle>
                     </DialogHeader>
@@ -265,12 +246,6 @@ export function CustomerCard({
                         location,
                         mwpManaged,
                         status,
-                        ammp_org_id: ammpOrgId,
-                        ammp_asset_ids: ammpAssetIds,
-                        is_whitelabel_partner: isWhitelabelPartner,
-                        ammp_capabilities: ammpCapabilities,
-                        last_ammp_sync: lastAmmpSync,
-                        ammp_sync_status: ammpSyncStatus,
                       }}
                     />
                   </DialogContent>
@@ -338,26 +313,8 @@ export function CustomerCard({
           </div>
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">MWp Managed</div>
-            <div className="font-medium">{mwpManaged} MWp</div>
+            <div className="font-medium">{mwpManaged.toFixed(2)} MWp</div>
           </div>
-          {ammpOrgId && (
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">AMMP Sync</div>
-              <Badge variant="outline" className="text-xs">
-                {lastAmmpSync ? (
-                  <>
-                    <CheckCircle2 className="mr-1 h-3 w-3" />
-                    {formatDistanceToNow(new Date(lastAmmpSync), { addSuffix: true })}
-                  </>
-                ) : (
-                  <>
-                    <AlertCircle className="mr-1 h-3 w-3" />
-                    Not synced
-                  </>
-                )}
-              </Badge>
-            </div>
-          )}
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
             <div className="font-medium">{formattedLastInvoiced}</div>
@@ -437,7 +394,7 @@ export function CustomerCard({
                       <DialogTitle>Edit Contract: {displayName}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, nickname, location, mwpManaged, ammpOrgId }}
+                      existingCustomer={{ id, name, nickname, location, mwpManaged }}
                       onComplete={() => {
                         setShowContractForm(false);
                         onContractCreated?.();
@@ -461,7 +418,7 @@ export function CustomerCard({
                       <DialogTitle>Add New Contract: {displayName}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, nickname, location, mwpManaged, ammpOrgId }}
+                      existingCustomer={{ id, name, nickname, location, mwpManaged }}
                       isNewContract={true}
                       onComplete={() => {
                         setShowAddContractForm(false);
@@ -486,7 +443,7 @@ export function CustomerCard({
                       <DialogTitle>Create Contract: {name}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, location, mwpManaged, ammpOrgId }}
+                      existingCustomer={{ id, name, location, mwpManaged }}
                       onComplete={() => {
                         setShowContractForm(false);
                         onContractCreated?.();
