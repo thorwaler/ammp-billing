@@ -130,6 +130,8 @@ interface Customer {
   ammpAssetGroupId?: string;
   ammpAssetGroupIdAnd?: string;
   ammpAssetGroupIdNot?: string;
+  cachedCapabilities?: any;
+  contractAmmpOrgId?: string;
 }
 
 // Default modules and addons from shared data
@@ -219,7 +221,9 @@ export function InvoiceCalculator({
             above_threshold_price_per_mwp,
             ammp_asset_group_id,
             ammp_asset_group_id_and,
-            ammp_asset_group_id_not
+            ammp_asset_group_id_not,
+            cached_capabilities,
+            contract_ammp_org_id
           )
         `)
         .eq('user_id', user.id)
@@ -283,6 +287,8 @@ export function InvoiceCalculator({
             ammpAssetGroupId: (contract as any).ammp_asset_group_id || undefined,
             ammpAssetGroupIdAnd: (contract as any).ammp_asset_group_id_and || undefined,
             ammpAssetGroupIdNot: (contract as any).ammp_asset_group_id_not || undefined,
+            cachedCapabilities: (contract as any).cached_capabilities || undefined,
+            contractAmmpOrgId: (contract as any).contract_ammp_org_id || undefined,
           };
         });
 
@@ -735,7 +741,16 @@ export function InvoiceCalculator({
     }
     
     // Prepare asset breakdown for site-level pricing
-    let assetBreakdown = selectedCustomer.ammpCapabilities?.assetBreakdown?.map((asset: any) => ({
+    // For Elum packages with contract-level sync (asset group or org ID), use cached_capabilities
+    const usesContractLevelSync = !!(
+      selectedCustomer.ammpAssetGroupId || 
+      selectedCustomer.contractAmmpOrgId
+    );
+    const effectiveCapabilities = usesContractLevelSync && selectedCustomer.cachedCapabilities
+      ? selectedCustomer.cachedCapabilities
+      : selectedCustomer.ammpCapabilities;
+    
+    let assetBreakdown = effectiveCapabilities?.assetBreakdown?.map((asset: any) => ({
       assetId: asset.assetId,
       assetName: asset.assetName,
       totalMW: asset.totalMW,
@@ -789,7 +804,7 @@ export function InvoiceCalculator({
       portfolioDiscountTiers: selectedCustomer.portfolioDiscountTiers,
       frequencyMultiplier,
       billingFrequency,
-      ammpCapabilities: selectedCustomer.ammpCapabilities,
+      ammpCapabilities: effectiveCapabilities,
       assetBreakdown,
       enableSiteMinimumPricing: enableSiteMinPricing,
       baseMonthlyPrice: selectedCustomer.baseMonthlyPrice,
