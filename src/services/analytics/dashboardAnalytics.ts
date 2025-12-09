@@ -828,7 +828,7 @@ export async function getProjectedRevenueByMonth(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
-  // Fetch active non-POC contracts with all pricing data
+  // Fetch active non-POC contracts with all pricing data including Elum fields
   let query = supabase
     .from('contracts')
     .select(`
@@ -847,7 +847,14 @@ export async function getProjectedRevenueByMonth(
       base_monthly_price,
       site_charge_frequency,
       currency,
-      cached_capabilities
+      cached_capabilities,
+      retainer_hours,
+      retainer_hourly_rate,
+      retainer_minimum_value,
+      site_size_threshold_kwp,
+      below_threshold_price_per_mwp,
+      above_threshold_price_per_mwp,
+      annual_fee_per_site
     `)
     .eq('user_id', user.id)
     .eq('contract_status', 'active')
@@ -885,7 +892,9 @@ export async function getProjectedRevenueByMonth(
         ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
         : contract.initial_mw || 0);
 
-    if (totalMW === 0 && contract.package !== 'starter' && contract.package !== 'capped') continue;
+    // Skip only if no MW AND not a package that can have revenue without MW
+    const packagesWithoutMWRequirement = ['starter', 'capped', 'elum_jubaili', 'per_site'];
+    if (totalMW === 0 && !packagesWithoutMWRequirement.includes(contract.package)) continue;
 
     // Determine billing frequency and interval
     const billingFrequency = contract.billing_frequency || 'annual';
@@ -902,7 +911,7 @@ export async function getProjectedRevenueByMonth(
         const monthlyBase = contract.base_monthly_price || 0;
         perInvoiceAmount = (basePrice * frequencyMultiplier) + (monthlyBase * monthsPerInvoice);
       } else {
-        // For pro/custom/hybrid_tiered, use full calculation
+        // For pro/custom/hybrid_tiered/elum packages, use full calculation
         const result = calculateInvoice({
           packageType: contract.package as any,
           totalMW,
@@ -915,6 +924,7 @@ export async function getProjectedRevenueByMonth(
             customTiers: a.customTiers,
           })),
           frequencyMultiplier,
+          billingFrequency: billingFrequency as any,
           customPricing: contract.custom_pricing as any,
           portfolioDiscountTiers: (contract.portfolio_discount_tiers as any[]) || [],
           minimumChargeTiers: (contract.minimum_charge_tiers as any[]) || [],
@@ -922,6 +932,18 @@ export async function getProjectedRevenueByMonth(
           ammpCapabilities: cachedCapabilities || undefined,
           siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
           baseMonthlyPrice: contract.base_monthly_price || 0,
+          // Elum ePM pricing fields
+          siteSizeThresholdKwp: contract.site_size_threshold_kwp || undefined,
+          belowThresholdPricePerMWp: contract.below_threshold_price_per_mwp || undefined,
+          aboveThresholdPricePerMWp: contract.above_threshold_price_per_mwp || undefined,
+          // Elum Jubaili pricing
+          annualFeePerSite: contract.annual_fee_per_site || undefined,
+          // Asset breakdown for Elum calculations
+          assetBreakdown: assetBreakdown.length > 0 ? assetBreakdown : undefined,
+          // Retainer support
+          retainerHours: contract.retainer_hours || undefined,
+          retainerHourlyRate: contract.retainer_hourly_rate || undefined,
+          retainerMinimumValue: contract.retainer_minimum_value || undefined,
         });
         perInvoiceAmount = result.totalPrice;
       }
