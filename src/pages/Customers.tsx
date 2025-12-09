@@ -44,13 +44,7 @@ interface CustomerData {
     cached_capabilities?: any;
   }>;
   package?: string;
-  ammpOrgId?: string;
-  ammpAssetIds?: string[];
-  ammpCapabilities?: any;
-  lastAmmpSync?: string;
-  ammpSyncStatus?: string;
   manualStatusOverride?: boolean;
-  isWhitelabelPartner?: boolean;
 }
 
 
@@ -61,7 +55,6 @@ const Customers = () => {
   const [openContractDialogs, setOpenContractDialogs] = useState<{[key: string]: boolean}>({});
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
-  const [isAmmpSyncing, setIsAmmpSyncing] = useState(false);
   const [customersData, setCustomersData] = useState<CustomerData[]>([]);
   const [filterTab, setFilterTab] = useState("all");
   const [sortField, setSortField] = useState<string>("name");
@@ -86,12 +79,6 @@ const Customers = () => {
           join_date,
           last_invoiced,
           manual_status_override,
-          is_whitelabel_partner,
-          ammp_org_id,
-          ammp_asset_ids,
-          ammp_capabilities,
-          last_ammp_sync,
-          ammp_sync_status,
           contracts (
             id,
             contract_name,
@@ -116,7 +103,7 @@ const Customers = () => {
             retainer_minimum_value,
             cached_capabilities,
             ammp_asset_group_id,
-            contract_ammp_org_id,
+            ammp_org_id,
             site_size_threshold_kwp,
             below_threshold_price_per_mwp,
             above_threshold_price_per_mwp
@@ -136,20 +123,15 @@ const Customers = () => {
       const modules = Array.isArray(firstActiveContract?.modules) ? firstActiveContract.modules as string[] : [];
       const addons = Array.isArray(firstActiveContract?.addons) ? (firstActiveContract.addons as any[]).map((a: any) => a.id || a) : [];
       
-      // Determine if this is a whitelabel partner (uses contract-level capabilities)
-      const isWhitelabelPartner = c.is_whitelabel_partner === true;
-      
-      // Calculate MW: For whitelabel partners, sum from contract cached_capabilities
-      // For regular customers, use customer-level mwp_managed
+      // Calculate MW: Sum from all active contracts' cached_capabilities
       let mwpManaged = 0;
-      if (isWhitelabelPartner) {
-        // Sum MW from all active contracts with cached_capabilities
-        activeContracts.forEach((contract: any) => {
-          if (contract.cached_capabilities?.totalMW) {
-            mwpManaged += contract.cached_capabilities.totalMW;
-          }
-        });
-      } else {
+      activeContracts.forEach((contract: any) => {
+        if (contract.cached_capabilities?.totalMW) {
+          mwpManaged += contract.cached_capabilities.totalMW;
+        }
+      });
+      // Fallback to customer-level mwp_managed if no cached_capabilities
+      if (mwpManaged === 0) {
         mwpManaged = Number(c.mwp_managed) || 0;
       }
       
@@ -199,12 +181,6 @@ const Customers = () => {
           cached_capabilities: contract.cached_capabilities,
         })),
         package: firstActiveContract?.package || undefined,
-        isWhitelabelPartner,
-        ammpOrgId: c.ammp_org_id || undefined,
-        ammpAssetIds: (Array.isArray(c.ammp_asset_ids) ? c.ammp_asset_ids : undefined) as string[] | undefined,
-        ammpCapabilities: c.ammp_capabilities || undefined,
-        lastAmmpSync: c.last_ammp_sync || undefined,
-        ammpSyncStatus: c.ammp_sync_status || undefined,
         manualStatusOverride: c.manual_status_override || false,
       };
     });
@@ -297,67 +273,6 @@ const Customers = () => {
     }
   };
 
-  const handleBulkAmmpSync = async () => {
-    setIsAmmpSyncing(true);
-    
-    try {
-      const customersWithAmmp = customersData.filter(c => c.ammpOrgId);
-      
-      if (customersWithAmmp.length === 0) {
-        toast({
-          title: "No AMMP customers",
-          description: "No customers have AMMP org IDs configured.",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      let successCount = 0;
-      let failCount = 0;
-      const errors: string[] = [];
-      
-      for (const customer of customersWithAmmp) {
-        try {
-          const { syncCustomerAMMPData } = await import('@/services/ammp/ammpService');
-          await syncCustomerAMMPData(customer.id, customer.ammpOrgId!);
-          successCount++;
-        } catch (error) {
-          failCount++;
-          console.error(`Failed to sync ${customer.name}:`, error);
-          errors.push(`${customer.name}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      }
-      
-      if (successCount > 0) {
-        toast({
-          title: "✅ AMMP Sync Complete",
-          description: `Successfully synced ${successCount} of ${customersWithAmmp.length} customers${failCount > 0 ? `. ${failCount} failed.` : ''}`,
-        });
-      }
-      
-      if (failCount > 0) {
-        console.error('AMMP sync errors:', errors);
-        toast({
-          title: "Some syncs failed",
-          description: `${failCount} customers failed to sync. Check console for details.`,
-          variant: "destructive",
-        });
-      }
-      
-      await loadCustomers();
-      
-    } catch (error) {
-      console.error('Error during bulk AMMP sync:', error);
-      toast({
-        title: "Bulk sync failed",
-        description: error instanceof Error ? error.message : "An unexpected error occurred.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsAmmpSyncing(false);
-    }
-  };
-
   const getFilteredCustomers = () => {
     let filtered = customersData;
     
@@ -370,15 +285,6 @@ const Customers = () => {
     } else if (filterTab === "no-contracts") {
       // Show customers that have no contract AND are not inactive
       filtered = filtered.filter(c => !c.contractId && c.status !== "inactive");
-    } else if (filterTab === "has-ammp") {
-      // Show all customers with AMMP org ID, regardless of sync status
-      filtered = filtered.filter(c => c.ammpOrgId);
-    } else if (filterTab === "no-ammp") {
-      // Show all customers without AMMP org ID
-      filtered = filtered.filter(c => !c.ammpOrgId);
-    } else if (filterTab === "ammp-synced") {
-      // Show only customers with AMMP org ID AND have been synced at least once
-      filtered = filtered.filter(c => c.ammpOrgId && c.ammpSyncStatus !== 'never_synced');
     }
     
     // Apply search filter
@@ -482,23 +388,6 @@ const Customers = () => {
                 </>
               )}
             </Button>
-            <Button 
-              variant="outline" 
-              onClick={handleBulkAmmpSync} 
-              disabled={isAmmpSyncing || customersData.filter(c => c.ammpOrgId).length === 0}
-            >
-              {isAmmpSyncing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Syncing AMMP...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Sync All from AMMP ({customersData.filter(c => c.ammpOrgId).length})
-                </>
-              )}
-            </Button>
             <Dialog open={showAddCustomerForm} onOpenChange={setShowAddCustomerForm}>
               <DialogTrigger asChild>
                 <Button>
@@ -506,7 +395,7 @@ const Customers = () => {
                   Add Customer
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+              <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Customer</DialogTitle>
                 </DialogHeader>
@@ -550,7 +439,7 @@ const Customers = () => {
                         <DialogTrigger asChild>
                           <Button variant="outline" className="w-full justify-start">
                             <Users className="mr-2 h-4 w-4" />
-                            {customer.nickname || customer.name} - {customer.mwpManaged} MWp
+                            {customer.nickname || customer.name} - {customer.mwpManaged.toFixed(2)} MWp
                           </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
@@ -564,7 +453,6 @@ const Customers = () => {
                               nickname: customer.nickname,
                               location: customer.location, 
                               mwpManaged: customer.mwpManaged,
-                              ammpOrgId: customer.ammpOrgId
                             }}
                             onComplete={() => {
                               setOpenContractDialogs({...openContractDialogs, [customer.id]: false});
@@ -596,15 +484,6 @@ const Customers = () => {
             </TabsTrigger>
             <TabsTrigger value="inactive">
               Inactive ({customersData.filter(c => c.status === "inactive").length})
-            </TabsTrigger>
-            <TabsTrigger value="has-ammp">
-              Has AMMP ({customersData.filter(c => c.ammpOrgId).length})
-            </TabsTrigger>
-            <TabsTrigger value="no-ammp">
-              No AMMP ({customersData.filter(c => !c.ammpOrgId).length})
-            </TabsTrigger>
-            <TabsTrigger value="ammp-synced">
-              AMMP Synced ({customersData.filter(c => c.ammpOrgId && c.ammpSyncStatus !== 'never_synced').length})
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -672,12 +551,6 @@ const Customers = () => {
               hasContract={!!customer.contractId}
               contractCount={customer.contractCount}
               contracts={customer.contracts}
-              ammpOrgId={customer.ammpOrgId}
-              ammpAssetIds={customer.ammpAssetIds}
-              ammpCapabilities={customer.ammpCapabilities}
-              lastAmmpSync={customer.lastAmmpSync}
-              ammpSyncStatus={customer.ammpSyncStatus}
-              isWhitelabelPartner={customer.isWhitelabelPartner}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)}
               onViewDetails={() => navigate(`/contracts/${customer.contractId}`)}
               onContractCreated={loadCustomers}

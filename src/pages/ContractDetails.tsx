@@ -60,9 +60,9 @@ const ContractDetails = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
 
-  // Check if contract uses contract-level sync (asset group or custom org)
-  const usesContractLevelSync = contract && (contract.ammp_asset_group_id || contract.contract_ammp_org_id);
-  const isElumContract = usesContractLevelSync; // Keep this for backward compatibility
+  // All contracts now use contract-level sync via cached_capabilities
+  const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
+  const cachedCapabilities = contract?.cached_capabilities;
 
   const loadContractData = async () => {
       setLoading(true);
@@ -306,14 +306,14 @@ const ContractDetails = () => {
           </div>
           
           <div className="flex gap-2 flex-wrap">
-            {isElumContract && (
+            {hasAMMPData && (
               <Button 
                 variant="outline" 
                 onClick={handleRefreshAssets}
                 disabled={isRefreshingAssets}
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingAssets ? 'animate-spin' : ''}`} />
-                {isRefreshingAssets ? 'Refreshing...' : 'Refresh Assets'}
+                {isRefreshingAssets ? 'Refreshing...' : 'Sync AMMP'}
               </Button>
             )}
             <Button variant="outline" onClick={handleDownloadContract}>
@@ -337,8 +337,7 @@ const ContractDetails = () => {
                     id: customer.id,
                     name: customer.name,
                     location: customer.location,
-                    mwpManaged: customer.mwp_managed,
-                    ammpOrgId: customer.ammp_org_id
+                    mwpManaged: cachedCapabilities?.totalMW || customer.mwp_managed || 0,
                   } : undefined}
                   existingContract={{
                     id: contract.id,
@@ -396,8 +395,7 @@ const ContractDetails = () => {
             existingCustomer={{
               id: contract.customer_id,
               name: contract.company_name,
-              mwpManaged: customer?.mwp_managed || contract.initial_mw,
-              ammpOrgId: customer?.ammp_org_id
+              mwpManaged: cachedCapabilities?.totalMW || customer?.mwp_managed || contract.initial_mw,
             }}
             existingContract={{
               id: contract.id,

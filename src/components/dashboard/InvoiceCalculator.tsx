@@ -46,7 +46,7 @@ import {
   type CalculationResult 
 } from "@/lib/invoiceCalculations";
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
-import { filterAssetsByGroups } from "@/lib/assetGroupFilter";
+// Asset group filtering now handled server-side in ammp-sync-contract
 
 // Simplified interfaces - complex types moved to shared files
 interface Module {

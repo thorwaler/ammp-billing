@@ -1,7 +1,6 @@
 /**
  * High-level AMMP API business logic
- * Now uses the unified ammp-sync-customer Edge Function for sync operations
- * with background processing and real progress polling
+ * Uses contract-level sync via ammp-sync-contract Edge Function
  */
 
 import { dataApiClient } from './dataApiClient';
@@ -144,36 +143,57 @@ export function detectSyncAnomalies(capabilities: AssetCapabilities[]): SyncAnom
   };
 }
 
-interface SyncJobStatus {
-  id: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  total_assets: number;
-  processed_assets: number;
-  current_asset_name: string | null;
-  result: any;
-  error_message: string | null;
-}
-
 /**
- * Poll for sync job status
+ * Sync contract AMMP data
+ * Uses the unified ammp-sync-contract Edge Function
  */
-async function pollJobStatus(jobId: string): Promise<SyncJobStatus> {
-  const { data, error } = await supabase
-    .from('ammp_sync_jobs')
-    .select('id, status, total_assets, processed_assets, current_asset_name, result, error_message')
-    .eq('id', jobId)
-    .single();
-
-  if (error) {
-    throw new Error(`Failed to fetch job status: ${error.message}`);
+export async function syncContractAMMPData(
+  contractId: string,
+  onProgress?: (current: number, total: number, assetName: string) => void
+): Promise<{
+  success: boolean;
+  totalMW?: number;
+  totalSites?: number;
+  error?: string;
+}> {
+  if (onProgress) {
+    onProgress(0, 1, 'Starting sync...');
   }
 
-  return data as SyncJobStatus;
+  try {
+    const { data, error } = await supabase.functions.invoke('ammp-sync-contract', {
+      body: { contractId }
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Failed to sync contract');
+    }
+
+    if (!data?.success) {
+      throw new Error(data?.error || 'Sync failed');
+    }
+
+    if (onProgress) {
+      onProgress(data.totalSites || 1, data.totalSites || 1, 'Complete');
+    }
+
+    return {
+      success: true,
+      totalMW: data.totalMW,
+      totalSites: data.totalSites,
+    };
+  } catch (err) {
+    console.error('[AMMP Sync] Contract sync error:', err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Unknown error',
+    };
+  }
 }
 
 /**
- * Sync customer AMMP data by org_id
- * Uses background processing with real progress polling
+ * @deprecated Use syncContractAMMPData instead
+ * Customer-level sync is deprecated in favor of contract-level sync
  */
 export async function syncCustomerAMMPData(
   customerId: string, 
@@ -183,81 +203,13 @@ export async function syncCustomerAMMPData(
   summary: any;
   anomalies: SyncAnomalies;
 }> {
-  // Start the sync job
-  if (onProgress) {
-    onProgress(0, 1, 'Starting sync...');
-  }
-
-  const { data, error } = await supabase.functions.invoke('ammp-sync-customer', {
-    body: { customerId, orgId }
-  });
-
-  if (error) {
-    throw new Error(error.message || 'Failed to start sync');
-  }
-
-  if (!data?.success || !data?.jobId) {
-    throw new Error(data?.error || 'Failed to start sync job');
-  }
-
-  const jobId = data.jobId;
-  console.log(`[AMMP Sync] Started background job: ${jobId}`);
-
-  // Poll for progress every 2 seconds
-  const POLL_INTERVAL = 2000;
-  const MAX_POLL_TIME = 10 * 60 * 1000; // 10 minutes max
-  const startTime = Date.now();
-
-  return new Promise((resolve, reject) => {
-    const pollInterval = setInterval(async () => {
-      try {
-        // Check for timeout
-        if (Date.now() - startTime > MAX_POLL_TIME) {
-          clearInterval(pollInterval);
-          reject(new Error('Sync timed out after 10 minutes'));
-          return;
-        }
-
-        const jobStatus = await pollJobStatus(jobId);
-        
-        // Report progress
-        if (onProgress && jobStatus.total_assets > 0) {
-          onProgress(
-            jobStatus.processed_assets,
-            jobStatus.total_assets,
-            jobStatus.current_asset_name || 'Processing...'
-          );
-        } else if (onProgress) {
-          // Still initializing
-          onProgress(0, 1, jobStatus.current_asset_name || 'Initializing...');
-        }
-
-        // Check if completed
-        if (jobStatus.status === 'completed') {
-          clearInterval(pollInterval);
-          
-          if (onProgress) {
-            onProgress(
-              jobStatus.total_assets,
-              jobStatus.total_assets,
-              'Complete'
-            );
-          }
-
-          resolve({
-            summary: jobStatus.result?.summary || {},
-            anomalies: jobStatus.result?.anomalies || { hasAnomalies: false, warnings: [], stats: {} },
-          });
-        } else if (jobStatus.status === 'failed') {
-          clearInterval(pollInterval);
-          reject(new Error(jobStatus.error_message || 'Sync failed'));
-        }
-      } catch (pollError) {
-        console.error('[AMMP Sync] Poll error:', pollError);
-        // Don't reject immediately on poll errors, just log and continue
-      }
-    }, POLL_INTERVAL);
-  });
+  console.warn('[AMMP Sync] syncCustomerAMMPData is deprecated. Use syncContractAMMPData instead.');
+  
+  // This function is deprecated - throw an error directing users to use contract-level sync
+  throw new Error(
+    'Customer-level AMMP sync is deprecated. ' +
+    'Please use contract-level sync via the Contract Details page instead.'
+  );
 }
 
 /**
