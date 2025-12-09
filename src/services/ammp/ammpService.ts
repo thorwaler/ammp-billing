@@ -1,5 +1,6 @@
 /**
  * High-level AMMP API business logic
+ * Now uses the unified ammp-sync-customer Edge Function for sync operations
  */
 
 import { dataApiClient } from './dataApiClient';
@@ -144,168 +145,50 @@ export function detectSyncAnomalies(capabilities: AssetCapabilities[]): SyncAnom
 
 /**
  * Sync customer AMMP data by org_id
- * Fetches all assets for an org, calculates capabilities, and stores in database
- * Uses smart caching to only fetch metadata for assets missing onboardingDate
+ * Now calls the unified ammp-sync-customer Edge Function
  */
 export async function syncCustomerAMMPData(
   customerId: string, 
   orgId: string,
   onProgress?: (current: number, total: number, assetName: string) => void
-) {
-  // 1. Fetch all assets from AMMP
-  const allAssets = await dataApiClient.listAssets();
-  const orgAssets = allAssets.filter(a => a.org_id === orgId);
-  
-  if (orgAssets.length === 0) {
-    throw new Error(`No assets found for org_id: ${orgId}`);
+): Promise<{
+  summary: any;
+  anomalies: SyncAnomalies;
+}> {
+  // Report starting
+  if (onProgress) {
+    onProgress(0, 1, 'Starting sync...');
   }
 
-  // 2. Fetch existing customer capabilities to check for cached onboardingDates
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error('Not authenticated');
+  // Call the unified Edge Function
+  const { data, error } = await supabase.functions.invoke('ammp-sync-customer', {
+    body: { customerId, orgId }
+  });
 
-  const { data: existingCustomer } = await supabase
-    .from('customers')
-    .select('ammp_capabilities')
-    .eq('id', customerId)
-    .eq('user_id', user.id)
-    .single();
-
-  const existingCapabilities = (existingCustomer?.ammp_capabilities as any)?.assetBreakdown || [];
-  
-  // Build a map of existing onboardingDates
-  const cachedOnboardingDates: Record<string, string | null> = {};
-  for (const asset of existingCapabilities) {
-    if (asset.assetId && asset.onboardingDate) {
-      cachedOnboardingDates[asset.assetId] = asset.onboardingDate;
-    }
+  if (error) {
+    throw new Error(error.message || 'Sync failed');
   }
 
-  // 3. Identify assets that need metadata fetch (missing onboardingDate)
-  const assetsMissingMetadata = orgAssets.filter(a => !cachedOnboardingDates[a.asset_id]);
-  
-  console.log(`[AMMP Sync] ${orgAssets.length} total assets, ${assetsMissingMetadata.length} need metadata fetch`);
-
-  // 4. Batch fetch metadata ONLY for assets that need it
-  const METADATA_BATCH_SIZE = 10;
-  const fetchedMetadata: Record<string, string | null> = {};
-
-  for (let i = 0; i < assetsMissingMetadata.length; i += METADATA_BATCH_SIZE) {
-    const batch = assetsMissingMetadata.slice(i, i + METADATA_BATCH_SIZE);
-    
-    // Report progress for metadata fetch phase
-    if (onProgress) {
-      onProgress(i + 1, assetsMissingMetadata.length, `Fetching metadata: ${batch[0]?.asset_name || 'assets'}`);
-    }
-    
-    const metadataPromises = batch.map(async (asset) => {
-      try {
-        const metadata = await dataApiClient.getAssetMetadata(asset.asset_id);
-        return { assetId: asset.asset_id, created: metadata.created || null };
-      } catch (error) {
-        console.warn(`[AMMP Sync] Failed to fetch metadata for ${asset.asset_id}:`, error);
-        return { assetId: asset.asset_id, created: null };
-      }
-    });
-    
-    const results = await Promise.all(metadataPromises);
-    for (const result of results) {
-      fetchedMetadata[result.assetId] = result.created;
-    }
+  if (!data?.success) {
+    throw new Error(data?.error || 'Sync failed');
   }
 
-  // 5. Combine cached and newly fetched metadata
-  const assetMetadataMap: Record<string, { created?: string }> = {};
-  for (const asset of orgAssets) {
-    const cachedDate = cachedOnboardingDates[asset.asset_id];
-    const fetchedDate = fetchedMetadata[asset.asset_id];
-    const created = cachedDate || fetchedDate || undefined;
-    if (created) {
-      assetMetadataMap[asset.asset_id] = { created };
-    }
+  // Report completion
+  if (onProgress) {
+    onProgress(data.assetsProcessed || 1, data.assetsProcessed || 1, 'Complete');
   }
 
-  // 6. Calculate capabilities in batches (parallel processing with progress tracking)
-  const BATCH_SIZE = 10;
-  const capabilities: AssetCapabilities[] = [];
-
-  for (let i = 0; i < orgAssets.length; i += BATCH_SIZE) {
-    const batch = orgAssets.slice(i, i + BATCH_SIZE);
-    
-    // Report progress for capability calculation phase
-    if (onProgress) {
-      onProgress(i + 1, orgAssets.length, `Syncing: ${batch[0]?.asset_name || 'assets'}`);
-    }
-    
-    // Process batch in parallel, passing pre-fetched metadata
-    const batchPromises = batch.map(async (asset) => {
-      return calculateCapabilities(asset.asset_id, assetMetadataMap[asset.asset_id]);
-    });
-    
-    const batchResults = await Promise.all(batchPromises);
-    capabilities.push(...batchResults);
-  }
-  
-  // 3. Aggregate data
-  const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset && !c.hasHybridEMS);
-  const hybridSites = capabilities.filter(c => c.hasBattery || c.hasGenset || c.hasHybridEMS);
-  
-  const summary = {
-    totalMW: capabilities.reduce((sum, cap) => sum + cap.totalMW, 0),
-    ongridTotalMW: ongridSites.reduce((sum, cap) => sum + cap.totalMW, 0),
-    hybridTotalMW: hybridSites.reduce((sum, cap) => sum + cap.totalMW, 0),
-    totalSites: capabilities.length,
-    ongridSites: ongridSites.length,
-    hybridSites: hybridSites.length,
-    sitesWithSolcast: capabilities.filter(c => c.hasSolcast).length,
-    assetBreakdown: capabilities.map(c => ({
-      assetId: c.assetId,
-      assetName: c.assetName,
-      totalMW: c.totalMW,
-      isHybrid: c.hasBattery || c.hasGenset || c.hasHybridEMS,
-      hasSolcast: c.hasSolcast,
-      deviceCount: c.deviceCount,
-      onboardingDate: c.onboardingDate,  // Include creation date in breakdown
-    }))
-  };
-  
-  // 9. Detect anomalies
-  const anomalies = detectSyncAnomalies(capabilities);
-  
-  // Log warnings to console for debugging
-  if (anomalies.hasAnomalies) {
-    console.warn('[AMMP Sync] Anomalies detected:', anomalies);
-  }
-  
-  // 10. Store in database (user already fetched earlier)
-  const { error } = await supabase
-    .from('customers')
-    .update({
-      ammp_capabilities: summary,
-      ammp_sync_status: 'synced',
-      last_ammp_sync: new Date().toISOString(),
-      mwp_managed: summary.totalMW,
-      ammp_asset_ids: orgAssets.map(a => a.asset_id),
-    })
-    .eq('id', customerId)
-    .eq('user_id', user.id);
-    
-  if (error) throw error;
-  
-  // 11. Auto-populate site_billing_status for per_site contracts
-  await populateSiteBillingStatus(customerId, user.id, summary.assetBreakdown);
-  
   return {
-    summary,
-    anomalies,
+    summary: data.summary,
+    anomalies: data.anomalies || { hasAnomalies: false, warnings: [], stats: {} },
   };
 }
 
 /**
  * Auto-populate site_billing_status for customers with per_site contracts
- * Creates/updates billing records for each asset
+ * Note: This is now handled by the Edge Function, but kept for backwards compatibility
  */
-async function populateSiteBillingStatus(
+export async function populateSiteBillingStatus(
   customerId: string,
   userId: string,
   assetBreakdown: Array<{
