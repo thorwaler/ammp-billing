@@ -164,14 +164,9 @@ const Customers = () => {
             .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0]
         : null;
       
-      // Sum contract values from ALL active contracts
-      // For whitelabel partners, use contract's cached_capabilities
-      // For regular customers, use customer's ammp_capabilities
+      // Sum contract values from ALL active contracts using cached_capabilities
       const totalContractValue = activeContracts.reduce((sum: number, contract: any) => {
-        const capabilities = isWhitelabelPartner 
-          ? contract.cached_capabilities 
-          : c.ammp_capabilities;
-        return sum + calculateSingleContractARR(contract, capabilities);
+        return sum + calculateSingleContractARR(contract);
       }, 0);
       
       // Get currency from first active contract (for display purposes)
