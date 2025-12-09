@@ -23,7 +23,7 @@ interface UpcomingInvoice {
   portfolioDiscountTiers: DiscountTier[];
   minimumAnnualValue: number;
   customPricing: any;
-  ammpCapabilities: any;
+  cachedCapabilities: any;
   manualInvoicing: boolean;
   baseMonthlyPrice: number;
   siteChargeFrequency: "monthly" | "annual";
@@ -74,24 +74,24 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           minimum_annual_value,
           custom_pricing,
           initial_mw,
-            manual_invoicing,
-            base_monthly_price,
-            site_charge_frequency,
-            retainer_hours,
-            retainer_hourly_rate,
-            retainer_minimum_value,
-            site_size_threshold_kwp,
-            below_threshold_price_per_mwp,
-            above_threshold_price_per_mwp,
-            ammp_asset_group_id,
-            ammp_asset_group_id_and,
-            ammp_asset_group_id_not,
-            customers (
+          manual_invoicing,
+          base_monthly_price,
+          site_charge_frequency,
+          retainer_hours,
+          retainer_hourly_rate,
+          retainer_minimum_value,
+          site_size_threshold_kwp,
+          below_threshold_price_per_mwp,
+          above_threshold_price_per_mwp,
+          ammp_asset_group_id,
+          ammp_asset_group_id_and,
+          ammp_asset_group_id_not,
+          cached_capabilities,
+          customers (
             id,
             name,
             nickname,
-            mwp_managed,
-            ammp_capabilities
+            mwp_managed
           )
         `)
         .eq('user_id', user.id)
@@ -132,7 +132,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             portfolioDiscountTiers,
             minimumAnnualValue: Number(c.minimum_annual_value) || 0,
             customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {},
-            ammpCapabilities: customer.ammp_capabilities || null,
+            cachedCapabilities: (c as any).cached_capabilities || null,
             manualInvoicing: c.manual_invoicing || false,
             baseMonthlyPrice: Number(c.base_monthly_price) || 0,
             siteChargeFrequency: (c.site_charge_frequency as "monthly" | "annual") || "annual",
@@ -172,14 +172,20 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
     
     const multiplier = frequencyMultipliers[invoice.billingFrequency as keyof typeof frequencyMultipliers] || 1;
     
-    const assetBreakdown = invoice.ammpCapabilities?.assetBreakdown 
-      ? invoice.ammpCapabilities.assetBreakdown.map((asset: any) => ({
+    // Use contract-level cached_capabilities as the source of truth
+    const assetBreakdown = invoice.cachedCapabilities?.assetBreakdown 
+      ? invoice.cachedCapabilities.assetBreakdown.map((asset: any) => ({
           assetId: asset.assetId,
           assetName: asset.assetName,
           totalMW: asset.totalMW,
           isHybrid: asset.isHybrid
         }))
       : undefined;
+    
+    // Calculate totalMW from cached capabilities
+    const totalMW = assetBreakdown && assetBreakdown.length > 0
+      ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
+      : invoice.mwpManaged;
     
     const selectedModules = Array.isArray(invoice.modules) 
       ? invoice.modules.map((m: any) => typeof m === 'string' ? m : m.id)
@@ -197,7 +203,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
     
     const result = calculateInvoice({
       packageType: invoice.packageType as any,
-      totalMW: invoice.mwpManaged,
+      totalMW,
       selectedModules,
       selectedAddons,
       customPricing: invoice.customPricing,
@@ -206,7 +212,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       portfolioDiscountTiers: invoice.portfolioDiscountTiers,
       minimumAnnualValue: invoice.minimumAnnualValue,
       frequencyMultiplier: multiplier,
-      ammpCapabilities: invoice.ammpCapabilities,
+      ammpCapabilities: invoice.cachedCapabilities,
       assetBreakdown,
       enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0,
       baseMonthlyPrice: invoice.baseMonthlyPrice,
