@@ -1,7 +1,6 @@
 import Layout from "@/components/layout/Layout";
 import XeroIntegration from "@/components/integrations/XeroIntegration";
 import AmmpIntegration from "@/components/integrations/AmmpIntegration";
-import AmmpSyncSettings from "@/components/integrations/AmmpSyncSettings";
 import WebhookNotifications from "@/components/integrations/WebhookNotifications";
 import { Link2 } from "lucide-react";
 
@@ -22,7 +21,6 @@ const Integrations = () => {
         <div className="grid gap-6 md:grid-cols-2">
           <XeroIntegration />
           <AmmpIntegration />
-          <AmmpSyncSettings />
           <WebhookNotifications />
         </div>
       </div>
