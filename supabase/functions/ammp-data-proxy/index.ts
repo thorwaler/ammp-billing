@@ -1,6 +1,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 
 const AMMP_BASE_URL = 'https://data-api.ammp.io/v1';
+const REQUEST_TIMEOUT_MS = 25000; // 25 seconds timeout (edge functions have 30s limit)
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -24,14 +25,55 @@ Deno.serve(async (req) => {
     const url = `${AMMP_BASE_URL}${path}`;
     console.log(`Proxying ${method} request to: ${url}`);
 
+    // Create abort controller for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let response: Response;
     const startTime = Date.now();
-    const response = await fetch(url, {
-      method,
-      headers: {
-        'accept': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-    });
+    
+    try {
+      response = await fetch(url, {
+        method,
+        headers: {
+          'accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      const errorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';
+      
+      // Check if it's an abort/timeout error
+      if (errorMessage.includes('abort') || errorMessage.includes('timeout')) {
+        console.error(`AMMP API request timed out after ${REQUEST_TIMEOUT_MS}ms: ${url}`);
+        return new Response(
+          JSON.stringify({
+            error: 'AMMP API request timed out',
+            details: `Request to ${path} exceeded ${REQUEST_TIMEOUT_MS}ms`,
+          }),
+          {
+            status: 504, // Gateway Timeout
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+      
+      console.error(`AMMP API fetch failed: ${errorMessage}`);
+      return new Response(
+        JSON.stringify({
+          error: 'Failed to connect to AMMP API',
+          details: errorMessage,
+        }),
+        {
+          status: 502, // Bad Gateway
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+    
+    clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
     console.log(`[AMMP Timing] ${url} took ${duration}ms`);
 
@@ -75,13 +117,19 @@ Deno.serve(async (req) => {
         const fallbackUrl = `${AMMP_BASE_URL}/assets/${assetId}`;
         
         try {
+          const fallbackController = new AbortController();
+          const fallbackTimeoutId = setTimeout(() => fallbackController.abort(), REQUEST_TIMEOUT_MS);
+          
           const fallbackResponse = await fetch(fallbackUrl, {
             method: 'GET',
             headers: {
               'accept': 'application/json',
               'Authorization': `Bearer ${token}`,
             },
+            signal: fallbackController.signal,
           });
+          
+          clearTimeout(fallbackTimeoutId);
           
           if (fallbackResponse.ok) {
             const assetData = await fallbackResponse.json();
