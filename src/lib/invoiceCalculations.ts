@@ -72,8 +72,8 @@ export interface CalculationParams {
   sitesToBill?: SiteBillingItem[];
   // Elum package fields
   siteSizeThresholdKwp?: number;
-  belowThresholdPricePerKwp?: number;
-  aboveThresholdPricePerKwp?: number;
+  belowThresholdPricePerMWp?: number;
+  aboveThresholdPricePerMWp?: number;
 }
 
 export interface SiteMinimumPricingResult {
@@ -100,9 +100,10 @@ export interface SiteMinimumPricingResult {
 export interface ElumEpmSiteBreakdown {
   assetId: string;
   assetName: string;
-  capacityKwp: number;
+  capacityKwp: number;  // For display
+  capacityMW: number;   // For calculation
   isSmallSite: boolean;
-  pricePerKwp: number;
+  pricePerMWp: number;  // Price per MWp
   cost: number;
 }
 
@@ -389,29 +390,33 @@ export function calculateHybridTieredBreakdown(
 
 /**
  * Calculate Elum ePM site-size threshold pricing
+ * Prices are per MWp (not per kWp), but threshold is still in kWp
  */
 export function calculateElumEpmBreakdown(
   assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number }>,
   thresholdKwp: number,
-  belowThresholdPrice: number,
-  aboveThresholdPrice: number,
+  belowThresholdPricePerMWp: number,
+  aboveThresholdPricePerMWp: number,
   frequencyMultiplier: number
 ): ElumEpmBreakdown {
   const smallSites: ElumEpmSiteBreakdown[] = [];
   const largeSites: ElumEpmSiteBreakdown[] = [];
   
   for (const asset of assetBreakdown) {
-    const capacityKwp = asset.totalMW * 1000; // Convert MW to kWp
+    const capacityKwp = asset.totalMW * 1000; // Convert MW to kWp for threshold comparison
+    const capacityMW = asset.totalMW;
     const isSmall = capacityKwp <= thresholdKwp;
-    const pricePerKwp = isSmall ? belowThresholdPrice : aboveThresholdPrice;
-    const cost = capacityKwp * pricePerKwp * frequencyMultiplier;
+    const pricePerMWp = isSmall ? belowThresholdPricePerMWp : aboveThresholdPricePerMWp;
+    // Cost is calculated using MW (not kWp) since prices are per MWp
+    const cost = capacityMW * pricePerMWp * frequencyMultiplier;
     
     const siteBreakdown: ElumEpmSiteBreakdown = {
       assetId: asset.assetId,
       assetName: asset.assetName,
       capacityKwp,
+      capacityMW,
       isSmallSite: isSmall,
-      pricePerKwp,
+      pricePerMWp,
       cost
     };
     
@@ -552,10 +557,10 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const minimumValue = minimumAnnualValue || 0;
     result.starterPackageCost = minimumValue * frequencyMultiplier;
   } else if (packageType === 'elum_epm') {
-    // Elum ePM - site-size threshold per-kWp pricing
+    // Elum ePM - site-size threshold per-MWp pricing
     const threshold = params.siteSizeThresholdKwp || 100;
-    const belowPrice = params.belowThresholdPricePerKwp || 50;
-    const abovePrice = params.aboveThresholdPricePerKwp || 30;
+    const belowPrice = params.belowThresholdPricePerMWp || 50;
+    const abovePrice = params.aboveThresholdPricePerMWp || 30;
     const assets = params.assetBreakdown || [];
     
     if (assets.length > 0) {

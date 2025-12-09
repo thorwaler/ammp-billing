@@ -106,8 +106,8 @@ const contractFormSchema = z.object({
   ammpAssetGroupNameNot: z.string().optional(),
   contractAmmpOrgId: z.string().optional(),
   siteSizeThresholdKwp: z.coerce.number().optional(),
-  belowThresholdPricePerKwp: z.coerce.number().optional(),
-  aboveThresholdPricePerKwp: z.coerce.number().optional(),
+  belowThresholdPricePerMWp: z.coerce.number().optional(),
+  aboveThresholdPricePerMWp: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -163,8 +163,8 @@ interface ContractFormProps {
     ammpAssetGroupNameNot?: string;
     contractAmmpOrgId?: string;
     siteSizeThresholdKwp?: number;
-    belowThresholdPricePerKwp?: number;
-    aboveThresholdPricePerKwp?: number;
+    belowThresholdPricePerMWp?: number;
+    aboveThresholdPricePerMWp?: number;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -225,8 +225,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       ammpAssetGroupNameNot: existingContract.ammpAssetGroupNameNot || "",
       contractAmmpOrgId: existingContract.contractAmmpOrgId || "",
       siteSizeThresholdKwp: existingContract.siteSizeThresholdKwp,
-      belowThresholdPricePerKwp: existingContract.belowThresholdPricePerKwp,
-      aboveThresholdPricePerKwp: existingContract.aboveThresholdPricePerKwp,
+      belowThresholdPricePerMWp: existingContract.belowThresholdPricePerMWp,
+      aboveThresholdPricePerMWp: existingContract.aboveThresholdPricePerMWp,
     } : {
       contractName: "",
       companyName: existingCustomer?.name || "",
@@ -338,8 +338,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue('ammpAssetGroupNameNot', existingContract.ammpAssetGroupNameNot || '');
       form.setValue('contractAmmpOrgId', existingContract.contractAmmpOrgId || '');
       form.setValue('siteSizeThresholdKwp', existingContract.siteSizeThresholdKwp || undefined);
-      form.setValue('belowThresholdPricePerKwp', existingContract.belowThresholdPricePerKwp || undefined);
-      form.setValue('aboveThresholdPricePerKwp', existingContract.aboveThresholdPricePerKwp || undefined);
+      form.setValue('belowThresholdPricePerMWp', existingContract.belowThresholdPricePerMWp || undefined);
+      form.setValue('aboveThresholdPricePerMWp', existingContract.aboveThresholdPricePerMWp || undefined);
       
       // Store contract ID for update if not extending
       if (!isExtending) {
@@ -493,8 +493,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         form.setValue('ammpAssetGroupNameNot', contract.ammp_asset_group_name_not || '');
         form.setValue('contractAmmpOrgId', contract.contract_ammp_org_id || '');
         form.setValue('siteSizeThresholdKwp', contract.site_size_threshold_kwp || undefined);
-        form.setValue('belowThresholdPricePerKwp', contract.below_threshold_price_per_kwp || undefined);
-        form.setValue('aboveThresholdPricePerKwp', contract.above_threshold_price_per_kwp || undefined);
+        form.setValue('belowThresholdPricePerMWp', contract.below_threshold_price_per_mwp || undefined);
+        form.setValue('aboveThresholdPricePerMWp', contract.above_threshold_price_per_mwp || undefined);
 
       } catch (error) {
         console.error('Error loading contract:', error);
@@ -585,8 +585,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
     } else if (value === "elum_epm") {
       // Elum ePM - site-size threshold pricing
       form.setValue("siteSizeThresholdKwp", 100);
-      form.setValue("belowThresholdPricePerKwp", 50);
-      form.setValue("aboveThresholdPricePerKwp", 30);
+      form.setValue("belowThresholdPricePerMWp", 50);
+      form.setValue("aboveThresholdPricePerMWp", 30);
       form.setValue("modules", []);
       setShowCustomPricing(false);
     } else if (value === "elum_jubaili") {
@@ -850,11 +850,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         site_size_threshold_kwp: data.package === 'elum_epm' 
           ? (data.siteSizeThresholdKwp || 100) 
           : null,
-        below_threshold_price_per_kwp: data.package === 'elum_epm' 
-          ? (data.belowThresholdPricePerKwp || 50) 
+        below_threshold_price_per_mwp: data.package === 'elum_epm' 
+          ? (data.belowThresholdPricePerMWp || 50) 
           : null,
-        above_threshold_price_per_kwp: data.package === 'elum_epm' 
-          ? (data.aboveThresholdPricePerKwp || 30) 
+        above_threshold_price_per_mwp: data.package === 'elum_epm' 
+          ? (data.aboveThresholdPricePerMWp || 30) 
           : null,
         max_mw: data.maxMw || null,
         notes: data.notes || '',
@@ -1288,28 +1288,30 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       </FormItem>
                     )}
                   />
-                  <FormField
+                <FormField
                     control={form.control}
-                    name="belowThresholdPricePerKwp"
+                    name="belowThresholdPricePerMWp"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price/kWp (≤ threshold)</FormLabel>
+                        <FormLabel>Price/MWp (≤ threshold)</FormLabel>
                         <FormControl>
                           <Input type="number" step="0.01" placeholder="50" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 50)} />
                         </FormControl>
+                        <FormDescription>Annual price per MWp for sites ≤ threshold</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
                   <FormField
                     control={form.control}
-                    name="aboveThresholdPricePerKwp"
+                    name="aboveThresholdPricePerMWp"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Price/kWp (&gt; threshold)</FormLabel>
+                        <FormLabel>Price/MWp (&gt; threshold)</FormLabel>
                         <FormControl>
                           <Input type="number" step="0.01" placeholder="30" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 30)} />
                         </FormControl>
+                        <FormDescription>Annual price per MWp for sites &gt; threshold</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}

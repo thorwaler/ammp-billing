@@ -32,8 +32,8 @@ interface UpcomingInvoice {
   retainerMinimumValue: number;
   // Elum package fields
   siteSizeThresholdKwp?: number;
-  belowThresholdPricePerKwp?: number;
-  aboveThresholdPricePerKwp?: number;
+  belowThresholdPricePerMWp?: number;
+  aboveThresholdPricePerMWp?: number;
   ammpAssetGroupId?: string;
   ammpAssetGroupIdAnd?: string;
   ammpAssetGroupIdNot?: string;
@@ -81,8 +81,8 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             retainer_hourly_rate,
             retainer_minimum_value,
             site_size_threshold_kwp,
-            below_threshold_price_per_kwp,
-            above_threshold_price_per_kwp,
+            below_threshold_price_per_mwp,
+            above_threshold_price_per_mwp,
             ammp_asset_group_id,
             ammp_asset_group_id_and,
             ammp_asset_group_id_not,
@@ -141,8 +141,8 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             retainerMinimumValue: Number((c as any).retainer_minimum_value) || 0,
             // Elum package fields
             siteSizeThresholdKwp: Number((c as any).site_size_threshold_kwp) || 100,
-            belowThresholdPricePerKwp: Number((c as any).below_threshold_price_per_kwp) || 50,
-            aboveThresholdPricePerKwp: Number((c as any).above_threshold_price_per_kwp) || 30,
+            belowThresholdPricePerMWp: Number((c as any).below_threshold_price_per_mwp) || 50,
+            aboveThresholdPricePerMWp: Number((c as any).above_threshold_price_per_mwp) || 30,
             ammpAssetGroupId: (c as any).ammp_asset_group_id || undefined,
             ammpAssetGroupIdAnd: (c as any).ammp_asset_group_id_and || undefined,
             ammpAssetGroupIdNot: (c as any).ammp_asset_group_id_not || undefined,
@@ -217,8 +217,8 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       retainerMinimumValue: invoice.retainerMinimumValue,
       // Elum package fields
       siteSizeThresholdKwp: invoice.siteSizeThresholdKwp,
-      belowThresholdPricePerKwp: invoice.belowThresholdPricePerKwp,
-      aboveThresholdPricePerKwp: invoice.aboveThresholdPricePerKwp,
+      belowThresholdPricePerMWp: invoice.belowThresholdPricePerMWp,
+      aboveThresholdPricePerMWp: invoice.aboveThresholdPricePerMWp,
     });
     
     return result.totalPrice;
