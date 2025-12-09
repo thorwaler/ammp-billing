@@ -116,7 +116,10 @@ const Customers = () => {
             retainer_minimum_value,
             cached_capabilities,
             ammp_asset_group_id,
-            contract_ammp_org_id
+            contract_ammp_org_id,
+            site_size_threshold_kwp,
+            below_threshold_price_per_kwp,
+            above_threshold_price_per_kwp
           )
         `)
         .eq('user_id', user.id);
