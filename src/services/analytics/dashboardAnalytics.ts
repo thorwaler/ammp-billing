@@ -272,11 +272,14 @@ export function calculateSingleContractARR(
   return annualValue;
 }
 
+// Elum package types that use contract-level cached capabilities
+const ELUM_PACKAGES = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
+
 /**
  * Calculate total ARR (Annual Recurring Revenue) from all active non-POC contracts
  */
 async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
-  // Fetch all active non-POC contracts with pricing data
+  // Fetch all active non-POC contracts with pricing data and cached capabilities
   const { data: contracts } = await supabase
     .from('contracts')
     .select(`
@@ -297,7 +300,8 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       annual_fee_per_site,
       retainer_hours,
       retainer_hourly_rate,
-      retainer_minimum_value
+      retainer_minimum_value,
+      cached_capabilities
     `)
     .eq('user_id', userId)
     .eq('contract_status', 'active')
@@ -305,7 +309,7 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
 
   if (!contracts || contracts.length === 0) return { eurTotal: 0, usdTotal: 0 };
 
-  // Fetch customer AMMP capabilities for accurate MW calculation
+  // Fetch customer AMMP capabilities for non-Elum contracts
   const customerIds = [...new Set(contracts.map(c => c.customer_id))];
   const { data: customers } = await supabase
     .from('customers')
@@ -318,10 +322,19 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
   let usdTotal = 0;
 
   for (const contract of contracts) {
-    const customer = customerMap.get(contract.customer_id);
-    if (!customer) continue;
+    // For Elum packages, use contract's cached_capabilities
+    // For other packages, use customer's ammp_capabilities
+    let ammpCapabilities: any;
+    
+    if (ELUM_PACKAGES.includes(contract.package)) {
+      // Use contract-level cached capabilities for Elum
+      ammpCapabilities = contract.cached_capabilities;
+    } else {
+      // Use customer-level capabilities for non-Elum
+      const customer = customerMap.get(contract.customer_id);
+      ammpCapabilities = customer?.ammp_capabilities;
+    }
 
-    const ammpCapabilities = customer.ammp_capabilities as any;
     const annualValue = calculateSingleContractARR(contract, ammpCapabilities);
 
     // Add to appropriate currency bucket

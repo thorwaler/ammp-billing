@@ -216,6 +216,7 @@ export type Database = {
           base_monthly_price: number | null
           below_threshold_price_per_kwp: number | null
           billing_frequency: string | null
+          cached_capabilities: Json | null
           company_name: string
           contract_ammp_org_id: string | null
           contract_expiry_date: string | null
@@ -267,6 +268,7 @@ export type Database = {
           base_monthly_price?: number | null
           below_threshold_price_per_kwp?: number | null
           billing_frequency?: string | null
+          cached_capabilities?: Json | null
           company_name: string
           contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
@@ -318,6 +320,7 @@ export type Database = {
           base_monthly_price?: number | null
           below_threshold_price_per_kwp?: number | null
           billing_frequency?: string | null
+          cached_capabilities?: Json | null
           company_name?: string
           contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
