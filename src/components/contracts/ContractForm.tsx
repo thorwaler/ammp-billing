@@ -228,7 +228,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       ammpAssetGroupNameAnd: existingContract.ammpAssetGroupNameAnd || "",
       ammpAssetGroupIdNot: existingContract.ammpAssetGroupIdNot || "",
       ammpAssetGroupNameNot: existingContract.ammpAssetGroupNameNot || "",
-      contractAmmpOrgId: existingContract.contractAmmpOrgId || "",
+      contractAmmpOrgId: existingContract.ammpOrgId || existingContract.contractAmmpOrgId || "",
       siteSizeThresholdKwp: existingContract.siteSizeThresholdKwp,
       belowThresholdPricePerMWp: existingContract.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: existingContract.aboveThresholdPricePerMWp,
@@ -341,7 +341,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue('ammpAssetGroupNameAnd', existingContract.ammpAssetGroupNameAnd || '');
       form.setValue('ammpAssetGroupIdNot', existingContract.ammpAssetGroupIdNot || '');
       form.setValue('ammpAssetGroupNameNot', existingContract.ammpAssetGroupNameNot || '');
-      form.setValue('contractAmmpOrgId', existingContract.contractAmmpOrgId || '');
+      form.setValue('contractAmmpOrgId', existingContract.ammpOrgId || existingContract.contractAmmpOrgId || '');
       form.setValue('siteSizeThresholdKwp', existingContract.siteSizeThresholdKwp || undefined);
       form.setValue('belowThresholdPricePerMWp', existingContract.belowThresholdPricePerMWp || undefined);
       form.setValue('aboveThresholdPricePerMWp', existingContract.aboveThresholdPricePerMWp || undefined);
