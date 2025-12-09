@@ -204,7 +204,7 @@ export type Database = {
       }
       contracts: {
         Row: {
-          above_threshold_price_per_kwp: number | null
+          above_threshold_price_per_mwp: number | null
           addons: Json | null
           ammp_asset_group_id: string | null
           ammp_asset_group_id_and: string | null
@@ -214,7 +214,7 @@ export type Database = {
           ammp_asset_group_name_not: string | null
           annual_fee_per_site: number | null
           base_monthly_price: number | null
-          below_threshold_price_per_kwp: number | null
+          below_threshold_price_per_mwp: number | null
           billing_frequency: string | null
           cached_capabilities: Json | null
           company_name: string
@@ -256,7 +256,7 @@ export type Database = {
           volume_discounts: Json | null
         }
         Insert: {
-          above_threshold_price_per_kwp?: number | null
+          above_threshold_price_per_mwp?: number | null
           addons?: Json | null
           ammp_asset_group_id?: string | null
           ammp_asset_group_id_and?: string | null
@@ -266,7 +266,7 @@ export type Database = {
           ammp_asset_group_name_not?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
-          below_threshold_price_per_kwp?: number | null
+          below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
           cached_capabilities?: Json | null
           company_name: string
@@ -308,7 +308,7 @@ export type Database = {
           volume_discounts?: Json | null
         }
         Update: {
-          above_threshold_price_per_kwp?: number | null
+          above_threshold_price_per_mwp?: number | null
           addons?: Json | null
           ammp_asset_group_id?: string | null
           ammp_asset_group_id_and?: string | null
@@ -318,7 +318,7 @@ export type Database = {
           ammp_asset_group_name_not?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
-          below_threshold_price_per_kwp?: number | null
+          below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
           cached_capabilities?: Json | null
           company_name?: string

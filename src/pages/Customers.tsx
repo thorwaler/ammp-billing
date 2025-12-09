@@ -118,8 +118,8 @@ const Customers = () => {
             ammp_asset_group_id,
             contract_ammp_org_id,
             site_size_threshold_kwp,
-            below_threshold_price_per_kwp,
-            above_threshold_price_per_kwp
+            below_threshold_price_per_mwp,
+            above_threshold_price_per_mwp
           )
         `)
         .eq('user_id', user.id);

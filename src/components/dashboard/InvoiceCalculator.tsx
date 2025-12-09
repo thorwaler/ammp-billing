@@ -125,8 +125,8 @@ interface Customer {
   contractId?: string;
   // Elum package fields
   siteSizeThresholdKwp?: number;
-  belowThresholdPricePerKwp?: number;
-  aboveThresholdPricePerKwp?: number;
+  belowThresholdPricePerMWp?: number;
+  aboveThresholdPricePerMWp?: number;
   ammpAssetGroupId?: string;
   ammpAssetGroupIdAnd?: string;
   ammpAssetGroupIdNot?: string;
@@ -215,8 +215,8 @@ export function InvoiceCalculator({
             onboarding_fee_per_site,
             annual_fee_per_site,
             site_size_threshold_kwp,
-            below_threshold_price_per_kwp,
-            above_threshold_price_per_kwp,
+            below_threshold_price_per_mwp,
+            above_threshold_price_per_mwp,
             ammp_asset_group_id,
             ammp_asset_group_id_and,
             ammp_asset_group_id_not
@@ -278,8 +278,8 @@ export function InvoiceCalculator({
             contractId: contract.id,
             // Elum package fields
             siteSizeThresholdKwp: Number((contract as any).site_size_threshold_kwp) || 100,
-            belowThresholdPricePerKwp: Number((contract as any).below_threshold_price_per_kwp) || 50,
-            aboveThresholdPricePerKwp: Number((contract as any).above_threshold_price_per_kwp) || 30,
+            belowThresholdPricePerMWp: Number((contract as any).below_threshold_price_per_mwp) || 50,
+            aboveThresholdPricePerMWp: Number((contract as any).above_threshold_price_per_mwp) || 30,
             ammpAssetGroupId: (contract as any).ammp_asset_group_id || undefined,
             ammpAssetGroupIdAnd: (contract as any).ammp_asset_group_id_and || undefined,
             ammpAssetGroupIdNot: (contract as any).ammp_asset_group_id_not || undefined,
@@ -803,8 +803,8 @@ export function InvoiceCalculator({
       sitesToBill: selectedCustomer.package === 'per_site' ? selectedSitesToBill : undefined,
       // Elum package fields
       siteSizeThresholdKwp: selectedCustomer.siteSizeThresholdKwp,
-      belowThresholdPricePerKwp: selectedCustomer.belowThresholdPricePerKwp,
-      aboveThresholdPricePerKwp: selectedCustomer.aboveThresholdPricePerKwp,
+      belowThresholdPricePerMWp: selectedCustomer.belowThresholdPricePerMWp,
+      aboveThresholdPricePerMWp: selectedCustomer.aboveThresholdPricePerMWp,
     };
     
     calculationResult = calculateInvoice(params);

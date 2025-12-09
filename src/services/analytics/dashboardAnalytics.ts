@@ -200,8 +200,8 @@ export function calculateSingleContractARR(
     retainer_hourly_rate?: number | null;
     retainer_minimum_value?: number | null;
     site_size_threshold_kwp?: number | null;
-    below_threshold_price_per_kwp?: number | null;
-    above_threshold_price_per_kwp?: number | null;
+    below_threshold_price_per_mwp?: number | null;
+    above_threshold_price_per_mwp?: number | null;
   },
   ammpCapabilities?: any
 ): number {
@@ -259,8 +259,8 @@ export function calculateSingleContractARR(
         enableSiteMinimumPricing: assetBreakdown.length > 0,
         // Elum ePM pricing fields
         siteSizeThresholdKwp: contract.site_size_threshold_kwp || undefined,
-        belowThresholdPricePerKwp: contract.below_threshold_price_per_kwp || undefined,
-        aboveThresholdPricePerKwp: contract.above_threshold_price_per_kwp || undefined,
+        belowThresholdPricePerMWp: contract.below_threshold_price_per_mwp || undefined,
+        aboveThresholdPricePerMWp: contract.above_threshold_price_per_mwp || undefined,
       });
       annualValue = result.totalPrice;
     }
@@ -316,8 +316,8 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       ammp_asset_group_id,
       contract_ammp_org_id,
       site_size_threshold_kwp,
-      below_threshold_price_per_kwp,
-      above_threshold_price_per_kwp
+      below_threshold_price_per_mwp,
+      above_threshold_price_per_mwp
     `)
     .eq('user_id', userId)
     .eq('contract_status', 'active')
