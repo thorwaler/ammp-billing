@@ -116,6 +116,9 @@ export const dataApiClient = {
    * Get members of an asset group
    */
   async getAssetGroupMembers(groupId: string): Promise<AssetGroupMemberResponse[]> {
-    return request<AssetGroupMemberResponse[]>(`/asset_groups/${groupId}/members`);
+    const response = await request<{ group_id: string; group_name: string; members: AssetGroupMemberResponse[] }>(
+      `/asset_groups/${groupId}/members`
+    );
+    return response.members || [];
   }
 };
