@@ -2,6 +2,19 @@ export type UUID = string & { __brand?: "uuid" }
 export type DateStr = string & { __brand?: "date" }
 export type DateTimeStr = string & { __brand?: "datetime" }
 
+// Asset Group types
+export interface AssetGroupResponse {
+  group_id: UUID;
+  group_name: string;
+  description?: string;
+  org_id?: UUID;
+}
+
+export interface AssetGroupMemberResponse {
+  asset_id: UUID;
+  asset_name: string;
+}
+
 // Asset tags
 export interface AssetTags {
   state?: string | null

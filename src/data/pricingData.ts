@@ -148,7 +148,17 @@ export const ADDONS: AddonDefinition[] = [
 ];
 
 // Package type definitions
-export type PackageType = "starter" | "pro" | "custom" | "hybrid_tiered" | "capped" | "poc" | "per_site";
+export type PackageType = 
+  | "starter" 
+  | "pro" 
+  | "custom" 
+  | "hybrid_tiered" 
+  | "capped" 
+  | "poc" 
+  | "per_site"
+  | "elum_epm"
+  | "elum_jubaili"
+  | "elum_portfolio_os";
 
 // Per-site pricing defaults (for UNHCR-style contracts)
 export const DEFAULT_PER_SITE_PRICING = {
