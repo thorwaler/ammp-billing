@@ -41,6 +41,7 @@ interface CustomerData {
     period_start?: string;
     period_end?: string;
     company_name?: string;
+    cached_capabilities?: any;
   }>;
   package?: string;
   ammpOrgId?: string;
@@ -49,6 +50,7 @@ interface CustomerData {
   lastAmmpSync?: string;
   ammpSyncStatus?: string;
   manualStatusOverride?: boolean;
+  isWhitelabelPartner?: boolean;
 }
 
 
@@ -84,6 +86,7 @@ const Customers = () => {
           join_date,
           last_invoiced,
           manual_status_override,
+          is_whitelabel_partner,
           ammp_org_id,
           ammp_asset_ids,
           ammp_capabilities,
@@ -110,7 +113,10 @@ const Customers = () => {
             annual_fee_per_site,
             retainer_hours,
             retainer_hourly_rate,
-            retainer_minimum_value
+            retainer_minimum_value,
+            cached_capabilities,
+            ammp_asset_group_id,
+            contract_ammp_org_id
           )
         `)
         .eq('user_id', user.id);
@@ -126,7 +132,23 @@ const Customers = () => {
       const firstActiveContract = activeContracts[0];
       const modules = Array.isArray(firstActiveContract?.modules) ? firstActiveContract.modules as string[] : [];
       const addons = Array.isArray(firstActiveContract?.addons) ? (firstActiveContract.addons as any[]).map((a: any) => a.id || a) : [];
-      const mwpManaged = Number(c.mwp_managed) || 0;
+      
+      // Determine if this is a whitelabel partner (uses contract-level capabilities)
+      const isWhitelabelPartner = c.is_whitelabel_partner === true;
+      
+      // Calculate MW: For whitelabel partners, sum from contract cached_capabilities
+      // For regular customers, use customer-level mwp_managed
+      let mwpManaged = 0;
+      if (isWhitelabelPartner) {
+        // Sum MW from all active contracts with cached_capabilities
+        activeContracts.forEach((contract: any) => {
+          if (contract.cached_capabilities?.totalMW) {
+            mwpManaged += contract.cached_capabilities.totalMW;
+          }
+        });
+      } else {
+        mwpManaged = Number(c.mwp_managed) || 0;
+      }
       
       // Count total contracts for this customer
       const contractCount = c.contracts?.length || 0;
@@ -139,9 +161,15 @@ const Customers = () => {
             .sort((a: string, b: string) => new Date(a).getTime() - new Date(b).getTime())[0]
         : null;
       
-      // Sum contract values from ALL active contracts using the single source of truth
-      const totalContractValue = activeContracts.reduce((sum: number, contract: any) => 
-        sum + calculateSingleContractARR(contract, c.ammp_capabilities), 0);
+      // Sum contract values from ALL active contracts
+      // For whitelabel partners, use contract's cached_capabilities
+      // For regular customers, use customer's ammp_capabilities
+      const totalContractValue = activeContracts.reduce((sum: number, contract: any) => {
+        const capabilities = isWhitelabelPartner 
+          ? contract.cached_capabilities 
+          : c.ammp_capabilities;
+        return sum + calculateSingleContractARR(contract, capabilities);
+      }, 0);
       
       // Get currency from first active contract (for display purposes)
       const contractCurrency = firstActiveContract?.currency || 'USD';
@@ -170,8 +198,10 @@ const Customers = () => {
           period_start: contract.period_start,
           period_end: contract.period_end,
           company_name: c.name,
+          cached_capabilities: contract.cached_capabilities,
         })),
         package: firstActiveContract?.package || undefined,
+        isWhitelabelPartner,
         ammpOrgId: c.ammp_org_id || undefined,
         ammpAssetIds: (Array.isArray(c.ammp_asset_ids) ? c.ammp_asset_ids : undefined) as string[] | undefined,
         ammpCapabilities: c.ammp_capabilities || undefined,
@@ -649,6 +679,7 @@ const Customers = () => {
               ammpCapabilities={customer.ammpCapabilities}
               lastAmmpSync={customer.lastAmmpSync}
               ammpSyncStatus={customer.ammpSyncStatus}
+              isWhitelabelPartner={customer.isWhitelabelPartner}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)}
               onViewDetails={() => navigate(`/contracts/${customer.contractId}`)}
               onContractCreated={loadCustomers}

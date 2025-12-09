@@ -60,9 +60,9 @@ const ContractDetails = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
 
-  // Elum package types that support asset refresh
-  const ELUM_PACKAGES = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
-  const isElumContract = contract && ELUM_PACKAGES.includes(contract.package);
+  // Check if contract uses contract-level sync (asset group or custom org)
+  const usesContractLevelSync = contract && (contract.ammp_asset_group_id || contract.contract_ammp_org_id);
+  const isElumContract = usesContractLevelSync; // Keep this for backward compatibility
 
   const loadContractData = async () => {
       setLoading(true);
