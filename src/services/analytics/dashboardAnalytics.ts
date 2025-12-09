@@ -272,8 +272,12 @@ export function calculateSingleContractARR(
   return annualValue;
 }
 
-// Elum package types that use contract-level cached capabilities
-const ELUM_PACKAGES = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
+/**
+ * Check if a contract uses contract-level sync (asset group or custom org)
+ */
+function usesContractLevelSync(contract: any): boolean {
+  return !!(contract.ammp_asset_group_id || contract.contract_ammp_org_id);
+}
 
 /**
  * Calculate total ARR (Annual Recurring Revenue) from all active non-POC contracts
@@ -301,7 +305,9 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       retainer_hours,
       retainer_hourly_rate,
       retainer_minimum_value,
-      cached_capabilities
+      cached_capabilities,
+      ammp_asset_group_id,
+      contract_ammp_org_id
     `)
     .eq('user_id', userId)
     .eq('contract_status', 'active')
@@ -322,15 +328,15 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
   let usdTotal = 0;
 
   for (const contract of contracts) {
-    // For Elum packages, use contract's cached_capabilities
-    // For other packages, use customer's ammp_capabilities
+    // For contracts with asset group or custom org, use contract's cached_capabilities
+    // For other contracts, use customer's ammp_capabilities
     let ammpCapabilities: any;
     
-    if (ELUM_PACKAGES.includes(contract.package)) {
-      // Use contract-level cached capabilities for Elum
+    if (usesContractLevelSync(contract)) {
+      // Use contract-level cached capabilities
       ammpCapabilities = contract.cached_capabilities;
     } else {
-      // Use customer-level capabilities for non-Elum
+      // Use customer-level capabilities
       const customer = customerMap.get(contract.customer_id);
       ammpCapabilities = customer?.ammp_capabilities;
     }

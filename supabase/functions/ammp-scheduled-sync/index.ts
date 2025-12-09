@@ -73,8 +73,9 @@ function calculateNextSyncAt(schedule: string): Date | null {
   }
 }
 
-// Elum package types that need contract-level sync
-const ELUM_PACKAGES = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
+/**
+ * Get contracts that need contract-level sync (have asset group ID or custom org ID)
+ */
 
 /**
  * Call ammp-sync-customer Edge Function for a single customer
@@ -148,16 +149,16 @@ async function syncContract(
 }
 
 /**
- * Check if a customer has any Elum contracts (needs contract-level sync)
+ * Get contracts that need contract-level sync (have asset group ID or custom org ID)
  */
-async function getElumContracts(supabase: any, customerId: string, userId: string): Promise<any[]> {
+async function getContractLevelSyncContracts(supabase: any, customerId: string, userId: string): Promise<any[]> {
   const { data: contracts } = await supabase
     .from('contracts')
-    .select('id, package, company_name')
+    .select('id, package, company_name, ammp_asset_group_id, contract_ammp_org_id')
     .eq('customer_id', customerId)
     .eq('user_id', userId)
     .eq('contract_status', 'active')
-    .in('package', ELUM_PACKAGES);
+    .or('ammp_asset_group_id.not.is.null,contract_ammp_org_id.not.is.null');
   
   return contracts || [];
 }
@@ -243,18 +244,18 @@ Deno.serve(async (req) => {
         for (const customer of customers || []) {
           console.log(`[AMMP Scheduled Sync] Processing customer ${customer.name}`);
           
-          // Check if customer has Elum contracts (need contract-level sync)
-          const elumContracts = await getElumContracts(supabase, customer.id, user_id);
+          // Check if customer has contracts needing contract-level sync
+          const contractLevelContracts = await getContractLevelSyncContracts(supabase, customer.id, user_id);
           
-          if (elumContracts.length > 0) {
-            // Sync Elum contracts individually (fast, asset-group scoped)
-            console.log(`[AMMP Scheduled Sync] Customer ${customer.name} has ${elumContracts.length} Elum contracts - using contract-level sync`);
+          if (contractLevelContracts.length > 0) {
+            // Sync contracts individually (fast, asset-group scoped)
+            console.log(`[AMMP Scheduled Sync] Customer ${customer.name} has ${contractLevelContracts.length} contract-level sync contracts`);
             
             let contractsSuccess = 0;
             let contractAssets = 0;
             
-            for (const contract of elumContracts) {
-              console.log(`[AMMP Scheduled Sync] Syncing Elum contract ${contract.id} (${contract.package})`);
+            for (const contract of contractLevelContracts) {
+              console.log(`[AMMP Scheduled Sync] Syncing contract ${contract.id} (${contract.package})`);
               
               const contractResult = await syncContract(contract.id, api_key, user_id);
               

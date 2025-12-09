@@ -44,6 +44,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     mwpManaged: existingCustomer?.mwpManaged || "",
     status: existingCustomer?.status || "active",
     ammpOrgId: existingCustomer?.ammp_org_id || "",
+    isWhitelabelPartner: existingCustomer?.is_whitelabel_partner || false,
   });
   
   // Track original status to detect manual changes
@@ -277,6 +278,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
         last_ammp_sync: syncedCapabilities ? new Date().toISOString() : null,
         // Set manual_status_override to true if status was manually changed
         manual_status_override: statusChanged ? true : (existingCustomer?.manual_status_override || false),
+        is_whitelabel_partner: formData.isWhitelabelPartner,
         user_id: user.id,
       };
 
@@ -395,6 +397,23 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 Status will be manually managed (Xero sync won't change it)
               </p>
             )}
+          </div>
+        </div>
+
+        {/* Whitelabel Partner Toggle */}
+        <div className="flex items-center space-x-3 p-4 border rounded-lg bg-muted/50">
+          <input
+            type="checkbox"
+            id="whitelabel-partner"
+            checked={formData.isWhitelabelPartner}
+            onChange={(e) => setFormData(prev => ({ ...prev, isWhitelabelPartner: e.target.checked }))}
+            className="h-4 w-4 rounded border-border"
+          />
+          <div className="flex flex-col">
+            <Label htmlFor="whitelabel-partner" className="cursor-pointer">Whitelabel Partner</Label>
+            <p className="text-xs text-muted-foreground">
+              Partner manages assets via contracts with asset groups or custom AMMP org IDs
+            </p>
           </div>
         </div>
 

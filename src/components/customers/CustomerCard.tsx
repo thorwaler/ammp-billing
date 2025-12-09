@@ -59,6 +59,7 @@ interface CustomerCardProps {
   ammpCapabilities?: any;
   lastAmmpSync?: string;
   ammpSyncStatus?: string;
+  isWhitelabelPartner?: boolean;
   onViewContract?: () => void;
   onViewDetails?: () => void;
   onContractCreated?: () => void;
@@ -86,6 +87,7 @@ export function CustomerCard({
   ammpCapabilities,
   lastAmmpSync,
   ammpSyncStatus,
+  isWhitelabelPartner,
   onViewContract,
   onViewDetails,
   onContractCreated,
@@ -187,6 +189,12 @@ export function CustomerCard({
             )}
           </div>
           <div className="flex items-center space-x-2">
+            {/* Whitelabel Partner Badge */}
+            {isWhitelabelPartner && (
+              <Badge variant="secondary" className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">
+                Whitelabel
+              </Badge>
+            )}
             {/* POC Badge - shown separately */}
             {packageType === 'poc' && hasContract && (
               <Badge variant="outline" className="bg-purple-600/20 text-purple-400 border-purple-500">
@@ -259,6 +267,7 @@ export function CustomerCard({
                         status,
                         ammp_org_id: ammpOrgId,
                         ammp_asset_ids: ammpAssetIds,
+                        is_whitelabel_partner: isWhitelabelPartner,
                         ammp_capabilities: ammpCapabilities,
                         last_ammp_sync: lastAmmpSync,
                         ammp_sync_status: ammpSyncStatus,

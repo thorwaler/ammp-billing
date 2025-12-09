@@ -404,6 +404,7 @@ export type Database = {
           ammp_sync_status: string | null
           created_at: string
           id: string
+          is_whitelabel_partner: boolean | null
           join_date: string | null
           last_ammp_sync: string | null
           last_invoiced: string | null
@@ -423,6 +424,7 @@ export type Database = {
           ammp_sync_status?: string | null
           created_at?: string
           id?: string
+          is_whitelabel_partner?: boolean | null
           join_date?: string | null
           last_ammp_sync?: string | null
           last_invoiced?: string | null
@@ -442,6 +444,7 @@ export type Database = {
           ammp_sync_status?: string | null
           created_at?: string
           id?: string
+          is_whitelabel_partner?: boolean | null
           join_date?: string | null
           last_ammp_sync?: string | null
           last_invoiced?: string | null
