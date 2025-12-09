@@ -1,6 +1,7 @@
 /**
  * High-level AMMP API business logic
  * Now uses the unified ammp-sync-customer Edge Function for sync operations
+ * with background processing and real progress polling
  */
 
 import { dataApiClient } from './dataApiClient';
@@ -143,10 +144,36 @@ export function detectSyncAnomalies(capabilities: AssetCapabilities[]): SyncAnom
   };
 }
 
+interface SyncJobStatus {
+  id: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  total_assets: number;
+  processed_assets: number;
+  current_asset_name: string | null;
+  result: any;
+  error_message: string | null;
+}
+
+/**
+ * Poll for sync job status
+ */
+async function pollJobStatus(jobId: string): Promise<SyncJobStatus> {
+  const { data, error } = await supabase
+    .from('ammp_sync_jobs')
+    .select('id, status, total_assets, processed_assets, current_asset_name, result, error_message')
+    .eq('id', jobId)
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to fetch job status: ${error.message}`);
+  }
+
+  return data as SyncJobStatus;
+}
+
 /**
  * Sync customer AMMP data by org_id
- * Now calls the unified ammp-sync-customer Edge Function
- * Uses simulated progress tracking since sync runs server-side
+ * Uses background processing with real progress polling
  */
 export async function syncCustomerAMMPData(
   customerId: string, 
@@ -156,59 +183,81 @@ export async function syncCustomerAMMPData(
   summary: any;
   anomalies: SyncAnomalies;
 }> {
-  // Estimated progress simulation (typical customer has 30-70 assets)
-  const estimatedAssets = 50;
-  let currentProgress = 0;
-  let progressInterval: ReturnType<typeof setInterval> | null = null;
-
-  // Start progress simulation
+  // Start the sync job
   if (onProgress) {
-    onProgress(0, estimatedAssets, 'Connecting to AMMP...');
-    
-    // Simulate progress every 1.5 seconds during server-side sync
-    progressInterval = setInterval(() => {
-      currentProgress = Math.min(currentProgress + 3, estimatedAssets - 5);
-      onProgress(currentProgress, estimatedAssets, 'Syncing assets...');
-    }, 1500);
+    onProgress(0, 1, 'Starting sync...');
   }
 
-  try {
-    // Call the unified Edge Function
-    const { data, error } = await supabase.functions.invoke('ammp-sync-customer', {
-      body: { customerId, orgId }
-    });
+  const { data, error } = await supabase.functions.invoke('ammp-sync-customer', {
+    body: { customerId, orgId }
+  });
 
-    // Clear progress simulation
-    if (progressInterval) {
-      clearInterval(progressInterval);
-      progressInterval = null;
-    }
-
-    if (error) {
-      throw new Error(error.message || 'Sync failed');
-    }
-
-    if (!data?.success) {
-      throw new Error(data?.error || 'Sync failed');
-    }
-
-    // Report actual completion with real count from server
-    if (onProgress) {
-      const actualCount = data.assetsProcessed || estimatedAssets;
-      onProgress(actualCount, actualCount, 'Complete');
-    }
-
-    return {
-      summary: data.summary,
-      anomalies: data.anomalies || { hasAnomalies: false, warnings: [], stats: {} },
-    };
-  } catch (err) {
-    // Ensure cleanup on error
-    if (progressInterval) {
-      clearInterval(progressInterval);
-    }
-    throw err;
+  if (error) {
+    throw new Error(error.message || 'Failed to start sync');
   }
+
+  if (!data?.success || !data?.jobId) {
+    throw new Error(data?.error || 'Failed to start sync job');
+  }
+
+  const jobId = data.jobId;
+  console.log(`[AMMP Sync] Started background job: ${jobId}`);
+
+  // Poll for progress every 2 seconds
+  const POLL_INTERVAL = 2000;
+  const MAX_POLL_TIME = 10 * 60 * 1000; // 10 minutes max
+  const startTime = Date.now();
+
+  return new Promise((resolve, reject) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        // Check for timeout
+        if (Date.now() - startTime > MAX_POLL_TIME) {
+          clearInterval(pollInterval);
+          reject(new Error('Sync timed out after 10 minutes'));
+          return;
+        }
+
+        const jobStatus = await pollJobStatus(jobId);
+        
+        // Report progress
+        if (onProgress && jobStatus.total_assets > 0) {
+          onProgress(
+            jobStatus.processed_assets,
+            jobStatus.total_assets,
+            jobStatus.current_asset_name || 'Processing...'
+          );
+        } else if (onProgress) {
+          // Still initializing
+          onProgress(0, 1, jobStatus.current_asset_name || 'Initializing...');
+        }
+
+        // Check if completed
+        if (jobStatus.status === 'completed') {
+          clearInterval(pollInterval);
+          
+          if (onProgress) {
+            onProgress(
+              jobStatus.total_assets,
+              jobStatus.total_assets,
+              'Complete'
+            );
+          }
+
+          resolve({
+            summary: jobStatus.result?.summary || {},
+            anomalies: jobStatus.result?.anomalies || { hasAnomalies: false, warnings: [], stats: {} },
+          });
+        } else if (jobStatus.status === 'failed') {
+          clearInterval(pollInterval);
+          reject(new Error(jobStatus.error_message || 'Sync failed'));
+        }
+      } catch (pollError) {
+        console.error('[AMMP Sync] Poll error:', pollError);
+        // Don't reject immediately on poll errors, just log and continue
+      }
+    }, POLL_INTERVAL);
+  });
 }
 
 /**
