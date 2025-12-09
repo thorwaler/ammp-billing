@@ -52,6 +52,40 @@ interface CustomerCardProps {
     period_start?: string;
     period_end?: string;
     company_name?: string;
+    cached_capabilities?: any;
+    // AMMP fields
+    ammp_org_id?: string;
+    ammp_asset_group_id?: string;
+    ammp_asset_group_name?: string;
+    ammp_asset_group_id_and?: string;
+    ammp_asset_group_name_and?: string;
+    ammp_asset_group_id_not?: string;
+    ammp_asset_group_name_not?: string;
+    // Other contract fields
+    modules?: any;
+    addons?: any;
+    custom_pricing?: any;
+    minimum_annual_value?: number;
+    minimum_charge?: number;
+    minimum_charge_tiers?: any;
+    portfolio_discount_tiers?: any;
+    site_charge_frequency?: string;
+    volume_discounts?: any;
+    currency?: string;
+    billing_frequency?: string;
+    base_monthly_price?: number;
+    initial_mw?: number;
+    annual_fee_per_site?: number;
+    retainer_hours?: number;
+    retainer_hourly_rate?: number;
+    retainer_minimum_value?: number;
+    site_size_threshold_kwp?: number;
+    below_threshold_price_per_mwp?: number;
+    above_threshold_price_per_mwp?: number;
+    contract_expiry_date?: string;
+    notes?: string;
+    max_mw?: number;
+    onboarding_fee_per_site?: number;
   }>;
   onViewContract?: () => void;
   onViewDetails?: () => void;
@@ -395,6 +429,52 @@ export function CustomerCard({
                     </DialogHeader>
                     <ContractForm 
                       existingCustomer={{ id, name, nickname, location, mwpManaged }}
+                      existingContract={contracts && contracts.length > 0 ? (() => {
+                        const c = contracts.find(ct => ct.contract_status === 'active') || contracts[0];
+                        return {
+                          id: c.id,
+                          contractName: c.contract_name,
+                          package: c.package,
+                          companyName: c.company_name || name,
+                          signedDate: c.signed_date,
+                          periodStart: c.period_start,
+                          periodEnd: c.period_end,
+                          cachedCapabilities: c.cached_capabilities,
+                          // AMMP fields
+                          ammpOrgId: c.ammp_org_id,
+                          ammpAssetGroupId: c.ammp_asset_group_id,
+                          ammpAssetGroupName: c.ammp_asset_group_name,
+                          ammpAssetGroupIdAnd: c.ammp_asset_group_id_and,
+                          ammpAssetGroupNameAnd: c.ammp_asset_group_name_and,
+                          ammpAssetGroupIdNot: c.ammp_asset_group_id_not,
+                          ammpAssetGroupNameNot: c.ammp_asset_group_name_not,
+                          // Other contract fields
+                          modules: c.modules,
+                          addons: c.addons,
+                          customPricing: c.custom_pricing,
+                          minimumAnnualValue: c.minimum_annual_value,
+                          minimumCharge: c.minimum_charge,
+                          minimumChargeTiers: c.minimum_charge_tiers,
+                          portfolioDiscountTiers: c.portfolio_discount_tiers,
+                          siteChargeFrequency: c.site_charge_frequency,
+                          volumeDiscounts: c.volume_discounts,
+                          currency: c.currency,
+                          billingFrequency: c.billing_frequency,
+                          baseMonthlyPrice: c.base_monthly_price,
+                          initialMW: c.initial_mw,
+                          annualFeePerSite: c.annual_fee_per_site,
+                          retainerHours: c.retainer_hours,
+                          retainerHourlyRate: c.retainer_hourly_rate,
+                          retainerMinimumValue: c.retainer_minimum_value,
+                          siteSizeThresholdKwp: c.site_size_threshold_kwp,
+                          belowThresholdPricePerMwp: c.below_threshold_price_per_mwp,
+                          aboveThresholdPricePerMwp: c.above_threshold_price_per_mwp,
+                          contractExpiryDate: c.contract_expiry_date,
+                          notes: c.notes,
+                          maxMw: c.max_mw,
+                          onboardingFeePerSite: c.onboarding_fee_per_site,
+                        };
+                      })() : undefined}
                       onComplete={() => {
                         setShowContractForm(false);
                         onContractCreated?.();
