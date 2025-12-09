@@ -216,6 +216,17 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       periodStart: existingContract.periodStart?.split('T')[0] || "",
       periodEnd: existingContract.periodEnd?.split('T')[0] || "",
       contractStatus: existingContract.contractStatus as any,
+      // Elum asset group fields
+      ammpAssetGroupId: existingContract.ammpAssetGroupId || "",
+      ammpAssetGroupName: existingContract.ammpAssetGroupName || "",
+      ammpAssetGroupIdAnd: existingContract.ammpAssetGroupIdAnd || "",
+      ammpAssetGroupNameAnd: existingContract.ammpAssetGroupNameAnd || "",
+      ammpAssetGroupIdNot: existingContract.ammpAssetGroupIdNot || "",
+      ammpAssetGroupNameNot: existingContract.ammpAssetGroupNameNot || "",
+      contractAmmpOrgId: existingContract.contractAmmpOrgId || "",
+      siteSizeThresholdKwp: existingContract.siteSizeThresholdKwp,
+      belowThresholdPricePerKwp: existingContract.belowThresholdPricePerKwp,
+      aboveThresholdPricePerKwp: existingContract.aboveThresholdPricePerKwp,
     } : {
       contractName: "",
       companyName: existingCustomer?.name || "",
@@ -318,12 +329,24 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         setShowCustomPricing(true);
       }
       
+      // Initialize Elum asset group fields
+      form.setValue('ammpAssetGroupId', existingContract.ammpAssetGroupId || '');
+      form.setValue('ammpAssetGroupName', existingContract.ammpAssetGroupName || '');
+      form.setValue('ammpAssetGroupIdAnd', existingContract.ammpAssetGroupIdAnd || '');
+      form.setValue('ammpAssetGroupNameAnd', existingContract.ammpAssetGroupNameAnd || '');
+      form.setValue('ammpAssetGroupIdNot', existingContract.ammpAssetGroupIdNot || '');
+      form.setValue('ammpAssetGroupNameNot', existingContract.ammpAssetGroupNameNot || '');
+      form.setValue('contractAmmpOrgId', existingContract.contractAmmpOrgId || '');
+      form.setValue('siteSizeThresholdKwp', existingContract.siteSizeThresholdKwp || undefined);
+      form.setValue('belowThresholdPricePerKwp', existingContract.belowThresholdPricePerKwp || undefined);
+      form.setValue('aboveThresholdPricePerKwp', existingContract.aboveThresholdPricePerKwp || undefined);
+      
       // Store contract ID for update if not extending
       if (!isExtending) {
         setExistingContractId(existingContract.id);
       }
     }
-  }, [existingContract, isExtending]);
+  }, [existingContract, isExtending, form]);
 
   // Auto-extend period dates when extending a contract
   useEffect(() => {
@@ -460,6 +483,18 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             { minMW: 200, maxMW: null, chargePerSite: charge, label: "200+ MW" }
           ]);
         }
+
+        // Load Elum asset group fields
+        form.setValue('ammpAssetGroupId', contract.ammp_asset_group_id || '');
+        form.setValue('ammpAssetGroupName', contract.ammp_asset_group_name || '');
+        form.setValue('ammpAssetGroupIdAnd', contract.ammp_asset_group_id_and || '');
+        form.setValue('ammpAssetGroupNameAnd', contract.ammp_asset_group_name_and || '');
+        form.setValue('ammpAssetGroupIdNot', contract.ammp_asset_group_id_not || '');
+        form.setValue('ammpAssetGroupNameNot', contract.ammp_asset_group_name_not || '');
+        form.setValue('contractAmmpOrgId', contract.contract_ammp_org_id || '');
+        form.setValue('siteSizeThresholdKwp', contract.site_size_threshold_kwp || undefined);
+        form.setValue('belowThresholdPricePerKwp', contract.below_threshold_price_per_kwp || undefined);
+        form.setValue('aboveThresholdPricePerKwp', contract.above_threshold_price_per_kwp || undefined);
 
       } catch (error) {
         console.error('Error loading contract:', error);
