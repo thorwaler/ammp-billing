@@ -138,19 +138,40 @@ function calculateCapabilities(
 
 /**
  * Fetch asset group members from AMMP API
+ * Returns array of { asset_id, asset_name } for each member
  */
-async function getAssetGroupMembers(token: string, groupId: string): Promise<string[]> {
+async function getAssetGroupMembers(token: string, groupId: string): Promise<{asset_id: string, asset_name: string}[]> {
   try {
-    const members = await fetchAMMPData(token, `/asset_groups/${groupId}/members`);
-    return members.map((m: any) => m.asset_id);
+    console.log(`[AMMP Sync Contract] Fetching members for group ${groupId}`);
+    const response = await fetchAMMPData(token, `/asset_groups/${groupId}/members`);
+    
+    // API returns: { group_id, group_name, members: [...] }
+    const members = response?.members || [];
+    
+    if (!Array.isArray(members)) {
+      console.warn(`[AMMP Sync Contract] Unexpected members format for group ${groupId}:`, typeof response);
+      return [];
+    }
+    
+    console.log(`[AMMP Sync Contract] Found ${members.length} members in group ${groupId}`);
+    return members.map((m: any) => ({ 
+      asset_id: m.asset_id, 
+      asset_name: m.asset_name || 'Unknown'
+    }));
   } catch (error) {
     console.error(`[AMMP Sync Contract] Failed to fetch group ${groupId} members:`, error);
     return [];
   }
 }
 
+interface AssetGroupMember {
+  asset_id: string;
+  asset_name: string;
+}
+
 /**
  * Process contract-level sync for Elum packages
+ * For asset group contracts, fetches members directly then full details for each
  */
 async function processContractSync(
   supabase: any,
@@ -161,7 +182,9 @@ async function processContractSync(
   const packageType = contract.package;
   console.log(`[AMMP Sync Contract] Processing ${packageType} contract ${contract.id}`);
   
-  let filteredAssetIds: string[] = [];
+  // For asset group contracts, we get members directly (no need for allAssets)
+  let assetGroupMembers: AssetGroupMember[] = [];
+  let useAssetGroupApproach = false;
   
   // Get existing cached capabilities for onboarding dates
   const existingCached = contract.cached_capabilities as CachedCapabilities | null;
@@ -176,32 +199,36 @@ async function processContractSync(
   
   // For elum_epm and elum_jubaili: filter by asset group
   if ((packageType === 'elum_epm' || packageType === 'elum_jubaili') && contract.ammp_asset_group_id) {
-    // Get primary group members
+    useAssetGroupApproach = true;
+    
+    // Get primary group members (returns array of {asset_id, asset_name})
     const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
-    filteredAssetIds = [...primaryMembers];
+    assetGroupMembers = [...primaryMembers];
     
     // Apply AND filter if configured
     if (contract.ammp_asset_group_id_and) {
       const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
-      filteredAssetIds = filteredAssetIds.filter(id => andMembers.includes(id));
+      const andIds = new Set(andMembers.map(m => m.asset_id));
+      assetGroupMembers = assetGroupMembers.filter(m => andIds.has(m.asset_id));
     }
     
     // Apply NOT filter if configured
     if (contract.ammp_asset_group_id_not) {
       const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
-      filteredAssetIds = filteredAssetIds.filter(id => !notMembers.includes(id));
+      const notIds = new Set(notMembers.map(m => m.asset_id));
+      assetGroupMembers = assetGroupMembers.filter(m => !notIds.has(m.asset_id));
     }
     
-    console.log(`[AMMP Sync Contract] Asset group filtering: ${filteredAssetIds.length} assets`);
+    console.log(`[AMMP Sync Contract] Asset group filtering: ${assetGroupMembers.length} assets`);
   }
-  // For elum_portfolio_os: use contract-specific org_id
+  // For elum_portfolio_os: use contract-specific org_id (needs allAssets)
   else if (packageType === 'elum_portfolio_os' && contract.contract_ammp_org_id) {
     const orgAssets = allAssets.filter(a => a.org_id === contract.contract_ammp_org_id);
-    filteredAssetIds = orgAssets.map(a => a.asset_id);
-    console.log(`[AMMP Sync Contract] Org ${contract.contract_ammp_org_id} filtering: ${filteredAssetIds.length} assets`);
+    assetGroupMembers = orgAssets.map(a => ({ asset_id: a.asset_id, asset_name: a.asset_name }));
+    console.log(`[AMMP Sync Contract] Org ${contract.contract_ammp_org_id} filtering: ${assetGroupMembers.length} assets`);
   }
   
-  if (filteredAssetIds.length === 0) {
+  if (assetGroupMembers.length === 0) {
     console.log(`[AMMP Sync Contract] No assets found for contract ${contract.id}`);
     return {
       totalMW: 0,
@@ -216,68 +243,54 @@ async function processContractSync(
     };
   }
   
-  // Filter full assets list to only those in our filter
-  const targetAssets = allAssets.filter(a => filteredAssetIds.includes(a.asset_id));
-  
-  // Identify assets needing metadata fetch
-  const assetsMissingMetadata = targetAssets.filter(a => !cachedDates[a.asset_id]);
+  // For asset group approach, we need to fetch full asset details for each member
+  // Since group endpoint only provides asset_id and asset_name
+  const assetsMissingMetadata = assetGroupMembers.filter(m => !cachedDates[m.asset_id]);
   console.log(`[AMMP Sync Contract] ${assetsMissingMetadata.length} assets need metadata fetch`);
   
-  // Batch fetch metadata for assets missing onboarding dates
-  const fetchedMetadata: Record<string, string | null> = {};
-  const METADATA_BATCH_SIZE = 10;
-  
-  for (let i = 0; i < assetsMissingMetadata.length; i += METADATA_BATCH_SIZE) {
-    const batch = assetsMissingMetadata.slice(i, i + METADATA_BATCH_SIZE);
-    const metadataPromises = batch.map(async (asset: any) => {
-      try {
-        const metadata = await fetchAMMPData(token, `/assets/${asset.asset_id}`);
-        return { assetId: asset.asset_id, created: metadata.created || null };
-      } catch (error) {
-        console.warn(`Failed to fetch metadata for ${asset.asset_id}:`, error);
-        return { assetId: asset.asset_id, created: null };
-      }
-    });
-    
-    const results = await Promise.all(metadataPromises);
-    for (const result of results) {
-      fetchedMetadata[result.assetId] = result.created;
-    }
-  }
-  
-  // Process assets in batches with device data
+  // Batch fetch full asset data (metadata + devices) for each member
+  // Since asset group endpoint only gives us IDs and names
   const capabilities: AssetCapabilities[] = [];
   const BATCH_SIZE = 10;
   
-  for (let i = 0; i < targetAssets.length; i += BATCH_SIZE) {
-    const batch = targetAssets.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < assetGroupMembers.length; i += BATCH_SIZE) {
+    const batch = assetGroupMembers.slice(i, i + BATCH_SIZE);
     
-    const batchPromises = batch.map(async (asset: any) => {
+    const batchPromises = batch.map(async (member) => {
       try {
-        // Fetch asset with devices
-        const assetData = await fetchAMMPData(token, `/assets/${asset.asset_id}/devices?include_virtual=true`);
-        const devices = assetData.devices || [];
+        // Fetch full asset details including total_pv_power
+        const assetData = await fetchAMMPData(token, `/assets/${member.asset_id}`);
         
-        // Use cached or fetched onboarding date
-        const cachedDate = cachedDates[asset.asset_id] || fetchedMetadata[asset.asset_id];
+        // Fetch devices for capability detection
+        let devices: any[] = [];
+        try {
+          const devicesResponse = await fetchAMMPData(token, `/assets/${member.asset_id}/devices?include_virtual=true`);
+          devices = devicesResponse.devices || devicesResponse || [];
+          if (!Array.isArray(devices)) devices = [];
+        } catch (deviceError) {
+          console.warn(`[AMMP Sync Contract] No devices for ${member.asset_id}`);
+        }
+        
+        // Use cached onboarding date if available, otherwise use asset.created
+        const cachedDate = cachedDates[member.asset_id] || assetData.created || null;
         
         return calculateCapabilities(
-          { ...asset, ...assetData },
+          { ...assetData, asset_id: member.asset_id, asset_name: member.asset_name },
           devices,
           cachedDate
         );
       } catch (error) {
-        console.error(`Error processing asset ${asset.asset_id}:`, error);
+        console.error(`[AMMP Sync Contract] Error processing asset ${member.asset_id}:`, error);
         return {
-          assetId: asset.asset_id,
-          assetName: asset.asset_name || 'Unknown',
+          assetId: member.asset_id,
+          assetName: member.asset_name,
           totalMW: 0,
           capacityKWp: 0,
           hasSolcast: false,
           hasBattery: false,
           hasGenset: false,
           hasHybridEMS: false,
-          onboardingDate: cachedDates[asset.asset_id] || fetchedMetadata[asset.asset_id] || null,
+          onboardingDate: cachedDates[member.asset_id] || null,
           deviceCount: 0,
         };
       }
@@ -286,7 +299,7 @@ async function processContractSync(
     const batchResults = await Promise.all(batchPromises);
     capabilities.push(...batchResults);
     
-    console.log(`[AMMP Sync Contract] Progress: ${Math.min(i + BATCH_SIZE, targetAssets.length)}/${targetAssets.length}`);
+    console.log(`[AMMP Sync Contract] Progress: ${Math.min(i + BATCH_SIZE, assetGroupMembers.length)}/${assetGroupMembers.length}`);
   }
   
   // Aggregate data
