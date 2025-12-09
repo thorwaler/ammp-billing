@@ -73,6 +73,9 @@ function calculateNextSyncAt(schedule: string): Date | null {
   }
 }
 
+// Elum package types that need contract-level sync
+const ELUM_PACKAGES = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
+
 /**
  * Call ammp-sync-customer Edge Function for a single customer
  */
@@ -105,6 +108,58 @@ async function syncCustomer(
   } catch (error: any) {
     return { success: false, error: error.message };
   }
+}
+
+/**
+ * Call ammp-sync-contract Edge Function for Elum contracts
+ */
+async function syncContract(
+  contractId: string,
+  apiKey: string,
+  userId: string
+): Promise<{ success: boolean; error?: string; totalSites?: number; totalMW?: number }> {
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/ammp-sync-contract`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ contractId, apiKey, userId }),
+    });
+    
+    const result = await response.json();
+    
+    if (!response.ok || !result.success) {
+      return { success: false, error: result.error || 'Contract sync failed' };
+    }
+    
+    return { 
+      success: true, 
+      totalSites: result.totalSites,
+      totalMW: result.totalMW
+    };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Check if a customer has any Elum contracts (needs contract-level sync)
+ */
+async function getElumContracts(supabase: any, customerId: string, userId: string): Promise<any[]> {
+  const { data: contracts } = await supabase
+    .from('contracts')
+    .select('id, package, company_name')
+    .eq('customer_id', customerId)
+    .eq('user_id', userId)
+    .eq('contract_status', 'active')
+    .in('package', ELUM_PACKAGES);
+  
+  return contracts || [];
 }
 
 Deno.serve(async (req) => {
@@ -184,28 +239,59 @@ Deno.serve(async (req) => {
         let customersProcessed = 0;
         let totalAssets = 0;
 
-        // Sync each customer using the unified function
+        // Sync each customer
         for (const customer of customers || []) {
-          console.log(`[AMMP Scheduled Sync] Syncing customer ${customer.name}`);
+          console.log(`[AMMP Scheduled Sync] Processing customer ${customer.name}`);
           
-          const result = await syncCustomer(
-            customer.id,
-            customer.ammp_org_id!,
-            api_key,
-            user_id
-          );
+          // Check if customer has Elum contracts (need contract-level sync)
+          const elumContracts = await getElumContracts(supabase, customer.id, user_id);
           
-          if (result.success) {
-            customersProcessed++;
-            totalAssets += result.assetsProcessed || 0;
-            console.log(`[AMMP Scheduled Sync] ✓ ${customer.name}: ${result.assetsProcessed} assets`);
+          if (elumContracts.length > 0) {
+            // Sync Elum contracts individually (fast, asset-group scoped)
+            console.log(`[AMMP Scheduled Sync] Customer ${customer.name} has ${elumContracts.length} Elum contracts - using contract-level sync`);
+            
+            let contractsSuccess = 0;
+            let contractAssets = 0;
+            
+            for (const contract of elumContracts) {
+              console.log(`[AMMP Scheduled Sync] Syncing Elum contract ${contract.id} (${contract.package})`);
+              
+              const contractResult = await syncContract(contract.id, api_key, user_id);
+              
+              if (contractResult.success) {
+                contractsSuccess++;
+                contractAssets += contractResult.totalSites || 0;
+                console.log(`[AMMP Scheduled Sync] ✓ Contract ${contract.id}: ${contractResult.totalSites} sites, ${contractResult.totalMW?.toFixed(4)} MW`);
+              } else {
+                console.error(`[AMMP Scheduled Sync] ✗ Contract ${contract.id}: ${contractResult.error}`);
+              }
+            }
+            
+            if (contractsSuccess > 0) {
+              customersProcessed++;
+              totalAssets += contractAssets;
+            }
           } else {
-            console.error(`[AMMP Scheduled Sync] ✗ ${customer.name}: ${result.error}`);
-            // Mark customer as error
-            await supabase
-              .from('customers')
-              .update({ ammp_sync_status: 'error' })
-              .eq('id', customer.id);
+            // Regular customer-level sync (for non-Elum customers)
+            const result = await syncCustomer(
+              customer.id,
+              customer.ammp_org_id!,
+              api_key,
+              user_id
+            );
+            
+            if (result.success) {
+              customersProcessed++;
+              totalAssets += result.assetsProcessed || 0;
+              console.log(`[AMMP Scheduled Sync] ✓ ${customer.name}: ${result.assetsProcessed} assets`);
+            } else {
+              console.error(`[AMMP Scheduled Sync] ✗ ${customer.name}: ${result.error}`);
+              // Mark customer as error
+              await supabase
+                .from('customers')
+                .update({ ammp_sync_status: 'error' })
+                .eq('id', customer.id);
+            }
           }
         }
 

@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { toast } from "@/hooks/use-toast";
@@ -58,8 +58,11 @@ const ContractDetails = () => {
   const [error, setError] = useState<string | null>(null);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
 
-  const loadContractData = async () => {
+  // Elum package types that support asset refresh
+  const ELUM_PACKAGES = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
+  const isElumContract = contract && ELUM_PACKAGES.includes(contract.package);
       setLoading(true);
       setError(null);
       
@@ -166,6 +169,37 @@ const ContractDetails = () => {
     });
   };
 
+  const handleRefreshAssets = async () => {
+    if (!contract) return;
+    
+    setIsRefreshingAssets(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ammp-sync-contract', {
+        body: { contractId: contract.id }
+      });
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        toast({
+          title: "Asset data refreshed",
+          description: `Synced ${data.totalSites} sites (${data.totalMW?.toFixed(4)} MW)`,
+        });
+        loadContractData();
+      } else {
+        throw new Error(data.error || 'Refresh failed');
+      }
+    } catch (error: any) {
+      toast({
+        title: "Refresh failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefreshingAssets(false);
+    }
+  };
+
   const handleExtendContract = () => {
     // Would handle contract extension logic
     setShowExtendDialog(false);
@@ -268,7 +302,17 @@ const ContractDetails = () => {
             </p>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
+            {isElumContract && (
+              <Button 
+                variant="outline" 
+                onClick={handleRefreshAssets}
+                disabled={isRefreshingAssets}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshingAssets ? 'animate-spin' : ''}`} />
+                {isRefreshingAssets ? 'Refreshing...' : 'Refresh Assets'}
+              </Button>
+            )}
             <Button variant="outline" onClick={handleDownloadContract}>
               <Download className="mr-2 h-4 w-4" />
               Download PDF
