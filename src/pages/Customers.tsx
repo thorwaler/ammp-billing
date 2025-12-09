@@ -535,7 +535,8 @@ const Customers = () => {
                               name: customer.name,
                               nickname: customer.nickname,
                               location: customer.location, 
-                              mwpManaged: customer.mwpManaged 
+                              mwpManaged: customer.mwpManaged,
+                              ammpOrgId: customer.ammpOrgId
                             }}
                             onComplete={() => {
                               setOpenContractDialogs({...openContractDialogs, [customer.id]: false});

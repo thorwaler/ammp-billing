@@ -117,6 +117,7 @@ interface ContractFormProps {
     nickname?: string | null;
     location?: string;
     mwpManaged: number;
+    ammpOrgId?: string;
   };
   existingContract?: {
     id: string;
@@ -1102,6 +1103,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             {/* Elum ePM package fields */}
             {watchPackage === "elum_epm" && (
               <>
+                <AssetGroupSelector
+                  orgId={existingCustomer?.ammpOrgId}
+                  value={form.watch("ammpAssetGroupId")}
+                  onSelect={(groupId, groupName) => {
+                    form.setValue("ammpAssetGroupId", groupId);
+                    form.setValue("ammpAssetGroupName", groupName);
+                  }}
+                  disabled={!existingCustomer?.ammpOrgId}
+                />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -1199,6 +1209,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             {/* Elum Jubaili package fields */}
             {watchPackage === "elum_jubaili" && (
               <>
+                <AssetGroupSelector
+                  orgId={existingCustomer?.ammpOrgId}
+                  value={form.watch("ammpAssetGroupId")}
+                  onSelect={(groupId, groupName) => {
+                    form.setValue("ammpAssetGroupId", groupId);
+                    form.setValue("ammpAssetGroupName", groupName);
+                  }}
+                  disabled={!existingCustomer?.ammpOrgId}
+                />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}

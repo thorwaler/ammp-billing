@@ -428,7 +428,7 @@ export function CustomerCard({
                       <DialogTitle>Edit Contract: {displayName}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, nickname, location, mwpManaged }}
+                      existingCustomer={{ id, name, nickname, location, mwpManaged, ammpOrgId }}
                       onComplete={() => {
                         setShowContractForm(false);
                         onContractCreated?.();
@@ -452,7 +452,7 @@ export function CustomerCard({
                       <DialogTitle>Add New Contract: {displayName}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, nickname, location, mwpManaged }}
+                      existingCustomer={{ id, name, nickname, location, mwpManaged, ammpOrgId }}
                       isNewContract={true}
                       onComplete={() => {
                         setShowAddContractForm(false);
@@ -477,7 +477,7 @@ export function CustomerCard({
                       <DialogTitle>Create Contract: {name}</DialogTitle>
                     </DialogHeader>
                     <ContractForm 
-                      existingCustomer={{ id, name, location, mwpManaged }}
+                      existingCustomer={{ id, name, location, mwpManaged, ammpOrgId }}
                       onComplete={() => {
                         setShowContractForm(false);
                         onContractCreated?.();

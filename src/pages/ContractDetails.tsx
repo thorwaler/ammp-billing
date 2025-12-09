@@ -290,7 +290,8 @@ const ContractDetails = () => {
                     id: customer.id,
                     name: customer.name,
                     location: customer.location,
-                    mwpManaged: customer.mwp_managed
+                    mwpManaged: customer.mwp_managed,
+                    ammpOrgId: customer.ammp_org_id
                   } : undefined}
                   existingContract={{
                     id: contract.id,
@@ -348,7 +349,8 @@ const ContractDetails = () => {
             existingCustomer={{
               id: contract.customer_id,
               name: contract.company_name,
-              mwpManaged: customer?.mwp_managed || contract.initial_mw
+              mwpManaged: customer?.mwp_managed || contract.initial_mw,
+              ammpOrgId: customer?.ammp_org_id
             }}
             existingContract={{
               id: contract.id,
