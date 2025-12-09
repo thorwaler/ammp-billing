@@ -170,8 +170,10 @@ interface AssetGroupMember {
 }
 
 /**
- * Process contract-level sync for Elum packages
- * For asset group contracts, fetches members directly then full details for each
+ * Process contract sync - handles ALL contract types
+ * For asset group contracts: uses asset group filtering
+ * For org-scoped contracts: uses org_id filtering  
+ * For regular contracts: syncs all org assets
  */
 async function processContractSync(
   supabase: any,
@@ -180,11 +182,12 @@ async function processContractSync(
   allAssets: any[]
 ): Promise<CachedCapabilities> {
   const packageType = contract.package;
-  console.log(`[AMMP Sync Contract] Processing ${packageType} contract ${contract.id}`);
+  const contractId = contract.id;
   
-  // For asset group contracts, we get members directly (no need for allAssets)
-  let assetGroupMembers: AssetGroupMember[] = [];
-  let useAssetGroupApproach = false;
+  // Determine org ID: contract.ammp_org_id > customer.ammp_org_id
+  const orgId = contract.ammp_org_id || contract.customers?.ammp_org_id;
+  
+  console.log(`[AMMP Sync Contract] Processing ${packageType} contract ${contractId}, orgId: ${orgId}`);
   
   // Get existing cached capabilities for onboarding dates
   const existingCached = contract.cached_capabilities as CachedCapabilities | null;
@@ -197,39 +200,36 @@ async function processContractSync(
     }
   }
   
-  // For elum_epm and elum_jubaili: filter by asset group
-  if ((packageType === 'elum_epm' || packageType === 'elum_jubaili') && contract.ammp_asset_group_id) {
-    useAssetGroupApproach = true;
-    
-    // Get primary group members (returns array of {asset_id, asset_name})
+  let assetsToProcess: AssetGroupMember[] = [];
+  
+  // Determine which assets to process based on contract configuration
+  if (contract.ammp_asset_group_id) {
+    // Asset group filtering (for elum_epm, elum_jubaili, or any contract with asset group)
     const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
-    assetGroupMembers = [...primaryMembers];
+    assetsToProcess = [...primaryMembers];
     
     // Apply AND filter if configured
     if (contract.ammp_asset_group_id_and) {
       const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
       const andIds = new Set(andMembers.map(m => m.asset_id));
-      assetGroupMembers = assetGroupMembers.filter(m => andIds.has(m.asset_id));
+      assetsToProcess = assetsToProcess.filter(m => andIds.has(m.asset_id));
     }
     
     // Apply NOT filter if configured
     if (contract.ammp_asset_group_id_not) {
       const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
       const notIds = new Set(notMembers.map(m => m.asset_id));
-      assetGroupMembers = assetGroupMembers.filter(m => !notIds.has(m.asset_id));
+      assetsToProcess = assetsToProcess.filter(m => !notIds.has(m.asset_id));
     }
     
-    console.log(`[AMMP Sync Contract] Asset group filtering: ${assetGroupMembers.length} assets`);
-  }
-  // For elum_portfolio_os: use contract-specific org_id (needs allAssets)
-  else if (packageType === 'elum_portfolio_os' && contract.contract_ammp_org_id) {
-    const orgAssets = allAssets.filter(a => a.org_id === contract.contract_ammp_org_id);
-    assetGroupMembers = orgAssets.map(a => ({ asset_id: a.asset_id, asset_name: a.asset_name }));
-    console.log(`[AMMP Sync Contract] Org ${contract.contract_ammp_org_id} filtering: ${assetGroupMembers.length} assets`);
-  }
-  
-  if (assetGroupMembers.length === 0) {
-    console.log(`[AMMP Sync Contract] No assets found for contract ${contract.id}`);
+    console.log(`[AMMP Sync Contract] Asset group filtering: ${assetsToProcess.length} assets`);
+  } else if (orgId) {
+    // Filter by org ID (for regular contracts or elum_portfolio_os with custom org)
+    const orgAssets = allAssets.filter((a: any) => a.org_id === orgId);
+    assetsToProcess = orgAssets.map((a: any) => ({ asset_id: a.asset_id, asset_name: a.asset_name }));
+    console.log(`[AMMP Sync Contract] Org ${orgId} filtering: ${assetsToProcess.length} assets`);
+  } else {
+    console.log(`[AMMP Sync Contract] No org ID or asset group for contract ${contractId}`);
     return {
       totalMW: 0,
       totalSites: 0,
@@ -243,18 +243,27 @@ async function processContractSync(
     };
   }
   
-  // For asset group approach, we need to fetch full asset details for each member
-  // Since group endpoint only provides asset_id and asset_name
-  const assetsMissingMetadata = assetGroupMembers.filter(m => !cachedDates[m.asset_id]);
-  console.log(`[AMMP Sync Contract] ${assetsMissingMetadata.length} assets need metadata fetch`);
+  if (assetsToProcess.length === 0) {
+    console.log(`[AMMP Sync Contract] No assets found for contract ${contractId}`);
+    return {
+      totalMW: 0,
+      totalSites: 0,
+      ongridMW: 0,
+      hybridMW: 0,
+      ongridSites: 0,
+      hybridSites: 0,
+      sitesWithSolcast: 0,
+      assetBreakdown: [],
+      lastSynced: new Date().toISOString(),
+    };
+  }
   
-  // Batch fetch full asset data (metadata + devices) for each member
-  // Since asset group endpoint only gives us IDs and names
+  // Batch fetch full asset data (metadata + devices) for each asset
   const capabilities: AssetCapabilities[] = [];
   const BATCH_SIZE = 10;
   
-  for (let i = 0; i < assetGroupMembers.length; i += BATCH_SIZE) {
-    const batch = assetGroupMembers.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < assetsToProcess.length; i += BATCH_SIZE) {
+    const batch = assetsToProcess.slice(i, i + BATCH_SIZE);
     
     const batchPromises = batch.map(async (member) => {
       try {
@@ -299,7 +308,7 @@ async function processContractSync(
     const batchResults = await Promise.all(batchPromises);
     capabilities.push(...batchResults);
     
-    console.log(`[AMMP Sync Contract] Progress: ${Math.min(i + BATCH_SIZE, assetGroupMembers.length)}/${assetGroupMembers.length}`);
+    console.log(`[AMMP Sync Contract] Progress: ${Math.min(i + BATCH_SIZE, assetsToProcess.length)}/${assetsToProcess.length}`);
   }
   
   // Aggregate data
@@ -330,6 +339,71 @@ async function processContractSync(
   console.log(`[AMMP Sync Contract] Summary: ${cachedCapabilities.totalSites} sites, ${cachedCapabilities.totalMW.toFixed(4)} MW`);
   
   return cachedCapabilities;
+}
+
+/**
+ * Populate site_billing_status for per_site contracts
+ */
+async function populateSiteBillingStatus(
+  supabase: any,
+  contractId: string,
+  customerId: string,
+  userId: string,
+  assetBreakdown: Array<{
+    assetId: string;
+    assetName: string;
+    totalMW: number;
+    onboardingDate?: string | null;
+  }>
+) {
+  // Check if this is a per_site contract
+  const { data: contract } = await supabase
+    .from('contracts')
+    .select('package, onboarding_fee_per_site, annual_fee_per_site')
+    .eq('id', contractId)
+    .single();
+  
+  if (!contract || contract.package !== 'per_site') return;
+  
+  console.log(`[AMMP Sync Contract] Populating site_billing_status for ${assetBreakdown.length} assets`);
+  
+  for (const asset of assetBreakdown) {
+    const { data: existing } = await supabase
+      .from('site_billing_status')
+      .select('id, onboarding_fee_paid')
+      .eq('asset_id', asset.assetId)
+      .eq('contract_id', contractId)
+      .maybeSingle();
+    
+    if (existing) {
+      await supabase
+        .from('site_billing_status')
+        .update({
+          asset_name: asset.assetName,
+          asset_capacity_kwp: asset.totalMW * 1000,
+          onboarding_date: asset.onboardingDate || null,
+        })
+        .eq('id', existing.id);
+    } else {
+      const onboardingDate = asset.onboardingDate ? new Date(asset.onboardingDate) : new Date();
+      const nextAnnualDue = new Date(onboardingDate);
+      nextAnnualDue.setFullYear(nextAnnualDue.getFullYear() + 1);
+      
+      await supabase
+        .from('site_billing_status')
+        .insert({
+          user_id: userId,
+          contract_id: contractId,
+          customer_id: customerId,
+          asset_id: asset.assetId,
+          asset_name: asset.assetName,
+          asset_capacity_kwp: asset.totalMW * 1000,
+          onboarding_date: onboardingDate.toISOString(),
+          onboarding_fee_paid: false,
+          next_annual_due_date: nextAnnualDue.toISOString(),
+        });
+    }
+  }
 }
 
 Deno.serve(async (req) => {
@@ -371,17 +445,17 @@ Deno.serve(async (req) => {
 
     console.log(`[AMMP Sync Contract] Starting sync for contract ${contractId}`);
 
-    // Fetch the contract with customer info
+    // Fetch the contract with customer info - now uses contract.ammp_org_id
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
       .select(`
         id,
         customer_id,
         package,
+        ammp_org_id,
         ammp_asset_group_id,
         ammp_asset_group_id_and,
         ammp_asset_group_id_not,
-        contract_ammp_org_id,
         cached_capabilities,
         customers!inner (
           id,
@@ -396,14 +470,27 @@ Deno.serve(async (req) => {
       throw new Error(`Contract not found: ${contractError?.message}`);
     }
 
-    // Check if this is an Elum package
-    const elumPackages = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
-    if (!elumPackages.includes(contract.package)) {
+    // Skip POC contracts
+    if (contract.package === 'poc') {
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'POC contracts do not need AMMP sync',
+          totalSites: 0,
+          totalMW: 0
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check if contract has org ID (either on contract or customer)
+    const orgId = contract.ammp_org_id || (contract.customers as any)?.ammp_org_id;
+    
+    if (!orgId && !contract.ammp_asset_group_id) {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Contract is not an Elum package type',
-          package: contract.package 
+          error: 'Contract has no AMMP org ID or asset group configured'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -426,22 +513,53 @@ Deno.serve(async (req) => {
       token = await getToken(connection.api_key);
     }
 
-    // Fetch all assets (we'll filter by group/org)
+    // Fetch all assets (we'll filter by group/org in processContractSync)
     const allAssets = await fetchAMMPData(token, '/assets');
     console.log(`[AMMP Sync Contract] Fetched ${allAssets.length} total assets`);
 
     // Process the contract
     const cachedCapabilities = await processContractSync(supabase, contract, token, allAssets);
 
-    // Update the contract with cached capabilities
+    // Update the contract with cached capabilities and sync status
     const { error: updateError } = await supabase
       .from('contracts')
-      .update({ cached_capabilities: cachedCapabilities })
+      .update({ 
+        cached_capabilities: cachedCapabilities,
+        ammp_sync_status: 'synced',
+        last_ammp_sync: new Date().toISOString(),
+        ammp_asset_ids: cachedCapabilities.assetBreakdown.map(a => a.assetId)
+      })
       .eq('id', contractId);
 
     if (updateError) {
       throw new Error(`Failed to update contract: ${updateError.message}`);
     }
+
+    // Populate site billing status for per_site contracts
+    await populateSiteBillingStatus(
+      supabase,
+      contractId,
+      contract.customer_id,
+      effectiveUserId,
+      cachedCapabilities.assetBreakdown
+    );
+
+    // Update customer's mwp_managed (aggregate from all contracts)
+    const { data: customerContracts } = await supabase
+      .from('contracts')
+      .select('cached_capabilities')
+      .eq('customer_id', contract.customer_id)
+      .eq('contract_status', 'active')
+      .neq('package', 'poc');
+    
+    const totalCustomerMW = customerContracts?.reduce((sum: number, c: any) => {
+      return sum + (c.cached_capabilities?.totalMW || 0);
+    }, 0) || 0;
+    
+    await supabase
+      .from('customers')
+      .update({ mwp_managed: totalCustomerMW })
+      .eq('id', contract.customer_id);
 
     console.log(`[AMMP Sync Contract] Successfully synced contract ${contractId}`);
 

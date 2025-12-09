@@ -74,45 +74,7 @@ function calculateNextSyncAt(schedule: string): Date | null {
 }
 
 /**
- * Get contracts that need contract-level sync (have asset group ID or custom org ID)
- */
-
-/**
- * Call ammp-sync-customer Edge Function for a single customer
- */
-async function syncCustomer(
-  customerId: string,
-  orgId: string,
-  apiKey: string,
-  userId: string
-): Promise<{ success: boolean; error?: string; assetsProcessed?: number }> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/ammp-sync-customer`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({ customerId, orgId, apiKey, userId }),
-    });
-    
-    const result = await response.json();
-    
-    if (!response.ok || !result.success) {
-      return { success: false, error: result.error || 'Sync failed' };
-    }
-    
-    return { success: true, assetsProcessed: result.assetsProcessed };
-  } catch (error: any) {
-    return { success: false, error: error.message };
-  }
-}
-
-/**
- * Call ammp-sync-contract Edge Function for Elum contracts
+ * Call ammp-sync-contract Edge Function for a single contract
  */
 async function syncContract(
   contractId: string,
@@ -146,21 +108,6 @@ async function syncContract(
   } catch (error: any) {
     return { success: false, error: error.message };
   }
-}
-
-/**
- * Get contracts that need contract-level sync (have asset group ID or custom org ID)
- */
-async function getContractLevelSyncContracts(supabase: any, customerId: string, userId: string): Promise<any[]> {
-  const { data: contracts } = await supabase
-    .from('contracts')
-    .select('id, package, company_name, ammp_asset_group_id, contract_ammp_org_id')
-    .eq('customer_id', customerId)
-    .eq('user_id', userId)
-    .eq('contract_status', 'active')
-    .or('ammp_asset_group_id.not.is.null,contract_ammp_org_id.not.is.null');
-  
-  return contracts || [];
 }
 
 Deno.serve(async (req) => {
@@ -209,7 +156,7 @@ Deno.serve(async (req) => {
 
     const results: Array<{
       userId: string;
-      customersProcessed: number;
+      contractsProcessed: number;
       totalAssets: number;
       success: boolean;
       error?: string;
@@ -228,71 +175,54 @@ Deno.serve(async (req) => {
       console.log(`[AMMP Scheduled Sync] Processing user ${user_id}`);
 
       try {
-        // Get customers with AMMP org IDs
-        const { data: customers, error: custError } = await supabase
-          .from('customers')
-          .select('id, name, ammp_org_id')
+        // Get all active non-POC contracts with AMMP org ID (on contract or customer)
+        const { data: contracts, error: contractError } = await supabase
+          .from('contracts')
+          .select(`
+            id, 
+            package, 
+            company_name, 
+            ammp_org_id,
+            ammp_asset_group_id,
+            customers!inner (
+              id,
+              ammp_org_id
+            )
+          `)
           .eq('user_id', user_id)
-          .not('ammp_org_id', 'is', null);
+          .eq('contract_status', 'active')
+          .neq('package', 'poc');
 
-        if (custError) throw custError;
+        if (contractError) throw contractError;
 
-        let customersProcessed = 0;
+        // Filter to contracts that have either contract-level or customer-level AMMP config
+        const syncableContracts = contracts?.filter((c: any) => 
+          c.ammp_org_id || c.ammp_asset_group_id || c.customers?.ammp_org_id
+        ) || [];
+
+        console.log(`[AMMP Scheduled Sync] Found ${syncableContracts.length} syncable contracts`);
+
+        let contractsProcessed = 0;
         let totalAssets = 0;
 
-        // Sync each customer
-        for (const customer of customers || []) {
-          console.log(`[AMMP Scheduled Sync] Processing customer ${customer.name}`);
+        // Sync each contract
+        for (const contract of syncableContracts) {
+          console.log(`[AMMP Scheduled Sync] Syncing contract ${contract.id} (${contract.package}) - ${contract.company_name}`);
           
-          // Check if customer has contracts needing contract-level sync
-          const contractLevelContracts = await getContractLevelSyncContracts(supabase, customer.id, user_id);
+          const result = await syncContract(contract.id, api_key, user_id);
           
-          if (contractLevelContracts.length > 0) {
-            // Sync contracts individually (fast, asset-group scoped)
-            console.log(`[AMMP Scheduled Sync] Customer ${customer.name} has ${contractLevelContracts.length} contract-level sync contracts`);
-            
-            let contractsSuccess = 0;
-            let contractAssets = 0;
-            
-            for (const contract of contractLevelContracts) {
-              console.log(`[AMMP Scheduled Sync] Syncing contract ${contract.id} (${contract.package})`);
-              
-              const contractResult = await syncContract(contract.id, api_key, user_id);
-              
-              if (contractResult.success) {
-                contractsSuccess++;
-                contractAssets += contractResult.totalSites || 0;
-                console.log(`[AMMP Scheduled Sync] ✓ Contract ${contract.id}: ${contractResult.totalSites} sites, ${contractResult.totalMW?.toFixed(4)} MW`);
-              } else {
-                console.error(`[AMMP Scheduled Sync] ✗ Contract ${contract.id}: ${contractResult.error}`);
-              }
-            }
-            
-            if (contractsSuccess > 0) {
-              customersProcessed++;
-              totalAssets += contractAssets;
-            }
+          if (result.success) {
+            contractsProcessed++;
+            totalAssets += result.totalSites || 0;
+            console.log(`[AMMP Scheduled Sync] ✓ Contract ${contract.id}: ${result.totalSites} sites, ${result.totalMW?.toFixed(4)} MW`);
           } else {
-            // Regular customer-level sync (for non-Elum customers)
-            const result = await syncCustomer(
-              customer.id,
-              customer.ammp_org_id!,
-              api_key,
-              user_id
-            );
+            console.error(`[AMMP Scheduled Sync] ✗ Contract ${contract.id}: ${result.error}`);
             
-            if (result.success) {
-              customersProcessed++;
-              totalAssets += result.assetsProcessed || 0;
-              console.log(`[AMMP Scheduled Sync] ✓ ${customer.name}: ${result.assetsProcessed} assets`);
-            } else {
-              console.error(`[AMMP Scheduled Sync] ✗ ${customer.name}: ${result.error}`);
-              // Mark customer as error
-              await supabase
-                .from('customers')
-                .update({ ammp_sync_status: 'error' })
-                .eq('id', customer.id);
-            }
+            // Mark contract as error
+            await supabase
+              .from('contracts')
+              .update({ ammp_sync_status: 'error' })
+              .eq('id', contract.id);
           }
         }
 
@@ -311,12 +241,12 @@ Deno.serve(async (req) => {
           user_id,
           type: 'ammp_sync_complete',
           title: 'AMMP Sync Complete',
-          message: `Successfully synced ${customersProcessed} customer${customersProcessed !== 1 ? 's' : ''} (${totalAssets} assets total).`,
+          message: `Successfully synced ${contractsProcessed} contract${contractsProcessed !== 1 ? 's' : ''} (${totalAssets} sites total).`,
           severity: 'info',
-          metadata: { customersProcessed, totalAssets, isManual },
+          metadata: { contractsProcessed, totalAssets, isManual },
         });
 
-        results.push({ userId: user_id, customersProcessed, totalAssets, success: true });
+        results.push({ userId: user_id, contractsProcessed, totalAssets, success: true });
 
       } catch (userError: any) {
         console.error(`[AMMP Scheduled Sync] Error for user ${user_id}:`, userError);
@@ -330,7 +260,7 @@ Deno.serve(async (req) => {
           metadata: { error: userError.message, isManual },
         });
 
-        results.push({ userId: user_id, customersProcessed: 0, totalAssets: 0, success: false, error: userError.message });
+        results.push({ userId: user_id, contractsProcessed: 0, totalAssets: 0, success: false, error: userError.message });
       }
     }
 

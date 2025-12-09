@@ -6,9 +6,6 @@ verify_jwt = false
 [functions.ammp-scheduled-sync]
 verify_jwt = false
 
-[functions.ammp-sync-customer]
-verify_jwt = true
-
 [functions.ammp-sync-contract]
 verify_jwt = true
 

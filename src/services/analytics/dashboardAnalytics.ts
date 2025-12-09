@@ -1,6 +1,10 @@
 /**
  * Dashboard Analytics Service
  * Provides real data aggregation for dashboard and reports
+ * 
+ * CONTRACT-CENTRIC ARCHITECTURE:
+ * All AMMP data and MW calculations are sourced from contract.cached_capabilities
+ * Customer-level ammp_capabilities is deprecated
  */
 
 import { supabase } from '@/integrations/supabase/client';
@@ -81,6 +85,46 @@ async function getCustomersWithNonPocContracts(userId: string): Promise<string[]
 }
 
 /**
+ * Get all asset breakdown data from contracts (single source of truth)
+ */
+async function getAssetBreakdownFromContracts(
+  userId: string, 
+  customerIds?: string[]
+): Promise<AssetOnboardingData[]> {
+  let query = supabase
+    .from('contracts')
+    .select('cached_capabilities, customer_id')
+    .eq('user_id', userId)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
+
+  if (customerIds && customerIds.length > 0) {
+    query = query.in('customer_id', customerIds);
+  }
+
+  const { data: contracts } = await query;
+
+  const assetData: AssetOnboardingData[] = [];
+  
+  contracts?.forEach(contract => {
+    const capabilities = contract.cached_capabilities as any;
+    if (capabilities?.assetBreakdown) {
+      capabilities.assetBreakdown.forEach((asset: any) => {
+        if (asset.onboardingDate && asset.totalMW) {
+          assetData.push({
+            assetName: asset.assetName,
+            totalMW: asset.totalMW,
+            onboardingDate: asset.onboardingDate,
+          });
+        }
+      });
+    }
+  });
+
+  return assetData;
+}
+
+/**
  * Get dashboard statistics from real data
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -115,46 +159,50 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 
-  // Get total MWp managed (active customers with non-POC contracts only)
-  let customers: any[] = [];
-  if (customerIdsWithContracts.length > 0) {
-    const { data } = await supabase
-      .from('customers')
-      .select('mwp_managed, join_date, ammp_capabilities')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .in('id', customerIdsWithContracts);
-    customers = data || [];
-  }
+  // Get total MWp managed from contract cached_capabilities (single source of truth)
+  const { data: contracts } = await supabase
+    .from('contracts')
+    .select('cached_capabilities')
+    .eq('user_id', user.id)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
 
-  const totalMWpManaged = customers.reduce((sum, c) => sum + (c.mwp_managed || 0), 0);
+  const totalMWpManaged = contracts?.reduce((sum, c) => {
+    const capabilities = c.cached_capabilities as any;
+    return sum + (capabilities?.totalMW || 0);
+  }, 0) || 0;
 
-  // Calculate MW added this year from AMMP asset creation dates
+  // Calculate MW added this year/quarter from contract asset breakdown
+  const assetData = await getAssetBreakdownFromContracts(user.id);
+  
   let mwAddedThisYear = 0;
   let mwAddedThisQuarter = 0;
 
-  customers.forEach(customer => {
-    const capabilities = customer.ammp_capabilities as any;
-    if (capabilities?.assetBreakdown) {
-      capabilities.assetBreakdown.forEach((asset: any) => {
-        if (asset.onboardingDate) {
-          const onboardingDate = new Date(asset.onboardingDate);
-          if (onboardingDate >= startOfYear) {
-            mwAddedThisYear += asset.totalMW || 0;
-          }
-          if (onboardingDate >= startOfQuarter) {
-            mwAddedThisQuarter += asset.totalMW || 0;
-          }
-        }
-      });
+  assetData.forEach(asset => {
+    const onboardingDate = new Date(asset.onboardingDate);
+    if (onboardingDate >= startOfYear) {
+      mwAddedThisYear += asset.totalMW;
+    }
+    if (onboardingDate >= startOfQuarter) {
+      mwAddedThisQuarter += asset.totalMW;
     }
   });
 
   // Count customers added this quarter (only those with non-POC contracts)
-  const customersAddedThisQuarter = customers.filter(c => {
-    if (!c.join_date) return false;
-    return new Date(c.join_date) >= startOfQuarter;
-  }).length;
+  let customersAddedThisQuarter = 0;
+  if (customerIdsWithContracts.length > 0) {
+    const { data: customers } = await supabase
+      .from('customers')
+      .select('join_date')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .in('id', customerIdsWithContracts);
+
+    customersAddedThisQuarter = customers?.filter(c => {
+      if (!c.join_date) return false;
+      return new Date(c.join_date) >= startOfQuarter;
+    }).length || 0;
+  }
 
   // Get active non-POC contracts added this quarter
   const { count: contractsAddedThisQuarter } = await supabase
@@ -182,6 +230,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
 /**
  * Calculate ARR for a single contract - the single source of truth for all ARR calculations
+ * Uses contract.cached_capabilities directly
  */
 export function calculateSingleContractARR(
   contract: {
@@ -202,17 +251,20 @@ export function calculateSingleContractARR(
     site_size_threshold_kwp?: number | null;
     below_threshold_price_per_mwp?: number | null;
     above_threshold_price_per_mwp?: number | null;
-  },
-  ammpCapabilities?: any
+    cached_capabilities?: any;
+  }
 ): number {
   // POC contracts have no ARR
   if (contract.package === 'poc') return 0;
 
-  const assetBreakdown = ammpCapabilities?.assetBreakdown || [];
-  const totalMW = assetBreakdown.length > 0
-    ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
-    : contract.initial_mw || 0;
-  const totalSites = ammpCapabilities?.totalSites || assetBreakdown.length || 0;
+  // Use cached_capabilities from contract (single source of truth)
+  const cachedCapabilities = contract.cached_capabilities;
+  const assetBreakdown = cachedCapabilities?.assetBreakdown || [];
+  const totalMW = cachedCapabilities?.totalMW || 
+    (assetBreakdown.length > 0
+      ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
+      : contract.initial_mw || 0);
+  const totalSites = cachedCapabilities?.totalSites || assetBreakdown.length || 0;
 
   let annualValue = 0;
 
@@ -228,8 +280,7 @@ export function calculateSingleContractARR(
       const annualFeePerSite = contract.annual_fee_per_site || 1000;
       annualValue = annualFeePerSite * totalSites;
     }
-    // For pro/custom/hybrid_tiered - use calculateInvoice with frequencyMultiplier=1
-    // Also run when there's a base_monthly_price or minimum_charge_tiers with sites (for metering/per-site contracts)
+    // For pro/custom/hybrid_tiered/elum packages - use calculateInvoice with frequencyMultiplier=1
     else if (totalMW > 0 || contract.base_monthly_price || ((contract.minimum_charge_tiers as any[])?.length > 0 && totalSites > 0)) {
       const result = calculateInvoice({
         packageType: contract.package as any,
@@ -247,7 +298,7 @@ export function calculateSingleContractARR(
         portfolioDiscountTiers: (contract.portfolio_discount_tiers as any[]) || [],
         minimumChargeTiers: (contract.minimum_charge_tiers as any[]) || [],
         minimumAnnualValue: contract.minimum_annual_value || 0,
-        ammpCapabilities: ammpCapabilities || undefined,
+        ammpCapabilities: cachedCapabilities || undefined,
         siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
         baseMonthlyPrice: contract.base_monthly_price || 0,
         retainerHours: contract.retainer_hours || undefined,
@@ -280,14 +331,8 @@ export function calculateSingleContractARR(
 }
 
 /**
- * Check if a contract uses contract-level sync (asset group or custom org)
- */
-function usesContractLevelSync(contract: any): boolean {
-  return !!(contract.ammp_asset_group_id || contract.contract_ammp_org_id);
-}
-
-/**
  * Calculate total ARR (Annual Recurring Revenue) from all active non-POC contracts
+ * Uses contract.cached_capabilities directly (no customer lookup needed)
  */
 async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
   // Fetch all active non-POC contracts with pricing data and cached capabilities
@@ -313,8 +358,6 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       retainer_hourly_rate,
       retainer_minimum_value,
       cached_capabilities,
-      ammp_asset_group_id,
-      contract_ammp_org_id,
       site_size_threshold_kwp,
       below_threshold_price_per_mwp,
       above_threshold_price_per_mwp
@@ -325,33 +368,12 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
 
   if (!contracts || contracts.length === 0) return { eurTotal: 0, usdTotal: 0 };
 
-  // Fetch customer AMMP capabilities for non-Elum contracts
-  const customerIds = [...new Set(contracts.map(c => c.customer_id))];
-  const { data: customers } = await supabase
-    .from('customers')
-    .select('id, ammp_capabilities, mwp_managed')
-    .in('id', customerIds);
-
-  const customerMap = new Map(customers?.map(c => [c.id, c]) || []);
-
   let eurTotal = 0;
   let usdTotal = 0;
 
   for (const contract of contracts) {
-    // For contracts with asset group or custom org, use contract's cached_capabilities
-    // For other contracts, use customer's ammp_capabilities
-    let ammpCapabilities: any;
-    
-    if (usesContractLevelSync(contract)) {
-      // Use contract-level cached capabilities
-      ammpCapabilities = contract.cached_capabilities;
-    } else {
-      // Use customer-level capabilities
-      const customer = customerMap.get(contract.customer_id);
-      ammpCapabilities = customer?.ammp_capabilities;
-    }
-
-    const annualValue = calculateSingleContractARR(contract, ammpCapabilities);
+    // Use contract's cached_capabilities directly
+    const annualValue = calculateSingleContractARR(contract);
 
     // Add to appropriate currency bucket
     if (contract.currency === 'USD') {
@@ -371,7 +393,7 @@ export interface ReportFilters {
 }
 
 /**
- * Get MW growth over time from asset onboarding dates
+ * Get MW growth over time from asset onboarding dates (from contract cached_capabilities)
  */
 export async function getMWGrowthByMonth(filters?: ReportFilters): Promise<MWGrowthData[]> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -381,55 +403,28 @@ export async function getMWGrowthByMonth(filters?: ReportFilters): Promise<MWGro
   const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
   if (customerIdsWithContracts.length === 0) return [];
 
-  let query = supabase
-    .from('customers')
-    .select('id, ammp_capabilities')
-    .eq('user_id', user.id)
-    .eq('status', 'active')
-    .in('id', customerIdsWithContracts);
-
-  // Filter by customer IDs if specified (intersection with non-POC customers)
+  // Apply customer filter
+  let customerIds = customerIdsWithContracts;
   if (filters?.customerIds && filters.customerIds.length > 0) {
-    const filteredIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
-    if (filteredIds.length === 0) return [];
-    query = supabase
-      .from('customers')
-      .select('id, ammp_capabilities')
-      .eq('user_id', user.id)
-      .eq('status', 'active')
-      .in('id', filteredIds);
+    customerIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
+    if (customerIds.length === 0) return [];
   }
 
-  const { data: customers } = await query;
+  // Get asset data from contracts
+  const assetData = await getAssetBreakdownFromContracts(user.id, customerIds);
 
-  // Extract all asset onboarding data
-  const assetData: AssetOnboardingData[] = [];
-  
-  customers?.forEach(customer => {
-    const capabilities = customer.ammp_capabilities as any;
-    if (capabilities?.assetBreakdown) {
-      capabilities.assetBreakdown.forEach((asset: any) => {
-        if (asset.onboardingDate && asset.totalMW) {
-          const onboardingDate = new Date(asset.onboardingDate);
-          
-          // Apply date filters
-          if (filters?.startDate && onboardingDate < filters.startDate) return;
-          if (filters?.endDate && onboardingDate > filters.endDate) return;
-          
-          assetData.push({
-            assetName: asset.assetName,
-            totalMW: asset.totalMW,
-            onboardingDate: asset.onboardingDate,
-          });
-        }
-      });
-    }
+  // Filter by date range
+  const filteredAssets = assetData.filter(asset => {
+    const onboardingDate = new Date(asset.onboardingDate);
+    if (filters?.startDate && onboardingDate < filters.startDate) return false;
+    if (filters?.endDate && onboardingDate > filters.endDate) return false;
+    return true;
   });
 
   // Group by month and calculate cumulative MW
   const monthlyMap = new Map<string, number>();
   
-  assetData.forEach(asset => {
+  filteredAssets.forEach(asset => {
     const date = new Date(asset.onboardingDate);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + asset.totalMW);
@@ -525,7 +520,7 @@ export async function getCustomerGrowthByQuarter(filters?: ReportFilters): Promi
 }
 
 /**
- * Get MWp by customer (top customers by capacity)
+ * Get MWp by customer (top customers by capacity) - from contract cached_capabilities
  */
 export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Promise<CustomerMWData[]> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -543,23 +538,41 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
     if (customerIds.length === 0) return [];
   }
 
-  const { data: customers } = await supabase
-    .from('customers')
-    .select('id, name, nickname, mwp_managed')
+  // Get contracts with cached capabilities grouped by customer
+  const { data: contracts } = await supabase
+    .from('contracts')
+    .select('customer_id, cached_capabilities, customers!inner(name, nickname)')
     .eq('user_id', user.id)
-    .eq('status', 'active')
-    .in('id', customerIds)
-    .gt('mwp_managed', 0)
-    .order('mwp_managed', { ascending: false })
-    .limit(limit);
+    .eq('contract_status', 'active')
+    .neq('package', 'poc')
+    .in('customer_id', customerIds);
 
-  return customers?.map(c => {
-    const displayName = c.nickname || c.name;
-    return {
-      name: displayName.length > 15 ? displayName.substring(0, 15) + '...' : displayName,
-      mwp: parseFloat((c.mwp_managed || 0).toFixed(2)),
-    };
-  }) || [];
+  if (!contracts || contracts.length === 0) return [];
+
+  // Aggregate MW by customer
+  const customerMWMap = new Map<string, { name: string; mwp: number }>();
+  
+  contracts.forEach((contract: any) => {
+    const customerId = contract.customer_id;
+    const displayName = contract.customers?.nickname || contract.customers?.name || 'Unknown';
+    const contractMW = (contract.cached_capabilities as any)?.totalMW || 0;
+    
+    const existing = customerMWMap.get(customerId) || { name: displayName, mwp: 0 };
+    customerMWMap.set(customerId, {
+      name: displayName,
+      mwp: existing.mwp + contractMW,
+    });
+  });
+
+  // Sort by MW and return top customers
+  return Array.from(customerMWMap.values())
+    .filter(c => c.mwp > 0)
+    .sort((a, b) => b.mwp - a.mwp)
+    .slice(0, limit)
+    .map(c => ({
+      name: c.name.length > 15 ? c.name.substring(0, 15) + '...' : c.name,
+      mwp: parseFloat(c.mwp.toFixed(2)),
+    }));
 }
 
 export interface ARRvsNRRData {
@@ -806,6 +819,7 @@ export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters):
 
 /**
  * Get projected revenue by month based on contract billing cycles
+ * Uses contract.cached_capabilities directly
  */
 export async function getProjectedRevenueByMonth(
   monthsAhead: number = 12,
@@ -813,10 +827,6 @@ export async function getProjectedRevenueByMonth(
 ): Promise<ProjectedRevenueData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
-
-  // Get customer IDs with non-POC contracts if filtering by customer
-  const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
-  if (customerIdsWithContracts.length === 0) return [];
 
   // Fetch active non-POC contracts with all pricing data
   let query = supabase
@@ -836,7 +846,8 @@ export async function getProjectedRevenueByMonth(
       custom_pricing,
       base_monthly_price,
       site_charge_frequency,
-      currency
+      currency,
+      cached_capabilities
     `)
     .eq('user_id', user.id)
     .eq('contract_status', 'active')
@@ -844,22 +855,11 @@ export async function getProjectedRevenueByMonth(
 
   // Filter by customer IDs if specified
   if (filters?.customerIds && filters.customerIds.length > 0) {
-    const filteredIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
-    if (filteredIds.length === 0) return [];
-    query = query.in('customer_id', filteredIds);
+    query = query.in('customer_id', filters.customerIds);
   }
 
   const { data: contracts } = await query;
   if (!contracts || contracts.length === 0) return [];
-
-  // Fetch customer AMMP capabilities for accurate MW calculation
-  const customerIds = [...new Set(contracts.map(c => c.customer_id))];
-  const { data: customers } = await supabase
-    .from('customers')
-    .select('id, ammp_capabilities, mwp_managed')
-    .in('id', customerIds);
-
-  const customerMap = new Map(customers?.map(c => [c.id, c]) || []);
 
   // Calculate projected invoices for each contract
   const now = new Date();
@@ -875,19 +875,17 @@ export async function getProjectedRevenueByMonth(
   };
 
   for (const contract of contracts) {
-    const customer = customerMap.get(contract.customer_id);
-    if (!customer) continue;
-
-    // Get AMMP capabilities for accurate calculation
-    const ammpCapabilities = customer.ammp_capabilities as any;
-    const assetBreakdown = ammpCapabilities?.assetBreakdown || [];
+    // Get capabilities from contract's cached_capabilities
+    const cachedCapabilities = contract.cached_capabilities as any;
+    const assetBreakdown = cachedCapabilities?.assetBreakdown || [];
     
-    // Calculate MW - use AMMP data if available, otherwise initial_mw
-    const totalMW = assetBreakdown.length > 0
-      ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
-      : contract.initial_mw || 0;
+    // Calculate MW - use cached capabilities
+    const totalMW = cachedCapabilities?.totalMW || 
+      (assetBreakdown.length > 0
+        ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
+        : contract.initial_mw || 0);
 
-    if (totalMW === 0) continue;
+    if (totalMW === 0 && contract.package !== 'starter' && contract.package !== 'capped') continue;
 
     // Determine billing frequency and interval
     const billingFrequency = contract.billing_frequency || 'annual';
@@ -921,7 +919,7 @@ export async function getProjectedRevenueByMonth(
           portfolioDiscountTiers: (contract.portfolio_discount_tiers as any[]) || [],
           minimumChargeTiers: (contract.minimum_charge_tiers as any[]) || [],
           minimumAnnualValue: contract.minimum_annual_value || 0,
-          ammpCapabilities: ammpCapabilities || undefined,
+          ammpCapabilities: cachedCapabilities || undefined,
           siteChargeFrequency: contract.site_charge_frequency as any || 'annual',
           baseMonthlyPrice: contract.base_monthly_price || 0,
         });
