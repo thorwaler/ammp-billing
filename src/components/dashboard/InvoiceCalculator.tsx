@@ -757,11 +757,12 @@ export function InvoiceCalculator({
       isHybrid: asset.isHybrid
     }));
     
-    // Apply asset group filtering for Elum packages
+    // Apply asset group filtering for Elum packages - skip if using cached_capabilities (already filtered)
     if ((selectedCustomer.package === 'elum_epm' || selectedCustomer.package === 'elum_jubaili') && 
         selectedCustomer.ammpAssetGroupId && 
         assetBreakdown && 
-        assetBreakdown.length > 0) {
+        assetBreakdown.length > 0 &&
+        !usesContractLevelSync) {
       try {
         assetBreakdown = await filterAssetsByGroups(
           assetBreakdown,
