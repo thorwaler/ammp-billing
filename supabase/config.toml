@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.ammp-scheduled-sync]
 verify_jwt = false
 
+[functions.ammp-sync-customer]
+verify_jwt = true
+
 [functions.xero-oauth-init]
 verify_jwt = true
 
