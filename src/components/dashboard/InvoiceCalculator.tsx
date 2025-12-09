@@ -1230,6 +1230,15 @@ export function InvoiceCalculator({
         ? getApplicableDiscount(Number(mwManaged), selectedCustomer.portfolioDiscountTiers)
         : 0;
       
+      // Determine effective capabilities (use cached for whitelabel contracts)
+      const usesContractLevelSyncForDoc = !!(
+        selectedCustomer.ammpAssetGroupId || 
+        selectedCustomer.contractAmmpOrgId
+      );
+      const effectiveCapabilitiesForDoc = usesContractLevelSyncForDoc && selectedCustomer.cachedCapabilities
+        ? selectedCustomer.cachedCapabilities
+        : selectedCustomer.ammpCapabilities;
+
       // Generate support document data
       const docData = await generateSupportDocumentData(
         selectedCustomer.id,
@@ -1239,7 +1248,7 @@ export function InvoiceCalculator({
         result,
         modules.filter(m => m.selected).map(m => m.id),
         addons.filter(a => a.selected).map(a => ({ id: a.id, quantity: a.quantity })),
-        selectedCustomer.ammpCapabilities,
+        effectiveCapabilitiesForDoc,
         selectedCustomer.package,
         billingFrequency,
         discountPercent,
