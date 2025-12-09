@@ -212,6 +212,9 @@ export type Database = {
           ammp_asset_group_name: string | null
           ammp_asset_group_name_and: string | null
           ammp_asset_group_name_not: string | null
+          ammp_asset_ids: Json | null
+          ammp_org_id: string | null
+          ammp_sync_status: string | null
           annual_fee_per_site: number | null
           base_monthly_price: number | null
           below_threshold_price_per_mwp: number | null
@@ -229,6 +232,7 @@ export type Database = {
           customer_id: string
           id: string
           initial_mw: number
+          last_ammp_sync: string | null
           manual_invoicing: boolean | null
           max_mw: number | null
           minimum_annual_value: number | null
@@ -264,6 +268,9 @@ export type Database = {
           ammp_asset_group_name?: string | null
           ammp_asset_group_name_and?: string | null
           ammp_asset_group_name_not?: string | null
+          ammp_asset_ids?: Json | null
+          ammp_org_id?: string | null
+          ammp_sync_status?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
@@ -281,6 +288,7 @@ export type Database = {
           customer_id: string
           id?: string
           initial_mw: number
+          last_ammp_sync?: string | null
           manual_invoicing?: boolean | null
           max_mw?: number | null
           minimum_annual_value?: number | null
@@ -316,6 +324,9 @@ export type Database = {
           ammp_asset_group_name?: string | null
           ammp_asset_group_name_and?: string | null
           ammp_asset_group_name_not?: string | null
+          ammp_asset_ids?: Json | null
+          ammp_org_id?: string | null
+          ammp_sync_status?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
@@ -333,6 +344,7 @@ export type Database = {
           customer_id?: string
           id?: string
           initial_mw?: number
+          last_ammp_sync?: string | null
           manual_invoicing?: boolean | null
           max_mw?: number | null
           minimum_annual_value?: number | null
