@@ -162,7 +162,11 @@ export type Database = {
           above_threshold_price_per_kwp: number | null
           addons: Json | null
           ammp_asset_group_id: string | null
+          ammp_asset_group_id_and: string | null
+          ammp_asset_group_id_not: string | null
           ammp_asset_group_name: string | null
+          ammp_asset_group_name_and: string | null
+          ammp_asset_group_name_not: string | null
           annual_fee_per_site: number | null
           base_monthly_price: number | null
           below_threshold_price_per_kwp: number | null
@@ -209,7 +213,11 @@ export type Database = {
           above_threshold_price_per_kwp?: number | null
           addons?: Json | null
           ammp_asset_group_id?: string | null
+          ammp_asset_group_id_and?: string | null
+          ammp_asset_group_id_not?: string | null
           ammp_asset_group_name?: string | null
+          ammp_asset_group_name_and?: string | null
+          ammp_asset_group_name_not?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_kwp?: number | null
@@ -256,7 +264,11 @@ export type Database = {
           above_threshold_price_per_kwp?: number | null
           addons?: Json | null
           ammp_asset_group_id?: string | null
+          ammp_asset_group_id_and?: string | null
+          ammp_asset_group_id_not?: string | null
           ammp_asset_group_name?: string | null
+          ammp_asset_group_name_and?: string | null
+          ammp_asset_group_name_not?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_kwp?: number | null

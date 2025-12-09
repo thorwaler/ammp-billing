@@ -30,6 +30,13 @@ interface UpcomingInvoice {
   retainerHours: number;
   retainerHourlyRate: number;
   retainerMinimumValue: number;
+  // Elum package fields
+  siteSizeThresholdKwp?: number;
+  belowThresholdPricePerKwp?: number;
+  aboveThresholdPricePerKwp?: number;
+  ammpAssetGroupId?: string;
+  ammpAssetGroupIdAnd?: string;
+  ammpAssetGroupIdNot?: string;
 }
 
 interface UpcomingInvoicesListProps {
@@ -73,6 +80,12 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             retainer_hours,
             retainer_hourly_rate,
             retainer_minimum_value,
+            site_size_threshold_kwp,
+            below_threshold_price_per_kwp,
+            above_threshold_price_per_kwp,
+            ammp_asset_group_id,
+            ammp_asset_group_id_and,
+            ammp_asset_group_id_not,
             customers (
             id,
             name,
@@ -126,6 +139,13 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             retainerHours: Number((c as any).retainer_hours) || 0,
             retainerHourlyRate: Number((c as any).retainer_hourly_rate) || 0,
             retainerMinimumValue: Number((c as any).retainer_minimum_value) || 0,
+            // Elum package fields
+            siteSizeThresholdKwp: Number((c as any).site_size_threshold_kwp) || 100,
+            belowThresholdPricePerKwp: Number((c as any).below_threshold_price_per_kwp) || 50,
+            aboveThresholdPricePerKwp: Number((c as any).above_threshold_price_per_kwp) || 30,
+            ammpAssetGroupId: (c as any).ammp_asset_group_id || undefined,
+            ammpAssetGroupIdAnd: (c as any).ammp_asset_group_id_and || undefined,
+            ammpAssetGroupIdNot: (c as any).ammp_asset_group_id_not || undefined,
           };
         });
 
@@ -195,6 +215,10 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       retainerHours: invoice.retainerHours,
       retainerHourlyRate: invoice.retainerHourlyRate,
       retainerMinimumValue: invoice.retainerMinimumValue,
+      // Elum package fields
+      siteSizeThresholdKwp: invoice.siteSizeThresholdKwp,
+      belowThresholdPricePerKwp: invoice.belowThresholdPricePerKwp,
+      aboveThresholdPricePerKwp: invoice.aboveThresholdPricePerKwp,
     });
     
     return result.totalPrice;

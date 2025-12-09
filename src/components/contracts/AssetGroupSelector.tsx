@@ -24,14 +24,22 @@ interface AssetGroupSelectorProps {
   orgId?: string;
   value?: string;
   onSelect: (groupId: string, groupName: string) => void;
+  onClear?: () => void;
   disabled?: boolean;
+  label?: string;
+  optional?: boolean;
+  showClearButton?: boolean;
 }
 
 export function AssetGroupSelector({ 
   orgId, 
   value, 
-  onSelect, 
-  disabled 
+  onSelect,
+  onClear,
+  disabled,
+  label = "AMMP Asset Group",
+  optional = false,
+  showClearButton = false
 }: AssetGroupSelectorProps) {
   const [groups, setGroups] = useState<AssetGroupResponse[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,10 +90,12 @@ export function AssetGroupSelector({
     }
   };
 
+  const labelText = optional ? `${label} (optional)` : label;
+
   if (loading) {
     return (
       <div>
-        <Label>AMMP Asset Group</Label>
+        <Label>{labelText}</Label>
         <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading asset groups...
@@ -97,7 +107,7 @@ export function AssetGroupSelector({
   if (error) {
     return (
       <div>
-        <Label>AMMP Asset Group</Label>
+        <Label>{labelText}</Label>
         <div className="text-sm text-destructive mt-1">{error}</div>
       </div>
     );
@@ -105,20 +115,21 @@ export function AssetGroupSelector({
 
   return (
     <div>
-      <Label>AMMP Asset Group</Label>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={open}
-            className="w-full justify-between mt-1"
-            disabled={disabled}
-          >
-            {displayName || "Select asset group..."}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
+      <Label>{labelText}</Label>
+      <div className="flex gap-2 mt-1">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={open}
+              className="flex-1 justify-between"
+              disabled={disabled}
+            >
+              {displayName || "Select asset group..."}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0 bg-popover" align="start">
           <Command>
             <CommandInput placeholder="Search asset groups..." />
@@ -175,7 +186,19 @@ export function AssetGroupSelector({
             </div>
           </Command>
         </PopoverContent>
-      </Popover>
+        </Popover>
+        {showClearButton && value && onClear && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={onClear}
+            className="shrink-0"
+          >
+            Clear
+          </Button>
+        )}
+      </div>
       {value && (
         <p className="text-xs text-muted-foreground mt-1">
           ID: {value}
