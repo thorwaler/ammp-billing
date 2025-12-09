@@ -5,6 +5,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+interface DeviceInfo {
+  deviceId: string;
+  deviceName: string;
+  deviceType: string;
+  manufacturer: string | null;
+  model: string | null;
+  dataProvider: string | null;
+}
+
 interface AssetCapabilities {
   assetId: string;
   assetName: string;
@@ -16,6 +25,7 @@ interface AssetCapabilities {
   hasHybridEMS: boolean;
   onboardingDate?: string | null;
   deviceCount: number;
+  devices: DeviceInfo[];
 }
 
 interface CachedCapabilities {
@@ -35,6 +45,7 @@ interface CachedCapabilities {
     hasSolcast: boolean;
     deviceCount: number;
     onboardingDate?: string | null;
+    devices: DeviceInfo[];
   }>;
   lastSynced: string;
 }
@@ -133,6 +144,14 @@ function calculateCapabilities(
     hasHybridEMS,
     onboardingDate,
     deviceCount: devices.length,
+    devices: devices.map(d => ({
+      deviceId: d.device_id,
+      deviceName: d.device_name || 'Unknown Device',
+      deviceType: d.device_type || 'unknown',
+      manufacturer: d.manufacturer || null,
+      model: d.model || null,
+      dataProvider: d.data_provider || null,
+    })),
   };
 }
 
@@ -301,6 +320,7 @@ async function processContractSync(
           hasHybridEMS: false,
           onboardingDate: cachedDates[member.asset_id] || null,
           deviceCount: 0,
+          devices: [],
         };
       }
     });
@@ -332,6 +352,7 @@ async function processContractSync(
       hasSolcast: c.hasSolcast,
       deviceCount: c.deviceCount,
       onboardingDate: c.onboardingDate,
+      devices: c.devices,
     })),
     lastSynced: new Date().toISOString(),
   };

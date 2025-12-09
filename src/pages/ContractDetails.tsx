@@ -59,6 +59,8 @@ const ContractDetails = () => {
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
+  const [showAllAssets, setShowAllAssets] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
 
   // All contracts now use contract-level sync via cached_capabilities
   const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
@@ -339,7 +341,7 @@ const ContractDetails = () => {
                     location: customer.location,
                     mwpManaged: cachedCapabilities?.totalMW || customer.mwp_managed || 0,
                   } : undefined}
-                  existingContract={{
+                existingContract={{
                     id: contract.id,
                     contractName: contract.contract_name,
                     package: contract.package,
@@ -369,6 +371,12 @@ const ContractDetails = () => {
                     retainerHourlyRate: contract.retainer_hourly_rate,
                     retainerMinimumValue: contract.retainer_minimum_value,
                     ammpOrgId: contract.ammp_org_id,
+                    ammpAssetGroupId: contract.ammp_asset_group_id,
+                    ammpAssetGroupName: contract.ammp_asset_group_name,
+                    ammpAssetGroupIdAnd: contract.ammp_asset_group_id_and,
+                    ammpAssetGroupNameAnd: contract.ammp_asset_group_name_and,
+                    ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
+                    ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
                     cachedCapabilities: contract.cached_capabilities
                   }}
                   onComplete={() => {
@@ -423,14 +431,20 @@ const ContractDetails = () => {
               notes: contract.notes,
               contractStatus: contract.contract_status,
               portfolioDiscountTiers: contract.portfolio_discount_tiers,
-                    minimumChargeTiers: contract.minimum_charge_tiers,
-                    siteChargeFrequency: contract.site_charge_frequency,
-                    retainerHours: contract.retainer_hours,
-                    retainerHourlyRate: contract.retainer_hourly_rate,
-                    retainerMinimumValue: contract.retainer_minimum_value,
-                    ammpOrgId: contract.ammp_org_id,
-                    cachedCapabilities: contract.cached_capabilities
-                  }}
+              minimumChargeTiers: contract.minimum_charge_tiers,
+              siteChargeFrequency: contract.site_charge_frequency,
+              retainerHours: contract.retainer_hours,
+              retainerHourlyRate: contract.retainer_hourly_rate,
+              retainerMinimumValue: contract.retainer_minimum_value,
+              ammpOrgId: contract.ammp_org_id,
+              ammpAssetGroupId: contract.ammp_asset_group_id,
+              ammpAssetGroupName: contract.ammp_asset_group_name,
+              ammpAssetGroupIdAnd: contract.ammp_asset_group_id_and,
+              ammpAssetGroupNameAnd: contract.ammp_asset_group_name_and,
+              ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
+              ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
+              cachedCapabilities: contract.cached_capabilities
+            }}
             isExtending={true}
             onComplete={() => {
               setShowExtendDialog(false);
@@ -834,8 +848,22 @@ const ContractDetails = () => {
                 </div>
               </div>
 
+              {/* Asset Table Controls */}
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">
+                  {cachedCapabilities.assetBreakdown.length} assets
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowAllAssets(!showAllAssets)}
+                >
+                  {showAllAssets ? 'Collapse' : 'Show All'}
+                </Button>
+              </div>
+
               {/* Asset Table */}
-              <div className="max-h-96 overflow-auto border rounded-lg">
+              <div className={`${showAllAssets ? '' : 'max-h-96'} overflow-auto border rounded-lg`}>
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0">
                     <tr>
@@ -848,7 +876,11 @@ const ContractDetails = () => {
                   </thead>
                   <tbody>
                     {cachedCapabilities.assetBreakdown.map((asset: any) => (
-                      <tr key={asset.assetId} className="border-t hover:bg-muted/30">
+                      <tr 
+                        key={asset.assetId} 
+                        className="border-t hover:bg-muted/50 cursor-pointer"
+                        onClick={() => setSelectedAsset(asset)}
+                      >
                         <td className="p-2">{asset.assetName}</td>
                         <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
                         <td className="p-2 text-center">
@@ -863,6 +895,51 @@ const ContractDetails = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Device Details Dialog */}
+              <Dialog open={!!selectedAsset} onOpenChange={() => setSelectedAsset(null)}>
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>{selectedAsset?.assetName}</DialogTitle>
+                    <DialogDescription>
+                      {selectedAsset?.totalMW?.toFixed(4)} MW • {selectedAsset?.deviceCount || 0} devices
+                      {selectedAsset?.isHybrid && <Badge variant="outline" className="ml-2 bg-purple-50">Hybrid</Badge>}
+                      {selectedAsset?.hasSolcast && <Badge variant="outline" className="ml-2 bg-blue-50">Solcast</Badge>}
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  {selectedAsset?.devices && selectedAsset.devices.length > 0 ? (
+                    <div className="border rounded-lg overflow-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted sticky top-0">
+                          <tr>
+                            <th className="text-left p-2 font-medium">Device Name</th>
+                            <th className="text-left p-2 font-medium">Type</th>
+                            <th className="text-left p-2 font-medium">Manufacturer</th>
+                            <th className="text-left p-2 font-medium">Model</th>
+                            <th className="text-left p-2 font-medium">Data Provider</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedAsset.devices.map((device: any) => (
+                            <tr key={device.deviceId} className="border-t hover:bg-muted/30">
+                              <td className="p-2 font-medium">{device.deviceName}</td>
+                              <td className="p-2">{device.deviceType}</td>
+                              <td className="p-2">{device.manufacturer || '-'}</td>
+                              <td className="p-2">{device.model || '-'}</td>
+                              <td className="p-2">{device.dataProvider || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-center py-8">
+                      No device data available. Re-sync the contract to fetch device details.
+                    </p>
+                  )}
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         )}
