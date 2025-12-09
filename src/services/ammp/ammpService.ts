@@ -146,6 +146,7 @@ export function detectSyncAnomalies(capabilities: AssetCapabilities[]): SyncAnom
 /**
  * Sync customer AMMP data by org_id
  * Now calls the unified ammp-sync-customer Edge Function
+ * Uses simulated progress tracking since sync runs server-side
  */
 export async function syncCustomerAMMPData(
   customerId: string, 
@@ -155,33 +156,59 @@ export async function syncCustomerAMMPData(
   summary: any;
   anomalies: SyncAnomalies;
 }> {
-  // Report starting
+  // Estimated progress simulation (typical customer has 30-70 assets)
+  const estimatedAssets = 50;
+  let currentProgress = 0;
+  let progressInterval: ReturnType<typeof setInterval> | null = null;
+
+  // Start progress simulation
   if (onProgress) {
-    onProgress(0, 1, 'Starting sync...');
+    onProgress(0, estimatedAssets, 'Connecting to AMMP...');
+    
+    // Simulate progress every 1.5 seconds during server-side sync
+    progressInterval = setInterval(() => {
+      currentProgress = Math.min(currentProgress + 3, estimatedAssets - 5);
+      onProgress(currentProgress, estimatedAssets, 'Syncing assets...');
+    }, 1500);
   }
 
-  // Call the unified Edge Function
-  const { data, error } = await supabase.functions.invoke('ammp-sync-customer', {
-    body: { customerId, orgId }
-  });
+  try {
+    // Call the unified Edge Function
+    const { data, error } = await supabase.functions.invoke('ammp-sync-customer', {
+      body: { customerId, orgId }
+    });
 
-  if (error) {
-    throw new Error(error.message || 'Sync failed');
+    // Clear progress simulation
+    if (progressInterval) {
+      clearInterval(progressInterval);
+      progressInterval = null;
+    }
+
+    if (error) {
+      throw new Error(error.message || 'Sync failed');
+    }
+
+    if (!data?.success) {
+      throw new Error(data?.error || 'Sync failed');
+    }
+
+    // Report actual completion with real count from server
+    if (onProgress) {
+      const actualCount = data.assetsProcessed || estimatedAssets;
+      onProgress(actualCount, actualCount, 'Complete');
+    }
+
+    return {
+      summary: data.summary,
+      anomalies: data.anomalies || { hasAnomalies: false, warnings: [], stats: {} },
+    };
+  } catch (err) {
+    // Ensure cleanup on error
+    if (progressInterval) {
+      clearInterval(progressInterval);
+    }
+    throw err;
   }
-
-  if (!data?.success) {
-    throw new Error(data?.error || 'Sync failed');
-  }
-
-  // Report completion
-  if (onProgress) {
-    onProgress(data.assetsProcessed || 1, data.assetsProcessed || 1, 'Complete');
-  }
-
-  return {
-    summary: data.summary,
-    anomalies: data.anomalies || { hasAnomalies: false, warnings: [], stats: {} },
-  };
 }
 
 /**
