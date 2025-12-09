@@ -132,7 +132,7 @@ const WebhookNotifications = () => {
           user_id: user?.id,
           type: 'test',
           title: '🧪 Test Notification',
-          message: 'This is a test notification from AMMP Revenue & Invoicing. If you see this in your Zap, the webhook is working correctly!',
+          message: 'This is a test notification from AMMP Revenue & Invoicing. If you receive this, the webhook is working correctly!',
           severity: 'info',
           metadata: { test: true },
           contract_id: null,
@@ -142,7 +142,7 @@ const WebhookNotifications = () => {
       });
 
       if (error) throw error;
-      toast.success('Test notification sent! Check your Zap history.');
+      toast.success('Test notification sent! Check your webhook endpoint.');
     } catch (error: any) {
       console.error('Error testing webhook:', error);
       toast.error('Failed to send test: ' + error.message);
@@ -184,7 +184,7 @@ const WebhookNotifications = () => {
           Webhook Notifications
         </CardTitle>
         <CardDescription>
-          Push notifications to Slack, Email, or any app via Zapier
+          Push notifications to external services via webhook
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -193,7 +193,7 @@ const WebhookNotifications = () => {
           <div className="space-y-0.5">
             <Label htmlFor="webhook-enabled">Enable Webhook</Label>
             <p className="text-sm text-muted-foreground">
-              Send notifications to your Zapier webhook
+              Send notifications to an external webhook endpoint
             </p>
           </div>
           <Switch
@@ -205,12 +205,12 @@ const WebhookNotifications = () => {
 
         {/* Webhook URL */}
         <div className="space-y-2">
-          <Label htmlFor="webhook-url">Zapier Webhook URL</Label>
+          <Label htmlFor="webhook-url">Webhook URL</Label>
           <div className="flex gap-2">
             <Input
               id="webhook-url"
               type="url"
-              placeholder="https://hooks.zapier.com/hooks/catch/..."
+              placeholder="https://your-webhook-endpoint.com/..."
               value={settings.zapier_webhook_url || ''}
               onChange={(e) => setSettings(prev => ({ ...prev, zapier_webhook_url: e.target.value }))}
             />
@@ -289,7 +289,7 @@ const WebhookNotifications = () => {
             <Button variant="ghost" className="w-full justify-between">
               <span className="flex items-center gap-2">
                 <HelpCircle className="h-4 w-4" />
-                How to set up Zapier
+                How to use webhooks
               </span>
               <ChevronDown className={`h-4 w-4 transition-transform ${helpOpen ? 'rotate-180' : ''}`} />
             </Button>
@@ -298,15 +298,19 @@ const WebhookNotifications = () => {
             <div className="rounded-lg bg-muted p-4 text-sm space-y-3">
               <p className="font-medium">Setup Instructions:</p>
               <ol className="list-decimal list-inside space-y-2 text-muted-foreground">
-                <li>Go to <a href="https://zapier.com/app/zaps" target="_blank" rel="noopener noreferrer" className="text-primary underline">Zapier</a> and create a new Zap</li>
-                <li>Choose <strong>"Webhooks by Zapier"</strong> as the trigger</li>
-                <li>Select <strong>"Catch Hook"</strong> as the event</li>
+                <li>Set up a webhook receiver in your preferred service (Slack, Teams, Make, n8n, custom endpoint, etc.)</li>
                 <li>Copy the webhook URL and paste it above</li>
-                <li>Click <strong>"Test"</strong> to send a sample notification</li>
-                <li>Continue in Zapier to set up your action (Slack, Email, etc.)</li>
+                <li>Click the <strong>Send</strong> button to test the connection</li>
+                <li>Select which notification types you want to receive</li>
+                <li>Save your settings</li>
               </ol>
+              <p className="font-medium mt-4">Payload Format:</p>
               <p className="text-muted-foreground">
-                The webhook will receive: type, title, message, severity, metadata, timestamp
+                The webhook receives JSON with: type, title, message, severity, metadata, timestamp
+              </p>
+              <p className="font-medium mt-4">Compatible Services:</p>
+              <p className="text-muted-foreground">
+                Slack, Microsoft Teams, Discord, Make (Integromat), n8n, custom APIs, and any service that accepts HTTP webhooks
               </p>
             </div>
           </CollapsibleContent>
