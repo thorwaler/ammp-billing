@@ -741,44 +741,15 @@ export function InvoiceCalculator({
     }
     
     // Prepare asset breakdown for site-level pricing
-    // For Elum packages with contract-level sync (asset group or org ID), use cached_capabilities
-    const usesContractLevelSync = !!(
-      selectedCustomer.ammpAssetGroupId || 
-      selectedCustomer.contractAmmpOrgId
-    );
-    const effectiveCapabilities = usesContractLevelSync && selectedCustomer.cachedCapabilities
-      ? selectedCustomer.cachedCapabilities
-      : selectedCustomer.ammpCapabilities;
+    // Always use cached_capabilities from contract (single source of truth)
+    const effectiveCapabilities = selectedCustomer.cachedCapabilities;
     
-    let assetBreakdown = effectiveCapabilities?.assetBreakdown?.map((asset: any) => ({
+    const assetBreakdown = effectiveCapabilities?.assetBreakdown?.map((asset: any) => ({
       assetId: asset.assetId,
       assetName: asset.assetName,
       totalMW: asset.totalMW,
       isHybrid: asset.isHybrid
     }));
-    
-    // Apply asset group filtering for Elum packages - skip if using cached_capabilities (already filtered)
-    if ((selectedCustomer.package === 'elum_epm' || selectedCustomer.package === 'elum_jubaili') && 
-        selectedCustomer.ammpAssetGroupId && 
-        assetBreakdown && 
-        assetBreakdown.length > 0 &&
-        !usesContractLevelSync) {
-      try {
-        assetBreakdown = await filterAssetsByGroups(
-          assetBreakdown,
-          selectedCustomer.ammpAssetGroupId,
-          selectedCustomer.ammpAssetGroupIdAnd,
-          selectedCustomer.ammpAssetGroupIdNot
-        );
-      } catch (error) {
-        console.error('Error filtering assets by groups:', error);
-        toast({
-          title: "Asset group filter error",
-          description: "Could not filter assets. Using full portfolio.",
-          variant: "destructive",
-        });
-      }
-    }
     
     // Enable site minimum pricing if we have asset breakdown and minimum charge tiers
     const enableSiteMinPricing = !!(
