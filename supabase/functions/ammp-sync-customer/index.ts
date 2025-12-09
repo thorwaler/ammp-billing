@@ -296,20 +296,26 @@ Deno.serve(async (req) => {
 
     console.log(`[AMMP Sync] Found ${orgAssets.length} assets for org ${orgId}`);
 
-    // Get existing capabilities for smart caching
+    // Get existing capabilities for smart caching and change detection
     const { data: existingCustomer } = await supabase
       .from('customers')
       .select('ammp_capabilities')
       .eq('id', customerId)
       .single();
 
-    const existingBreakdown = (existingCustomer?.ammp_capabilities as any)?.assetBreakdown || [];
+    const existingCapabilities = existingCustomer?.ammp_capabilities as any;
+    const existingBreakdown = existingCapabilities?.assetBreakdown || [];
     const cachedDates: Record<string, string | null> = {};
     for (const asset of existingBreakdown) {
       if (asset.assetId && asset.onboardingDate) {
         cachedDates[asset.assetId] = asset.onboardingDate;
       }
     }
+
+    // Store previous MW values for change detection
+    const oldTotalMW = existingCapabilities?.totalMW || 0;
+    const oldOngridMW = existingCapabilities?.ongridTotalMW || 0;
+    const oldHybridMW = existingCapabilities?.hybridTotalMW || 0;
 
     // Identify assets needing metadata fetch
     const assetsMissingMetadata = orgAssets.filter((a: any) => !cachedDates[a.asset_id]);
@@ -379,6 +385,13 @@ Deno.serve(async (req) => {
       capabilities.push(...batchResults);
     }
 
+    // Log per-asset details for debugging
+    console.log(`[AMMP Sync] === Per-Asset Breakdown ===`);
+    for (const c of capabilities) {
+      const isHybrid = c.hasBattery || c.hasGenset || c.hasHybridEMS;
+      console.log(`[AMMP Sync] Asset: ${c.assetName} | MW: ${c.totalMW.toFixed(4)} | Hybrid: ${isHybrid} | Solcast: ${c.hasSolcast} | Devices: ${c.deviceCount}`);
+    }
+
     // Aggregate data
     const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset && !c.hasHybridEMS);
     const hybridSites = capabilities.filter(c => c.hasBattery || c.hasGenset || c.hasHybridEMS);
@@ -403,10 +416,54 @@ Deno.serve(async (req) => {
       lastSyncedAt: new Date().toISOString(),
     };
 
+    // Log detailed summary breakdown
+    console.log(`[AMMP Sync] === Summary Breakdown ===`);
+    console.log(`[AMMP Sync]   Ongrid: ${summary.ongridSites} sites, ${summary.ongridTotalMW.toFixed(4)} MW`);
+    console.log(`[AMMP Sync]   Hybrid: ${summary.hybridSites} sites, ${summary.hybridTotalMW.toFixed(4)} MW`);
+    console.log(`[AMMP Sync]   Sites with Solcast: ${summary.sitesWithSolcast}`);
+    console.log(`[AMMP Sync]   Total: ${summary.totalSites} sites, ${summary.totalMW.toFixed(4)} MW`);
+
+    // Calculate MW deltas for change detection
+    const mwDelta = summary.totalMW - oldTotalMW;
+    const ongridDelta = summary.ongridTotalMW - oldOngridMW;
+    const hybridDelta = summary.hybridTotalMW - oldHybridMW;
+
+    // Log MW change detection
+    if (Math.abs(mwDelta) > 0.001) {
+      console.log(`[AMMP Sync] ⚠️ MW CHANGE DETECTED for customer ${customerId}:`);
+      console.log(`[AMMP Sync]   Total: ${oldTotalMW.toFixed(4)} → ${summary.totalMW.toFixed(4)} (delta: ${mwDelta > 0 ? '+' : ''}${mwDelta.toFixed(4)})`);
+      console.log(`[AMMP Sync]   Ongrid: ${oldOngridMW.toFixed(4)} → ${summary.ongridTotalMW.toFixed(4)} (delta: ${ongridDelta > 0 ? '+' : ''}${ongridDelta.toFixed(4)})`);
+      console.log(`[AMMP Sync]   Hybrid: ${oldHybridMW.toFixed(4)} → ${summary.hybridTotalMW.toFixed(4)} (delta: ${hybridDelta > 0 ? '+' : ''}${hybridDelta.toFixed(4)})`);
+    } else {
+      console.log(`[AMMP Sync] No significant MW change detected (delta: ${mwDelta.toFixed(6)})`);
+    }
+
     // Detect anomalies
     const anomalies = detectAnomalies(capabilities);
     if (anomalies.hasAnomalies) {
       console.warn('[AMMP Sync] Anomalies detected:', anomalies.warnings);
+    }
+
+    // Store sync history for audit trail
+    const { error: historyError } = await supabase.from('ammp_sync_history').insert({
+      customer_id: customerId,
+      user_id: effectiveUserId,
+      total_mw: summary.totalMW,
+      ongrid_mw: summary.ongridTotalMW,
+      hybrid_mw: summary.hybridTotalMW,
+      total_sites: summary.totalSites,
+      ongrid_sites: summary.ongridSites,
+      hybrid_sites: summary.hybridSites,
+      sites_with_solcast: summary.sitesWithSolcast,
+      previous_total_mw: oldTotalMW,
+      mw_delta: mwDelta,
+      asset_breakdown: summary.assetBreakdown,
+    });
+
+    if (historyError) {
+      console.warn('[AMMP Sync] Failed to save audit history:', historyError.message);
+    } else {
+      console.log('[AMMP Sync] Audit history saved successfully');
     }
 
     // Update customer
@@ -434,6 +491,7 @@ Deno.serve(async (req) => {
         summary, 
         anomalies,
         assetsProcessed: capabilities.length,
+        mwDelta: mwDelta,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

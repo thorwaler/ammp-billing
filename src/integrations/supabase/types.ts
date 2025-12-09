@@ -47,6 +47,60 @@ export type Database = {
         }
         Relationships: []
       }
+      ammp_sync_history: {
+        Row: {
+          asset_breakdown: Json | null
+          created_at: string | null
+          customer_id: string
+          hybrid_mw: number | null
+          hybrid_sites: number | null
+          id: string
+          mw_delta: number | null
+          ongrid_mw: number | null
+          ongrid_sites: number | null
+          previous_total_mw: number | null
+          sites_with_solcast: number | null
+          synced_at: string | null
+          total_mw: number | null
+          total_sites: number | null
+          user_id: string
+        }
+        Insert: {
+          asset_breakdown?: Json | null
+          created_at?: string | null
+          customer_id: string
+          hybrid_mw?: number | null
+          hybrid_sites?: number | null
+          id?: string
+          mw_delta?: number | null
+          ongrid_mw?: number | null
+          ongrid_sites?: number | null
+          previous_total_mw?: number | null
+          sites_with_solcast?: number | null
+          synced_at?: string | null
+          total_mw?: number | null
+          total_sites?: number | null
+          user_id: string
+        }
+        Update: {
+          asset_breakdown?: Json | null
+          created_at?: string | null
+          customer_id?: string
+          hybrid_mw?: number | null
+          hybrid_sites?: number | null
+          id?: string
+          mw_delta?: number | null
+          ongrid_mw?: number | null
+          ongrid_sites?: number | null
+          previous_total_mw?: number | null
+          sites_with_solcast?: number | null
+          synced_at?: string | null
+          total_mw?: number | null
+          total_sites?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       contract_amendments: {
         Row: {
           amendment_date: string
