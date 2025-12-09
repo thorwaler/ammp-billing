@@ -101,6 +101,51 @@ export type Database = {
         }
         Relationships: []
       }
+      ammp_sync_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_asset_name: string | null
+          customer_id: string
+          error_message: string | null
+          id: string
+          processed_assets: number | null
+          result: Json | null
+          status: string
+          total_assets: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_asset_name?: string | null
+          customer_id: string
+          error_message?: string | null
+          id?: string
+          processed_assets?: number | null
+          result?: Json | null
+          status?: string
+          total_assets?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_asset_name?: string | null
+          customer_id?: string
+          error_message?: string | null
+          id?: string
+          processed_assets?: number | null
+          result?: Json | null
+          status?: string
+          total_assets?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       contract_amendments: {
         Row: {
           amendment_date: string
