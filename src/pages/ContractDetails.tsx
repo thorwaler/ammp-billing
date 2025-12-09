@@ -530,9 +530,18 @@ const ContractDetails = () => {
                 <div className="space-y-1">
                   <p className="text-sm text-muted-foreground">Package</p>
                   <p className="font-medium">
-                    {contract.package === "starter" ? "AMMP OS Starter" : 
-                     contract.package === "pro" ? "AMMP OS Pro" : 
-                     contract.package === "hybrid_tiered" ? "Hybrid Tiered" : "Custom/Legacy"}
+                    {({
+                      starter: "AMMP OS Starter",
+                      pro: "AMMP OS Pro",
+                      custom: "Custom/Legacy",
+                      hybrid_tiered: "Hybrid Tiered",
+                      capped: "Capped Package",
+                      poc: "Proof of Concept",
+                      per_site: "Per-Site Billing",
+                      elum_epm: "Elum ePM",
+                      elum_jubaili: "Elum Jubaili",
+                      elum_portfolio_os: "Elum Portfolio OS"
+                    } as Record<string, string>)[contract.package] || contract.package}
                   </p>
                 </div>
                 
