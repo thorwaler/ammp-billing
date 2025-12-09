@@ -4,7 +4,7 @@
 
 import { authService } from './authService';
 import { supabase } from '@/integrations/supabase/client';
-import { AssetResponse, DeviceResponse, DataApiRequestError } from '@/types/ammp-api';
+import { AssetResponse, DeviceResponse, DataApiRequestError, AssetGroupResponse, AssetGroupMemberResponse } from '@/types/ammp-api';
 
 /**
  * Generic request method with Bearer token authentication and automatic retry on 401
@@ -103,5 +103,19 @@ export const dataApiClient = {
   async getAssetDevices(assetId: string): Promise<DeviceResponse[]> {
     const response = await request<AssetResponse>(`/assets/${assetId}/devices?include_virtual=true`);
     return response.devices || [];
+  },
+
+  /**
+   * List all asset groups
+   */
+  async listAssetGroups(): Promise<AssetGroupResponse[]> {
+    return request<AssetGroupResponse[]>('/asset_groups');
+  },
+
+  /**
+   * Get members of an asset group
+   */
+  async getAssetGroupMembers(groupId: string): Promise<AssetGroupMemberResponse[]> {
+    return request<AssetGroupMemberResponse[]>(`/asset_groups/${groupId}/members`);
   }
 };

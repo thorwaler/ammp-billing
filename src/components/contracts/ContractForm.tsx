@@ -8,6 +8,7 @@ import { ContractPackageSelector } from "@/components/contracts/ContractPackageS
 import { ContractPdfUploader } from "@/components/contracts/ContractPdfUploader";
 import { DiscountTierEditor } from "@/components/contracts/DiscountTierEditor";
 import { MinimumChargeTierEditor } from "@/components/contracts/MinimumChargeTierEditor";
+import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
 import { 
   MODULES, 
   ADDONS, 
@@ -61,7 +62,7 @@ const contractFormSchema = z.object({
   contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc", "per_site"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os"]),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -96,6 +97,13 @@ const contractFormSchema = z.object({
   // Per-site package fields
   onboardingFeePerSite: z.coerce.number().optional(),
   annualFeePerSite: z.coerce.number().optional(),
+  // Elum package fields
+  ammpAssetGroupId: z.string().optional(),
+  ammpAssetGroupName: z.string().optional(),
+  contractAmmpOrgId: z.string().optional(),
+  siteSizeThresholdKwp: z.coerce.number().optional(),
+  belowThresholdPricePerKwp: z.coerce.number().optional(),
+  aboveThresholdPricePerKwp: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -141,6 +149,13 @@ interface ContractFormProps {
     minimumChargeTiers?: any[];
     siteChargeFrequency?: string;
     contractExpiryDate?: string;
+    // Elum package fields
+    ammpAssetGroupId?: string;
+    ammpAssetGroupName?: string;
+    contractAmmpOrgId?: string;
+    siteSizeThresholdKwp?: number;
+    belowThresholdPricePerKwp?: number;
+    aboveThresholdPricePerKwp?: number;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -523,6 +538,22 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("billingFrequency", "monthly"); // Per-site contracts are checked monthly
       form.setValue("modules", []);
       setShowCustomPricing(false);
+    } else if (value === "elum_epm") {
+      // Elum ePM - site-size threshold pricing
+      form.setValue("siteSizeThresholdKwp", 100);
+      form.setValue("belowThresholdPricePerKwp", 50);
+      form.setValue("aboveThresholdPricePerKwp", 30);
+      form.setValue("modules", []);
+      setShowCustomPricing(false);
+    } else if (value === "elum_jubaili") {
+      // Elum Jubaili - per-site pricing
+      form.setValue("annualFeePerSite", 500);
+      form.setValue("modules", []);
+      setShowCustomPricing(false);
+    } else if (value === "elum_portfolio_os") {
+      // Elum Portfolio OS - full pricing flexibility
+      form.setValue("modules", ["technicalMonitoring"]);
+      setShowCustomPricing(true);
     } else {
       setShowCustomPricing(false);
     }
@@ -744,8 +775,31 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         retainer_hourly_rate: (data.package === 'poc' || data.package === 'per_site') ? null : (data.retainerHourlyRate || null),
         retainer_minimum_value: (data.package === 'poc' || data.package === 'per_site') ? null : (data.retainerMinimumValue || null),
         // Per-site package fields
-        onboarding_fee_per_site: data.package === 'per_site' ? (data.onboardingFeePerSite || 1000) : null,
-        annual_fee_per_site: data.package === 'per_site' ? (data.annualFeePerSite || 1000) : null,
+        onboarding_fee_per_site: (data.package === 'per_site' || data.package === 'elum_jubaili') 
+          ? (data.onboardingFeePerSite || (data.package === 'per_site' ? 1000 : null)) 
+          : null,
+        annual_fee_per_site: (data.package === 'per_site' || data.package === 'elum_jubaili') 
+          ? (data.annualFeePerSite || (data.package === 'per_site' ? 1000 : 500)) 
+          : null,
+        // Elum package fields
+        ammp_asset_group_id: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
+          ? (data.ammpAssetGroupId || null) 
+          : null,
+        ammp_asset_group_name: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
+          ? (data.ammpAssetGroupName || null) 
+          : null,
+        contract_ammp_org_id: data.package === 'elum_portfolio_os' 
+          ? (data.contractAmmpOrgId || null) 
+          : null,
+        site_size_threshold_kwp: data.package === 'elum_epm' 
+          ? (data.siteSizeThresholdKwp || 100) 
+          : null,
+        below_threshold_price_per_kwp: data.package === 'elum_epm' 
+          ? (data.belowThresholdPricePerKwp || 50) 
+          : null,
+        above_threshold_price_per_kwp: data.package === 'elum_epm' 
+          ? (data.aboveThresholdPricePerKwp || 30) 
+          : null,
         max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
@@ -886,6 +940,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="capped">Capped Package (Fixed annual fee with MW cap)</SelectItem>
                       <SelectItem value="poc">POC/Trial (No billing - expiry tracking only)</SelectItem>
                       <SelectItem value="per_site">Per-Site (Fixed fees per site for onboarding + annual subscription)</SelectItem>
+                      <SelectItem value="elum_epm">Elum ePM (Asset group with site-size threshold pricing)</SelectItem>
+                      <SelectItem value="elum_jubaili">Elum Jubaili (Asset group with per-site pricing)</SelectItem>
+                      <SelectItem value="elum_portfolio_os">Elum Portfolio OS (Custom org with full pricing flexibility)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -901,6 +958,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "POC/Trial: Track proof-of-concept trials with expiry notifications. No invoicing or billing." :
                       watchPackage === "per_site" ?
                       "Per-Site: Fixed fee per site for onboarding (one-time) and annual subscription. Sites are billed individually on their anniversary." :
+                      watchPackage === "elum_epm" ?
+                      "Elum ePM: Filter to specific AMMP asset group with different per-kWp pricing based on site size threshold." :
+                      watchPackage === "elum_jubaili" ?
+                      "Elum Jubaili: Filter to specific AMMP asset group with flat per-site pricing." :
+                      watchPackage === "elum_portfolio_os" ?
+                      "Elum Portfolio OS: Use a separate AMMP org ID with full pricing flexibility (modules, addons, custom pricing)." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -1036,8 +1099,164 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </>
             )}
 
-            {/* Billing fields - hidden for POC and per_site */}
-            {watchPackage !== "poc" && watchPackage !== "per_site" && (
+            {/* Elum ePM package fields */}
+            {watchPackage === "elum_epm" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" />
+                          Contract Currency
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="USD">USD ($)</SelectItem>
+                            <SelectItem value="EUR">EUR (€)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="billingFrequency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Billing Frequency</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select frequency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="quarterly">Quarterly</SelectItem>
+                            <SelectItem value="biannual">Bi-annual</SelectItem>
+                            <SelectItem value="annual">Annual</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="siteSizeThresholdKwp"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Site Size Threshold (kWp)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="1" placeholder="100" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 100)} />
+                        </FormControl>
+                        <FormDescription>Sites ≤ this size use below-threshold pricing</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="belowThresholdPricePerKwp"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price/kWp (≤ threshold)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="50" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 50)} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="aboveThresholdPricePerKwp"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Price/kWp (&gt; threshold)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="30" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 30)} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Elum Jubaili package fields */}
+            {watchPackage === "elum_jubaili" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Contract Currency</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger><SelectValue placeholder="Select currency" /></SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="USD">USD ($)</SelectItem>
+                            <SelectItem value="EUR">EUR (€)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="annualFeePerSite"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Per-Site Fee ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" placeholder="500" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 500)} />
+                        </FormControl>
+                        <FormDescription>Flat fee charged per site in the asset group</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Elum Portfolio OS package fields */}
+            {watchPackage === "elum_portfolio_os" && (
+              <FormField
+                control={form.control}
+                name="contractAmmpOrgId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>AMMP Organization ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter AMMP org ID for this contract" {...field} />
+                    </FormControl>
+                    <FormDescription>Use a separate AMMP organization ID for this contract (overrides customer's default org)</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
+            {/* Billing fields - hidden for POC, per_site, and Elum packages with their own billing fields */}
+            {watchPackage !== "poc" && watchPackage !== "per_site" && watchPackage !== "elum_epm" && watchPackage !== "elum_jubaili" && (
               <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <FormField

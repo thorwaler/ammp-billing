@@ -159,11 +159,16 @@ export type Database = {
       }
       contracts: {
         Row: {
+          above_threshold_price_per_kwp: number | null
           addons: Json | null
+          ammp_asset_group_id: string | null
+          ammp_asset_group_name: string | null
           annual_fee_per_site: number | null
           base_monthly_price: number | null
+          below_threshold_price_per_kwp: number | null
           billing_frequency: string | null
           company_name: string
+          contract_ammp_org_id: string | null
           contract_expiry_date: string | null
           contract_name: string | null
           contract_pdf_url: string | null
@@ -195,16 +200,22 @@ export type Database = {
           retainer_minimum_value: number | null
           signed_date: string | null
           site_charge_frequency: string | null
+          site_size_threshold_kwp: number | null
           updated_at: string
           user_id: string
           volume_discounts: Json | null
         }
         Insert: {
+          above_threshold_price_per_kwp?: number | null
           addons?: Json | null
+          ammp_asset_group_id?: string | null
+          ammp_asset_group_name?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
+          below_threshold_price_per_kwp?: number | null
           billing_frequency?: string | null
           company_name: string
+          contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
           contract_name?: string | null
           contract_pdf_url?: string | null
@@ -236,16 +247,22 @@ export type Database = {
           retainer_minimum_value?: number | null
           signed_date?: string | null
           site_charge_frequency?: string | null
+          site_size_threshold_kwp?: number | null
           updated_at?: string
           user_id: string
           volume_discounts?: Json | null
         }
         Update: {
+          above_threshold_price_per_kwp?: number | null
           addons?: Json | null
+          ammp_asset_group_id?: string | null
+          ammp_asset_group_name?: string | null
           annual_fee_per_site?: number | null
           base_monthly_price?: number | null
+          below_threshold_price_per_kwp?: number | null
           billing_frequency?: string | null
           company_name?: string
+          contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
           contract_name?: string | null
           contract_pdf_url?: string | null
@@ -277,6 +294,7 @@ export type Database = {
           retainer_minimum_value?: number | null
           signed_date?: string | null
           site_charge_frequency?: string | null
+          site_size_threshold_kwp?: number | null
           updated_at?: string
           user_id?: string
           volume_discounts?: Json | null
