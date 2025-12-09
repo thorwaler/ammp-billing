@@ -46,6 +46,7 @@ import {
   type CalculationResult 
 } from "@/lib/invoiceCalculations";
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
+import { filterAssetsByGroups } from "@/lib/assetGroupFilter";
 
 // Simplified interfaces - complex types moved to shared files
 interface Module {
@@ -122,6 +123,13 @@ interface Customer {
   onboardingFeePerSite?: number;
   annualFeePerSite?: number;
   contractId?: string;
+  // Elum package fields
+  siteSizeThresholdKwp?: number;
+  belowThresholdPricePerKwp?: number;
+  aboveThresholdPricePerKwp?: number;
+  ammpAssetGroupId?: string;
+  ammpAssetGroupIdAnd?: string;
+  ammpAssetGroupIdNot?: string;
 }
 
 // Default modules and addons from shared data
@@ -205,7 +213,13 @@ export function InvoiceCalculator({
             retainer_hourly_rate,
             retainer_minimum_value,
             onboarding_fee_per_site,
-            annual_fee_per_site
+            annual_fee_per_site,
+            site_size_threshold_kwp,
+            below_threshold_price_per_kwp,
+            above_threshold_price_per_kwp,
+            ammp_asset_group_id,
+            ammp_asset_group_id_and,
+            ammp_asset_group_id_not
           )
         `)
         .eq('user_id', user.id)
@@ -262,6 +276,13 @@ export function InvoiceCalculator({
             onboardingFeePerSite: Number((contract as any).onboarding_fee_per_site) || 1000,
             annualFeePerSite: Number((contract as any).annual_fee_per_site) || 1000,
             contractId: contract.id,
+            // Elum package fields
+            siteSizeThresholdKwp: Number((contract as any).site_size_threshold_kwp) || 100,
+            belowThresholdPricePerKwp: Number((contract as any).below_threshold_price_per_kwp) || 50,
+            aboveThresholdPricePerKwp: Number((contract as any).above_threshold_price_per_kwp) || 30,
+            ammpAssetGroupId: (contract as any).ammp_asset_group_id || undefined,
+            ammpAssetGroupIdAnd: (contract as any).ammp_asset_group_id_and || undefined,
+            ammpAssetGroupIdNot: (contract as any).ammp_asset_group_id_not || undefined,
           };
         });
 
@@ -714,12 +735,34 @@ export function InvoiceCalculator({
     }
     
     // Prepare asset breakdown for site-level pricing
-    const assetBreakdown = selectedCustomer.ammpCapabilities?.assetBreakdown?.map((asset: any) => ({
+    let assetBreakdown = selectedCustomer.ammpCapabilities?.assetBreakdown?.map((asset: any) => ({
       assetId: asset.assetId,
       assetName: asset.assetName,
       totalMW: asset.totalMW,
       isHybrid: asset.isHybrid
     }));
+    
+    // Apply asset group filtering for Elum packages
+    if ((selectedCustomer.package === 'elum_epm' || selectedCustomer.package === 'elum_jubaili') && 
+        selectedCustomer.ammpAssetGroupId && 
+        assetBreakdown && 
+        assetBreakdown.length > 0) {
+      try {
+        assetBreakdown = await filterAssetsByGroups(
+          assetBreakdown,
+          selectedCustomer.ammpAssetGroupId,
+          selectedCustomer.ammpAssetGroupIdAnd,
+          selectedCustomer.ammpAssetGroupIdNot
+        );
+      } catch (error) {
+        console.error('Error filtering assets by groups:', error);
+        toast({
+          title: "Asset group filter error",
+          description: "Could not filter assets. Using full portfolio.",
+          variant: "destructive",
+        });
+      }
+    }
     
     // Enable site minimum pricing if we have asset breakdown and minimum charge tiers
     const enableSiteMinPricing = !!(
@@ -758,6 +801,10 @@ export function InvoiceCalculator({
       onboardingFeePerSite: selectedCustomer.onboardingFeePerSite,
       annualFeePerSite: selectedCustomer.annualFeePerSite,
       sitesToBill: selectedCustomer.package === 'per_site' ? selectedSitesToBill : undefined,
+      // Elum package fields
+      siteSizeThresholdKwp: selectedCustomer.siteSizeThresholdKwp,
+      belowThresholdPricePerKwp: selectedCustomer.belowThresholdPricePerKwp,
+      aboveThresholdPricePerKwp: selectedCustomer.aboveThresholdPricePerKwp,
     };
     
     calculationResult = calculateInvoice(params);

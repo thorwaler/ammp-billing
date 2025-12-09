@@ -100,6 +100,10 @@ const contractFormSchema = z.object({
   // Elum package fields
   ammpAssetGroupId: z.string().optional(),
   ammpAssetGroupName: z.string().optional(),
+  ammpAssetGroupIdAnd: z.string().optional(),
+  ammpAssetGroupNameAnd: z.string().optional(),
+  ammpAssetGroupIdNot: z.string().optional(),
+  ammpAssetGroupNameNot: z.string().optional(),
   contractAmmpOrgId: z.string().optional(),
   siteSizeThresholdKwp: z.coerce.number().optional(),
   belowThresholdPricePerKwp: z.coerce.number().optional(),
@@ -153,6 +157,10 @@ interface ContractFormProps {
     // Elum package fields
     ammpAssetGroupId?: string;
     ammpAssetGroupName?: string;
+    ammpAssetGroupIdAnd?: string;
+    ammpAssetGroupNameAnd?: string;
+    ammpAssetGroupIdNot?: string;
+    ammpAssetGroupNameNot?: string;
     contractAmmpOrgId?: string;
     siteSizeThresholdKwp?: number;
     belowThresholdPricePerKwp?: number;
@@ -789,6 +797,18 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         ammp_asset_group_name: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
           ? (data.ammpAssetGroupName || null) 
           : null,
+        ammp_asset_group_id_and: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
+          ? (data.ammpAssetGroupIdAnd || null) 
+          : null,
+        ammp_asset_group_name_and: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
+          ? (data.ammpAssetGroupNameAnd || null) 
+          : null,
+        ammp_asset_group_id_not: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
+          ? (data.ammpAssetGroupIdNot || null) 
+          : null,
+        ammp_asset_group_name_not: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
+          ? (data.ammpAssetGroupNameNot || null) 
+          : null,
         contract_ammp_org_id: data.package === 'elum_portfolio_os' 
           ? (data.contractAmmpOrgId || null) 
           : null,
@@ -1103,15 +1123,53 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             {/* Elum ePM package fields */}
             {watchPackage === "elum_epm" && (
               <>
-                <AssetGroupSelector
-                  orgId={existingCustomer?.ammpOrgId}
-                  value={form.watch("ammpAssetGroupId")}
-                  onSelect={(groupId, groupName) => {
-                    form.setValue("ammpAssetGroupId", groupId);
-                    form.setValue("ammpAssetGroupName", groupName);
-                  }}
-                  disabled={!existingCustomer?.ammpOrgId}
-                />
+                <div className="space-y-4 rounded-lg border p-4">
+                  <Label className="text-sm font-medium">Asset Group Filters</Label>
+                  <AssetGroupSelector
+                    label="Primary Group"
+                    orgId={existingCustomer?.ammpOrgId}
+                    value={form.watch("ammpAssetGroupId")}
+                    onSelect={(groupId, groupName) => {
+                      form.setValue("ammpAssetGroupId", groupId);
+                      form.setValue("ammpAssetGroupName", groupName);
+                    }}
+                    disabled={!existingCustomer?.ammpOrgId}
+                  />
+                  <AssetGroupSelector
+                    label="AND Filter"
+                    optional
+                    showClearButton
+                    orgId={existingCustomer?.ammpOrgId}
+                    value={form.watch("ammpAssetGroupIdAnd")}
+                    onSelect={(groupId, groupName) => {
+                      form.setValue("ammpAssetGroupIdAnd", groupId);
+                      form.setValue("ammpAssetGroupNameAnd", groupName);
+                    }}
+                    onClear={() => {
+                      form.setValue("ammpAssetGroupIdAnd", undefined);
+                      form.setValue("ammpAssetGroupNameAnd", undefined);
+                    }}
+                    disabled={!existingCustomer?.ammpOrgId}
+                  />
+                  <p className="text-xs text-muted-foreground -mt-2">Assets must also be in this group</p>
+                  <AssetGroupSelector
+                    label="NOT Filter"
+                    optional
+                    showClearButton
+                    orgId={existingCustomer?.ammpOrgId}
+                    value={form.watch("ammpAssetGroupIdNot")}
+                    onSelect={(groupId, groupName) => {
+                      form.setValue("ammpAssetGroupIdNot", groupId);
+                      form.setValue("ammpAssetGroupNameNot", groupName);
+                    }}
+                    onClear={() => {
+                      form.setValue("ammpAssetGroupIdNot", undefined);
+                      form.setValue("ammpAssetGroupNameNot", undefined);
+                    }}
+                    disabled={!existingCustomer?.ammpOrgId}
+                  />
+                  <p className="text-xs text-muted-foreground -mt-2">Exclude assets in this group</p>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -1209,15 +1267,53 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             {/* Elum Jubaili package fields */}
             {watchPackage === "elum_jubaili" && (
               <>
-                <AssetGroupSelector
-                  orgId={existingCustomer?.ammpOrgId}
-                  value={form.watch("ammpAssetGroupId")}
-                  onSelect={(groupId, groupName) => {
-                    form.setValue("ammpAssetGroupId", groupId);
-                    form.setValue("ammpAssetGroupName", groupName);
-                  }}
-                  disabled={!existingCustomer?.ammpOrgId}
-                />
+                <div className="space-y-4 rounded-lg border p-4">
+                  <Label className="text-sm font-medium">Asset Group Filters</Label>
+                  <AssetGroupSelector
+                    label="Primary Group"
+                    orgId={existingCustomer?.ammpOrgId}
+                    value={form.watch("ammpAssetGroupId")}
+                    onSelect={(groupId, groupName) => {
+                      form.setValue("ammpAssetGroupId", groupId);
+                      form.setValue("ammpAssetGroupName", groupName);
+                    }}
+                    disabled={!existingCustomer?.ammpOrgId}
+                  />
+                  <AssetGroupSelector
+                    label="AND Filter"
+                    optional
+                    showClearButton
+                    orgId={existingCustomer?.ammpOrgId}
+                    value={form.watch("ammpAssetGroupIdAnd")}
+                    onSelect={(groupId, groupName) => {
+                      form.setValue("ammpAssetGroupIdAnd", groupId);
+                      form.setValue("ammpAssetGroupNameAnd", groupName);
+                    }}
+                    onClear={() => {
+                      form.setValue("ammpAssetGroupIdAnd", undefined);
+                      form.setValue("ammpAssetGroupNameAnd", undefined);
+                    }}
+                    disabled={!existingCustomer?.ammpOrgId}
+                  />
+                  <p className="text-xs text-muted-foreground -mt-2">Assets must also be in this group</p>
+                  <AssetGroupSelector
+                    label="NOT Filter"
+                    optional
+                    showClearButton
+                    orgId={existingCustomer?.ammpOrgId}
+                    value={form.watch("ammpAssetGroupIdNot")}
+                    onSelect={(groupId, groupName) => {
+                      form.setValue("ammpAssetGroupIdNot", groupId);
+                      form.setValue("ammpAssetGroupNameNot", groupName);
+                    }}
+                    onClear={() => {
+                      form.setValue("ammpAssetGroupIdNot", undefined);
+                      form.setValue("ammpAssetGroupNameNot", undefined);
+                    }}
+                    disabled={!existingCustomer?.ammpOrgId}
+                  />
+                  <p className="text-xs text-muted-foreground -mt-2">Exclude assets in this group</p>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
