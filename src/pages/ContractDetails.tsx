@@ -63,7 +63,10 @@ const ContractDetails = () => {
   // Elum package types that support asset refresh
   const ELUM_PACKAGES = ['elum_epm', 'elum_jubaili', 'elum_portfolio_os'];
   const isElumContract = contract && ELUM_PACKAGES.includes(contract.package);
+
+  const loadContractData = async () => {
       setLoading(true);
+      setError(null);
       setError(null);
       
       try {
