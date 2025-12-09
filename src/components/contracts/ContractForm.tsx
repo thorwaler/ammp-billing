@@ -1163,53 +1163,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             {/* Elum ePM package fields */}
             {watchPackage === "elum_epm" && (
               <>
-                <div className="space-y-4 rounded-lg border p-4">
-                  <Label className="text-sm font-medium">Asset Group Filters</Label>
-                  <AssetGroupSelector
-                    label="Primary Group"
-                    orgId={existingCustomer?.ammpOrgId}
-                    value={form.watch("ammpAssetGroupId")}
-                    onSelect={(groupId, groupName) => {
-                      form.setValue("ammpAssetGroupId", groupId);
-                      form.setValue("ammpAssetGroupName", groupName);
-                    }}
-                    disabled={!existingCustomer?.ammpOrgId}
-                  />
-                  <AssetGroupSelector
-                    label="AND Filter"
-                    optional
-                    showClearButton
-                    orgId={existingCustomer?.ammpOrgId}
-                    value={form.watch("ammpAssetGroupIdAnd")}
-                    onSelect={(groupId, groupName) => {
-                      form.setValue("ammpAssetGroupIdAnd", groupId);
-                      form.setValue("ammpAssetGroupNameAnd", groupName);
-                    }}
-                    onClear={() => {
-                      form.setValue("ammpAssetGroupIdAnd", undefined);
-                      form.setValue("ammpAssetGroupNameAnd", undefined);
-                    }}
-                    disabled={!existingCustomer?.ammpOrgId}
-                  />
-                  <p className="text-xs text-muted-foreground -mt-2">Assets must also be in this group</p>
-                  <AssetGroupSelector
-                    label="NOT Filter"
-                    optional
-                    showClearButton
-                    orgId={existingCustomer?.ammpOrgId}
-                    value={form.watch("ammpAssetGroupIdNot")}
-                    onSelect={(groupId, groupName) => {
-                      form.setValue("ammpAssetGroupIdNot", groupId);
-                      form.setValue("ammpAssetGroupNameNot", groupName);
-                    }}
-                    onClear={() => {
-                      form.setValue("ammpAssetGroupIdNot", undefined);
-                      form.setValue("ammpAssetGroupNameNot", undefined);
-                    }}
-                    disabled={!existingCustomer?.ammpOrgId}
-                  />
-                  <p className="text-xs text-muted-foreground -mt-2">Exclude assets in this group</p>
-                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -1328,53 +1281,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             {/* Elum Jubaili package fields */}
             {watchPackage === "elum_jubaili" && (
               <>
-                <div className="space-y-4 rounded-lg border p-4">
-                  <Label className="text-sm font-medium">Asset Group Filters</Label>
-                  <AssetGroupSelector
-                    label="Primary Group"
-                    orgId={existingCustomer?.ammpOrgId}
-                    value={form.watch("ammpAssetGroupId")}
-                    onSelect={(groupId, groupName) => {
-                      form.setValue("ammpAssetGroupId", groupId);
-                      form.setValue("ammpAssetGroupName", groupName);
-                    }}
-                    disabled={!existingCustomer?.ammpOrgId}
-                  />
-                  <AssetGroupSelector
-                    label="AND Filter"
-                    optional
-                    showClearButton
-                    orgId={existingCustomer?.ammpOrgId}
-                    value={form.watch("ammpAssetGroupIdAnd")}
-                    onSelect={(groupId, groupName) => {
-                      form.setValue("ammpAssetGroupIdAnd", groupId);
-                      form.setValue("ammpAssetGroupNameAnd", groupName);
-                    }}
-                    onClear={() => {
-                      form.setValue("ammpAssetGroupIdAnd", undefined);
-                      form.setValue("ammpAssetGroupNameAnd", undefined);
-                    }}
-                    disabled={!existingCustomer?.ammpOrgId}
-                  />
-                  <p className="text-xs text-muted-foreground -mt-2">Assets must also be in this group</p>
-                  <AssetGroupSelector
-                    label="NOT Filter"
-                    optional
-                    showClearButton
-                    orgId={existingCustomer?.ammpOrgId}
-                    value={form.watch("ammpAssetGroupIdNot")}
-                    onSelect={(groupId, groupName) => {
-                      form.setValue("ammpAssetGroupIdNot", groupId);
-                      form.setValue("ammpAssetGroupNameNot", groupName);
-                    }}
-                    onClear={() => {
-                      form.setValue("ammpAssetGroupIdNot", undefined);
-                      form.setValue("ammpAssetGroupNameNot", undefined);
-                    }}
-                    disabled={!existingCustomer?.ammpOrgId}
-                  />
-                  <p className="text-xs text-muted-foreground -mt-2">Exclude assets in this group</p>
-                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
@@ -2162,10 +2068,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </div>
 
                 {/* Asset Group Selectors - for Elum-style filtering */}
-                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || form.watch('ammpAssetGroupId')) && (
+                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || form.watch('ammpAssetGroupId')) && (
                   <div className="space-y-4 mt-4 pt-4 border-t">
                     <h4 className="text-sm font-medium">Asset Group Filtering</h4>
                     <AssetGroupSelector
+                      orgId={form.watch('contractAmmpOrgId') || undefined}
                       value={form.watch('ammpAssetGroupId') || ''}
                       onSelect={(id, name) => {
                         form.setValue('ammpAssetGroupId', id);
@@ -2181,6 +2088,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                     />
                     
                     <AssetGroupSelector
+                      orgId={form.watch('contractAmmpOrgId') || undefined}
                       value={form.watch('ammpAssetGroupIdAnd') || ''}
                       onSelect={(id, name) => {
                         form.setValue('ammpAssetGroupIdAnd', id);
@@ -2196,6 +2104,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                     />
                     
                     <AssetGroupSelector
+                      orgId={form.watch('contractAmmpOrgId') || undefined}
                       value={form.watch('ammpAssetGroupIdNot') || ''}
                       onSelect={(id, name) => {
                         form.setValue('ammpAssetGroupIdNot', id);
