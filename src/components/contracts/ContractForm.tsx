@@ -42,6 +42,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { toast } from "@/hooks/use-toast";
 import { FileUp, Save, DollarSign, Calendar as CalendarIcon, Loader2, CheckCircle2, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { Badge } from "@/components/ui/badge";
@@ -193,6 +194,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [ocrExtractedFields, setOcrExtractedFields] = useState<Set<string>>(new Set());
+  const [isSyncing, setIsSyncing] = useState(false);
   const { currency: userCurrency} = useCurrency();
 
   const form = useForm<ContractFormValues>({
@@ -2037,6 +2039,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         variant="outline"
                         onClick={async () => {
                           if (!existingContractId) return;
+                          setIsSyncing(true);
                           try {
                             const { data, error } = await supabase.functions.invoke('ammp-sync-contract', {
                               body: { contractId: existingContractId }
@@ -2047,6 +2050,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                                 title: "AMMP sync complete",
                                 description: `Synced ${data.totalSites} sites (${data.totalMW?.toFixed(4)} MW)`,
                               });
+                              // Refresh the page to show updated data
+                              window.location.reload();
                             } else {
                               throw new Error(data.error || 'Sync failed');
                             }
@@ -2056,12 +2061,14 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                               description: err.message,
                               variant: "destructive",
                             });
+                          } finally {
+                            setIsSyncing(false);
                           }
                         }}
-                        disabled={!form.watch('contractAmmpOrgId') && !form.watch('ammpAssetGroupId')}
+                        disabled={isSyncing || (!form.watch('contractAmmpOrgId') && !form.watch('ammpAssetGroupId'))}
                       >
-                        <RefreshCw className="mr-2 h-4 w-4" />
-                        Sync from AMMP
+                        <RefreshCw className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} />
+                        {isSyncing ? 'Syncing...' : 'Sync from AMMP'}
                       </Button>
                     </div>
                   )}

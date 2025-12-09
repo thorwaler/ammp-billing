@@ -1,12 +1,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, BarChart, MoreHorizontal, CheckCircle2, AlertCircle, PlusCircle } from "lucide-react";
+import { FileText, BarChart, MoreHorizontal, CheckCircle2, AlertCircle, PlusCircle, Eye } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import CustomerForm from "./CustomerForm";
 import ContractForm from "../contracts/ContractForm";
 import { supabase } from "@/integrations/supabase/client";
@@ -119,6 +122,18 @@ export function CustomerCard({
   const [showContractForm, setShowContractForm] = useState(false);
   const [showAddContractForm, setShowAddContractForm] = useState(false);
   const [showContractSelector, setShowContractSelector] = useState(false);
+  const [showAssetsDialog, setShowAssetsDialog] = useState(false);
+  const [showAllAssets, setShowAllAssets] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
+
+  // Aggregate assets from all contracts
+  const allAssets = contracts?.flatMap(c => 
+    (c.cached_capabilities as any)?.assetBreakdown?.map((asset: any) => ({
+      ...asset,
+      contractName: c.contract_name || `${c.package} Contract`,
+      contractId: c.id
+    })) || []
+  ) || [];
 
   const handleMarkInactive = async () => {
     try {
@@ -347,7 +362,20 @@ export function CustomerCard({
           </div>
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">MWp Managed</div>
-            <div className="font-medium">{mwpManaged.toFixed(2)} MWp</div>
+            <div className="flex items-center gap-2">
+              <span className="font-medium">{mwpManaged.toFixed(2)} MWp</span>
+              {allAssets.length > 0 && (
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-6 px-2 text-xs"
+                  onClick={() => setShowAssetsDialog(true)}
+                >
+                  <Eye className="mr-1 h-3 w-3" />
+                  {allAssets.length} assets
+                </Button>
+              )}
+            </div>
           </div>
           <div className="flex items-center justify-between">
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
@@ -589,6 +617,102 @@ export function CustomerCard({
                     </Button>
                   </div>
                 ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Assets Dialog */}
+          <Dialog open={showAssetsDialog} onOpenChange={setShowAssetsDialog}>
+            <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Assets - {displayName}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Badge variant="secondary">
+                    {allAssets.length} sites • {allAssets.reduce((sum: number, a: any) => sum + (a.totalMW || 0), 0).toFixed(2)} MW
+                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Switch 
+                      id="show-all-assets" 
+                      checked={showAllAssets} 
+                      onCheckedChange={setShowAllAssets}
+                    />
+                    <Label htmlFor="show-all-assets" className="text-sm">Show All</Label>
+                  </div>
+                </div>
+                <div className={showAllAssets ? "" : "max-h-96 overflow-auto"}>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Asset Name</TableHead>
+                        <TableHead className="text-right">MW</TableHead>
+                        <TableHead className="text-center">Hybrid</TableHead>
+                        <TableHead className="text-center">Solcast</TableHead>
+                        <TableHead>Contract</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allAssets.map((asset: any) => (
+                        <TableRow 
+                          key={`${asset.contractId}-${asset.assetId}`}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setSelectedAsset(asset)}
+                        >
+                          <TableCell className="font-medium">{asset.assetName}</TableCell>
+                          <TableCell className="text-right">{asset.totalMW?.toFixed(4)}</TableCell>
+                          <TableCell className="text-center">{asset.isHybrid ? '✓' : '-'}</TableCell>
+                          <TableCell className="text-center">{asset.hasSolcast ? '✓' : '-'}</TableCell>
+                          <TableCell className="text-muted-foreground text-xs">{asset.contractName}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <p className="text-xs text-muted-foreground">Click an asset row to view device details</p>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Device Details Dialog */}
+          <Dialog open={!!selectedAsset} onOpenChange={(open) => !open && setSelectedAsset(null)}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>Devices - {selectedAsset?.assetName}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="flex gap-2 flex-wrap">
+                  <Badge variant="outline">{selectedAsset?.totalMW?.toFixed(4)} MW</Badge>
+                  {selectedAsset?.isHybrid && <Badge className="bg-orange-500">Hybrid</Badge>}
+                  {selectedAsset?.hasSolcast && <Badge className="bg-blue-500">Solcast</Badge>}
+                </div>
+                {selectedAsset?.devices && selectedAsset.devices.length > 0 ? (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Device Name</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Manufacturer</TableHead>
+                        <TableHead>Model</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedAsset.devices.map((device: any) => (
+                        <TableRow key={device.deviceId}>
+                          <TableCell className="font-medium">{device.deviceName}</TableCell>
+                          <TableCell>{device.deviceType}</TableCell>
+                          <TableCell>{device.manufacturer || '-'}</TableCell>
+                          <TableCell>{device.model || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>No device data available.</p>
+                    <p className="text-sm mt-1">Re-sync the contract from Contract Details to fetch device information.</p>
+                  </div>
+                )}
               </div>
             </DialogContent>
           </Dialog>
