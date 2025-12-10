@@ -31,12 +31,12 @@ function parseXeroDate(xeroDate: string): string | null {
   return new Date(milliseconds).toISOString().split('T')[0]; // Return YYYY-MM-DD
 }
 
-async function getValidAccessToken(supabase: any, userId: string) {
-  // Fetch the current Xero connection
+async function getValidAccessToken(supabase: any) {
+  // Fetch ANY existing Xero connection (shared across team)
   const { data: connection, error } = await supabase
     .from('xero_connections')
     .select('*')
-    .eq('user_id', userId)
+    .limit(1)
     .maybeSingle();
 
   if (error || !connection) {
@@ -73,7 +73,7 @@ async function getValidAccessToken(supabase: any, userId: string) {
     const tokens = await tokenResponse.json();
     const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
-    // Update connection with new tokens
+    // Update connection with new tokens using connection ID (shared connection)
     await supabase
       .from('xero_connections')
       .update({
@@ -82,7 +82,7 @@ async function getValidAccessToken(supabase: any, userId: string) {
         expires_at: newExpiresAt.toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('user_id', userId);
+      .eq('id', connection.id);
 
     return { accessToken: tokens.access_token, tenantId: connection.tenant_id };
   }
@@ -176,8 +176,8 @@ Deno.serve(async (req) => {
 
     console.log('Syncing Xero invoices for user:', user.id, 'fromDate:', fromDate);
 
-    // Get valid access token
-    const { accessToken, tenantId } = await getValidAccessToken(supabase, user.id);
+    // Get valid access token (from shared connection)
+    const { accessToken, tenantId } = await getValidAccessToken(supabase);
 
     // Fetch custom account mappings for user (if any)
     const { data: customMappings } = await supabase

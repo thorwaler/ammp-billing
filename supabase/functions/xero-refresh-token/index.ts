@@ -27,11 +27,11 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    // Get current connection
+    // Get ANY existing Xero connection (shared across team)
     const { data: connection, error: connError } = await supabase
       .from('xero_connections')
       .select('*')
-      .eq('user_id', user.id)
+      .limit(1)
       .single();
 
     if (connError || !connection) {
@@ -61,14 +61,14 @@ Deno.serve(async (req) => {
     const tokens = await tokenResponse.json();
     const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
-    // Update stored tokens
+    // Update stored tokens using connection ID (not user ID)
     await supabase.from('xero_connections').update({
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: expiresAt,
-    }).eq('user_id', user.id);
+    }).eq('id', connection.id);
 
-    console.log('Token refreshed for user:', user.id);
+    console.log('Token refreshed for shared Xero connection:', connection.id);
 
     return new Response(
       JSON.stringify({ success: true, access_token: tokens.access_token }),

@@ -24,11 +24,12 @@ function parseXeroDate(dateString: string | null | undefined): string {
   }
 }
 
-async function getValidAccessToken(supabase: any, userId: string) {
+async function getValidAccessToken(supabase: any) {
+  // Fetch ANY existing Xero connection (shared across team)
   const { data: connection } = await supabase
     .from('xero_connections')
     .select('*')
-    .eq('user_id', userId)
+    .limit(1)
     .single();
 
   if (!connection) {
@@ -59,11 +60,12 @@ async function getValidAccessToken(supabase: any, userId: string) {
     const tokens = await tokenResponse.json();
     const newExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
+    // Update stored tokens using connection ID (shared connection)
     await supabase.from('xero_connections').update({
       access_token: tokens.access_token,
       refresh_token: tokens.refresh_token,
       expires_at: newExpiresAt,
-    }).eq('user_id', userId);
+    }).eq('id', connection.id);
 
     return { accessToken: tokens.access_token, tenantId: connection.tenant_id };
   }
@@ -95,8 +97,8 @@ Deno.serve(async (req) => {
 
     console.log('Starting customer sync for user:', user.id);
 
-    // Get valid access token
-    const { accessToken, tenantId } = await getValidAccessToken(supabase, user.id);
+    // Get valid access token (from shared connection)
+    const { accessToken, tenantId } = await getValidAccessToken(supabase);
 
     // Fetch all local customers first to track deletions
     const { data: localCustomers, error: localError } = await supabase
