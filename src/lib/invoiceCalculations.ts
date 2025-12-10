@@ -105,6 +105,8 @@ export interface ElumEpmSiteBreakdown {
   isSmallSite: boolean;
   pricePerMWp: number;  // Price per MWp
   cost: number;
+  calculatedCost?: number;  // Original calculated cost before minimum applied
+  usesMinimum?: boolean;    // Whether minimum fee was applied
 }
 
 export interface ElumEpmBreakdown {
@@ -114,6 +116,7 @@ export interface ElumEpmBreakdown {
   smallSitesTotal: number;
   largeSitesTotal: number;
   totalCost: number;
+  sitesUsingMinimum?: number;  // Count of sites where minimum was applied
 }
 
 export interface ElumJubailiBreakdown {
@@ -397,10 +400,12 @@ export function calculateElumEpmBreakdown(
   thresholdKwp: number,
   belowThresholdPricePerMWp: number,
   aboveThresholdPricePerMWp: number,
-  frequencyMultiplier: number
+  frequencyMultiplier: number,
+  minimumFeePerSite?: number  // Optional minimum fee per site (acts as floor)
 ): ElumEpmBreakdown {
   const smallSites: ElumEpmSiteBreakdown[] = [];
   const largeSites: ElumEpmSiteBreakdown[] = [];
+  let sitesUsingMinimum = 0;
   
   for (const asset of assetBreakdown) {
     const capacityKwp = asset.totalMW * 1000; // Convert MW to kWp for threshold comparison
@@ -408,7 +413,16 @@ export function calculateElumEpmBreakdown(
     const isSmall = capacityKwp <= thresholdKwp;
     const pricePerMWp = isSmall ? belowThresholdPricePerMWp : aboveThresholdPricePerMWp;
     // Cost is calculated using MW (not kWp) since prices are per MWp
-    const cost = capacityMW * pricePerMWp * frequencyMultiplier;
+    const calculatedCost = capacityMW * pricePerMWp * frequencyMultiplier;
+    
+    // Apply minimum fee as floor if configured
+    const minimumCost = (minimumFeePerSite || 0) * frequencyMultiplier;
+    const usesMinimum = minimumFeePerSite && minimumFeePerSite > 0 && calculatedCost < minimumCost;
+    const cost = usesMinimum ? minimumCost : calculatedCost;
+    
+    if (usesMinimum) {
+      sitesUsingMinimum++;
+    }
     
     const siteBreakdown: ElumEpmSiteBreakdown = {
       assetId: asset.assetId,
@@ -417,7 +431,9 @@ export function calculateElumEpmBreakdown(
       capacityMW,
       isSmallSite: isSmall,
       pricePerMWp,
-      cost
+      cost,
+      calculatedCost,
+      usesMinimum: !!usesMinimum
     };
     
     if (isSmall) {
@@ -433,7 +449,8 @@ export function calculateElumEpmBreakdown(
     largeSites,
     smallSitesTotal: smallSites.reduce((sum, s) => sum + s.cost, 0),
     largeSitesTotal: largeSites.reduce((sum, s) => sum + s.cost, 0),
-    totalCost: smallSites.reduce((sum, s) => sum + s.cost, 0) + largeSites.reduce((sum, s) => sum + s.cost, 0)
+    totalCost: smallSites.reduce((sum, s) => sum + s.cost, 0) + largeSites.reduce((sum, s) => sum + s.cost, 0),
+    sitesUsingMinimum
   };
 }
 
@@ -563,13 +580,19 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const abovePrice = params.aboveThresholdPricePerMWp || 30;
     const assets = params.assetBreakdown || [];
     
+    // Get applicable minimum fee per site from tiers (used as floor, not additive)
+    const minimumFeePerSite = params.minimumChargeTiers && params.minimumChargeTiers.length > 0
+      ? getApplicableMinimumCharge(totalMW, params.minimumChargeTiers)
+      : 0;
+    
     if (assets.length > 0) {
       const breakdown = calculateElumEpmBreakdown(
         assets,
         threshold,
         belowPrice,
         abovePrice,
-        frequencyMultiplier
+        frequencyMultiplier,
+        minimumFeePerSite  // Pass minimum fee for per-site floor comparison
       );
       result.elumEpmBreakdown = breakdown;
       result.totalMWCost = breakdown.totalCost;
@@ -635,7 +658,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   result.addonCosts = calculateAddonCosts(selectedAddons, frequencyMultiplier, params.billingFrequency);
   
   // Calculate minimum charges (with tier support) - only if not already set by site-level pricing
-  if (!result.siteMinimumPricingBreakdown) {
+  // Skip for elum_epm as minimum is applied per-site as a floor in the breakdown
+  if (!result.siteMinimumPricingBreakdown && packageType !== 'elum_epm') {
     result.minimumCharges = calculateMinimumCharges(
       minimumCharge,
       sitesUnderThreshold,
