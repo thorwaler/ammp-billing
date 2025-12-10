@@ -5,10 +5,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
-import { CheckCircle2, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Label } from "@/components/ui/label";
+import { format } from "date-fns";
 
 interface XeroSettings {
   invoiceTemplate: string;
@@ -35,6 +36,8 @@ const XeroIntegration = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [tenantName, setTenantName] = useState<string>('');
+  const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [connectedAt, setConnectedAt] = useState<string | null>(null);
   
   const [settings, setSettings] = useState<XeroSettings>({
     invoiceTemplate: 'standard',
@@ -63,16 +66,19 @@ const XeroIntegration = () => {
     if (!user) return;
 
     try {
+      // Fetch ANY existing Xero connection (shared across team)
       const { data, error } = await supabase
         .from('xero_connections' as any)
         .select('*')
-        .eq('user_id', user.id)
+        .limit(1)
         .maybeSingle();
 
       if (data && !error) {
         const connection = data as unknown as XeroConnection;
         setIsConnected(connection.is_enabled || false);
         setTenantName(connection.tenant_name || '');
+        setConnectionId(connection.id);
+        setConnectedAt(connection.created_at);
         setSettings({
           invoiceTemplate: connection.invoice_template || 'standard',
           isEnabled: connection.is_enabled || false,
@@ -116,6 +122,16 @@ const XeroIntegration = () => {
   };
 
   const handleConnect = async () => {
+    // Check if a connection already exists
+    if (isConnected) {
+      toast({
+        title: "Already connected",
+        description: "A Xero connection already exists for this team.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsLoading(true);
     
     try {
@@ -148,7 +164,7 @@ const XeroIntegration = () => {
   };
 
   const handleSaveSettings = async () => {
-    if (!user) return;
+    if (!connectionId) return;
 
     try {
       const { error } = await supabase
@@ -157,7 +173,7 @@ const XeroIntegration = () => {
           invoice_template: settings.invoiceTemplate,
           is_enabled: settings.isEnabled,
         })
-        .eq('user_id', user.id);
+        .eq('id', connectionId);
 
       if (error) throw error;
 
@@ -175,13 +191,13 @@ const XeroIntegration = () => {
   };
 
   const handleEnableIntegration = async (enabled: boolean) => {
-    if (!user) return;
+    if (!connectionId) return;
 
     try {
       const { error } = await supabase
         .from('xero_connections' as any)
         .update({ is_enabled: enabled })
-        .eq('user_id', user.id);
+        .eq('id', connectionId);
 
       if (error) throw error;
 
@@ -203,18 +219,20 @@ const XeroIntegration = () => {
   };
 
   const handleDisconnect = async () => {
-    if (!user) return;
+    if (!connectionId) return;
 
     try {
       const { error } = await supabase
         .from('xero_connections' as any)
         .delete()
-        .eq('user_id', user.id);
+        .eq('id', connectionId);
 
       if (error) throw error;
 
       setIsConnected(false);
       setTenantName('');
+      setConnectionId(null);
+      setConnectedAt(null);
       setSettings({ invoiceTemplate: 'standard', isEnabled: true });
       
       toast({
@@ -285,6 +303,17 @@ const XeroIntegration = () => {
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Shared integration indicator */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+              <Users className="h-4 w-4" />
+              <span>
+                Team integration
+                {connectedAt && (
+                  <> · Connected {format(new Date(connectedAt), 'MMM d, yyyy')}</>
+                )}
+              </span>
             </div>
 
             <div className="space-y-4">

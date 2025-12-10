@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, Link2, AlertCircle, Clock, Calendar, RefreshCw, Loader2 } from 'lucide-react';
+import { CheckCircle2, Link2, AlertCircle, Clock, Calendar, RefreshCw, Loader2, Users } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -37,6 +37,8 @@ interface SyncSettings {
   sync_schedule: string;
   last_sync_at: string | null;
   next_sync_at: string | null;
+  connection_id: string | null;
+  connected_at: string | null;
 }
 
 const AmmpIntegration = () => {
@@ -53,6 +55,8 @@ const AmmpIntegration = () => {
     sync_schedule: 'disabled',
     last_sync_at: null,
     next_sync_at: null,
+    connection_id: null,
+    connected_at: null,
   });
 
   useEffect(() => {
@@ -67,10 +71,11 @@ const AmmpIntegration = () => {
     if (!user?.id) return;
 
     try {
+      // Fetch ANY existing AMMP connection (shared across team)
       const { data, error } = await supabase
         .from('ammp_connections')
-        .select('sync_schedule, last_sync_at, next_sync_at')
-        .eq('user_id', user.id)
+        .select('id, sync_schedule, last_sync_at, next_sync_at, created_at')
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
@@ -80,6 +85,8 @@ const AmmpIntegration = () => {
           sync_schedule: data.sync_schedule || 'disabled',
           last_sync_at: data.last_sync_at,
           next_sync_at: data.next_sync_at,
+          connection_id: data.id,
+          connected_at: data.created_at,
         });
       }
     } catch (error) {
@@ -98,6 +105,8 @@ const AmmpIntegration = () => {
       await connect(apiKey.trim());
       setDialogOpen(false);
       setApiKey('');
+      // Refresh sync settings after connecting
+      await fetchSyncSettings();
     } catch {
       // Error is handled by the hook
     }
@@ -105,10 +114,17 @@ const AmmpIntegration = () => {
 
   const handleDisconnect = async () => {
     await disconnect();
+    setSyncSettings({
+      sync_schedule: 'disabled',
+      last_sync_at: null,
+      next_sync_at: null,
+      connection_id: null,
+      connected_at: null,
+    });
   };
 
   const saveSchedule = async (newSchedule: string) => {
-    if (!user?.id) return;
+    if (!syncSettings.connection_id) return;
 
     setSaving(true);
     try {
@@ -124,7 +140,7 @@ const AmmpIntegration = () => {
           sync_schedule: newSchedule,
           next_sync_at: nextSyncAt,
         })
-        .eq('user_id', user.id);
+        .eq('id', syncSettings.connection_id);
 
       if (error) throw error;
 
@@ -240,7 +256,7 @@ const AmmpIntegration = () => {
               <AlertDialogHeader>
                 <AlertDialogTitle>Enter AMMP API Key</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Your API key will be stored securely on the server and used to authenticate with the AMMP Data API.
+                  Your API key will be stored securely on the server and shared across all team members.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="space-y-2">
@@ -274,6 +290,17 @@ const AmmpIntegration = () => {
                 Connected to AMMP Data API
               </AlertDescription>
             </Alert>
+
+            {/* Shared integration indicator */}
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-lg">
+              <Users className="h-4 w-4" />
+              <span>
+                Team integration
+                {syncSettings.connected_at && (
+                  <> · Connected {format(new Date(syncSettings.connected_at), 'MMM d, yyyy')}</>
+                )}
+              </span>
+            </div>
 
             <div className="space-y-3">
               <div className="text-sm">
