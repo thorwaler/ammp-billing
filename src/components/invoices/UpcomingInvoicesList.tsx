@@ -8,6 +8,7 @@ import type { MinimumChargeTier, DiscountTier } from "@/data/pricingData";
 
 interface UpcomingInvoice {
   contractId: string;
+  contractName?: string;
   customerId: string;
   customerName: string;
   nextInvoiceDate: string;
@@ -61,6 +62,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
         .from('contracts')
         .select(`
           id,
+          contract_name,
           customer_id,
           next_invoice_date,
           billing_frequency,
@@ -117,6 +119,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           
           return {
             contractId: c.id,
+            contractName: c.contract_name || undefined,
             customerId: customer.id,
             customerName: customer.nickname || customer.name,
             nextInvoiceDate: c.next_invoice_date!,
@@ -253,6 +256,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
         <InvoiceCard
           key={invoice.contractId}
           contractId={invoice.contractId}
+          contractName={invoice.contractName}
           customerName={invoice.customerName}
           nextInvoiceDate={invoice.nextInvoiceDate}
           billingFrequency={invoice.billingFrequency}
