@@ -249,10 +249,10 @@ const ContractDetails = () => {
   }
 
   const daysUntilExpiration = () => {
-    // Use period_end for contract expiration, not next_invoice_date
-    if (!contract.period_end) return null;
+    // Use contract_expiry_date for contract expiration (not period_end which is billing period)
+    if (!contract.contract_expiry_date) return null;
     const today = new Date();
-    const expiration = new Date(contract.period_end);
+    const expiration = new Date(contract.contract_expiry_date);
     const diffTime = expiration.getTime() - today.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
@@ -633,7 +633,7 @@ const ContractDetails = () => {
                 {contract.minimum_charge && contract.minimum_charge > 0 && (
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Minimum Charge per Site</p>
-                    <p className="font-medium">${contract.minimum_charge}</p>
+                    <p className="font-medium">{contract.currency === 'EUR' ? '€' : '$'}{contract.minimum_charge}</p>
                   </div>
                 )}
               </div>

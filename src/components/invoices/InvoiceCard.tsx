@@ -7,6 +7,7 @@ import { format, differenceInDays } from "date-fns";
 
 interface InvoiceCardProps {
   contractId: string;
+  contractName?: string;
   customerName: string;
   nextInvoiceDate: string;
   billingFrequency: string;
@@ -18,6 +19,7 @@ interface InvoiceCardProps {
 }
 
 export function InvoiceCard({
+  contractName,
   customerName,
   nextInvoiceDate,
   billingFrequency,
@@ -54,6 +56,9 @@ export function InvoiceCard({
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <h3 className="font-semibold text-lg">{customerName}</h3>
+            {contractName && (
+              <p className="text-sm text-muted-foreground">{contractName}</p>
+            )}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
               <span>{format(invoiceDate, "MMM d, yyyy")}</span>
