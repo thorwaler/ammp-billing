@@ -115,7 +115,20 @@ serve(async (req) => {
     const { email, name, role } = body;
     
     // Get the origin URL to redirect users back to the same environment (preview or production)
-    const origin = req.headers.get('origin') || req.headers.get('referer');
+    const rawUrl = req.headers.get('origin') || req.headers.get('referer');
+    
+    // Extract just the origin (scheme + host) from the URL, stripping any paths or query params
+    let cleanOrigin: string | undefined;
+    if (rawUrl) {
+      try {
+        const url = new URL(rawUrl);
+        cleanOrigin = url.origin; // Gets just "https://preview--ammp-billing.lovable.app"
+        console.log(`Redirect URL: raw=${rawUrl}, clean=${cleanOrigin}`);
+      } catch (e) {
+        console.error('Failed to parse origin URL:', rawUrl, e);
+        cleanOrigin = undefined;
+      }
+    }
     
     // Validate all inputs
     const emailValidation = validateEmail(email);
@@ -149,7 +162,7 @@ serve(async (req) => {
     // Invite user - Supabase automatically sends a magic link email
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.inviteUserByEmail(sanitizedEmail, {
       data: { full_name: sanitizedName },
-      redirectTo: origin || undefined
+      redirectTo: cleanOrigin
     });
 
     if (createError) {
