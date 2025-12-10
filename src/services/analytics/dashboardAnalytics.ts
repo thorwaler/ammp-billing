@@ -75,7 +75,6 @@ async function getCustomersWithNonPocContracts(userId: string): Promise<string[]
   const { data: contracts } = await supabase
     .from('contracts')
     .select('customer_id')
-    .eq('user_id', userId)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
   
@@ -94,7 +93,6 @@ async function getAssetBreakdownFromContracts(
   let query = supabase
     .from('contracts')
     .select('cached_capabilities, customer_id')
-    .eq('user_id', userId)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 
@@ -145,7 +143,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const { count } = await supabase
       .from('customers')
       .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
       .eq('status', 'active')
       .in('id', customerIdsWithContracts);
     totalCustomers = count || 0;
@@ -155,7 +152,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const { count: activeContracts } = await supabase
     .from('contracts')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 
@@ -163,7 +159,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const { data: contracts } = await supabase
     .from('contracts')
     .select('cached_capabilities')
-    .eq('user_id', user.id)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 
@@ -194,7 +189,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const { data: customers } = await supabase
       .from('customers')
       .select('join_date')
-      .eq('user_id', user.id)
       .eq('status', 'active')
       .in('id', customerIdsWithContracts);
 
@@ -208,7 +202,6 @@ export async function getDashboardStats(): Promise<DashboardStats> {
   const { count: contractsAddedThisQuarter } = await supabase
     .from('contracts')
     .select('*', { count: 'exact', head: true })
-    .eq('user_id', user.id)
     .eq('contract_status', 'active')
     .neq('package', 'poc')
     .gte('created_at', startOfQuarter.toISOString());
@@ -362,7 +355,6 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       below_threshold_price_per_mwp,
       above_threshold_price_per_mwp
     `)
-    .eq('user_id', userId)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 
@@ -465,7 +457,6 @@ export async function getCustomerGrowthByQuarter(filters?: ReportFilters): Promi
   let query = supabase
     .from('customers')
     .select('id, join_date, created_at')
-    .eq('user_id', user.id)
     .eq('status', 'active')
     .in('id', customerIdsWithContracts);
 
@@ -476,7 +467,6 @@ export async function getCustomerGrowthByQuarter(filters?: ReportFilters): Promi
     query = supabase
       .from('customers')
       .select('id, join_date, created_at')
-      .eq('user_id', user.id)
       .eq('status', 'active')
       .in('id', filteredIds);
   }
@@ -542,7 +532,6 @@ export async function getMWpByCustomer(limit = 10, filters?: ReportFilters): Pro
   const { data: contracts } = await supabase
     .from('contracts')
     .select('customer_id, cached_capabilities, customers!inner(name, nickname)')
-    .eq('user_id', user.id)
     .eq('contract_status', 'active')
     .neq('package', 'poc')
     .in('customer_id', customerIds);
@@ -601,7 +590,6 @@ export async function getMonthlyRevenue(filters?: ReportFilters): Promise<Actual
   let query = supabase
     .from('invoices')
     .select('invoice_date, invoice_amount, customer_id')
-    .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
@@ -652,7 +640,6 @@ export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvs
   let query = supabase
     .from('invoices')
     .select('invoice_date, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customer_id')
-    .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
@@ -716,7 +703,6 @@ export async function getTotalARRFromInvoices(startDate: Date, endDate: Date): P
   const { data: invoices } = await supabase
     .from('invoices')
     .select('arr_amount_eur, invoice_amount_eur, xero_amount_credited_eur')
-    .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
@@ -740,7 +726,6 @@ export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): P
   const { data: invoices } = await supabase
     .from('invoices')
     .select('nrr_amount_eur, invoice_amount_eur, xero_amount_credited_eur')
-    .eq('user_id', user.id)
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
@@ -764,8 +749,7 @@ export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters):
   // Build query with date range if specified
   let query = supabase
     .from('invoices')
-    .select('customer_id, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customers!inner(name, nickname)')
-    .eq('user_id', user.id);
+    .select('customer_id, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customers!inner(name, nickname)');
 
   if (filters?.startDate) {
     query = query.gte('invoice_date', filters.startDate.toISOString());
@@ -856,7 +840,6 @@ export async function getProjectedRevenueByMonth(
       above_threshold_price_per_mwp,
       annual_fee_per_site
     `)
-    .eq('user_id', user.id)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 

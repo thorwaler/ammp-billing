@@ -96,7 +96,6 @@ export default function InvoiceHistory() {
           *,
           customer:customers(name, nickname)
         `)
-        .eq('user_id', user?.id)
         .order('invoice_date', { ascending: false });
 
       if (error) throw error;

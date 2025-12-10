@@ -93,7 +93,6 @@ const ContractDetails = () => {
             )
           `)
           .eq('id', id)
-          .eq('user_id', user.id)
           .single();
 
         if (contractData && !contractError) {
@@ -111,7 +110,6 @@ const ContractDetails = () => {
             contracts (*)
           `)
           .eq('id', id)
-          .eq('user_id', user.id)
           .single();
 
         if (customerData && !customerError) {

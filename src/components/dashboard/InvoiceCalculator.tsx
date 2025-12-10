@@ -226,7 +226,6 @@ export function InvoiceCalculator({
             contract_ammp_org_id
           )
         `)
-        .eq('user_id', user.id)
         .eq('status', 'active');
 
       if (error) {
