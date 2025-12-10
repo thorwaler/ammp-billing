@@ -41,6 +41,26 @@ export default function Auth() {
   const [signupPassword, setSignupPassword] = useState("");
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
 
+  // Check for auth errors in URL hash (from failed magic link)
+  useEffect(() => {
+    const hash = window.location.hash;
+    if (hash) {
+      const params = new URLSearchParams(hash.substring(1));
+      const urlError = params.get('error');
+      const errorDescription = params.get('error_description');
+      
+      if (urlError) {
+        if (errorDescription?.includes('expired') || errorDescription?.includes('invalid')) {
+          setError('This invitation link has expired or is invalid. Please ask your administrator to send a new invitation.');
+        } else {
+          setError(errorDescription?.replace(/\+/g, ' ') || 'Authentication error. Please try again.');
+        }
+        // Clear the hash from URL
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+    }
+  }, []);
+
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
