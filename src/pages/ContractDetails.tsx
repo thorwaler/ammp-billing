@@ -753,7 +753,7 @@ const ContractDetails = () => {
                           <div key={moduleId} className="flex justify-between">
                             <span className="text-sm">{moduleNames[moduleId] || moduleId}:</span>
                             <span className="font-medium">
-                              ${price.toLocaleString()}/MWp/year
+                              {contract.currency === 'EUR' ? '€' : '$'}{price.toLocaleString()}/MWp/year
                             </span>
                           </div>
                         );
@@ -767,7 +767,7 @@ const ContractDetails = () => {
                     <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
                     {contract.package === "pro" ? (
                       <p className="font-medium">
-                        ${Math.max(5000, (customer?.mwp_managed || contract.initial_mw) * (contract.modules || []).reduce((sum: number, moduleId: string) => {
+                        {contract.currency === 'EUR' ? '€' : '$'}{Math.max(5000, (customer?.mwp_managed || contract.initial_mw) * (contract.modules || []).reduce((sum: number, moduleId: string) => {
                           const customPrice = contract.custom_pricing?.[moduleId];
                           const defaultPrices: {[key: string]: number} = {
                             technicalMonitoring: 1000,
@@ -835,7 +835,7 @@ const ContractDetails = () => {
                   <p className="text-xs text-muted-foreground">Total MW</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold">{cachedCapabilities.onGridSites || 0}</p>
+                  <p className="text-2xl font-bold">{cachedCapabilities.assetBreakdown?.filter((a: any) => !a.isHybrid).length || 0}</p>
                   <p className="text-xs text-muted-foreground">On-Grid Sites</p>
                 </div>
                 <div className="text-center">
