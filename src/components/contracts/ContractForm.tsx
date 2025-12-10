@@ -498,7 +498,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         form.setValue('ammpAssetGroupNameAnd', contract.ammp_asset_group_name_and || '');
         form.setValue('ammpAssetGroupIdNot', contract.ammp_asset_group_id_not || '');
         form.setValue('ammpAssetGroupNameNot', contract.ammp_asset_group_name_not || '');
-        form.setValue('contractAmmpOrgId', contract.contract_ammp_org_id || '');
+        form.setValue('contractAmmpOrgId', contract.ammp_org_id || '');
         form.setValue('siteSizeThresholdKwp', contract.site_size_threshold_kwp || undefined);
         form.setValue('belowThresholdPricePerMWp', contract.below_threshold_price_per_mwp || undefined);
         form.setValue('aboveThresholdPricePerMWp', contract.above_threshold_price_per_mwp || undefined);
@@ -851,7 +851,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         ammp_asset_group_name_not: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
           ? (data.ammpAssetGroupNameNot || null) 
           : null,
-        contract_ammp_org_id: data.package === 'elum_portfolio_os' 
+        ammp_org_id: data.package !== 'poc' 
           ? (data.contractAmmpOrgId || null) 
           : null,
         site_size_threshold_kwp: data.package === 'elum_epm' 
