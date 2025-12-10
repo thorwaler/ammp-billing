@@ -88,7 +88,6 @@ const Reports = () => {
     const { data } = await supabase
       .from('customers')
       .select('id, name, nickname')
-      .eq('user_id', user.id)
       .order('name');
     
     setCustomers(data || []);
