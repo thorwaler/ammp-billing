@@ -42,30 +42,30 @@ Deno.serve(async (req) => {
     const payload: NotificationPayload = await req.json();
     console.log('Received notification payload:', JSON.stringify(payload));
 
-    const { user_id, type, title, message, severity, metadata, contract_id, created_at, is_test } = payload;
-
-    if (!user_id) {
-      console.error('Missing user_id in payload');
-      return new Response(JSON.stringify({ error: 'Missing user_id' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const { type, title, message, severity, metadata, contract_id, created_at, is_test } = payload;
 
     // Create Supabase client with service role for accessing notification_settings
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch user's notification settings
+    // Fetch shared notification settings (team-wide, not user-specific)
     const { data: settings, error: settingsError } = await supabase
       .from('notification_settings')
       .select('*')
-      .eq('user_id', user_id)
-      .single();
+      .limit(1)
+      .maybeSingle();
 
     if (settingsError) {
-      console.log('No notification settings found for user:', user_id);
+      console.error('Error fetching notification settings:', settingsError);
+      return new Response(JSON.stringify({ message: 'Error fetching settings' }), {
+        status: 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!settings) {
+      console.log('No notification settings configured');
       return new Response(JSON.stringify({ message: 'No webhook configured' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -83,9 +83,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Check if notification type matches user's filters (skip for test notifications)
+    // Check if notification type matches filters (skip for test notifications)
     if (!is_test && !notificationSettings.notification_types.includes(type)) {
-      console.log(`Notification type '${type}' not in user's filter list`);
+      console.log(`Notification type '${type}' not in filter list`);
       return new Response(JSON.stringify({ message: 'Notification type filtered out' }), {
         status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -115,10 +115,10 @@ Deno.serve(async (req) => {
       is_test: is_test || false,
     };
 
-    console.log('Sending to Zapier webhook:', notificationSettings.zapier_webhook_url);
+    console.log('Sending to webhook:', notificationSettings.zapier_webhook_url);
     console.log('Webhook payload:', JSON.stringify(webhookPayload));
 
-    // Send to Zapier webhook
+    // Send to webhook
     const webhookResponse = await fetch(notificationSettings.zapier_webhook_url, {
       method: 'POST',
       headers: {
@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify(webhookPayload),
     });
 
-    console.log('Zapier webhook response status:', webhookResponse.status);
+    console.log('Webhook response status:', webhookResponse.status);
 
     return new Response(JSON.stringify({ 
       success: true, 
