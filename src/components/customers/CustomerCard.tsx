@@ -436,7 +436,13 @@ export function CustomerCard({
                 <Button 
                   size="sm" 
                   variant="outline"
-                  onClick={onViewDetails}
+                  onClick={() => {
+                    if (contractCount > 1) {
+                      setShowContractSelector(true);
+                    } else {
+                      onViewDetails?.();
+                    }
+                  }}
                 >
                   <BarChart className="mr-2 h-4 w-4" />
                   Details
