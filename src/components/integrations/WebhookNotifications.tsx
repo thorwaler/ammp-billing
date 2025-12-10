@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Webhook, ChevronDown, Loader2, Send, HelpCircle, CheckCircle2 } from "lucide-react";
+import { Webhook, ChevronDown, Loader2, Send, HelpCircle, CheckCircle2, Users } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -50,16 +50,15 @@ const WebhookNotifications = () => {
 
   useEffect(() => {
     fetchSettings();
-  }, [user?.id]);
+  }, []);
 
   const fetchSettings = async () => {
-    if (!user?.id) return;
-
     try {
+      // Fetch any existing notification settings (shared across team)
       const { data, error } = await supabase
         .from('notification_settings')
         .select('*')
-        .eq('user_id', user.id)
+        .limit(1)
         .maybeSingle();
 
       if (error) throw error;
@@ -86,7 +85,7 @@ const WebhookNotifications = () => {
     setSaving(true);
     try {
       const payload = {
-        user_id: user.id,
+        user_id: user.id, // Track who configured it (audit trail)
         zapier_webhook_url: settings.zapier_webhook_url || null,
         webhook_enabled: settings.webhook_enabled,
         notification_types: settings.notification_types,
@@ -94,12 +93,14 @@ const WebhookNotifications = () => {
       };
 
       if (settings.id) {
+        // Update existing shared settings
         const { error } = await supabase
           .from('notification_settings')
           .update(payload)
           .eq('id', settings.id);
         if (error) throw error;
       } else {
+        // Create new shared settings
         const { data, error } = await supabase
           .from('notification_settings')
           .insert(payload)
@@ -183,8 +184,9 @@ const WebhookNotifications = () => {
           <Webhook className="h-5 w-5 text-ammp-blue" />
           Webhook Notifications
         </CardTitle>
-        <CardDescription>
-          Push notifications to external services via webhook
+        <CardDescription className="flex items-center gap-2">
+          <Users className="h-3 w-3" />
+          <span>Team integration • Shared across all users</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
