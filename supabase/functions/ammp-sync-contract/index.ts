@@ -50,6 +50,13 @@ interface CachedCapabilities {
   lastSynced: string;
 }
 
+interface SyncResult {
+  cachedCapabilities: CachedCapabilities;
+  syncStatus: 'synced' | 'partial';
+  timedOut: boolean;
+  totalExpected: number;
+}
+
 /**
  * Call existing ammp-token-exchange Edge Function internally
  */
@@ -199,7 +206,7 @@ async function processContractSync(
   contract: any,
   token: string,
   allAssets: any[]
-): Promise<CachedCapabilities> {
+): Promise<SyncResult> {
   const packageType = contract.package;
   const contractId = contract.id;
   
@@ -250,38 +257,65 @@ async function processContractSync(
   } else {
     console.log(`[AMMP Sync Contract] No org ID or asset group for contract ${contractId}`);
     return {
-      totalMW: 0,
-      totalSites: 0,
-      ongridMW: 0,
-      hybridMW: 0,
-      ongridSites: 0,
-      hybridSites: 0,
-      sitesWithSolcast: 0,
-      assetBreakdown: [],
-      lastSynced: new Date().toISOString(),
+      cachedCapabilities: {
+        totalMW: 0,
+        totalSites: 0,
+        ongridMW: 0,
+        hybridMW: 0,
+        ongridSites: 0,
+        hybridSites: 0,
+        sitesWithSolcast: 0,
+        assetBreakdown: [],
+        lastSynced: new Date().toISOString(),
+      },
+      syncStatus: 'synced',
+      timedOut: false,
+      totalExpected: 0
     };
   }
   
   if (assetsToProcess.length === 0) {
     console.log(`[AMMP Sync Contract] No assets found for contract ${contractId}`);
     return {
-      totalMW: 0,
-      totalSites: 0,
-      ongridMW: 0,
-      hybridMW: 0,
-      ongridSites: 0,
-      hybridSites: 0,
-      sitesWithSolcast: 0,
-      assetBreakdown: [],
-      lastSynced: new Date().toISOString(),
+      cachedCapabilities: {
+        totalMW: 0,
+        totalSites: 0,
+        ongridMW: 0,
+        hybridMW: 0,
+        ongridSites: 0,
+        hybridSites: 0,
+        sitesWithSolcast: 0,
+        assetBreakdown: [],
+        lastSynced: new Date().toISOString(),
+      },
+      syncStatus: 'synced',
+      timedOut: false,
+      totalExpected: 0
     };
   }
   
   // Batch fetch full asset data (metadata + devices) for each asset
   const capabilities: AssetCapabilities[] = [];
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 50; // Increased from 10 for better parallelization
+  const MAX_SYNC_TIME_MS = 50000; // 50 seconds safety margin before timeout
+  const syncStartTime = Date.now();
+  
+  // For large syncs (>200 assets), skip device details to avoid timeout
+  const skipDevices = assetsToProcess.length > 200;
+  if (skipDevices) {
+    console.log(`[AMMP Sync Contract] Large sync (${assetsToProcess.length} assets) - skipping device details`);
+  }
+  
+  let timedOut = false;
   
   for (let i = 0; i < assetsToProcess.length; i += BATCH_SIZE) {
+    // Check for timeout before processing batch
+    if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS) {
+      console.log(`[AMMP Sync Contract] Timeout approaching, saving partial progress (${capabilities.length}/${assetsToProcess.length})`);
+      timedOut = true;
+      break;
+    }
+    
     const batch = assetsToProcess.slice(i, i + BATCH_SIZE);
     
     const batchPromises = batch.map(async (member) => {
@@ -289,14 +323,16 @@ async function processContractSync(
         // Fetch full asset details including total_pv_power
         const assetData = await fetchAMMPData(token, `/assets/${member.asset_id}`);
         
-        // Fetch devices for capability detection
+        // Fetch devices for capability detection (skip for large syncs)
         let devices: any[] = [];
-        try {
-          const devicesResponse = await fetchAMMPData(token, `/assets/${member.asset_id}/devices?include_virtual=true`);
-          devices = devicesResponse.devices || devicesResponse || [];
-          if (!Array.isArray(devices)) devices = [];
-        } catch (deviceError) {
-          console.warn(`[AMMP Sync Contract] No devices for ${member.asset_id}`);
+        if (!skipDevices) {
+          try {
+            const devicesResponse = await fetchAMMPData(token, `/assets/${member.asset_id}/devices?include_virtual=true`);
+            devices = devicesResponse.devices || devicesResponse || [];
+            if (!Array.isArray(devices)) devices = [];
+          } catch (deviceError) {
+            console.warn(`[AMMP Sync Contract] No devices for ${member.asset_id}`);
+          }
         }
         
         // Use cached onboarding date if available, otherwise use asset.created
@@ -328,7 +364,8 @@ async function processContractSync(
     const batchResults = await Promise.all(batchPromises);
     capabilities.push(...batchResults);
     
-    console.log(`[AMMP Sync Contract] Progress: ${Math.min(i + BATCH_SIZE, assetsToProcess.length)}/${assetsToProcess.length}`);
+    const elapsedSec = ((Date.now() - syncStartTime) / 1000).toFixed(1);
+    console.log(`[AMMP Sync Contract] Progress: ${Math.min(i + BATCH_SIZE, assetsToProcess.length)}/${assetsToProcess.length} (${elapsedSec}s)`);
   }
   
   // Aggregate data
@@ -357,9 +394,10 @@ async function processContractSync(
     lastSynced: new Date().toISOString(),
   };
   
-  console.log(`[AMMP Sync Contract] Summary: ${cachedCapabilities.totalSites} sites, ${cachedCapabilities.totalMW.toFixed(4)} MW`);
+  const syncStatus = timedOut ? 'partial' : 'synced';
+  console.log(`[AMMP Sync Contract] Summary: ${cachedCapabilities.totalSites} sites, ${cachedCapabilities.totalMW.toFixed(4)} MW (status: ${syncStatus})`);
   
-  return cachedCapabilities;
+  return { cachedCapabilities, syncStatus, timedOut, totalExpected: assetsToProcess.length };
 }
 
 /**
@@ -539,16 +577,17 @@ Deno.serve(async (req) => {
     console.log(`[AMMP Sync Contract] Fetched ${allAssets.length} total assets`);
 
     // Process the contract
-    const cachedCapabilities = await processContractSync(supabase, contract, token, allAssets);
+    const syncResult = await processContractSync(supabase, contract, token, allAssets);
+    const { cachedCapabilities, syncStatus, timedOut, totalExpected } = syncResult;
 
     // Update the contract with cached capabilities and sync status
     const { error: updateError } = await supabase
       .from('contracts')
       .update({ 
         cached_capabilities: cachedCapabilities,
-        ammp_sync_status: 'synced',
+        ammp_sync_status: syncStatus,
         last_ammp_sync: new Date().toISOString(),
-        ammp_asset_ids: cachedCapabilities.assetBreakdown.map(a => a.assetId)
+        ammp_asset_ids: cachedCapabilities.assetBreakdown.map((a: any) => a.assetId)
       })
       .eq('id', contractId);
 
@@ -582,7 +621,7 @@ Deno.serve(async (req) => {
       .update({ mwp_managed: totalCustomerMW })
       .eq('id', contract.customer_id);
 
-    console.log(`[AMMP Sync Contract] Successfully synced contract ${contractId}`);
+    console.log(`[AMMP Sync Contract] Successfully synced contract ${contractId} (status: ${syncStatus})`);
 
     return new Response(
       JSON.stringify({ 
@@ -590,7 +629,11 @@ Deno.serve(async (req) => {
         contractId,
         totalSites: cachedCapabilities.totalSites,
         totalMW: cachedCapabilities.totalMW,
-        lastSynced: cachedCapabilities.lastSynced
+        lastSynced: cachedCapabilities.lastSynced,
+        syncStatus,
+        timedOut,
+        totalExpected,
+        message: timedOut ? `Partial sync: ${cachedCapabilities.totalSites}/${totalExpected} assets processed` : undefined
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
