@@ -1759,6 +1759,40 @@ export function InvoiceCalculator({
               </div>
             )}
 
+            {/* Elum ePM breakdown */}
+            {result.elumEpmBreakdown && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm">Elum ePM Pricing:</h4>
+                <div className="space-y-1 text-sm pl-2">
+                  <div className="text-muted-foreground mb-2">
+                    Site Size Threshold: {result.elumEpmBreakdown.threshold} kWp
+                  </div>
+                  {result.elumEpmBreakdown.smallSites.length > 0 && (
+                    <div className="flex justify-between">
+                      <span>
+                        Small Sites ≤{result.elumEpmBreakdown.threshold}kWp ({result.elumEpmBreakdown.smallSites.length} sites, {result.elumEpmBreakdown.smallSites.reduce((sum, s) => sum + s.capacityMW, 0).toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.belowThresholdPricePerMWp}/MWp):
+                      </span>
+                      <span>{formatCurrency(result.elumEpmBreakdown.smallSitesTotal)}</span>
+                    </div>
+                  )}
+                  {result.elumEpmBreakdown.largeSites.length > 0 && (
+                    <div className="flex justify-between">
+                      <span>
+                        Large Sites &gt;{result.elumEpmBreakdown.threshold}kWp ({result.elumEpmBreakdown.largeSites.length} sites, {result.elumEpmBreakdown.largeSites.reduce((sum, s) => sum + s.capacityMW, 0).toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.aboveThresholdPricePerMWp}/MWp):
+                      </span>
+                      <span>{formatCurrency(result.elumEpmBreakdown.largeSitesTotal)}</span>
+                    </div>
+                  )}
+                  {(result.elumEpmBreakdown.sitesUsingMinimum || 0) > 0 && (
+                    <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                      <span>Sites using minimum fee ({result.elumEpmBreakdown.sitesUsingMinimum} sites):</span>
+                      <span>Minimum applied</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* Per-site billing breakdown */}
             {result.perSiteBreakdown && (result.perSiteBreakdown.onboardingCost > 0 || result.perSiteBreakdown.annualSubscriptionCost > 0) && (
               <div className="space-y-3 mb-4">
