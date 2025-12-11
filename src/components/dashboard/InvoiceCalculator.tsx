@@ -250,12 +250,15 @@ export function InvoiceCalculator({
           const portfolioDiscountTiers = Array.isArray(contract.portfolio_discount_tiers) ? contract.portfolio_discount_tiers : [];
           const siteChargeFrequency = contract.site_charge_frequency || "annual";
           
+          // Use contract-level cached_capabilities as primary source (contract-centric architecture)
+          const cachedCaps = (contract as any).cached_capabilities;
+          
           return {
             id: c.id,
             name: c.name,
             nickname: c.nickname,
             package: contract.package as PackageType,
-            mwManaged: Number(c.mwp_managed) || 0,
+            mwManaged: cachedCaps?.totalMW || Number(c.mwp_managed) || 0,
             modules,
             addons,
             minimumCharge: Number(contract.minimum_charge) || 0,
@@ -266,7 +269,7 @@ export function InvoiceCalculator({
             volumeDiscounts,
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
             billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual',
-            ammpCapabilities: c.ammp_capabilities || null,
+            ammpCapabilities: cachedCaps || c.ammp_capabilities || null,
             manualInvoicing: contract.manual_invoicing || false,
             baseMonthlyPrice: Number(contract.base_monthly_price) || 0,
             siteChargeFrequency: siteChargeFrequency as 'monthly' | 'annual',
