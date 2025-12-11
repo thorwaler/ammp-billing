@@ -55,6 +55,27 @@ interface SyncResult {
   syncStatus: 'synced' | 'partial';
   timedOut: boolean;
   totalExpected: number;
+  previouslySynced: number;
+  newlySynced: number;
+}
+
+/**
+ * Convert stored asset breakdown format back to AssetCapabilities
+ */
+function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'][0]): AssetCapabilities {
+  return {
+    assetId: stored.assetId,
+    assetName: stored.assetName,
+    totalMW: stored.totalMW,
+    capacityKWp: stored.capacityKWp,
+    hasSolcast: stored.hasSolcast,
+    hasBattery: stored.isHybrid, // Stored as isHybrid
+    hasGenset: false,
+    hasHybridEMS: false,
+    onboardingDate: stored.onboardingDate,
+    deviceCount: stored.deviceCount,
+    devices: stored.devices || [],
+  };
 }
 
 /**
@@ -215,15 +236,30 @@ async function processContractSync(
   
   console.log(`[AMMP Sync Contract] Processing ${packageType} contract ${contractId}, orgId: ${orgId}`);
   
-  // Get existing cached capabilities for onboarding dates
+  // Get existing cached capabilities for continuation support
   const existingCached = contract.cached_capabilities as CachedCapabilities | null;
+  const existingSyncStatus = contract.ammp_sync_status;
+  
+  // Build sets for continuation and date preservation
   const cachedDates: Record<string, string | null> = {};
+  const alreadySyncedIds = new Set<string>();
+  const existingCapabilities: AssetCapabilities[] = [];
+  
   if (existingCached?.assetBreakdown) {
     for (const asset of existingCached.assetBreakdown) {
-      if (asset.assetId && asset.onboardingDate) {
-        cachedDates[asset.assetId] = asset.onboardingDate;
+      if (asset.assetId) {
+        cachedDates[asset.assetId] = asset.onboardingDate || null;
+        // Only use existing data for continuation if we're resuming a partial sync
+        if (existingSyncStatus === 'partial') {
+          alreadySyncedIds.add(asset.assetId);
+          existingCapabilities.push(convertStoredToCapabilities(asset));
+        }
       }
     }
+  }
+  
+  if (alreadySyncedIds.size > 0) {
+    console.log(`[AMMP Sync Contract] Resuming partial sync, ${alreadySyncedIds.size} assets already synced`);
   }
   
   let assetsToProcess: AssetGroupMember[] = [];
@@ -270,9 +306,13 @@ async function processContractSync(
       },
       syncStatus: 'synced',
       timedOut: false,
-      totalExpected: 0
+      totalExpected: 0,
+      previouslySynced: 0,
+      newlySynced: 0
     };
   }
+  
+  const totalExpected = assetsToProcess.length;
   
   if (assetsToProcess.length === 0) {
     console.log(`[AMMP Sync Contract] No assets found for contract ${contractId}`);
@@ -290,33 +330,39 @@ async function processContractSync(
       },
       syncStatus: 'synced',
       timedOut: false,
-      totalExpected: 0
+      totalExpected: 0,
+      previouslySynced: 0,
+      newlySynced: 0
     };
   }
   
+  // Filter out already-synced assets for continuation
+  const assetsToActuallyProcess = assetsToProcess.filter(a => !alreadySyncedIds.has(a.asset_id));
+  console.log(`[AMMP Sync Contract] ${totalExpected} total assets, ${assetsToActuallyProcess.length} need processing`);
+  
   // Batch fetch full asset data (metadata + devices) for each asset
-  const capabilities: AssetCapabilities[] = [];
+  const newCapabilities: AssetCapabilities[] = [];
   const BATCH_SIZE = 50; // Increased from 10 for better parallelization
   const MAX_SYNC_TIME_MS = 50000; // 50 seconds safety margin before timeout
   const syncStartTime = Date.now();
   
   // For large syncs (>200 assets), skip device details to avoid timeout
-  const skipDevices = assetsToProcess.length > 200;
+  const skipDevices = assetsToActuallyProcess.length > 200;
   if (skipDevices) {
-    console.log(`[AMMP Sync Contract] Large sync (${assetsToProcess.length} assets) - skipping device details`);
+    console.log(`[AMMP Sync Contract] Large sync (${assetsToActuallyProcess.length} assets) - skipping device details`);
   }
   
   let timedOut = false;
   
-  for (let i = 0; i < assetsToProcess.length; i += BATCH_SIZE) {
+  for (let i = 0; i < assetsToActuallyProcess.length; i += BATCH_SIZE) {
     // Check for timeout before processing batch
     if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS) {
-      console.log(`[AMMP Sync Contract] Timeout approaching, saving partial progress (${capabilities.length}/${assetsToProcess.length})`);
+      console.log(`[AMMP Sync Contract] Timeout approaching, saving partial progress (${newCapabilities.length} new + ${existingCapabilities.length} existing)`);
       timedOut = true;
       break;
     }
     
-    const batch = assetsToProcess.slice(i, i + BATCH_SIZE);
+    const batch = assetsToActuallyProcess.slice(i, i + BATCH_SIZE);
     
     const batchPromises = batch.map(async (member) => {
       try {
@@ -362,25 +408,36 @@ async function processContractSync(
     });
     
     const batchResults = await Promise.all(batchPromises);
-    capabilities.push(...batchResults);
+    newCapabilities.push(...batchResults);
     
     const elapsedSec = ((Date.now() - syncStartTime) / 1000).toFixed(1);
-    console.log(`[AMMP Sync Contract] Progress: ${Math.min(i + BATCH_SIZE, assetsToProcess.length)}/${assetsToProcess.length} (${elapsedSec}s)`);
+    const totalProcessed = existingCapabilities.length + newCapabilities.length;
+    console.log(`[AMMP Sync Contract] Progress: ${totalProcessed}/${totalExpected} (${elapsedSec}s)`);
   }
   
+  // Merge existing (from partial) + new capabilities
+  const allCapabilities = [...existingCapabilities, ...newCapabilities];
+  
+  // Deduplicate by assetId (in case of any overlap)
+  const uniqueAssets = new Map<string, AssetCapabilities>();
+  for (const asset of allCapabilities) {
+    uniqueAssets.set(asset.assetId, asset);
+  }
+  const finalCapabilities = Array.from(uniqueAssets.values());
+  
   // Aggregate data
-  const ongridSites = capabilities.filter(c => !c.hasBattery && !c.hasGenset && !c.hasHybridEMS);
-  const hybridSites = capabilities.filter(c => c.hasBattery || c.hasGenset || c.hasHybridEMS);
+  const ongridSites = finalCapabilities.filter(c => !c.hasBattery && !c.hasGenset && !c.hasHybridEMS);
+  const hybridSites = finalCapabilities.filter(c => c.hasBattery || c.hasGenset || c.hasHybridEMS);
   
   const cachedCapabilities: CachedCapabilities = {
-    totalMW: capabilities.reduce((sum, cap) => sum + cap.totalMW, 0),
+    totalMW: finalCapabilities.reduce((sum, cap) => sum + cap.totalMW, 0),
     ongridMW: ongridSites.reduce((sum, cap) => sum + cap.totalMW, 0),
     hybridMW: hybridSites.reduce((sum, cap) => sum + cap.totalMW, 0),
-    totalSites: capabilities.length,
+    totalSites: finalCapabilities.length,
     ongridSites: ongridSites.length,
     hybridSites: hybridSites.length,
-    sitesWithSolcast: capabilities.filter(c => c.hasSolcast).length,
-    assetBreakdown: capabilities.map(c => ({
+    sitesWithSolcast: finalCapabilities.filter(c => c.hasSolcast).length,
+    assetBreakdown: finalCapabilities.map(c => ({
       assetId: c.assetId,
       assetName: c.assetName,
       totalMW: c.totalMW,
@@ -394,10 +451,20 @@ async function processContractSync(
     lastSynced: new Date().toISOString(),
   };
   
-  const syncStatus = timedOut ? 'partial' : 'synced';
-  console.log(`[AMMP Sync Contract] Summary: ${cachedCapabilities.totalSites} sites, ${cachedCapabilities.totalMW.toFixed(4)} MW (status: ${syncStatus})`);
+  // Determine if sync is complete
+  const isComplete = finalCapabilities.length >= totalExpected;
+  const syncStatus = isComplete ? 'synced' : 'partial';
   
-  return { cachedCapabilities, syncStatus, timedOut, totalExpected: assetsToProcess.length };
+  console.log(`[AMMP Sync Contract] Summary: ${cachedCapabilities.totalSites}/${totalExpected} sites, ${cachedCapabilities.totalMW.toFixed(4)} MW (status: ${syncStatus})`);
+  
+  return { 
+    cachedCapabilities, 
+    syncStatus, 
+    timedOut, 
+    totalExpected,
+    previouslySynced: existingCapabilities.length,
+    newlySynced: newCapabilities.length
+  };
 }
 
 /**
@@ -578,7 +645,7 @@ Deno.serve(async (req) => {
 
     // Process the contract
     const syncResult = await processContractSync(supabase, contract, token, allAssets);
-    const { cachedCapabilities, syncStatus, timedOut, totalExpected } = syncResult;
+    const { cachedCapabilities, syncStatus, timedOut, totalExpected, previouslySynced, newlySynced } = syncResult;
 
     // Update the contract with cached capabilities and sync status
     const { error: updateError } = await supabase
@@ -633,7 +700,13 @@ Deno.serve(async (req) => {
         syncStatus,
         timedOut,
         totalExpected,
-        message: timedOut ? `Partial sync: ${cachedCapabilities.totalSites}/${totalExpected} assets processed` : undefined
+        previouslySynced,
+        newlySynced,
+        message: timedOut 
+          ? `Partial sync: ${cachedCapabilities.totalSites}/${totalExpected} assets (${newlySynced} new this run)`
+          : previouslySynced > 0 
+            ? `Sync complete: resumed from ${previouslySynced} existing assets, added ${newlySynced} new`
+            : undefined
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
