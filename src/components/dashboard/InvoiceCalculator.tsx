@@ -1793,6 +1793,38 @@ export function InvoiceCalculator({
               </div>
             )}
 
+            {/* Elum Jubaili breakdown */}
+            {result.elumJubailiBreakdown && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm">Elum Jubaili Pricing:</h4>
+                <div className="space-y-2 text-sm pl-2">
+                  {result.elumJubailiBreakdown.allTiers && result.elumJubailiBreakdown.allTiers.length > 0 && (
+                    <div className="mb-2">
+                      <p className="text-muted-foreground mb-1">Per-Site Fee Tiers (based on {result.elumJubailiBreakdown.totalMW?.toFixed(2)} MW):</p>
+                      {result.elumJubailiBreakdown.allTiers.map((tier: any, index: number) => {
+                        const isApplied = tier === result.elumJubailiBreakdown?.appliedTier;
+                        return (
+                          <div 
+                            key={index} 
+                            className={`flex justify-between ${isApplied ? 'font-medium text-primary' : 'text-muted-foreground'}`}
+                          >
+                            <span>{tier.label || `Tier ${index + 1}`} ({tier.minMW}-{tier.maxMW || '∞'} MW):</span>
+                            <span>{formatCurrency(tier.chargePerSite)}/site {isApplied && '← Applied'}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className="flex justify-between font-medium border-t border-border pt-2">
+                    <span>
+                      Site Fees ({result.elumJubailiBreakdown.siteCount} sites × {formatCurrency(result.elumJubailiBreakdown.perSiteFee)}/site):
+                    </span>
+                    <span>{formatCurrency(result.elumJubailiBreakdown.totalCost)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Per-site billing breakdown */}
             {result.perSiteBreakdown && (result.perSiteBreakdown.onboardingCost > 0 || result.perSiteBreakdown.annualSubscriptionCost > 0) && (
               <div className="space-y-3 mb-4">

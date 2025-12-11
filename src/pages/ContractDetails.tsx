@@ -824,11 +824,35 @@ const ContractDetails = () => {
               ) : contract.package === "elum_jubaili" ? (
                 <>
                   <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Annual Fee per Site</p>
-                    <p className="font-medium">
-                      {contract.currency === 'EUR' ? '€' : '$'}
-                      {contract.annual_fee_per_site?.toLocaleString() || '0'}/site/year
-                    </p>
+                    <p className="text-sm text-muted-foreground">Per-Site Fee Tiers</p>
+                    {contract.minimum_charge_tiers && contract.minimum_charge_tiers.length > 0 ? (
+                      <div className="space-y-2 text-sm">
+                        {contract.minimum_charge_tiers.map((tier: any, index: number) => {
+                          const totalMW = cachedCapabilities?.totalMW || 0;
+                          const isApplied = totalMW >= tier.minMW && 
+                            (tier.maxMW === null || tier.maxMW === undefined || totalMW <= tier.maxMW);
+                          return (
+                            <div 
+                              key={index} 
+                              className={`flex justify-between ${isApplied ? 'font-medium text-primary' : 'text-muted-foreground'}`}
+                            >
+                              <span>
+                                {tier.label || `Tier ${index + 1}`} ({tier.minMW}-{tier.maxMW || '∞'} MW):
+                              </span>
+                              <span>
+                                {contract.currency === 'EUR' ? '€' : '$'}{tier.chargePerSite}/site/year
+                                {isApplied && ' ← Current'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="font-medium">
+                        {contract.currency === 'EUR' ? '€' : '$'}
+                        {contract.annual_fee_per_site?.toLocaleString() || '0'}/site/year
+                      </p>
+                    )}
                   </div>
                   
                   <Separator />
@@ -852,8 +876,24 @@ const ContractDetails = () => {
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
                     <p className="font-medium">
-                      {contract.currency === 'EUR' ? '€' : '$'}
-                      {((cachedCapabilities?.totalSites || 0) * (contract.annual_fee_per_site || 0)).toLocaleString()}
+                      {(() => {
+                        const totalMW = cachedCapabilities?.totalMW || 0;
+                        const totalSites = cachedCapabilities?.totalSites || 0;
+                        let perSiteFee = contract.annual_fee_per_site || 0;
+                        
+                        // Find applicable tier if tiers exist
+                        if (contract.minimum_charge_tiers && contract.minimum_charge_tiers.length > 0) {
+                          const appliedTier = contract.minimum_charge_tiers.find((tier: any) => 
+                            totalMW >= tier.minMW && 
+                            (tier.maxMW === null || tier.maxMW === undefined || totalMW <= tier.maxMW)
+                          );
+                          if (appliedTier) {
+                            perSiteFee = appliedTier.chargePerSite;
+                          }
+                        }
+                        
+                        return `${contract.currency === 'EUR' ? '€' : '$'}${(totalSites * perSiteFee).toLocaleString()}`;
+                      })()}
                     </p>
                   </div>
                 </>

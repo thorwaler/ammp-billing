@@ -124,6 +124,9 @@ export interface ElumJubailiBreakdown {
   siteCount: number;
   sites: Array<{ assetId: string; assetName: string }>;
   totalCost: number;
+  appliedTier?: MinimumChargeTier;
+  allTiers?: MinimumChargeTier[];
+  totalMW?: number;
 }
 
 export interface CalculationResult {
@@ -455,21 +458,42 @@ export function calculateElumEpmBreakdown(
 }
 
 /**
- * Calculate Elum Jubaili per-site pricing
+ * Calculate Elum Jubaili per-site pricing with tiered support
  */
 export function calculateElumJubailiBreakdown(
   assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number }>,
-  perSiteFee: number,
-  frequencyMultiplier: number
+  fallbackPerSiteFee: number,
+  frequencyMultiplier: number,
+  totalMW?: number,
+  minimumChargeTiers?: MinimumChargeTier[]
 ): ElumJubailiBreakdown {
   const siteCount = assetBreakdown.length;
+  const calculatedTotalMW = totalMW ?? assetBreakdown.reduce((sum, a) => sum + a.totalMW, 0);
+  
+  // Use tiered pricing if available, otherwise fallback to flat fee
+  let perSiteFee = fallbackPerSiteFee;
+  let appliedTier: MinimumChargeTier | undefined;
+  
+  if (minimumChargeTiers && minimumChargeTiers.length > 0) {
+    appliedTier = minimumChargeTiers.find(tier => 
+      calculatedTotalMW >= tier.minMW && 
+      (tier.maxMW === null || calculatedTotalMW <= tier.maxMW)
+    );
+    if (appliedTier) {
+      perSiteFee = appliedTier.chargePerSite;
+    }
+  }
+  
   const totalCost = siteCount * perSiteFee * frequencyMultiplier;
   
   return {
     perSiteFee,
     siteCount,
     sites: assetBreakdown.map(a => ({ assetId: a.assetId, assetName: a.assetName })),
-    totalCost
+    totalCost,
+    appliedTier,
+    allTiers: minimumChargeTiers,
+    totalMW: calculatedTotalMW
   };
 }
 
@@ -598,7 +622,7 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       result.totalMWCost = breakdown.totalCost;
     }
   } else if (packageType === 'elum_jubaili') {
-    // Elum Jubaili - per-site flat fee
+    // Elum Jubaili - per-site fee with tiered support
     const perSiteFee = params.annualFeePerSite || 500;
     const assets = params.assetBreakdown || [];
     
@@ -606,7 +630,9 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       const breakdown = calculateElumJubailiBreakdown(
         assets,
         perSiteFee,
-        frequencyMultiplier
+        frequencyMultiplier,
+        totalMW,
+        params.minimumChargeTiers
       );
       result.elumJubailiBreakdown = breakdown;
       result.totalMWCost = breakdown.totalCost;
