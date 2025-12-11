@@ -897,6 +897,101 @@ const ContractDetails = () => {
                     </p>
                   </div>
                 </>
+              ) : contract.package === "elum_portfolio_os" ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Per MWp Cost</p>
+                    <div className="space-y-2">
+                      {(contract.modules || []).map((moduleId: string) => {
+                        const customPrice = contract.custom_pricing?.[moduleId];
+                        const defaultPrices: {[key: string]: number} = {
+                          technicalMonitoring: 1000,
+                          energySavingsHub: 500,
+                          stakeholderPortal: 250,
+                          control: 500
+                        };
+                        const price = customPrice || defaultPrices[moduleId] || 0;
+                        
+                        return (
+                          <div key={moduleId} className="flex justify-between">
+                            <span className="text-sm">{moduleNames[moduleId] || moduleId}:</span>
+                            <span className="font-medium">
+                              {contract.currency === 'EUR' ? '€' : '$'}{price.toLocaleString()}/MWp/year
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Minimum Annual Value</p>
+                    <p className="font-medium">{contract.currency === 'EUR' ? '€' : '$'}{(contract.minimum_annual_value || 0).toLocaleString()}</p>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Portfolio Summary</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>Total Sites:</span>
+                        <span>{cachedCapabilities?.totalSites || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total MW:</span>
+                        <span>{(cachedCapabilities?.totalMW || 0).toFixed(2)} MW</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Hybrid Sites:</span>
+                        <span>{cachedCapabilities?.hybridSites || 0}</span>
+                      </div>
+                      {(cachedCapabilities?.sitesWithSolcast || 0) > 0 && (
+                        <div className="flex justify-between">
+                          <span>Solcast Sites:</span>
+                          <span>{cachedCapabilities.sitesWithSolcast}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
+                    <p className="font-medium">
+                      {(() => {
+                        const totalMW = cachedCapabilities?.totalMW || 0;
+                        const moduleTotal = (contract.modules || []).reduce((sum: number, moduleId: string) => {
+                          const customPrice = contract.custom_pricing?.[moduleId];
+                          const defaultPrices: {[key: string]: number} = {
+                            technicalMonitoring: 1000,
+                            energySavingsHub: 500,
+                            stakeholderPortal: 250,
+                            control: 500
+                          };
+                          return sum + (customPrice || defaultPrices[moduleId] || 0);
+                        }, 0);
+                        const calculatedValue = totalMW * moduleTotal;
+                        const minValue = contract.minimum_annual_value || 0;
+                        const finalValue = Math.max(calculatedValue, minValue);
+                        const currency = contract.currency === 'EUR' ? '€' : '$';
+                        
+                        if (calculatedValue < minValue) {
+                          return (
+                            <>
+                              {currency}{finalValue.toLocaleString()}
+                              <span className="text-sm text-muted-foreground ml-2">(minimum applied)</span>
+                            </>
+                          );
+                        }
+                        return `${currency}${finalValue.toLocaleString()}`;
+                      })()}
+                    </p>
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="space-y-1">

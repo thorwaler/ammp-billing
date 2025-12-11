@@ -701,7 +701,7 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   let baseCost = result.starterPackageCost + result.totalMWCost + result.minimumCharges;
   
   // Apply minimum annual value to BASE COST only (for Pro and Custom packages)
-  if ((packageType === 'pro' || packageType === 'custom') && minimumAnnualValue) {
+  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
     if (baseCost < minimumForPeriod) {
       // Add the difference as a "minimum contract value adjustment"
