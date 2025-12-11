@@ -1734,10 +1734,10 @@ export function InvoiceCalculator({
                   ))}
                 </div>
                 
-                {selectedCustomer?.package === 'pro' && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier(billingFrequency) && (
+                {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency) && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Contract Value Applied:</span>
-                    <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 5000) * getFrequencyMultiplier(billingFrequency))}</span>
+                    <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency))}</span>
                   </div>
                 )}
               </div>
