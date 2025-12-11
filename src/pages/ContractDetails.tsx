@@ -732,6 +732,131 @@ const ContractDetails = () => {
                     </>
                   )}
                 </>
+              ) : contract.package === "elum_epm" ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Site Size Threshold</p>
+                    <p className="font-medium">{contract.site_size_threshold_kwp || 100} kWp</p>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Pricing per MWp</p>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-sm">Sites ≤{contract.site_size_threshold_kwp || 100}kWp:</span>
+                        <span className="font-medium">
+                          {contract.currency === 'EUR' ? '€' : '$'}{contract.below_threshold_price_per_mwp || 50}/MWp/year
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-sm">Sites &gt;{contract.site_size_threshold_kwp || 100}kWp:</span>
+                        <span className="font-medium">
+                          {contract.currency === 'EUR' ? '€' : '$'}{contract.above_threshold_price_per_mwp || 30}/MWp/year
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {contract.minimum_charge_tiers && contract.minimum_charge_tiers.length > 0 && (
+                    <>
+                      <Separator />
+                      <div className="space-y-1">
+                        <p className="text-sm text-muted-foreground">Minimum Fee per Site</p>
+                        <p className="font-medium">
+                          {contract.currency === 'EUR' ? '€' : '$'}
+                          {(contract.minimum_charge_tiers[0] as any)?.chargePerSite || 0}/site (floor)
+                        </p>
+                      </div>
+                    </>
+                  )}
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Portfolio Summary</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>Total Sites:</span>
+                        <span className="font-medium">{cachedCapabilities?.totalSites || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total MW:</span>
+                        <span className="font-medium">{cachedCapabilities?.totalMW?.toFixed(2) || 0} MW</span>
+                      </div>
+                      {cachedCapabilities?.sitesWithSolcast > 0 && (
+                        <div className="flex justify-between">
+                          <span>Solcast Sites:</span>
+                          <span className="font-medium">{cachedCapabilities.sitesWithSolcast}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
+                    <p className="font-medium">
+                      {contract.currency === 'EUR' ? '€' : '$'}
+                      {(() => {
+                        const assets = cachedCapabilities?.assetBreakdown || [];
+                        const threshold = contract.site_size_threshold_kwp || 100;
+                        const belowPrice = contract.below_threshold_price_per_mwp || 50;
+                        const abovePrice = contract.above_threshold_price_per_mwp || 30;
+                        const minFee = contract.minimum_charge_tiers?.[0]?.chargePerSite || 0;
+                        
+                        let total = 0;
+                        assets.forEach((asset: any) => {
+                          const capacityKwp = (asset.totalMW || 0) * 1000;
+                          const capacityMW = asset.totalMW || 0;
+                          const isSmall = capacityKwp <= threshold;
+                          const rate = isSmall ? belowPrice : abovePrice;
+                          const calculated = capacityMW * rate;
+                          total += Math.max(calculated, minFee);
+                        });
+                        return total.toLocaleString();
+                      })()}
+                    </p>
+                  </div>
+                </>
+              ) : contract.package === "elum_jubaili" ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Annual Fee per Site</p>
+                    <p className="font-medium">
+                      {contract.currency === 'EUR' ? '€' : '$'}
+                      {contract.annual_fee_per_site?.toLocaleString() || '0'}/site/year
+                    </p>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Portfolio Summary</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>Total Sites:</span>
+                        <span className="font-medium">{cachedCapabilities?.totalSites || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total MW:</span>
+                        <span className="font-medium">{cachedCapabilities?.totalMW?.toFixed(2) || 0} MW</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
+                    <p className="font-medium">
+                      {contract.currency === 'EUR' ? '€' : '$'}
+                      {((cachedCapabilities?.totalSites || 0) * (contract.annual_fee_per_site || 0)).toLocaleString()}
+                    </p>
+                  </div>
+                </>
               ) : (
                 <>
                   <div className="space-y-1">
@@ -765,7 +890,7 @@ const ContractDetails = () => {
                     <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
                     {contract.package === "pro" ? (
                       <p className="font-medium">
-                        {contract.currency === 'EUR' ? '€' : '$'}{Math.max(5000, (customer?.mwp_managed || contract.initial_mw) * (contract.modules || []).reduce((sum: number, moduleId: string) => {
+                        {contract.currency === 'EUR' ? '€' : '$'}{Math.max(5000, (cachedCapabilities?.totalMW || customer?.mwp_managed || contract.initial_mw) * (contract.modules || []).reduce((sum: number, moduleId: string) => {
                           const customPrice = contract.custom_pricing?.[moduleId];
                           const defaultPrices: {[key: string]: number} = {
                             technicalMonitoring: 1000,

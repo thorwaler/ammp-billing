@@ -122,6 +122,8 @@ export function CustomerCard({
   const [showContractForm, setShowContractForm] = useState(false);
   const [showAddContractForm, setShowAddContractForm] = useState(false);
   const [showContractSelector, setShowContractSelector] = useState(false);
+  const [contractSelectorAction, setContractSelectorAction] = useState<'view' | 'edit'>('view');
+  const [selectedContractForEdit, setSelectedContractForEdit] = useState<any | null>(null);
   const [showAssetsDialog, setShowAssetsDialog] = useState(false);
   const [showAllAssets, setShowAllAssets] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
@@ -447,74 +449,89 @@ export function CustomerCard({
                   <BarChart className="mr-2 h-4 w-4" />
                   Details
                 </Button>
-                <Dialog open={showContractForm} onOpenChange={setShowContractForm}>
-                  <DialogTrigger asChild>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                    >
-                      <FileText className="mr-2 h-4 w-4" />
-                      Edit
-                    </Button>
-                  </DialogTrigger>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => {
+                    if (contractCount > 1) {
+                      setContractSelectorAction('edit');
+                      setShowContractSelector(true);
+                    } else {
+                      // Single contract - directly open edit form
+                      const c = contracts.find(ct => ct.contract_status === 'active') || contracts[0];
+                      setSelectedContractForEdit(c);
+                      setShowContractForm(true);
+                    }
+                  }}
+                >
+                  <FileText className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+                {/* Edit Contract Dialog - uses selectedContractForEdit */}
+                <Dialog open={showContractForm} onOpenChange={(open) => {
+                  setShowContractForm(open);
+                  if (!open) setSelectedContractForEdit(null);
+                }}>
                   <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Edit Contract: {displayName}</DialogTitle>
                     </DialogHeader>
-                    <ContractForm 
-                      existingCustomer={{ id, name, nickname, location, mwpManaged }}
-                      existingContract={contracts && contracts.length > 0 ? (() => {
-                        const c = contracts.find(ct => ct.contract_status === 'active') || contracts[0];
-                        return {
-                          id: c.id,
-                          contractName: c.contract_name,
-                          package: c.package,
-                          companyName: c.company_name || name,
-                          signedDate: c.signed_date,
-                          periodStart: c.period_start,
-                          periodEnd: c.period_end,
-                          cachedCapabilities: c.cached_capabilities,
+                    {selectedContractForEdit && (
+                      <ContractForm 
+                        existingCustomer={{ id, name, nickname, location, mwpManaged }}
+                        existingContract={{
+                          id: selectedContractForEdit.id,
+                          contractName: selectedContractForEdit.contract_name,
+                          package: selectedContractForEdit.package,
+                          signedDate: selectedContractForEdit.signed_date,
+                          periodStart: selectedContractForEdit.period_start,
+                          periodEnd: selectedContractForEdit.period_end,
+                          cachedCapabilities: selectedContractForEdit.cached_capabilities,
                           // AMMP fields
-                          ammpOrgId: c.ammp_org_id,
-                          ammpAssetGroupId: c.ammp_asset_group_id,
-                          ammpAssetGroupName: c.ammp_asset_group_name,
-                          ammpAssetGroupIdAnd: c.ammp_asset_group_id_and,
-                          ammpAssetGroupNameAnd: c.ammp_asset_group_name_and,
-                          ammpAssetGroupIdNot: c.ammp_asset_group_id_not,
-                          ammpAssetGroupNameNot: c.ammp_asset_group_name_not,
+                          ammpOrgId: selectedContractForEdit.ammp_org_id,
+                          ammpAssetGroupId: selectedContractForEdit.ammp_asset_group_id,
+                          ammpAssetGroupName: selectedContractForEdit.ammp_asset_group_name,
+                          ammpAssetGroupIdAnd: selectedContractForEdit.ammp_asset_group_id_and,
+                          ammpAssetGroupNameAnd: selectedContractForEdit.ammp_asset_group_name_and,
+                          ammpAssetGroupIdNot: selectedContractForEdit.ammp_asset_group_id_not,
+                          ammpAssetGroupNameNot: selectedContractForEdit.ammp_asset_group_name_not,
                           // Other contract fields
-                          modules: c.modules,
-                          addons: c.addons,
-                          customPricing: c.custom_pricing,
-                          minimumAnnualValue: c.minimum_annual_value,
-                          minimumCharge: c.minimum_charge,
-                          minimumChargeTiers: c.minimum_charge_tiers,
-                          portfolioDiscountTiers: c.portfolio_discount_tiers,
-                          siteChargeFrequency: c.site_charge_frequency,
-                          volumeDiscounts: c.volume_discounts,
-                          currency: c.currency,
-                          billingFrequency: c.billing_frequency,
-                          baseMonthlyPrice: c.base_monthly_price,
-                          initialMW: c.initial_mw,
-                          annualFeePerSite: c.annual_fee_per_site,
-                          retainerHours: c.retainer_hours,
-                          retainerHourlyRate: c.retainer_hourly_rate,
-                          retainerMinimumValue: c.retainer_minimum_value,
-              siteSizeThresholdKwp: c.site_size_threshold_kwp,
-              belowThresholdPricePerMWp: c.below_threshold_price_per_mwp,
-              aboveThresholdPricePerMWp: c.above_threshold_price_per_mwp,
-                          contractExpiryDate: c.contract_expiry_date,
-                          notes: c.notes,
-                          maxMw: c.max_mw,
-                          onboardingFeePerSite: c.onboarding_fee_per_site,
-                        };
-                      })() : undefined}
-                      onComplete={() => {
-                        setShowContractForm(false);
-                        onContractCreated?.();
-                      }}
-                      onCancel={() => setShowContractForm(false)}
-                    />
+                          modules: selectedContractForEdit.modules,
+                          addons: selectedContractForEdit.addons,
+                          customPricing: selectedContractForEdit.custom_pricing,
+                          minimumAnnualValue: selectedContractForEdit.minimum_annual_value,
+                          minimumCharge: selectedContractForEdit.minimum_charge,
+                          minimumChargeTiers: selectedContractForEdit.minimum_charge_tiers,
+                          portfolioDiscountTiers: selectedContractForEdit.portfolio_discount_tiers,
+                          siteChargeFrequency: selectedContractForEdit.site_charge_frequency,
+                          volumeDiscounts: selectedContractForEdit.volume_discounts,
+                          currency: selectedContractForEdit.currency,
+                          billingFrequency: selectedContractForEdit.billing_frequency,
+                          baseMonthlyPrice: selectedContractForEdit.base_monthly_price,
+                          initialMW: selectedContractForEdit.initial_mw,
+                          annualFeePerSite: selectedContractForEdit.annual_fee_per_site,
+                          retainerHours: selectedContractForEdit.retainer_hours,
+                          retainerHourlyRate: selectedContractForEdit.retainer_hourly_rate,
+                          retainerMinimumValue: selectedContractForEdit.retainer_minimum_value,
+                          siteSizeThresholdKwp: selectedContractForEdit.site_size_threshold_kwp,
+                          belowThresholdPricePerMWp: selectedContractForEdit.below_threshold_price_per_mwp,
+                          aboveThresholdPricePerMWp: selectedContractForEdit.above_threshold_price_per_mwp,
+                          contractExpiryDate: selectedContractForEdit.contract_expiry_date,
+                          notes: selectedContractForEdit.notes,
+                          maxMw: selectedContractForEdit.max_mw,
+                          onboardingFeePerSite: selectedContractForEdit.onboarding_fee_per_site,
+                        }}
+                        onComplete={() => {
+                          setShowContractForm(false);
+                          setSelectedContractForEdit(null);
+                          onContractCreated?.();
+                        }}
+                        onCancel={() => {
+                          setShowContractForm(false);
+                          setSelectedContractForEdit(null);
+                        }}
+                      />
+                    )}
                   </DialogContent>
                 </Dialog>
                 <Dialog open={showAddContractForm} onOpenChange={setShowAddContractForm}>
@@ -583,7 +600,9 @@ export function CustomerCard({
           <Dialog open={showContractSelector} onOpenChange={setShowContractSelector}>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Select Contract - {name}</DialogTitle>
+                <DialogTitle>
+                  {contractSelectorAction === 'edit' ? 'Select Contract to Edit' : 'Select Contract'} - {name}
+                </DialogTitle>
               </DialogHeader>
               <div className="space-y-2">
                 {contracts.map((contract) => (
@@ -612,15 +631,28 @@ export function CustomerCard({
                         </span>
                       )}
                     </div>
-                    <Button 
-                      size="sm" 
-                      onClick={() => {
-                        navigate(`/contracts/${contract.id}`);
-                        setShowContractSelector(false);
-                      }}
-                    >
-                      View
-                    </Button>
+                    {contractSelectorAction === 'edit' ? (
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          setSelectedContractForEdit(contract);
+                          setShowContractSelector(false);
+                          setShowContractForm(true);
+                        }}
+                      >
+                        Edit
+                      </Button>
+                    ) : (
+                      <Button 
+                        size="sm" 
+                        onClick={() => {
+                          navigate(`/contracts/${contract.id}`);
+                          setShowContractSelector(false);
+                        }}
+                      >
+                        View
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
