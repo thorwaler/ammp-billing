@@ -40,6 +40,8 @@ import {
   getTotalARRFromInvoices,
   getTotalNRRFromInvoices,
   getRevenueByCustomer,
+  getARRByCustomer,
+  getTotalContractARR,
   MWGrowthData,
   CustomerGrowthData,
   CustomerMWData,
@@ -47,6 +49,7 @@ import {
   ProjectedRevenueData,
   ActualRevenueData,
   ARRvsNRRData,
+  CustomerARRData,
   ReportFilters as AnalyticsFilters
 } from "@/services/analytics/dashboardAnalytics";
 import { ReportsFilters, ReportFilters } from "@/components/reports/ReportsFilters";
@@ -75,6 +78,8 @@ const Reports = () => {
   const [arrNrrData, setArrNrrData] = useState<ARRvsNRRData[]>([]);
   const [totalARR, setTotalARR] = useState(0);
   const [totalNRR, setTotalNRR] = useState(0);
+  const [arrByCustomer, setArrByCustomer] = useState<CustomerARRData[]>([]);
+  const [contractARR, setContractARR] = useState<{ eur: number; usd: number }>({ eur: 0, usd: 0 });
   const [showARROnly, setShowARROnly] = useState(false);
   
   // Filter state
@@ -106,7 +111,7 @@ const Reports = () => {
       const startDate = filters.startDate || new Date(new Date().getFullYear(), 0, 1);
       const endDate = filters.endDate || new Date();
 
-      const [mwGrowth, customerGrowth, customerMWp, customerRevenue, projected, actual, arrNrr, arrTotal, nrrTotal] = await Promise.all([
+      const [mwGrowth, customerGrowth, customerMWp, customerRevenue, projected, actual, arrNrr, arrTotal, nrrTotal, customerARR, totalContractARR] = await Promise.all([
         getMWGrowthByMonth(analyticsFilters),
         getCustomerGrowthByQuarter(analyticsFilters),
         getMWpByCustomer(8, analyticsFilters),
@@ -116,6 +121,8 @@ const Reports = () => {
         getARRvsNRRByMonth(analyticsFilters),
         getTotalARRFromInvoices(startDate, endDate),
         getTotalNRRFromInvoices(startDate, endDate),
+        getARRByCustomer(8, analyticsFilters),
+        getTotalContractARR(analyticsFilters),
       ]);
       
       setMwGrowthData(mwGrowth);
@@ -129,6 +136,16 @@ const Reports = () => {
       })));
       setTotalARR(convertToDisplayCurrency(arrTotal, "EUR"));
       setTotalNRR(convertToDisplayCurrency(nrrTotal, "EUR"));
+      
+      // Set contract-based ARR data
+      setArrByCustomer(customerARR.map(c => ({
+        ...c,
+        arr: convertToDisplayCurrency(c.arr, "EUR"),
+      })));
+      setContractARR({
+        eur: totalContractARR.eurTotal,
+        usd: totalContractARR.usdTotal,
+      });
       
       // Set ARR vs NRR data with currency conversion
       setArrNrrData(arrNrr.map(d => ({
@@ -178,6 +195,10 @@ const Reports = () => {
   const arrPercentage = totalARR + totalNRR > 0 
     ? Math.round((totalARR / (totalARR + totalNRR)) * 100) 
     : 0;
+
+  // Calculate contract ARR in display currency
+  const contractARRDisplay = convertToDisplayCurrency(contractARR.eur, "EUR") + 
+    convertToDisplayCurrency(contractARR.usd, "USD");
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -243,16 +264,23 @@ const Reports = () => {
         />
 
         {/* ARR/NRR Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <StatCard
-            title="Total ARR"
+            title="Contract ARR"
+            value={formatCurrency(contractARRDisplay)}
+            description="From active contract values"
+            icon={TrendingUp}
+            className="border-l-4 border-l-purple-500"
+          />
+          <StatCard
+            title="Invoice ARR"
             value={formatCurrency(totalARR)}
             description="Platform fees from invoices"
             icon={TrendingUp}
             className="border-l-4 border-l-ammp-teal"
           />
           <StatCard
-            title="Total NRR"
+            title="Invoice NRR"
             value={formatCurrency(totalNRR)}
             description="Implementation fees from invoices"
             icon={DollarSign}
@@ -530,6 +558,37 @@ const Reports = () => {
                   </ResponsiveContainer>
                 </div>
               ) : renderEmptyState("Create invoices to see revenue by customer.")}
+            </CardContent>
+          </Card>
+
+          {/* ARR by Customer (Contract Values) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-purple-500" />
+                ARR by Customer (Contract Values)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : arrByCustomer.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      layout="vertical"
+                      data={arrByCustomer}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" tickFormatter={(value) => formatCurrency(value)} />
+                      <YAxis dataKey="name" type="category" width={120} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar dataKey="arr" name="Contract ARR" fill="#9333EA" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Add contracts to see ARR by customer.")}
             </CardContent>
           </Card>
         </div>
