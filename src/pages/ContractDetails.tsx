@@ -1125,6 +1125,7 @@ const ContractDetails = () => {
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0">
                     <tr>
+                      <th className="text-left p-2 font-medium">Asset ID</th>
                       <th className="text-left p-2 font-medium">Asset Name</th>
                       <th className="text-right p-2 font-medium">MW</th>
                       <th className="text-center p-2 font-medium">Hybrid</th>
@@ -1139,6 +1140,9 @@ const ContractDetails = () => {
                         className="border-t hover:bg-muted/50 cursor-pointer"
                         onClick={() => setSelectedAsset(asset)}
                       >
+                        <td className="p-2 font-mono text-xs text-muted-foreground" title={asset.assetId}>
+                          {asset.assetId?.substring(0, 8)}...
+                        </td>
                         <td className="p-2">{asset.assetName}</td>
                         <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
                         <td className="p-2 text-center">
@@ -1159,10 +1163,13 @@ const ContractDetails = () => {
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle>{selectedAsset?.assetName}</DialogTitle>
-                    <DialogDescription>
-                      {selectedAsset?.totalMW?.toFixed(4)} MW • {selectedAsset?.deviceCount || 0} devices
-                      {selectedAsset?.isHybrid && <Badge variant="outline" className="ml-2 bg-purple-50">Hybrid</Badge>}
-                      {selectedAsset?.hasSolcast && <Badge variant="outline" className="ml-2 bg-blue-50">Solcast</Badge>}
+                    <DialogDescription className="space-y-1">
+                      <span className="font-mono text-xs">{selectedAsset?.assetId}</span>
+                      <div>
+                        {selectedAsset?.totalMW?.toFixed(4)} MW • {selectedAsset?.deviceCount || 0} devices
+                        {selectedAsset?.isHybrid && <Badge variant="outline" className="ml-2 bg-purple-50">Hybrid</Badge>}
+                        {selectedAsset?.hasSolcast && <Badge variant="outline" className="ml-2 bg-blue-50">Solcast</Badge>}
+                      </div>
                     </DialogDescription>
                   </DialogHeader>
                   

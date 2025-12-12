@@ -583,6 +583,7 @@ Deno.serve(async (req) => {
         ammp_asset_group_id_and,
         ammp_asset_group_id_not,
         cached_capabilities,
+        ammp_sync_status,
         customers!inner (
           id,
           ammp_org_id
