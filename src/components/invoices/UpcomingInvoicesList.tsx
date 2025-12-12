@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { calculateInvoice } from "@/lib/invoiceCalculations";
-import type { MinimumChargeTier, DiscountTier } from "@/data/pricingData";
+import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
 
 interface UpcomingInvoice {
   contractId: string;
@@ -38,6 +38,8 @@ interface UpcomingInvoice {
   ammpAssetGroupId?: string;
   ammpAssetGroupIdAnd?: string;
   ammpAssetGroupIdNot?: string;
+  // Elum Internal fields
+  graduatedMWTiers?: GraduatedMWTier[];
 }
 
 interface UpcomingInvoicesListProps {
@@ -89,6 +91,7 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
           ammp_asset_group_id_and,
           ammp_asset_group_id_not,
           cached_capabilities,
+          graduated_mw_tiers,
           customers (
             id,
             name,
@@ -148,6 +151,10 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
             ammpAssetGroupId: (c as any).ammp_asset_group_id || undefined,
             ammpAssetGroupIdAnd: (c as any).ammp_asset_group_id_and || undefined,
             ammpAssetGroupIdNot: (c as any).ammp_asset_group_id_not || undefined,
+            // Elum Internal fields
+            graduatedMWTiers: Array.isArray((c as any).graduated_mw_tiers) 
+              ? (c as any).graduated_mw_tiers as GraduatedMWTier[]
+              : undefined,
           };
         });
 
@@ -227,6 +234,8 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
       siteSizeThresholdKwp: invoice.siteSizeThresholdKwp,
       belowThresholdPricePerMWp: invoice.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: invoice.aboveThresholdPricePerMWp,
+      // Elum Internal fields
+      graduatedMWTiers: invoice.graduatedMWTiers,
     });
     
     return result.totalPrice;

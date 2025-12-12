@@ -176,6 +176,8 @@ interface ContractFormProps {
     ammpSyncStatus?: string;
     lastAmmpSync?: string;
     cachedCapabilities?: any;
+    // Elum Internal Assets fields
+    graduatedMWTiers?: any[];
   };
   onComplete?: () => void;
   onCancel?: () => void;

@@ -132,6 +132,8 @@ interface Customer {
   ammpAssetGroupIdNot?: string;
   cachedCapabilities?: any;
   contractAmmpOrgId?: string;
+  // Elum Internal fields
+  graduatedMWTiers?: any[];
 }
 
 // Default modules and addons from shared data
@@ -223,7 +225,8 @@ export function InvoiceCalculator({
             ammp_asset_group_id_and,
             ammp_asset_group_id_not,
             cached_capabilities,
-            contract_ammp_org_id
+            contract_ammp_org_id,
+            graduated_mw_tiers
           )
         `)
         .eq('status', 'active');
@@ -291,6 +294,10 @@ export function InvoiceCalculator({
             ammpAssetGroupIdNot: (contract as any).ammp_asset_group_id_not || undefined,
             cachedCapabilities: (contract as any).cached_capabilities || undefined,
             contractAmmpOrgId: (contract as any).contract_ammp_org_id || undefined,
+            // Elum Internal fields
+            graduatedMWTiers: Array.isArray((contract as any).graduated_mw_tiers) 
+              ? (contract as any).graduated_mw_tiers 
+              : undefined,
           };
         });
 
@@ -794,6 +801,8 @@ export function InvoiceCalculator({
       siteSizeThresholdKwp: selectedCustomer.siteSizeThresholdKwp,
       belowThresholdPricePerMWp: selectedCustomer.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: selectedCustomer.aboveThresholdPricePerMWp,
+      // Elum Internal fields
+      graduatedMWTiers: selectedCustomer.graduatedMWTiers,
     };
     
     calculationResult = calculateInvoice(params);
@@ -1792,6 +1801,27 @@ export function InvoiceCalculator({
                       <span>Minimum applied</span>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Elum Internal graduated MW breakdown */}
+            {result.elumInternalBreakdown && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm">Elum Internal Graduated MW Pricing:</h4>
+                <div className="space-y-2 text-sm pl-2">
+                  {result.elumInternalBreakdown.tiers.map((tier: any, index: number) => (
+                    <div key={index} className="flex justify-between">
+                      <span>
+                        {tier.label} ({tier.mwInTier.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{tier.pricePerMW}/MW):
+                      </span>
+                      <span>{formatCurrency(tier.cost)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between font-medium border-t border-border pt-2">
+                    <span>Total ({result.elumInternalBreakdown.totalMW.toFixed(2)} MW):</span>
+                    <span>{formatCurrency(result.elumInternalBreakdown.totalCost)}</span>
+                  </div>
                 </div>
               </div>
             )}
