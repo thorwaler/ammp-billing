@@ -123,6 +123,7 @@ interface Customer {
   onboardingFeePerSite?: number;
   annualFeePerSite?: number;
   contractId?: string;
+  contractName?: string;
   // Elum package fields
   siteSizeThresholdKwp?: number;
   belowThresholdPricePerMWp?: number;
@@ -285,6 +286,7 @@ export function InvoiceCalculator({
             onboardingFeePerSite: Number((contract as any).onboarding_fee_per_site) || 1000,
             annualFeePerSite: Number((contract as any).annual_fee_per_site) || 1000,
             contractId: contract.id,
+            contractName: (contract as any).contract_name || undefined,
             // Elum package fields
             siteSizeThresholdKwp: Number((contract as any).site_size_threshold_kwp) || 100,
             belowThresholdPricePerMWp: Number((contract as any).below_threshold_price_per_mwp) || 50,
@@ -1230,7 +1232,8 @@ export function InvoiceCalculator({
         selectedCustomer.contractId, // Fix #3: Filter YTD by contract
         selectedCustomer.retainerHours, // Fix #5: Pass retainer params
         selectedCustomer.retainerHourlyRate,
-        selectedCustomer.retainerMinimumValue
+        selectedCustomer.retainerMinimumValue,
+        selectedCustomer.contractName // Add contract name to support document
       );
       
       // Validate totals (show warning but continue)

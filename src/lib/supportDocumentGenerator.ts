@@ -5,6 +5,7 @@ import { format, startOfYear, endOfYear } from "date-fns";
 export interface SupportDocumentData {
   // Header info
   customerName: string;
+  contractName?: string;
   currency: 'EUR' | 'USD';
   invoiceDate: Date;
   invoicePeriod: string;
@@ -100,6 +101,15 @@ export interface SupportDocumentData {
   invoiceTotal: number;
   minimumContractAdjustment: number;
   totalsMatch: boolean;
+  // Detailed breakdown for validation
+  calculationBreakdown: {
+    assetBreakdownPeriod: number;
+    minimumCharges: number;
+    minimumContractAdjustment: number;
+    baseMonthlyPrice: number;
+    retainerCost: number;
+    addonsTotal: number;
+  };
 }
 
 /**
@@ -122,7 +132,8 @@ export async function generateSupportDocumentData(
   contractId?: string,
   retainerHours?: number,
   retainerHourlyRate?: number,
-  retainerMinimumValue?: number
+  retainerMinimumValue?: number,
+  contractName?: string
 ): Promise<SupportDocumentData> {
   
   // Fetch year-to-date invoices filtered by contract if available
@@ -268,6 +279,7 @@ export async function generateSupportDocumentData(
 
   return {
     customerName,
+    contractName,
     currency,
     invoiceDate,
     invoicePeriod: calculationResult.invoicePeriod || format(invoiceDate, 'MMM yyyy'),
@@ -287,7 +299,15 @@ export async function generateSupportDocumentData(
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
-    totalsMatch
+    totalsMatch,
+    calculationBreakdown: {
+      assetBreakdownPeriod: assetBreakdownPeriodTotal,
+      minimumCharges: calculationResult.minimumCharges,
+      minimumContractAdjustment,
+      baseMonthlyPrice: calculationResult.basePricingCost,
+      retainerCost: calculationResult.retainerCost,
+      addonsTotal: totalAddonCosts
+    }
   };
 }
 
