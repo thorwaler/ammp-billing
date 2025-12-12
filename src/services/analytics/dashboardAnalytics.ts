@@ -842,7 +842,8 @@ export async function getProjectedRevenueByMonth(
       site_size_threshold_kwp,
       below_threshold_price_per_mwp,
       above_threshold_price_per_mwp,
-      annual_fee_per_site
+      annual_fee_per_site,
+      graduated_mw_tiers
     `)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
@@ -880,7 +881,7 @@ export async function getProjectedRevenueByMonth(
         : contract.initial_mw || 0);
 
     // Skip only if no MW AND not a package that can have revenue without MW
-    const packagesWithoutMWRequirement = ['starter', 'capped', 'elum_jubaili', 'per_site'];
+    const packagesWithoutMWRequirement = ['starter', 'capped', 'elum_jubaili', 'per_site', 'elum_internal'];
     if (totalMW === 0 && !packagesWithoutMWRequirement.includes(contract.package)) continue;
 
     // Determine billing frequency and interval
@@ -931,6 +932,8 @@ export async function getProjectedRevenueByMonth(
           retainerHours: contract.retainer_hours || undefined,
           retainerHourlyRate: contract.retainer_hourly_rate || undefined,
           retainerMinimumValue: contract.retainer_minimum_value || undefined,
+          // Elum Internal Assets graduated MW tiers
+          graduatedMWTiers: (contract as any).graduated_mw_tiers || undefined,
         });
         perInvoiceAmount = result.totalPrice;
       }
@@ -978,4 +981,161 @@ export async function getProjectedRevenueByMonth(
   }
 
   return result;
+}
+
+/**
+ * Interface for customer ARR data
+ */
+export interface CustomerARRData {
+  name: string;
+  arr: number;
+  customerId: string;
+}
+
+/**
+ * Get ARR by customer based on current contract values (not invoices)
+ */
+export async function getARRByCustomer(
+  limit: number = 10,
+  filters?: ReportFilters
+): Promise<CustomerARRData[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Fetch all active non-POC contracts with full pricing data
+  let query = supabase
+    .from('contracts')
+    .select(`
+      id,
+      customer_id,
+      package,
+      billing_frequency,
+      initial_mw,
+      modules,
+      addons,
+      minimum_annual_value,
+      minimum_charge_tiers,
+      portfolio_discount_tiers,
+      custom_pricing,
+      base_monthly_price,
+      site_charge_frequency,
+      currency,
+      annual_fee_per_site,
+      retainer_hours,
+      retainer_hourly_rate,
+      retainer_minimum_value,
+      cached_capabilities,
+      site_size_threshold_kwp,
+      below_threshold_price_per_mwp,
+      above_threshold_price_per_mwp,
+      graduated_mw_tiers,
+      customers!inner(id, name, nickname)
+    `)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('customer_id', filters.customerIds);
+  }
+
+  const { data: contracts } = await query;
+  if (!contracts || contracts.length === 0) return [];
+
+  // Group contracts by customer and sum ARR
+  const customerARRMap = new Map<string, { name: string; arr: number; customerId: string }>();
+
+  for (const contract of contracts) {
+    const customerId = contract.customer_id;
+    const customerData = contract.customers as any;
+    const customerName = customerData?.nickname || customerData?.name || 'Unknown';
+
+    // Calculate ARR for this contract
+    const contractARR = calculateSingleContractARR(contract);
+
+    if (customerARRMap.has(customerId)) {
+      const existing = customerARRMap.get(customerId)!;
+      existing.arr += contractARR;
+    } else {
+      customerARRMap.set(customerId, {
+        name: customerName,
+        arr: contractARR,
+        customerId,
+      });
+    }
+  }
+
+  // Convert to array, sort by ARR, and limit
+  return Array.from(customerARRMap.values())
+    .sort((a, b) => b.arr - a.arr)
+    .slice(0, limit)
+    .map(c => ({
+      name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
+      arr: parseFloat(c.arr.toFixed(2)),
+      customerId: c.customerId,
+    }));
+}
+
+/**
+ * Get total ARR from contracts (not invoices), respecting filters
+ */
+export async function getTotalContractARR(
+  filters?: ReportFilters
+): Promise<{ eurTotal: number; usdTotal: number }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { eurTotal: 0, usdTotal: 0 };
+
+  // Fetch all active non-POC contracts
+  let query = supabase
+    .from('contracts')
+    .select(`
+      id,
+      customer_id,
+      package,
+      billing_frequency,
+      initial_mw,
+      modules,
+      addons,
+      minimum_annual_value,
+      minimum_charge_tiers,
+      portfolio_discount_tiers,
+      custom_pricing,
+      base_monthly_price,
+      site_charge_frequency,
+      currency,
+      annual_fee_per_site,
+      retainer_hours,
+      retainer_hourly_rate,
+      retainer_minimum_value,
+      cached_capabilities,
+      site_size_threshold_kwp,
+      below_threshold_price_per_mwp,
+      above_threshold_price_per_mwp,
+      graduated_mw_tiers
+    `)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
+
+  // Filter by customer IDs if specified
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    query = query.in('customer_id', filters.customerIds);
+  }
+
+  const { data: contracts } = await query;
+  if (!contracts || contracts.length === 0) return { eurTotal: 0, usdTotal: 0 };
+
+  let eurTotal = 0;
+  let usdTotal = 0;
+
+  for (const contract of contracts) {
+    const annualValue = calculateSingleContractARR(contract);
+
+    if (contract.currency === 'USD') {
+      usdTotal += annualValue;
+    } else {
+      eurTotal += annualValue;
+    }
+  }
+
+  return { eurTotal, usdTotal };
 }
