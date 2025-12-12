@@ -33,6 +33,9 @@ export interface SupportDocumentData {
     reportingActive: boolean;
     pricePerKWp: number;
     pricePerYear: number;
+    // Elum ePM specific fields
+    isSmallSite?: boolean;
+    usesMinimum?: boolean;
   }[];
   assetBreakdownTotal: number;
   
@@ -65,9 +68,37 @@ export interface SupportDocumentData {
     minimumApplied: boolean;
   };
   
+  // Elum-specific breakdowns
+  elumEpmBreakdown?: {
+    threshold: number;
+    smallSitesCount: number;
+    largeSitesCount: number;
+    smallSitesTotal: number;
+    largeSitesTotal: number;
+    sitesUsingMinimum: number;
+    belowThresholdRate: number;
+    aboveThresholdRate: number;
+  };
+  elumJubailiBreakdown?: {
+    perSiteFee: number;
+    siteCount: number;
+    totalCost: number;
+  };
+  elumInternalBreakdown?: {
+    tiers: {
+      label: string;
+      mwInTier: number;
+      pricePerMW: number;
+      cost: number;
+    }[];
+    totalMW: number;
+    totalCost: number;
+  };
+  
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
+  minimumContractAdjustment: number;
   totalsMatch: boolean;
 }
 
@@ -87,20 +118,31 @@ export async function generateSupportDocumentData(
   billingFrequency: string,
   discountPercent: number = 0,
   periodStart?: string,
-  periodEnd?: string
+  periodEnd?: string,
+  contractId?: string,
+  retainerHours?: number,
+  retainerHourlyRate?: number,
+  retainerMinimumValue?: number
 ): Promise<SupportDocumentData> {
   
-  // Fetch year-to-date invoices
+  // Fetch year-to-date invoices filtered by contract if available
   const yearStart = startOfYear(invoiceDate);
   const yearEnd = endOfYear(invoiceDate);
   
-  const { data: yearInvoices, error } = await supabase
+  let query = supabase
     .from('invoices')
     .select('*')
     .eq('customer_id', customerId)
     .gte('invoice_date', yearStart.toISOString())
     .lte('invoice_date', yearEnd.toISOString())
     .order('invoice_date', { ascending: true });
+  
+  // Filter by contract_id if provided (Fix #3)
+  if (contractId) {
+    query = query.eq('contract_id', contractId);
+  }
+  
+  const { data: yearInvoices, error } = await query;
 
   if (error) {
     console.error('Error fetching year invoices:', error);
@@ -110,7 +152,7 @@ export async function generateSupportDocumentData(
   const invoicesByPeriod = groupInvoicesByPeriod(yearInvoices || [], billingFrequency);
   const yearTotal = (yearInvoices || []).reduce((sum, inv) => sum + Number(inv.invoice_amount), 0);
 
-  // Generate asset breakdown
+  // Generate asset breakdown based on package type (Fix #1)
   const assetBreakdown = generateAssetBreakdown(
     ammpCapabilities?.assetBreakdown || [],
     calculationResult,
@@ -151,16 +193,58 @@ export async function generateSupportDocumentData(
     }));
   const addonsTotal = addonsBreakdown.reduce((sum, a) => sum + a.totalCost, 0);
 
-  // Generate retainer breakdown if applicable
+  // Generate retainer breakdown if applicable (Fix #5 - use passed params)
   let retainerBreakdown: SupportDocumentData['retainerBreakdown'];
   if (calculationResult.retainerCost > 0) {
     retainerBreakdown = {
-      hours: 0, // Will be passed from params
-      hourlyRate: 0,
-      minimumValue: 0,
+      hours: retainerHours || 0,
+      hourlyRate: retainerHourlyRate || 0,
+      minimumValue: retainerMinimumValue || 0,
       calculatedCost: calculationResult.retainerCalculatedCost,
       totalCost: calculationResult.retainerCost,
       minimumApplied: calculationResult.retainerMinimumApplied
+    };
+  }
+
+  // Generate Elum-specific breakdowns (Fix #1)
+  let elumEpmBreakdown: SupportDocumentData['elumEpmBreakdown'];
+  let elumJubailiBreakdown: SupportDocumentData['elumJubailiBreakdown'];
+  let elumInternalBreakdown: SupportDocumentData['elumInternalBreakdown'];
+
+  if (calculationResult.elumEpmBreakdown) {
+    const epmBreak = calculationResult.elumEpmBreakdown;
+    elumEpmBreakdown = {
+      threshold: epmBreak.threshold,
+      smallSitesCount: epmBreak.smallSites.length,
+      largeSitesCount: epmBreak.largeSites.length,
+      smallSitesTotal: epmBreak.smallSitesTotal,
+      largeSitesTotal: epmBreak.largeSitesTotal,
+      sitesUsingMinimum: epmBreak.sitesUsingMinimum || 0,
+      belowThresholdRate: epmBreak.smallSites[0]?.pricePerMWp || 0,
+      aboveThresholdRate: epmBreak.largeSites[0]?.pricePerMWp || 0
+    };
+  }
+
+  if (calculationResult.elumJubailiBreakdown) {
+    const jubBreak = calculationResult.elumJubailiBreakdown;
+    elumJubailiBreakdown = {
+      perSiteFee: jubBreak.perSiteFee,
+      siteCount: jubBreak.siteCount,
+      totalCost: jubBreak.totalCost
+    };
+  }
+
+  if (calculationResult.elumInternalBreakdown) {
+    const intBreak = calculationResult.elumInternalBreakdown;
+    elumInternalBreakdown = {
+      tiers: intBreak.tiers.map(t => ({
+        label: t.label,
+        mwInTier: t.mwInTier,
+        pricePerMW: t.pricePerMW,
+        cost: t.cost
+      })),
+      totalMW: intBreak.totalMW,
+      totalCost: intBreak.totalCost
     };
   }
 
@@ -170,9 +254,11 @@ export async function generateSupportDocumentData(
   const assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
   
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
+  const minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
+  
   const calculatedTotal = assetBreakdownPeriodTotal + 
     calculationResult.minimumCharges + 
-    calculationResult.minimumContractAdjustment +
+    minimumContractAdjustment +
     calculationResult.basePricingCost +
     calculationResult.retainerCost +
     totalAddonCosts;
@@ -195,8 +281,12 @@ export async function generateSupportDocumentData(
     addonsBreakdown,
     addonsTotal,
     retainerBreakdown,
+    elumEpmBreakdown,
+    elumJubailiBreakdown,
+    elumInternalBreakdown,
     calculatedTotal,
     invoiceTotal,
+    minimumContractAdjustment,
     totalsMatch
   };
 }
@@ -251,6 +341,7 @@ function groupInvoicesByPeriod(
 
 /**
  * Generate asset breakdown with per-asset pricing
+ * Supports all package types including Elum packages (Fix #1)
  */
 function generateAssetBreakdown(
   assets: any[],
@@ -259,6 +350,80 @@ function generateAssetBreakdown(
   selectedAddons: Array<{ id: string }>,
   packageType: string
 ): SupportDocumentData['assetBreakdown'] {
+  
+  // For Elum ePM - use the elumEpmBreakdown data
+  if (packageType === 'elum_epm' && calculationResult.elumEpmBreakdown) {
+    const epmBreak = calculationResult.elumEpmBreakdown;
+    const allSites = [...epmBreak.smallSites, ...epmBreak.largeSites];
+    
+    return allSites.map(site => ({
+      assetId: site.assetId,
+      assetName: site.assetName,
+      pvCapacityKWp: site.capacityKwp,
+      isPV: !site.isSmallSite, // Not directly available, infer from type
+      isHybrid: false,
+      hubActive: false,
+      portalActive: false,
+      controlActive: false,
+      reportingActive: false,
+      pricePerKWp: site.pricePerMWp / 1000, // Convert per-MWp to per-kWp
+      pricePerYear: site.cost,
+      isSmallSite: site.isSmallSite,
+      usesMinimum: site.usesMinimum
+    }));
+  }
+  
+  // For Elum Jubaili - use flat per-site fee
+  if (packageType === 'elum_jubaili' && calculationResult.elumJubailiBreakdown) {
+    const jubBreak = calculationResult.elumJubailiBreakdown;
+    
+    return jubBreak.sites.map(site => ({
+      assetId: site.assetId,
+      assetName: site.assetName,
+      pvCapacityKWp: 0, // Not relevant for per-site
+      isPV: true,
+      isHybrid: false,
+      hubActive: false,
+      portalActive: false,
+      controlActive: false,
+      reportingActive: false,
+      pricePerKWp: 0,
+      pricePerYear: jubBreak.perSiteFee
+    }));
+  }
+  
+  // For Elum Internal - don't show per-asset, use tier summary
+  if (packageType === 'elum_internal' && calculationResult.elumInternalBreakdown) {
+    // Return empty - the elumInternalBreakdown in the doc will handle this
+    return [];
+  }
+  
+  // For Elum Portfolio OS - treat like pro/custom
+  if (packageType === 'elum_portfolio_os') {
+    // Same logic as pro/custom - calculate total MW for rate calculation
+    const totalMW = assets.reduce((sum, asset) => sum + (asset.totalMW || 0), 0);
+    const baseRatePerMWp = calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
+    
+    return assets.map(asset => {
+      const pvCapacityKWp = (asset.totalMW || 0) * 1000;
+      const pricePerKWp = baseRatePerMWp / 1000;
+      const pricePerYear = pvCapacityKWp * pricePerKWp;
+      
+      return {
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
+        isPV: !asset.isHybrid,
+        isHybrid: asset.isHybrid || false,
+        hubActive: selectedModules.includes('energySavingsHub'),
+        portalActive: selectedModules.includes('stakeholderPortal'),
+        controlActive: selectedModules.includes('control'),
+        reportingActive: selectedAddons.some(a => a.id === 'reporting'),
+        pricePerKWp: Math.round(pricePerKWp * 100) / 100,
+        pricePerYear: Math.round(pricePerYear * 100) / 100
+      };
+    });
+  }
   
   // Calculate total MW for rate calculation
   const totalMW = assets.reduce((sum, asset) => sum + (asset.totalMW || 0), 0);
@@ -339,7 +504,7 @@ function generateSolcastBreakdown(
 }
 
 /**
- * Get list of months for the billing period
+ * Get list of months for the billing period (Fix #2)
  */
 function getMonthsForPeriod(
   billingFrequency: string, 
@@ -375,8 +540,9 @@ function getMonthsForPeriod(
     return months;
   }
   
-  // Fallback: calculate based on billing frequency
-  const startMonth = invoiceDate.getMonth();
+  // Fallback: calculate BACKWARDS from invoice date (Fix #2)
+  // For quarterly invoice on Dec 31, should be Oct, Nov, Dec - not Dec, Jan, Feb
+  const invoiceMonth = invoiceDate.getMonth();
   const year = invoiceDate.getFullYear();
 
   let monthCount = 1;
@@ -384,8 +550,9 @@ function getMonthsForPeriod(
   else if (billingFrequency === 'biannual') monthCount = 6;
   else if (billingFrequency === 'annual') monthCount = 12;
 
-  for (let i = 0; i < monthCount; i++) {
-    const date = new Date(year, startMonth + i, 1);
+  // Calculate starting month by going backwards
+  for (let i = monthCount - 1; i >= 0; i--) {
+    const date = new Date(year, invoiceMonth - i, 1);
     months.push(format(date, 'MMM yyyy'));
   }
 
