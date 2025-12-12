@@ -8,6 +8,7 @@ import { ContractPackageSelector } from "@/components/contracts/ContractPackageS
 import { ContractPdfUploader } from "@/components/contracts/ContractPdfUploader";
 import { DiscountTierEditor } from "@/components/contracts/DiscountTierEditor";
 import { MinimumChargeTierEditor } from "@/components/contracts/MinimumChargeTierEditor";
+import { GraduatedMWTierEditor } from "@/components/contracts/GraduatedMWTierEditor";
 import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
 import { 
   MODULES, 
@@ -16,8 +17,10 @@ import {
   type PricingTier,
   type DiscountTier,
   type MinimumChargeTier,
+  type GraduatedMWTier,
   DEFAULT_PORTFOLIO_DISCOUNT_TIERS,
-  DEFAULT_MINIMUM_CHARGE_TIERS
+  DEFAULT_MINIMUM_CHARGE_TIERS,
+  DEFAULT_GRADUATED_MW_TIERS
 } from "@/data/pricingData";
 import {
   Select,
@@ -63,7 +66,7 @@ const contractFormSchema = z.object({
   contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal"]),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -109,6 +112,8 @@ const contractFormSchema = z.object({
   siteSizeThresholdKwp: z.coerce.number().optional(),
   belowThresholdPricePerMWp: z.coerce.number().optional(),
   aboveThresholdPricePerMWp: z.coerce.number().optional(),
+  // Elum Internal Assets fields
+  graduatedMWTiers: z.array(z.any()).optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -190,6 +195,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [addonCustomTiers, setAddonCustomTiers] = useState<Record<string, PricingTier[]>>({});
   const [portfolioDiscountTiers, setPortfolioDiscountTiers] = useState<DiscountTier[]>(DEFAULT_PORTFOLIO_DISCOUNT_TIERS);
   const [minimumChargeTiers, setMinimumChargeTiers] = useState<MinimumChargeTier[]>(DEFAULT_MINIMUM_CHARGE_TIERS);
+  const [graduatedMWTiers, setGraduatedMWTiers] = useState<GraduatedMWTier[]>(DEFAULT_GRADUATED_MW_TIERS);
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
@@ -605,6 +611,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       // Elum Portfolio OS - full pricing flexibility
       form.setValue("modules", ["technicalMonitoring"]);
       setShowCustomPricing(true);
+    } else if (value === "elum_internal") {
+      // Elum Internal Assets - graduated MW pricing
+      form.setValue("modules", []);
+      setShowCustomPricing(false);
     } else {
       setShowCustomPricing(false);
     }
@@ -863,6 +873,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         above_threshold_price_per_mwp: data.package === 'elum_epm' 
           ? (data.aboveThresholdPricePerMWp || 30) 
           : null,
+        // Elum Internal Assets graduated MW tiers
+        graduated_mw_tiers: data.package === 'elum_internal' 
+          ? graduatedMWTiers 
+          : [],
         max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
@@ -1006,6 +1020,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="elum_epm">Elum ePM (Asset group with site-size threshold pricing)</SelectItem>
                       <SelectItem value="elum_jubaili">Elum Jubaili (Asset group with per-site pricing)</SelectItem>
                       <SelectItem value="elum_portfolio_os">Elum Portfolio OS (Custom org with full pricing flexibility)</SelectItem>
+                      <SelectItem value="elum_internal">Elum Internal Assets (Graduated MW pricing)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -1027,6 +1042,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "Elum Jubaili: Filter to specific AMMP asset group with flat per-site pricing." :
                       watchPackage === "elum_portfolio_os" ?
                       "Elum Portfolio OS: Use a separate AMMP org ID with full pricing flexibility (modules, addons, custom pricing)." :
+                      watchPackage === "elum_internal" ?
+                      "Elum Internal Assets: Graduated MW pricing with different rates for different MW tiers (e.g., €150/MW for 0-100MW, €75/MW for 100-500MW)." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -1159,6 +1176,97 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   <p className="font-medium mb-1">Monthly Invoice Check</p>
                   <p>Per-site contracts appear in the invoice creator every month to capture new site onboarding fees and annual renewal anniversaries as they occur.</p>
                 </div>
+              </>
+            )}
+
+            {/* Elum Internal Assets package fields */}
+            {watchPackage === "elum_internal" && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="currency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4" />
+                          Contract Currency
+                        </FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="USD">USD ($)</SelectItem>
+                            <SelectItem value="EUR">EUR (€)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="billingFrequency"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Billing Frequency</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select frequency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="quarterly">Quarterly</SelectItem>
+                            <SelectItem value="biannual">Bi-annual</SelectItem>
+                            <SelectItem value="annual">Annual</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="nextInvoiceDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-2">
+                          <CalendarIcon className="h-4 w-4" />
+                          Next Invoice Date
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="minimumAnnualValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Minimum Annual Value</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.01" {...field} />
+                        </FormControl>
+                        <FormDescription>Optional minimum contract value</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <GraduatedMWTierEditor
+                  tiers={graduatedMWTiers}
+                  onTiersChange={setGraduatedMWTiers}
+                  currentMW={form.watch('initialMW')}
+                  currencySymbol={form.watch('currency') === 'USD' ? '$' : '€'}
+                />
               </>
             )}
 

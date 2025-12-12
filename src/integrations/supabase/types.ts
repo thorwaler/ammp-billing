@@ -230,6 +230,7 @@ export type Database = {
           currency: string | null
           custom_pricing: Json | null
           customer_id: string
+          graduated_mw_tiers: Json | null
           id: string
           initial_mw: number
           last_ammp_sync: string | null
@@ -286,6 +287,7 @@ export type Database = {
           currency?: string | null
           custom_pricing?: Json | null
           customer_id: string
+          graduated_mw_tiers?: Json | null
           id?: string
           initial_mw: number
           last_ammp_sync?: string | null
@@ -342,6 +344,7 @@ export type Database = {
           currency?: string | null
           custom_pricing?: Json | null
           customer_id?: string
+          graduated_mw_tiers?: Json | null
           id?: string
           initial_mw?: number
           last_ammp_sync?: string | null
