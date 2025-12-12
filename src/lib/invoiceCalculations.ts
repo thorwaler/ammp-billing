@@ -7,7 +7,8 @@ import {
   type ComplexityLevel, 
   type PricingTier,
   type DiscountTier,
-  type MinimumChargeTier 
+  type MinimumChargeTier,
+  type GraduatedMWTier
 } from "@/data/pricingData";
 
 export interface SiteBillingItem {
@@ -74,6 +75,8 @@ export interface CalculationParams {
   siteSizeThresholdKwp?: number;
   belowThresholdPricePerMWp?: number;
   aboveThresholdPricePerMWp?: number;
+  // Elum Internal Assets package fields
+  graduatedMWTiers?: GraduatedMWTier[];
 }
 
 export interface SiteMinimumPricingResult {
@@ -129,6 +132,21 @@ export interface ElumJubailiBreakdown {
   totalMW?: number;
 }
 
+export interface ElumInternalTierBreakdown {
+  label: string;
+  minMW: number;
+  maxMW: number | null;
+  mwInTier: number;
+  pricePerMW: number;
+  cost: number;
+}
+
+export interface ElumInternalBreakdown {
+  tiers: ElumInternalTierBreakdown[];
+  totalMW: number;
+  totalCost: number;
+}
+
 export interface CalculationResult {
   moduleCosts: {
     moduleId: string;
@@ -165,6 +183,7 @@ export interface CalculationResult {
   // Elum package results
   elumEpmBreakdown?: ElumEpmBreakdown;
   elumJubailiBreakdown?: ElumJubailiBreakdown;
+  elumInternalBreakdown?: ElumInternalBreakdown;
 }
 
 /**
@@ -498,6 +517,50 @@ export function calculateElumJubailiBreakdown(
 }
 
 /**
+ * Calculate Elum Internal Assets graduated MW pricing
+ * Each tier applies to a specific MW range with its own price per MW
+ */
+export function calculateElumInternalBreakdown(
+  totalMW: number,
+  graduatedTiers: GraduatedMWTier[],
+  frequencyMultiplier: number
+): ElumInternalBreakdown {
+  // Sort tiers by minMW
+  const sortedTiers = [...graduatedTiers].sort((a, b) => a.minMW - b.minMW);
+  
+  let remainingMW = totalMW;
+  const tierBreakdown: ElumInternalTierBreakdown[] = [];
+  
+  for (const tier of sortedTiers) {
+    if (remainingMW <= 0) break;
+    
+    const tierStart = tier.minMW;
+    const tierEnd = tier.maxMW ?? Infinity;
+    const tierCapacity = tierEnd - tierStart;
+    
+    const mwInThisTier = Math.min(remainingMW, tierCapacity);
+    const cost = mwInThisTier * tier.pricePerMW * frequencyMultiplier;
+    
+    tierBreakdown.push({
+      label: tier.label,
+      minMW: tier.minMW,
+      maxMW: tier.maxMW,
+      mwInTier: mwInThisTier,
+      pricePerMW: tier.pricePerMW,
+      cost
+    });
+    
+    remainingMW -= mwInThisTier;
+  }
+  
+  return {
+    tiers: tierBreakdown,
+    totalMW,
+    totalCost: tierBreakdown.reduce((sum, t) => sum + t.cost, 0)
+  };
+}
+
+/**
  * Main calculation function
  */
 export function calculateInvoice(params: CalculationParams): CalculationResult {
@@ -642,6 +705,19 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const { moduleCosts, totalMWCost } = calculateModuleCosts(params);
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
+  } else if (packageType === 'elum_internal') {
+    // Elum Internal Assets - graduated MW pricing
+    const tiers = params.graduatedMWTiers || [];
+    
+    if (tiers.length > 0 && totalMW > 0) {
+      const breakdown = calculateElumInternalBreakdown(
+        totalMW,
+        tiers,
+        frequencyMultiplier
+      );
+      result.elumInternalBreakdown = breakdown;
+      result.totalMWCost = breakdown.totalCost;
+    }
   } else {
     // Pro or Custom - calculate module costs
     const { moduleCosts, totalMWCost } = calculateModuleCosts(params);
@@ -700,8 +776,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   // Calculate base cost (modules + minimum charges, or package cost)
   let baseCost = result.starterPackageCost + result.totalMWCost + result.minimumCharges;
   
-  // Apply minimum annual value to BASE COST only (for Pro and Custom packages)
-  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os') && minimumAnnualValue) {
+  // Apply minimum annual value to BASE COST only (for Pro, Custom, and Elum packages)
+  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
     if (baseCost < minimumForPeriod) {
       // Add the difference as a "minimum contract value adjustment"

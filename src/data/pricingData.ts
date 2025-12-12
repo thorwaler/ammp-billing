@@ -45,6 +45,13 @@ export interface MinimumChargeTier {
   label: string;
 }
 
+export interface GraduatedMWTier {
+  minMW: number;
+  maxMW: number | null;  // null = no upper limit
+  pricePerMW: number;
+  label: string;
+}
+
 export const MODULES: ModuleDefinition[] = [
   { 
     id: "technicalMonitoring", 
@@ -89,6 +96,12 @@ export const DEFAULT_MINIMUM_CHARGE_TIERS: MinimumChargeTier[] = [
   { minMW: 100, maxMW: 149.99, chargePerSite: 0, label: "100-149 MW" },
   { minMW: 150, maxMW: 199.99, chargePerSite: 0, label: "150-199 MW" },
   { minMW: 200, maxMW: null, chargePerSite: 0, label: "200+ MW" }
+];
+
+export const DEFAULT_GRADUATED_MW_TIERS: GraduatedMWTier[] = [
+  { minMW: 0, maxMW: 100, pricePerMW: 150, label: "0-100 MW" },
+  { minMW: 100, maxMW: 500, pricePerMW: 75, label: "100-500 MW" },
+  { minMW: 500, maxMW: null, pricePerMW: 37.5, label: "500+ MW" }
 ];
 
 export const ADDONS: AddonDefinition[] = [
@@ -158,7 +171,8 @@ export type PackageType =
   | "per_site"
   | "elum_epm"
   | "elum_jubaili"
-  | "elum_portfolio_os";
+  | "elum_portfolio_os"
+  | "elum_internal";
 
 // Per-site pricing defaults (for UNHCR-style contracts)
 export const DEFAULT_PER_SITE_PRICING = {
