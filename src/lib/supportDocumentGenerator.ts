@@ -267,14 +267,8 @@ export async function generateSupportDocumentData(
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
   const minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
   
-  // When site minimum pricing is active, the minimum charges are already included
-  // in the asset breakdown (sites below threshold show minimum charge as their pricePerYear)
-  // So we should NOT add minimumCharges separately to avoid double-counting
-  const hasSiteMinimumPricing = !!calculationResult.siteMinimumPricingBreakdown;
-  const minimumChargesForCalculation = hasSiteMinimumPricing ? 0 : calculationResult.minimumCharges;
-  
   const calculatedTotal = assetBreakdownPeriodTotal + 
-    minimumChargesForCalculation + 
+    calculationResult.minimumCharges + 
     minimumContractAdjustment +
     calculationResult.basePricingCost +
     calculationResult.retainerCost +
@@ -308,7 +302,7 @@ export async function generateSupportDocumentData(
     totalsMatch,
     calculationBreakdown: {
       assetBreakdownPeriod: assetBreakdownPeriodTotal,
-      minimumCharges: minimumChargesForCalculation, // Use 0 if site minimum pricing is active to avoid double-counting
+      minimumCharges: calculationResult.minimumCharges,
       minimumContractAdjustment,
       baseMonthlyPrice: calculationResult.basePricingCost,
       retainerCost: calculationResult.retainerCost,
@@ -449,56 +443,6 @@ function generateAssetBreakdown(
         pricePerYear: Math.round(pricePerYear * 100) / 100
       };
     });
-  }
-  
-  // For pro/custom packages with site minimum pricing, use the breakdown data
-  // This ensures sites below threshold show minimum charge instead of MW-based pricing
-  if ((packageType === 'pro' || packageType === 'custom') && calculationResult.siteMinimumPricingBreakdown) {
-    const siteMinBreak = calculationResult.siteMinimumPricingBreakdown;
-    const baseRatePerMWp = calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
-    const pricePerKWp = baseRatePerMWp / 1000;
-    
-    const breakdownAssets: SupportDocumentData['assetBreakdown'] = [];
-    
-    // Sites above threshold - use calculated MW-based cost
-    for (const site of siteMinBreak.sitesAboveThreshold) {
-      const pvCapacityKWp = site.mw * 1000;
-      breakdownAssets.push({
-        assetId: site.assetId,
-        assetName: site.assetName,
-        pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
-        isPV: true,
-        isHybrid: false,
-        hubActive: selectedModules.includes('energySavingsHub'),
-        portalActive: selectedModules.includes('stakeholderPortal'),
-        controlActive: selectedModules.includes('control'),
-        reportingActive: selectedAddons.some(a => a.id === 'reporting'),
-        pricePerKWp: Math.round(pricePerKWp * 100) / 100,
-        pricePerYear: Math.round(site.calculatedCost * 100) / 100,
-        usesMinimum: false
-      });
-    }
-    
-    // Sites below threshold - use minimum charge (this is already annual)
-    for (const site of siteMinBreak.sitesBelowThreshold) {
-      const pvCapacityKWp = site.mw * 1000;
-      breakdownAssets.push({
-        assetId: site.assetId,
-        assetName: site.assetName,
-        pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
-        isPV: true,
-        isHybrid: false,
-        hubActive: selectedModules.includes('energySavingsHub'),
-        portalActive: selectedModules.includes('stakeholderPortal'),
-        controlActive: selectedModules.includes('control'),
-        reportingActive: selectedAddons.some(a => a.id === 'reporting'),
-        pricePerKWp: 0, // N/A for minimum pricing
-        pricePerYear: Math.round(site.minimumCharge * 100) / 100,
-        usesMinimum: true
-      });
-    }
-    
-    return breakdownAssets;
   }
   
   // Calculate total MW for rate calculation
