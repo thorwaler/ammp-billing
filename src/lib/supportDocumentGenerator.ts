@@ -37,7 +37,18 @@ export interface SupportDocumentData {
     // Elum ePM specific fields
     isSmallSite?: boolean;
     usesMinimum?: boolean;
+    // Site minimum pricing fields
+    calculatedCost?: number;
+    minimumCharge?: number;
   }[];
+  
+  // Site minimum pricing summary (for pro/custom with minimum charges)
+  siteMinimumPricingSummary?: {
+    sitesOnNormal: number;
+    sitesOnMinimum: number;
+    normalPricingTotal: number;
+    minimumPricingTotal: number;
+  };
   assetBreakdownTotal: number;
   
   // Solcast table (if applicable)
@@ -164,7 +175,7 @@ export async function generateSupportDocumentData(
   const yearTotal = (yearInvoices || []).reduce((sum, inv) => sum + Number(inv.invoice_amount), 0);
 
   // Generate asset breakdown based on package type (Fix #1)
-  const assetBreakdown = generateAssetBreakdown(
+  const { assetBreakdown, siteMinimumPricingSummary } = generateAssetBreakdown(
     ammpCapabilities?.assetBreakdown || [],
     calculationResult,
     selectedModules,
@@ -288,6 +299,7 @@ export async function generateSupportDocumentData(
     yearTotal,
     assetBreakdown,
     assetBreakdownTotal,
+    siteMinimumPricingSummary,
     solcastBreakdown,
     solcastTotal,
     addonsBreakdown,
@@ -369,90 +381,152 @@ function generateAssetBreakdown(
   selectedModules: string[],
   selectedAddons: Array<{ id: string }>,
   packageType: string
-): SupportDocumentData['assetBreakdown'] {
+): { 
+  assetBreakdown: SupportDocumentData['assetBreakdown']; 
+  siteMinimumPricingSummary?: SupportDocumentData['siteMinimumPricingSummary'];
+} {
   
   // For Elum ePM - use the elumEpmBreakdown data
   if (packageType === 'elum_epm' && calculationResult.elumEpmBreakdown) {
     const epmBreak = calculationResult.elumEpmBreakdown;
     const allSites = [...epmBreak.smallSites, ...epmBreak.largeSites];
     
-    return allSites.map(site => ({
-      assetId: site.assetId,
-      assetName: site.assetName,
-      pvCapacityKWp: site.capacityKwp,
-      isPV: !site.isSmallSite, // Not directly available, infer from type
-      isHybrid: false,
-      hubActive: false,
-      portalActive: false,
-      controlActive: false,
-      reportingActive: false,
-      pricePerKWp: site.pricePerMWp / 1000, // Convert per-MWp to per-kWp
-      pricePerYear: site.cost,
-      isSmallSite: site.isSmallSite,
-      usesMinimum: site.usesMinimum
-    }));
+    return {
+      assetBreakdown: allSites.map(site => ({
+        assetId: site.assetId,
+        assetName: site.assetName,
+        pvCapacityKWp: site.capacityKwp,
+        isPV: !site.isSmallSite,
+        isHybrid: false,
+        hubActive: false,
+        portalActive: false,
+        controlActive: false,
+        reportingActive: false,
+        pricePerKWp: site.pricePerMWp / 1000,
+        pricePerYear: site.cost,
+        isSmallSite: site.isSmallSite,
+        usesMinimum: site.usesMinimum,
+        calculatedCost: site.calculatedCost,
+        minimumCharge: site.usesMinimum ? site.cost : undefined
+      }))
+    };
   }
   
   // For Elum Jubaili - use flat per-site fee
   if (packageType === 'elum_jubaili' && calculationResult.elumJubailiBreakdown) {
     const jubBreak = calculationResult.elumJubailiBreakdown;
     
-    return jubBreak.sites.map(site => ({
-      assetId: site.assetId,
-      assetName: site.assetName,
-      pvCapacityKWp: 0, // Not relevant for per-site
-      isPV: true,
-      isHybrid: false,
-      hubActive: false,
-      portalActive: false,
-      controlActive: false,
-      reportingActive: false,
-      pricePerKWp: 0,
-      pricePerYear: jubBreak.perSiteFee
-    }));
+    return {
+      assetBreakdown: jubBreak.sites.map(site => ({
+        assetId: site.assetId,
+        assetName: site.assetName,
+        pvCapacityKWp: 0,
+        isPV: true,
+        isHybrid: false,
+        hubActive: false,
+        portalActive: false,
+        controlActive: false,
+        reportingActive: false,
+        pricePerKWp: 0,
+        pricePerYear: jubBreak.perSiteFee
+      }))
+    };
   }
   
   // For Elum Internal - don't show per-asset, use tier summary
   if (packageType === 'elum_internal' && calculationResult.elumInternalBreakdown) {
-    // Return empty - the elumInternalBreakdown in the doc will handle this
-    return [];
+    return { assetBreakdown: [] };
   }
   
-  // For Elum Portfolio OS - treat like pro/custom
-  if (packageType === 'elum_portfolio_os') {
-    // Same logic as pro/custom - calculate total MW for rate calculation
-    const totalMW = assets.reduce((sum, asset) => sum + (asset.totalMW || 0), 0);
-    const baseRatePerMWp = calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
+  // For pro/custom packages WITH site minimum pricing - use the breakdown data
+  if ((packageType === 'pro' || packageType === 'custom') && calculationResult.siteMinimumPricingBreakdown) {
+    const smpBreakdown = calculationResult.siteMinimumPricingBreakdown;
+    const assetBreakdown: SupportDocumentData['assetBreakdown'] = [];
     
-    return assets.map(asset => {
-      const pvCapacityKWp = (asset.totalMW || 0) * 1000;
-      const pricePerKWp = baseRatePerMWp / 1000;
-      const pricePerYear = pvCapacityKWp * pricePerKWp;
-      
-      return {
-        assetId: asset.assetId,
-        assetName: asset.assetName,
-        pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
-        isPV: !asset.isHybrid,
-        isHybrid: asset.isHybrid || false,
+    // Sites on normal pricing (above threshold)
+    for (const site of smpBreakdown.sitesAboveThreshold) {
+      assetBreakdown.push({
+        assetId: site.assetId,
+        assetName: site.assetName,
+        pvCapacityKWp: Math.round(site.mw * 1000 * 100) / 100,
+        isPV: true,
+        isHybrid: false,
         hubActive: selectedModules.includes('energySavingsHub'),
         portalActive: selectedModules.includes('stakeholderPortal'),
         controlActive: selectedModules.includes('control'),
         reportingActive: selectedAddons.some(a => a.id === 'reporting'),
-        pricePerKWp: Math.round(pricePerKWp * 100) / 100,
-        pricePerYear: Math.round(pricePerYear * 100) / 100
-      };
-    });
+        pricePerKWp: 0, // Not meaningful for normal pricing view
+        pricePerYear: site.calculatedCost, // This is the actual annual cost
+        usesMinimum: false,
+        calculatedCost: site.calculatedCost
+      });
+    }
+    
+    // Sites on minimum pricing (below threshold)
+    for (const site of smpBreakdown.sitesBelowThreshold) {
+      assetBreakdown.push({
+        assetId: site.assetId,
+        assetName: site.assetName,
+        pvCapacityKWp: Math.round(site.mw * 1000 * 100) / 100,
+        isPV: true,
+        isHybrid: false,
+        hubActive: selectedModules.includes('energySavingsHub'),
+        portalActive: selectedModules.includes('stakeholderPortal'),
+        controlActive: selectedModules.includes('control'),
+        reportingActive: selectedAddons.some(a => a.id === 'reporting'),
+        pricePerKWp: 0,
+        pricePerYear: site.minimumCharge, // Use minimum charge as annual price
+        usesMinimum: true,
+        calculatedCost: site.calculatedCost,
+        minimumCharge: site.minimumCharge
+      });
+    }
+    
+    return {
+      assetBreakdown,
+      siteMinimumPricingSummary: {
+        sitesOnNormal: smpBreakdown.sitesAboveThreshold.length,
+        sitesOnMinimum: smpBreakdown.sitesBelowThreshold.length,
+        normalPricingTotal: smpBreakdown.normalPricingTotal,
+        minimumPricingTotal: smpBreakdown.minimumPricingTotal
+      }
+    };
   }
   
-  // Calculate total MW for rate calculation
+  // For Elum Portfolio OS - treat like pro/custom
+  if (packageType === 'elum_portfolio_os') {
+    const totalMW = assets.reduce((sum, asset) => sum + (asset.totalMW || 0), 0);
+    const baseRatePerMWp = calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
+    
+    return {
+      assetBreakdown: assets.map(asset => {
+        const pvCapacityKWp = (asset.totalMW || 0) * 1000;
+        const pricePerKWp = baseRatePerMWp / 1000;
+        const pricePerYear = pvCapacityKWp * pricePerKWp;
+        
+        return {
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
+          isPV: !asset.isHybrid,
+          isHybrid: asset.isHybrid || false,
+          hubActive: selectedModules.includes('energySavingsHub'),
+          portalActive: selectedModules.includes('stakeholderPortal'),
+          controlActive: selectedModules.includes('control'),
+          reportingActive: selectedAddons.some(a => a.id === 'reporting'),
+          pricePerKWp: Math.round(pricePerKWp * 100) / 100,
+          pricePerYear: Math.round(pricePerYear * 100) / 100
+        };
+      })
+    };
+  }
+  
+  // Default logic for other package types
   const totalMW = assets.reduce((sum, asset) => sum + (asset.totalMW || 0), 0);
   
-  // Determine per-kWp rate based on package and modules
   let baseRatePerMWp = 0;
   
   if (packageType === 'hybrid_tiered') {
-    // For hybrid tiered, we need to use the breakdown rates
     const breakdown = calculationResult.hybridTieredBreakdown;
     if (breakdown) {
       baseRatePerMWp = breakdown.ongrid.mw > 0 
@@ -460,46 +534,44 @@ function generateAssetBreakdown(
         : breakdown.hybrid.rate;
     }
   } else if (packageType === 'pro' || packageType === 'custom') {
-    // Sum up module rates
     baseRatePerMWp = calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
   } else if (packageType === 'starter') {
-    // Distribute starter cost across all MW
     baseRatePerMWp = totalMW > 0 ? calculationResult.starterPackageCost / totalMW : 0;
   } else if (packageType === 'capped') {
-    // Capped packages have a fixed fee, distribute proportionally
     baseRatePerMWp = totalMW > 0 ? calculationResult.starterPackageCost / totalMW : 0;
   }
 
-  return assets.map(asset => {
-    const pvCapacityKWp = (asset.totalMW || 0) * 1000;
-    const isHybrid = asset.isHybrid || false;
-    const isPV = !isHybrid;
+  return {
+    assetBreakdown: assets.map(asset => {
+      const pvCapacityKWp = (asset.totalMW || 0) * 1000;
+      const isHybrid = asset.isHybrid || false;
+      const isPV = !isHybrid;
 
-    // Determine rate for this specific asset
-    let assetRate = baseRatePerMWp;
-    if (packageType === 'hybrid_tiered' && calculationResult.hybridTieredBreakdown) {
-      assetRate = isHybrid 
-        ? calculationResult.hybridTieredBreakdown.hybrid.rate 
-        : calculationResult.hybridTieredBreakdown.ongrid.rate;
-    }
+      let assetRate = baseRatePerMWp;
+      if (packageType === 'hybrid_tiered' && calculationResult.hybridTieredBreakdown) {
+        assetRate = isHybrid 
+          ? calculationResult.hybridTieredBreakdown.hybrid.rate 
+          : calculationResult.hybridTieredBreakdown.ongrid.rate;
+      }
 
-    const pricePerKWp = assetRate / 1000; // Convert from per-MWp to per-kWp
-    const pricePerYear = pvCapacityKWp * pricePerKWp;
+      const pricePerKWp = assetRate / 1000;
+      const pricePerYear = pvCapacityKWp * pricePerKWp;
 
-    return {
-      assetId: asset.assetId,
-      assetName: asset.assetName,
-      pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
-      isPV,
-      isHybrid,
-      hubActive: selectedModules.includes('energySavingsHub'),
-      portalActive: selectedModules.includes('stakeholderPortal'),
-      controlActive: selectedModules.includes('control'),
-      reportingActive: selectedAddons.some(a => a.id === 'reporting'),
-      pricePerKWp: Math.round(pricePerKWp * 100) / 100,
-      pricePerYear: Math.round(pricePerYear * 100) / 100
-    };
-  });
+      return {
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
+        isPV,
+        isHybrid,
+        hubActive: selectedModules.includes('energySavingsHub'),
+        portalActive: selectedModules.includes('stakeholderPortal'),
+        controlActive: selectedModules.includes('control'),
+        reportingActive: selectedAddons.some(a => a.id === 'reporting'),
+        pricePerKWp: Math.round(pricePerKWp * 100) / 100,
+        pricePerYear: Math.round(pricePerYear * 100) / 100
+      };
+    })
+  };
 }
 
 /**

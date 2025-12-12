@@ -244,6 +244,26 @@ export function SupportDocument({ data }: SupportDocumentProps) {
       {data.assetBreakdown && data.assetBreakdown.length > 0 && (
         <section className="mb-6">
           <h2 className="text-base font-bold mb-3">Monitoring Fee Price Breakdown</h2>
+          
+          {/* Site minimum pricing summary if applicable */}
+          {data.siteMinimumPricingSummary && (
+            <div className="mb-3 p-2 bg-muted/50 rounded text-xs">
+              <p className="font-medium mb-1">Site Pricing Summary:</p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <span>Sites on Normal Pricing: </span>
+                  <strong>{data.siteMinimumPricingSummary.sitesOnNormal} sites</strong>
+                  <span className="ml-2 text-muted-foreground">({formatCurrency(data.siteMinimumPricingSummary.normalPricingTotal)}/yr)</span>
+                </div>
+                <div>
+                  <span>Sites on Minimum Pricing: </span>
+                  <strong>{data.siteMinimumPricingSummary.sitesOnMinimum} sites</strong>
+                  <span className="ml-2 text-muted-foreground">({formatCurrency(data.siteMinimumPricingSummary.minimumPricingTotal)}/yr)</span>
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-border text-xs">
               <thead>
@@ -263,7 +283,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               </thead>
               <tbody>
                 {data.assetBreakdown.map((asset, idx) => (
-                  <tr key={idx}>
+                  <tr key={idx} className={asset.usesMinimum ? 'bg-amber-50 dark:bg-amber-950/20' : ''}>
                     <td className="border border-border p-1">{asset.assetId}</td>
                     <td className="border border-border p-1">{asset.assetName}</td>
                     <td className="border border-border p-1 text-right">{asset.pvCapacityKWp.toFixed(2)}</td>
@@ -288,7 +308,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             </table>
           </div>
           {data.assetBreakdown.some(a => a.usesMinimum) && (
-            <p className="text-xs text-muted-foreground mt-1">* Minimum site fee applied</p>
+            <p className="text-xs text-muted-foreground mt-1">* Minimum site fee applied (highlighted rows)</p>
           )}
         </section>
       )}
@@ -300,11 +320,33 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         {/* Detailed breakdown */}
         {data.calculationBreakdown && (
           <div className="mb-3 text-xs space-y-1 font-mono">
-            {data.calculationBreakdown.assetBreakdownPeriod > 0 && (
-              <div className="flex justify-between">
-                <span>Asset Breakdown (period):</span>
-                <span>{formatCurrency(data.calculationBreakdown.assetBreakdownPeriod)}</span>
-              </div>
+            {/* Show site minimum pricing breakdown if available */}
+            {data.siteMinimumPricingSummary ? (
+              <>
+                <div className="flex justify-between">
+                  <span>Sites on Normal Pricing ({data.siteMinimumPricingSummary.sitesOnNormal} sites):</span>
+                  <span>{formatCurrency(data.siteMinimumPricingSummary.normalPricingTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>+ Sites on Minimum Pricing ({data.siteMinimumPricingSummary.sitesOnMinimum} sites):</span>
+                  <span>{formatCurrency(data.siteMinimumPricingSummary.minimumPricingTotal)}</span>
+                </div>
+                <div className="flex justify-between border-t border-border/50 pt-1 mt-1">
+                  <span>= Asset/Module Subtotal (annual):</span>
+                  <span>{formatCurrency(data.assetBreakdownTotal)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>  × Billing Period:</span>
+                  <span>{formatCurrency(data.calculationBreakdown.assetBreakdownPeriod)}</span>
+                </div>
+              </>
+            ) : (
+              data.calculationBreakdown.assetBreakdownPeriod > 0 && (
+                <div className="flex justify-between">
+                  <span>Asset Breakdown (period):</span>
+                  <span>{formatCurrency(data.calculationBreakdown.assetBreakdownPeriod)}</span>
+                </div>
+              )
             )}
             {data.calculationBreakdown.minimumCharges > 0 && (
               <div className="flex justify-between">
