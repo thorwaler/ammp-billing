@@ -375,7 +375,8 @@ const ContractDetails = () => {
                     ammpAssetGroupNameAnd: contract.ammp_asset_group_name_and,
                     ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
                     ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
-                    cachedCapabilities: contract.cached_capabilities
+                    cachedCapabilities: contract.cached_capabilities,
+                    graduatedMWTiers: contract.graduated_mw_tiers
                   }}
                   onComplete={() => {
                     setShowEditDialog(false);
@@ -441,7 +442,8 @@ const ContractDetails = () => {
               ammpAssetGroupNameAnd: contract.ammp_asset_group_name_and,
               ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
               ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
-              cachedCapabilities: contract.cached_capabilities
+              cachedCapabilities: contract.cached_capabilities,
+              graduatedMWTiers: contract.graduated_mw_tiers
             }}
             isExtending={true}
             onComplete={() => {
@@ -731,6 +733,82 @@ const ContractDetails = () => {
                       </div>
                     </>
                   )}
+                </>
+              ) : contract.package === "elum_internal" ? (
+                <>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Graduated MW Pricing Tiers</p>
+                    {contract.graduated_mw_tiers && contract.graduated_mw_tiers.length > 0 ? (
+                      <div className="space-y-2 text-sm">
+                        {contract.graduated_mw_tiers.map((tier: any, index: number) => {
+                          const totalMW = cachedCapabilities?.totalMW || 0;
+                          const isApplied = totalMW > tier.minMW && 
+                            (tier.maxMW === null || tier.maxMW === undefined || totalMW > tier.minMW);
+                          return (
+                            <div 
+                              key={index} 
+                              className={`flex justify-between ${isApplied ? 'font-medium text-primary' : 'text-muted-foreground'}`}
+                            >
+                              <span>{tier.label || `${tier.minMW}-${tier.maxMW || '∞'} MW`}:</span>
+                              <span>
+                                {contract.currency === 'EUR' ? '€' : '$'}{tier.pricePerMW}/MW/year
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-sm">No tiers configured</p>
+                    )}
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Portfolio Summary</p>
+                    <div className="space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span>Total Sites:</span>
+                        <span className="font-medium">{cachedCapabilities?.totalSites || 0}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Total MW:</span>
+                        <span className="font-medium">{cachedCapabilities?.totalMW?.toFixed(2) || 0} MW</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Estimated Annual Value</p>
+                    <p className="font-medium">
+                      {contract.currency === 'EUR' ? '€' : '$'}
+                      {(() => {
+                        const totalMW = cachedCapabilities?.totalMW || 0;
+                        const tiers = contract.graduated_mw_tiers || [];
+                        const sortedTiers = [...tiers].sort((a: any, b: any) => a.minMW - b.minMW);
+                        
+                        let remainingMW = totalMW;
+                        let total = 0;
+                        
+                        for (const tier of sortedTiers) {
+                          if (remainingMW <= 0) break;
+                          
+                          const tierStart = tier.minMW;
+                          const tierEnd = tier.maxMW ?? Infinity;
+                          const tierCapacity = tierEnd - tierStart;
+                          
+                          const mwInThisTier = Math.min(remainingMW, tierCapacity);
+                          total += mwInThisTier * tier.pricePerMW;
+                          
+                          remainingMW -= mwInThisTier;
+                        }
+                        
+                        return total.toLocaleString();
+                      })()}
+                    </p>
+                  </div>
                 </>
               ) : contract.package === "elum_epm" ? (
                 <>
