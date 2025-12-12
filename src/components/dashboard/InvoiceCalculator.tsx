@@ -1226,7 +1226,11 @@ export function InvoiceCalculator({
         billingFrequency,
         discountPercent,
         selectedCustomer.periodStart,
-        selectedCustomer.periodEnd
+        selectedCustomer.periodEnd,
+        selectedCustomer.contractId, // Fix #3: Filter YTD by contract
+        selectedCustomer.retainerHours, // Fix #5: Pass retainer params
+        selectedCustomer.retainerHourlyRate,
+        selectedCustomer.retainerMinimumValue
       );
       
       // Validate totals (show warning but continue)
