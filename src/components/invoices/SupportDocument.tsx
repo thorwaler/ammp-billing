@@ -23,6 +23,9 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <p><strong>Customer:</strong> {data.customerName}</p>
+            {data.contractName && (
+              <p><strong>Contract:</strong> {data.contractName}</p>
+            )}
             <p><strong>Invoice Period:</strong> {data.invoicePeriod}</p>
           </div>
           <div>
@@ -290,17 +293,59 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
-      {/* Validation Summary (Fix #4 - show minimum contract adjustment) */}
+      {/* Validation Summary with Detailed Breakdown */}
       <section className="mt-6 p-3 border rounded-lg bg-muted/50">
-        <h3 className="font-bold mb-2 text-xs">Validation</h3>
-        <div className="grid grid-cols-2 gap-2 text-xs">
-          <div className="space-y-1">
-            <p><strong>Support Document Total:</strong> {formatCurrency(data.calculatedTotal)}</p>
-            {data.minimumContractAdjustment > 0 && (
-              <p className="text-amber-600 dark:text-amber-400">
-                <strong>↳ Includes Min. Contract Adjustment:</strong> {formatCurrency(data.minimumContractAdjustment)}
-              </p>
+        <h3 className="font-bold mb-2 text-xs">Calculation Breakdown</h3>
+        
+        {/* Detailed breakdown */}
+        {data.calculationBreakdown && (
+          <div className="mb-3 text-xs space-y-1 font-mono">
+            {data.calculationBreakdown.assetBreakdownPeriod > 0 && (
+              <div className="flex justify-between">
+                <span>Asset Breakdown (period):</span>
+                <span>{formatCurrency(data.calculationBreakdown.assetBreakdownPeriod)}</span>
+              </div>
             )}
+            {data.calculationBreakdown.minimumCharges > 0 && (
+              <div className="flex justify-between">
+                <span>+ Minimum Charges:</span>
+                <span>{formatCurrency(data.calculationBreakdown.minimumCharges)}</span>
+              </div>
+            )}
+            {data.calculationBreakdown.minimumContractAdjustment > 0 && (
+              <div className="flex justify-between text-amber-600 dark:text-amber-400 font-medium">
+                <span>+ Min. Contract Adjustment:</span>
+                <span>{formatCurrency(data.calculationBreakdown.minimumContractAdjustment)}</span>
+              </div>
+            )}
+            {data.calculationBreakdown.baseMonthlyPrice > 0 && (
+              <div className="flex justify-between">
+                <span>+ Base Monthly Price:</span>
+                <span>{formatCurrency(data.calculationBreakdown.baseMonthlyPrice)}</span>
+              </div>
+            )}
+            {data.calculationBreakdown.retainerCost > 0 && (
+              <div className="flex justify-between">
+                <span>+ Retainer Hours:</span>
+                <span>{formatCurrency(data.calculationBreakdown.retainerCost)}</span>
+              </div>
+            )}
+            {data.calculationBreakdown.addonsTotal > 0 && (
+              <div className="flex justify-between">
+                <span>+ Addons Total:</span>
+                <span>{formatCurrency(data.calculationBreakdown.addonsTotal)}</span>
+              </div>
+            )}
+            <div className="border-t border-border pt-1 mt-1 flex justify-between font-bold">
+              <span>= Support Document Total:</span>
+              <span>{formatCurrency(data.calculatedTotal)}</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Comparison */}
+        <div className="grid grid-cols-2 gap-2 text-xs border-t border-border pt-2">
+          <div>
             <p><strong>Invoice Total:</strong> {formatCurrency(data.invoiceTotal)}</p>
           </div>
           <div>
