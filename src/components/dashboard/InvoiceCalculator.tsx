@@ -1014,21 +1014,12 @@ export function InvoiceCalculator({
             period_end: nextPeriodEnd.toISOString(),
             next_invoice_date: nextPeriodEnd.toISOString()
           })
-          .eq('customer_id', selectedCustomer.id)
-          .eq('contract_status', 'active');
+          .eq('id', selectedCustomer.contractId);
       }
       
       // Save invoice record to database for history tracking
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Get contract ID for this customer
-        const { data: contractData } = await supabase
-          .from('contracts')
-          .select('id')
-          .eq('customer_id', selectedCustomer.id)
-          .eq('contract_status', 'active')
-          .maybeSingle();
-        
         // Recalculate ARR/NRR for storage
         const storedArrAmount = (result.basePricingCost || 0) +
           (result.starterPackageCost || 0) +
@@ -1046,7 +1037,7 @@ export function InvoiceCalculator({
           .insert([{
             user_id: user.id,
             customer_id: selectedCustomer.id,
-            contract_id: contractData?.id || null,
+            contract_id: selectedCustomer.contractId || null,
             invoice_date: invoiceDate.toISOString(),
             xero_invoice_id: xeroInvoiceId || null,
             billing_frequency: billingFrequency,
@@ -1073,10 +1064,10 @@ export function InvoiceCalculator({
           setLastCreatedInvoiceId(insertedInvoice.id);
           
           // Check MW capacity for capped contracts
-          if (contractData?.id) {
+          if (selectedCustomer.contractId) {
             await monitorMWAndNotify(
               user.id,
-              contractData.id,
+              selectedCustomer.contractId,
               selectedCustomer.nickname || selectedCustomer.name,
               Number(mwManaged)
             );
