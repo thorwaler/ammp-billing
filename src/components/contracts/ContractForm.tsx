@@ -2104,7 +2104,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </div>
 
                 {/* Asset Group Selectors - for Elum-style filtering */}
-                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || form.watch('ammpAssetGroupId')) && (
+                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || watchPackage === "elum_internal" || form.watch('ammpAssetGroupId')) && (
                   <div className="space-y-4 mt-4 pt-4 border-t">
                     <h4 className="text-sm font-medium">Asset Group Filtering</h4>
                     <AssetGroupSelector
