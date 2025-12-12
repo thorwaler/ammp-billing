@@ -271,15 +271,29 @@ export async function generateSupportDocumentData(
   }
 
   // Calculate total including all addon costs and validate
-  // Asset breakdown is annual - multiply by frequency multiplier for period comparison
   const frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
-  const assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
-  
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
   const minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
   
+  let assetBreakdownPeriodTotal: number;
+  let minimumChargesForBreakdown: number;
+  
+  // When site minimum pricing is active, use the period-adjusted values directly from calculation
+  // This avoids double-applying the frequency multiplier
+  if (siteMinimumPricingSummary && calculationResult.siteMinimumPricingBreakdown) {
+    // These values are already period-adjusted from calculateInvoice
+    assetBreakdownPeriodTotal = calculationResult.siteMinimumPricingBreakdown.normalPricingTotal + 
+                                 calculationResult.siteMinimumPricingBreakdown.minimumPricingTotal;
+    // Don't add minimumCharges separately - it's already included in minimumPricingTotal
+    minimumChargesForBreakdown = 0;
+  } else {
+    // For other packages, multiply annual asset breakdown by frequency
+    assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
+    minimumChargesForBreakdown = calculationResult.minimumCharges;
+  }
+  
   const calculatedTotal = assetBreakdownPeriodTotal + 
-    calculationResult.minimumCharges + 
+    minimumChargesForBreakdown + 
     minimumContractAdjustment +
     calculationResult.basePricingCost +
     calculationResult.retainerCost +
@@ -314,7 +328,7 @@ export async function generateSupportDocumentData(
     totalsMatch,
     calculationBreakdown: {
       assetBreakdownPeriod: assetBreakdownPeriodTotal,
-      minimumCharges: calculationResult.minimumCharges,
+      minimumCharges: minimumChargesForBreakdown,
       minimumContractAdjustment,
       baseMonthlyPrice: calculationResult.basePricingCost,
       retainerCost: calculationResult.retainerCost,
