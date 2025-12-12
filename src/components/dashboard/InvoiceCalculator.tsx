@@ -1736,15 +1736,42 @@ export function InvoiceCalculator({
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Module Costs:</h4>
                 <div className="space-y-1 text-sm pl-2">
-                  {result.moduleCosts.map((item) => (
-                    <div key={item.moduleId} className="flex justify-between">
-                      <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{item.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
-                      <span>{formatCurrency(item.cost)}</span>
-                    </div>
-                  ))}
+                  {/* Show site-aware breakdown when site minimum pricing is active */}
+                  {result.siteMinimumPricingBreakdown ? (
+                    <>
+                      {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
+                        <div className="flex justify-between">
+                          <span>
+                            Sites above threshold ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites, {result.siteMinimumPricingBreakdown.sitesAboveThreshold.reduce((sum, s) => sum + s.mw, 0).toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.moduleCosts[0]?.rate || 0}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):
+                          </span>
+                          <span>{formatCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal)}</span>
+                        </div>
+                      )}
+                      {result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 && (
+                        <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                          <span>
+                            Sites on minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length} sites × min charge):
+                          </span>
+                          <span>{formatCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
+                        <span>Total MW Pricing:</span>
+                        <span>{formatCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal + result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    /* Standard module costs display when no site minimum pricing */
+                    result.moduleCosts.map((item) => (
+                      <div key={item.moduleId} className="flex justify-between">
+                        <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{item.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                        <span>{formatCurrency(item.cost)}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
                 
-                {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency) && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
+                {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && !result.siteMinimumPricingBreakdown && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency) && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Contract Value Applied:</span>
                     <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency))}</span>
