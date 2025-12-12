@@ -265,50 +265,56 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           )}
           
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-border text-xs">
+            <table className="w-full border-collapse border border-border" style={{ fontSize: '8px' }}>
               <thead>
                 <tr className="bg-muted">
-                  <th className="border border-border p-1 text-left">Asset ID</th>
-                  <th className="border border-border p-1 text-left">Asset Name</th>
-                  <th className="border border-border p-1 text-right">PV Capacity (kWp)</th>
-                  <th className="border border-border p-1 text-center">PV</th>
-                  <th className="border border-border p-1 text-center">Hybrid</th>
-                  <th className="border border-border p-1 text-center">Hub</th>
-                  <th className="border border-border p-1 text-center">Portal</th>
-                  <th className="border border-border p-1 text-center">Control</th>
-                  <th className="border border-border p-1 text-center">Reporting</th>
-                  <th className="border border-border p-1 text-right">Price per kWp ({data.currency})</th>
-                  <th className="border border-border p-1 text-right">Price per Year ({data.currency})</th>
+                  <th className="border border-border px-1 py-0.5 text-left">Asset Name</th>
+                  <th className="border border-border px-1 py-0.5 text-right">kWp</th>
+                  <th className="border border-border px-1 py-0.5 text-center">Hybrid</th>
+                  <th className="border border-border px-1 py-0.5 text-center">Hub</th>
+                  <th className="border border-border px-1 py-0.5 text-center">Portal</th>
+                  <th className="border border-border px-1 py-0.5 text-center">Control</th>
+                  <th className="border border-border px-1 py-0.5 text-center">Report</th>
+                  {data.siteMinimumPricingSummary && (
+                    <th className="border border-border px-1 py-0.5 text-center">Pricing</th>
+                  )}
+                  <th className="border border-border px-1 py-0.5 text-right">€/kWp</th>
+                  <th className="border border-border px-1 py-0.5 text-right">€/Year</th>
                 </tr>
               </thead>
               <tbody>
                 {data.assetBreakdown.map((asset, idx) => (
                   <tr key={idx} className={asset.usesMinimum ? 'bg-amber-50 dark:bg-amber-950/20' : ''}>
-                    <td className="border border-border p-1">{asset.assetId}</td>
-                    <td className="border border-border p-1">{asset.assetName}</td>
-                    <td className="border border-border p-1 text-right">{asset.pvCapacityKWp.toFixed(2)}</td>
-                    <td className="border border-border p-1 text-center">{asset.isPV ? 'Yes' : 'No'}</td>
-                    <td className="border border-border p-1 text-center">{asset.isHybrid ? 'Yes' : 'No'}</td>
-                    <td className="border border-border p-1 text-center">{asset.hubActive ? 'Yes' : 'No'}</td>
-                    <td className="border border-border p-1 text-center">{asset.portalActive ? 'Yes' : 'No'}</td>
-                    <td className="border border-border p-1 text-center">{asset.controlActive ? 'Yes' : 'No'}</td>
-                    <td className="border border-border p-1 text-center">{asset.reportingActive ? 'Yes' : 'No'}</td>
-                    <td className="border border-border p-1 text-right">{asset.pricePerKWp.toFixed(2)}</td>
-                    <td className="border border-border p-1 text-right font-medium">
+                    <td className="border border-border px-1 py-0.5" title={asset.assetId}>{asset.assetName}</td>
+                    <td className="border border-border px-1 py-0.5 text-right">{asset.pvCapacityKWp.toFixed(1)}</td>
+                    <td className="border border-border px-1 py-0.5 text-center">{asset.isHybrid ? 'Y' : '-'}</td>
+                    <td className="border border-border px-1 py-0.5 text-center">{asset.hubActive ? 'Y' : '-'}</td>
+                    <td className="border border-border px-1 py-0.5 text-center">{asset.portalActive ? 'Y' : '-'}</td>
+                    <td className="border border-border px-1 py-0.5 text-center">{asset.controlActive ? 'Y' : '-'}</td>
+                    <td className="border border-border px-1 py-0.5 text-center">{asset.reportingActive ? 'Y' : '-'}</td>
+                    {data.siteMinimumPricingSummary && (
+                      <td className={`border border-border px-1 py-0.5 text-center font-medium ${asset.usesMinimum ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+                        {asset.usesMinimum ? 'Min' : 'kWp'}
+                      </td>
+                    )}
+                    <td className="border border-border px-1 py-0.5 text-right">{asset.pricePerKWp.toFixed(2)}</td>
+                    <td className="border border-border px-1 py-0.5 text-right font-medium">
                       {formatCurrency(asset.pricePerYear)}
-                      {asset.usesMinimum && " *"}
                     </td>
                   </tr>
                 ))}
                 <tr className="bg-muted font-bold">
-                  <td className="border border-border p-1" colSpan={10}>Total:</td>
-                  <td className="border border-border p-1 text-right">{formatCurrency(data.assetBreakdownTotal)}</td>
+                  <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>Total:</td>
+                  <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(data.assetBreakdownTotal)}</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          {data.assetBreakdown.some(a => a.usesMinimum) && (
-            <p className="text-xs text-muted-foreground mt-1">* Minimum site fee applied (highlighted rows)</p>
+          {data.siteMinimumPricingSummary && (
+            <p className="text-muted-foreground mt-1" style={{ fontSize: '7px' }}>
+              Pricing: <span className="text-green-600 dark:text-green-400 font-medium">kWp</span> = per-kWp rate, 
+              <span className="text-orange-600 dark:text-orange-400 font-medium ml-1">Min</span> = minimum site fee (highlighted rows)
+            </p>
           )}
         </section>
       )}

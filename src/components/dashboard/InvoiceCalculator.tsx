@@ -862,14 +862,46 @@ export function InvoiceCalculator({
       }
 
       // Add module costs (Platform Fees - ARR)
-      result.moduleCosts.forEach(mc => {
-        lineItems.push({
-          Description: mc.moduleName,
-          Quantity: 1,
-          UnitAmount: mc.cost,
-          AccountCode: ACCOUNT_PLATFORM_FEES
+      // When site minimum pricing is active, use the breakdown instead of moduleCosts
+      if (result.siteMinimumPricingBreakdown) {
+        // Sites above threshold (normal pricing)
+        if (result.siteMinimumPricingBreakdown.normalPricingTotal > 0) {
+          lineItems.push({
+            Description: `Monitoring Fee - Sites Above Threshold (${result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites)`,
+            Quantity: 1,
+            UnitAmount: result.siteMinimumPricingBreakdown.normalPricingTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+        // Sites below threshold (minimum pricing)
+        if (result.siteMinimumPricingBreakdown.minimumPricingTotal > 0) {
+          lineItems.push({
+            Description: `Monitoring Fee - Sites Below Threshold (${result.siteMinimumPricingBreakdown.sitesBelowThreshold.length} sites, minimum charge)`,
+            Quantity: 1,
+            UnitAmount: result.siteMinimumPricingBreakdown.minimumPricingTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      } else {
+        result.moduleCosts.forEach(mc => {
+          lineItems.push({
+            Description: mc.moduleName,
+            Quantity: 1,
+            UnitAmount: mc.cost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
         });
-      });
+        
+        // Only add separate minimum charges when NOT using site minimum pricing
+        if (result.minimumCharges > 0) {
+          lineItems.push({
+            Description: "Minimum Charges",
+            Quantity: 1,
+            UnitAmount: result.minimumCharges,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
       
       // Add addon costs (Implementation Fees - NRR)
       result.addonCosts.forEach(ac => {
@@ -896,18 +928,6 @@ export function InvoiceCalculator({
           Description: "Minimum Contract Value Adjustment",
           Quantity: 1,
           UnitAmount: result.minimumContractAdjustment,
-          AccountCode: ACCOUNT_PLATFORM_FEES
-        });
-      }
-      
-      if (result.minimumCharges > 0) {
-        const siteCount = result.siteMinimumPricingBreakdown?.totalSitesOnMinimum || 0;
-        lineItems.push({
-          Description: siteCount > 0 
-            ? `Minimum Charges (${siteCount} sites)` 
-            : "Minimum Charges",
-          Quantity: 1,
-          UnitAmount: result.minimumCharges,
           AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
@@ -1942,64 +1962,65 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {result.minimumCharges > 0 && (
+            {/* Only show minimum charges section if NOT using site minimum pricing (since it's included above) */}
+            {result.minimumCharges > 0 && !result.siteMinimumPricingBreakdown && (
               <div className="space-y-2 mb-3">
                 <div className="flex justify-between text-sm">
-                  <span>Minimum Charges{result.siteMinimumPricingBreakdown?.totalSitesOnMinimum ? ` (${result.siteMinimumPricingBreakdown.totalSitesOnMinimum} sites)` : ''}:</span>
+                  <span>Minimum Charges:</span>
                   <span>{formatCurrency(result.minimumCharges)}</span>
                 </div>
-                
-                {/* Site-level breakdown if available */}
-                {result.siteMinimumPricingBreakdown && (
-                  <details className="text-xs bg-muted/30 p-3 rounded-md border">
-                    <summary className="cursor-pointer font-medium mb-2">
-                      View site pricing breakdown
-                    </summary>
-                    <div className="space-y-3 mt-2">
-                      {result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 && (
-                        <div>
-                          <div className="font-medium mb-1 text-orange-600 dark:text-orange-400">
-                            Sites using minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length}):
-                          </div>
-                          <div className="space-y-1 pl-2">
-                            {result.siteMinimumPricingBreakdown.sitesBelowThreshold.map((site) => (
-                              <div key={site.assetId} className="flex justify-between items-center py-1 border-b border-border/30">
-                                <div className="flex-1">
-                                  <div className="font-medium">{site.assetName}</div>
-                                  <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
-                                </div>
-                                <div className="text-right">
-                                  <div className="line-through text-muted-foreground">{formatCurrency(site.calculatedCost)}</div>
-                                  <div className="font-medium text-orange-600 dark:text-orange-400">{formatCurrency(site.minimumCharge)}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                      
-                      {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
-                        <div>
-                          <div className="font-medium mb-1 text-green-600 dark:text-green-400">
-                            Sites using normal pricing ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length}):
-                          </div>
-                          <div className="space-y-1 pl-2">
-                            {result.siteMinimumPricingBreakdown.sitesAboveThreshold.map((site) => (
-                              <div key={site.assetId} className="flex justify-between items-center py-1 border-b border-border/30 last:border-b-0">
-                                <div className="flex-1">
-                                  <div className="font-medium">{site.assetName}</div>
-                                  <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
-                                </div>
-                                <div className="font-medium">{formatCurrency(site.calculatedCost)}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </details>
-                )}
               </div>
+            )}
+            
+            {/* Show collapsible site breakdown for site minimum pricing (no duplicate header) */}
+            {result.siteMinimumPricingBreakdown && (
+              <details className="text-xs bg-muted/30 p-3 rounded-md border mb-3">
+                <summary className="cursor-pointer font-medium mb-2">
+                  View site-by-site pricing breakdown
+                </summary>
+                <div className="space-y-3 mt-2">
+                  {result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 && (
+                    <div>
+                      <div className="font-medium mb-1 text-orange-600 dark:text-orange-400">
+                        Sites on minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length}):
+                      </div>
+                      <div className="space-y-1 pl-2">
+                        {result.siteMinimumPricingBreakdown.sitesBelowThreshold.map((site) => (
+                          <div key={site.assetId} className="flex justify-between items-center py-1 border-b border-border/30">
+                            <div className="flex-1">
+                              <div className="font-medium">{site.assetName}</div>
+                              <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="line-through text-muted-foreground">{formatCurrency(site.calculatedCost)}</div>
+                              <div className="font-medium text-orange-600 dark:text-orange-400">{formatCurrency(site.minimumCharge)}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
+                    <div>
+                      <div className="font-medium mb-1 text-green-600 dark:text-green-400">
+                        Sites on normal pricing ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length}):
+                      </div>
+                      <div className="space-y-1 pl-2">
+                        {result.siteMinimumPricingBreakdown.sitesAboveThreshold.map((site) => (
+                          <div key={site.assetId} className="flex justify-between items-center py-1 border-b border-border/30 last:border-b-0">
+                            <div className="flex-1">
+                              <div className="font-medium">{site.assetName}</div>
+                              <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
+                            </div>
+                            <div className="font-medium">{formatCurrency(site.calculatedCost)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </details>
             )}
             
             {result.minimumContractAdjustment > 0 && (
