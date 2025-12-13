@@ -863,7 +863,8 @@ export function InvoiceCalculator({
 
       // Add module costs (Platform Fees - ARR)
       // When site minimum pricing is active, use the breakdown instead of moduleCosts
-      if (result.siteMinimumPricingBreakdown) {
+      // Only use threshold wording when there are ACTUALLY sites below threshold (mixed pricing)
+      if (result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0) {
         // Sites above threshold (normal pricing)
         if (result.siteMinimumPricingBreakdown.normalPricingTotal > 0) {
           lineItems.push({
@@ -883,6 +884,7 @@ export function InvoiceCalculator({
           });
         }
       } else {
+        // Standard module costs (no threshold wording)
         result.moduleCosts.forEach(mc => {
           lineItems.push({
             Description: mc.moduleName,
@@ -892,7 +894,7 @@ export function InvoiceCalculator({
           });
         });
         
-        // Only add separate minimum charges when NOT using site minimum pricing
+        // Add minimum charges as separate line item (for contracts with ONLY per-site charges)
         if (result.minimumCharges > 0) {
           lineItems.push({
             Description: "Minimum Charges",
@@ -1752,12 +1754,12 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {selectedCustomer?.package !== 'starter' && result.moduleCosts.length > 0 && (
+            {selectedCustomer?.package !== 'starter' && (result.moduleCosts.length > 0 || result.siteMinimumPricingBreakdown) && (
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Module Costs:</h4>
                 <div className="space-y-1 text-sm pl-2">
-                  {/* Show site-aware breakdown when site minimum pricing is active */}
-                  {result.siteMinimumPricingBreakdown ? (
+                  {/* Show site-aware breakdown ONLY when there are actually sites below threshold */}
+                  {result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 ? (
                     <>
                       {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
                         <div className="flex justify-between">
@@ -1767,19 +1769,23 @@ export function InvoiceCalculator({
                           <span>{formatCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal)}</span>
                         </div>
                       )}
-                      {result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 && (
-                        <div className="flex justify-between text-orange-600 dark:text-orange-400">
-                          <span>
-                            Sites on minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length} sites × min charge):
-                          </span>
-                          <span>{formatCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
-                        </div>
-                      )}
+                      <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                        <span>
+                          Sites on minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length} sites × min charge):
+                        </span>
+                        <span>{formatCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
+                      </div>
                       <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
                         <span>Total MW Pricing:</span>
                         <span>{formatCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal + result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
                       </div>
                     </>
+                  ) : result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesAboveThreshold.length === 0 ? (
+                    /* ALL sites on minimum pricing (no MW-based pricing) - show total prominently */
+                    <div className="flex justify-between font-medium">
+                      <span>Site Minimum Charges ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length} sites):</span>
+                      <span>{formatCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
+                    </div>
                   ) : (
                     /* Standard module costs display when no site minimum pricing */
                     result.moduleCosts.map((item) => (
