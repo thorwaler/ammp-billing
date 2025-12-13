@@ -457,6 +457,10 @@ function generateAssetBreakdown(
     const smpBreakdown = calculationResult.siteMinimumPricingBreakdown;
     const assetBreakdown: SupportDocumentData['assetBreakdown'] = [];
     
+    // Calculate the per-kWp rate from the contract's module costs
+    const baseRatePerMWp = calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
+    const perKWpRate = baseRatePerMWp / 1000; // Convert from per-MWp to per-kWp
+    
     // Sites on normal pricing (above threshold)
     for (const site of smpBreakdown.sitesAboveThreshold) {
       assetBreakdown.push({
@@ -469,7 +473,7 @@ function generateAssetBreakdown(
         portalActive: selectedModules.includes('stakeholderPortal'),
         controlActive: selectedModules.includes('control'),
         reportingActive: selectedAddons.some(a => a.id === 'reporting'),
-        pricePerKWp: 0, // Not meaningful for normal pricing view
+        pricePerKWp: perKWpRate, // Contract's actual per-kWp rate
         pricePerYear: site.calculatedCost, // This is the actual annual cost
         usesMinimum: false,
         calculatedCost: site.calculatedCost
