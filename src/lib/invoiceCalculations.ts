@@ -54,6 +54,8 @@ export interface CalculationParams {
   ammpCapabilities?: {
     ongridTotalMW?: number;
     hybridTotalMW?: number;
+    ongridMW?: number;
+    hybridMW?: number;
   };
   assetBreakdown?: Array<{
     assetId: string;
@@ -380,9 +382,11 @@ export function calculateHybridTieredBreakdown(
   const ongridPrice = customPricing?.ongrid_per_mwp || 0;
   const hybridPrice = customPricing?.hybrid_per_mwp || 0;
   
-  if (ammpCapabilities?.ongridTotalMW !== undefined && ammpCapabilities?.hybridTotalMW !== undefined) {
-    const ongridMW = ammpCapabilities.ongridTotalMW;
-    const hybridMW = ammpCapabilities.hybridTotalMW;
+  // Handle both field naming conventions (ongridTotalMW/hybridTotalMW and ongridMW/hybridMW)
+  const ongridMW = ammpCapabilities?.ongridTotalMW ?? ammpCapabilities?.ongridMW ?? 0;
+  const hybridMW = ammpCapabilities?.hybridTotalMW ?? ammpCapabilities?.hybridMW ?? 0;
+  
+  if (ongridMW > 0 || hybridMW > 0) {
     
     return {
       ongrid: { 

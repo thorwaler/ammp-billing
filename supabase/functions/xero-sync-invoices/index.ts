@@ -331,9 +331,33 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Skip if already synced as Xero-only invoice
+      // Check if this is an existing Xero-only invoice that needs status update
       if (xeroOnlyIds.has(xeroInvoiceId)) {
-        skippedCount++;
+        // Find the local invoice to update its status
+        const existingInvoice = existingInvoices?.find(i => i.xero_invoice_id === xeroInvoiceId);
+        
+        if (existingInvoice) {
+          // Update Xero-only invoice with latest status from Xero
+          const { error: updateError } = await supabase
+            .from('invoices')
+            .update({
+              xero_status: xeroInv.Status,
+              xero_synced_at: new Date().toISOString(),
+              xero_amount_credited: amountCredited,
+              xero_amount_credited_eur: amountCreditedEur,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', existingInvoice.id);
+
+          if (updateError) {
+            console.error('Error updating Xero-only invoice status:', existingInvoice.id, updateError);
+            skippedCount++;
+          } else {
+            updatedCount++;
+          }
+        } else {
+          skippedCount++;
+        }
         continue;
       }
 
