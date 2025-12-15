@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/components/ui/use-toast";
-import { CheckCircle2, Loader2, Users } from "lucide-react";
+import { CheckCircle2, Loader2, Users, Clock, RefreshCw } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import { format } from "date-fns";
 interface XeroSettings {
   invoiceTemplate: string;
   isEnabled: boolean;
+  syncSchedule: string;
 }
 
 interface XeroConnection {
@@ -26,22 +27,36 @@ interface XeroConnection {
   expires_at: string;
   invoice_template: string | null;
   is_enabled: boolean | null;
+  sync_schedule: string | null;
+  last_sync_at: string | null;
+  next_sync_at: string | null;
   created_at: string;
   updated_at: string;
 }
+
+const SCHEDULE_OPTIONS = [
+  { value: 'disabled', label: 'Disabled' },
+  { value: 'daily', label: 'Daily (3 AM UTC)' },
+  { value: 'weekly', label: 'Weekly (Sundays)' },
+  { value: 'monthly', label: 'Monthly (1st)' },
+];
 
 const XeroIntegration = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isConnected, setIsConnected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [tenantName, setTenantName] = useState<string>('');
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [connectedAt, setConnectedAt] = useState<string | null>(null);
+  const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [nextSyncAt, setNextSyncAt] = useState<string | null>(null);
   
   const [settings, setSettings] = useState<XeroSettings>({
     invoiceTemplate: 'standard',
     isEnabled: true,
+    syncSchedule: 'disabled',
   });
 
   // Load connection status on mount
@@ -79,9 +94,12 @@ const XeroIntegration = () => {
         setTenantName(connection.tenant_name || '');
         setConnectionId(connection.id);
         setConnectedAt(connection.created_at);
+        setLastSyncAt(connection.last_sync_at);
+        setNextSyncAt(connection.next_sync_at);
         setSettings({
           invoiceTemplate: connection.invoice_template || 'standard',
           isEnabled: connection.is_enabled || false,
+          syncSchedule: connection.sync_schedule || 'disabled',
         });
       }
     } catch (error) {
@@ -167,15 +185,42 @@ const XeroIntegration = () => {
     if (!connectionId) return;
 
     try {
+      // Calculate next sync time based on schedule
+      let nextSync: string | null = null;
+      if (settings.syncSchedule !== 'disabled') {
+        const now = new Date();
+        switch (settings.syncSchedule) {
+          case 'daily':
+            const tomorrow = new Date(now);
+            tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+            tomorrow.setUTCHours(3, 0, 0, 0);
+            nextSync = tomorrow.toISOString();
+            break;
+          case 'weekly':
+            const nextSunday = new Date(now);
+            nextSunday.setUTCDate(nextSunday.getUTCDate() + (7 - nextSunday.getUTCDay()));
+            nextSunday.setUTCHours(3, 0, 0, 0);
+            nextSync = nextSunday.toISOString();
+            break;
+          case 'monthly':
+            nextSync = new Date(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 3, 0, 0, 0).toISOString();
+            break;
+        }
+      }
+
       const { error } = await supabase
         .from('xero_connections' as any)
         .update({
           invoice_template: settings.invoiceTemplate,
           is_enabled: settings.isEnabled,
+          sync_schedule: settings.syncSchedule,
+          next_sync_at: nextSync,
         })
         .eq('id', connectionId);
 
       if (error) throw error;
+
+      setNextSyncAt(nextSync);
 
       toast({
         title: "Settings saved",
@@ -218,6 +263,37 @@ const XeroIntegration = () => {
     }
   };
 
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('xero-scheduled-sync', {
+        body: { manual: true },
+      });
+
+      if (error) throw error;
+
+      const result = data.results?.[0];
+      if (result?.success) {
+        toast({
+          title: "Sync complete",
+          description: `Synced ${result.synced} invoices, updated ${result.updated}, skipped ${result.skipped}.`,
+        });
+      } else if (result?.error) {
+        throw new Error(result.error);
+      }
+
+      await loadConnection();
+    } catch (error: any) {
+      toast({
+        title: "Sync failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleDisconnect = async () => {
     if (!connectionId) return;
 
@@ -233,7 +309,9 @@ const XeroIntegration = () => {
       setTenantName('');
       setConnectionId(null);
       setConnectedAt(null);
-      setSettings({ invoiceTemplate: 'standard', isEnabled: true });
+      setLastSyncAt(null);
+      setNextSyncAt(null);
+      setSettings({ invoiceTemplate: 'standard', isEnabled: true, syncSchedule: 'disabled' });
       
       toast({
         title: "Disconnected from Xero",
@@ -316,7 +394,59 @@ const XeroIntegration = () => {
               </span>
             </div>
 
+            {/* Sync status */}
+            <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <div>
+                  {lastSyncAt ? (
+                    <span>Last sync: {format(new Date(lastSyncAt), 'MMM d, yyyy h:mm a')}</span>
+                  ) : (
+                    <span className="text-muted-foreground">Never synced</span>
+                  )}
+                  {nextSyncAt && settings.syncSchedule !== 'disabled' && (
+                    <span className="text-muted-foreground"> · Next: {format(new Date(nextSyncAt), 'MMM d')}</span>
+                  )}
+                </div>
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleManualSync}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                <span className="ml-2">Sync Now</span>
+              </Button>
+            </div>
+
             <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="syncSchedule">Auto-Sync Schedule</Label>
+                <Select
+                  value={settings.syncSchedule}
+                  onValueChange={(value) => setSettings({ ...settings, syncSchedule: value })}
+                >
+                  <SelectTrigger id="syncSchedule">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SCHEDULE_OPTIONS.map(option => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Automatically sync invoices from Xero at the specified interval
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="invoiceTemplate">Invoice Template</Label>
                 <Select
