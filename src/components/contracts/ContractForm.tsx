@@ -844,25 +844,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         annual_fee_per_site: (data.package === 'per_site' || data.package === 'elum_jubaili') 
           ? (data.annualFeePerSite || (data.package === 'per_site' ? 1000 : 500)) 
           : null,
-        // Elum package fields
-        ammp_asset_group_id: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
-          ? (data.ammpAssetGroupId || null) 
-          : null,
-        ammp_asset_group_name: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
-          ? (data.ammpAssetGroupName || null) 
-          : null,
-        ammp_asset_group_id_and: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
-          ? (data.ammpAssetGroupIdAnd || null) 
-          : null,
-        ammp_asset_group_name_and: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
-          ? (data.ammpAssetGroupNameAnd || null) 
-          : null,
-        ammp_asset_group_id_not: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
-          ? (data.ammpAssetGroupIdNot || null) 
-          : null,
-        ammp_asset_group_name_not: (data.package === 'elum_epm' || data.package === 'elum_jubaili') 
-          ? (data.ammpAssetGroupNameNot || null) 
-          : null,
+        // Asset group fields - always save regardless of package
+        ammp_asset_group_id: data.ammpAssetGroupId || null,
+        ammp_asset_group_name: data.ammpAssetGroupName || null,
+        ammp_asset_group_id_and: data.ammpAssetGroupIdAnd || null,
+        ammp_asset_group_name_and: data.ammpAssetGroupNameAnd || null,
+        ammp_asset_group_id_not: data.ammpAssetGroupIdNot || null,
+        ammp_asset_group_name_not: data.ammpAssetGroupNameNot || null,
         ammp_org_id: data.package !== 'poc' 
           ? (data.contractAmmpOrgId || null) 
           : null,
