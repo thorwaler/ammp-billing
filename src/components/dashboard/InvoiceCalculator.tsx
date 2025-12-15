@@ -911,6 +911,26 @@ export function InvoiceCalculator({
         }
       }
       
+      // Add hybrid tiered pricing line items (for hybrid_tiered packages like BLS)
+      if (result.hybridTieredBreakdown) {
+        if (result.hybridTieredBreakdown.ongrid.cost > 0) {
+          lineItems.push({
+            Description: `On-Grid Sites Monitoring (${result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW)`,
+            Quantity: 1,
+            UnitAmount: result.hybridTieredBreakdown.ongrid.cost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+        if (result.hybridTieredBreakdown.hybrid.cost > 0) {
+          lineItems.push({
+            Description: `Hybrid Sites Monitoring (${result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW)`,
+            Quantity: 1,
+            UnitAmount: result.hybridTieredBreakdown.hybrid.cost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
+      
       // Add addon costs (Implementation Fees - NRR)
       result.addonCosts.forEach(ac => {
         lineItems.push({
@@ -977,6 +997,9 @@ export function InvoiceCalculator({
       const arrAmount = (result.basePricingCost || 0) +
         (result.starterPackageCost || 0) +
         result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
+        // Hybrid tiered pricing (BLS and similar)
+        (result.hybridTieredBreakdown?.ongrid.cost || 0) +
+        (result.hybridTieredBreakdown?.hybrid.cost || 0) +
         (result.minimumContractAdjustment || 0) +
         (result.minimumCharges || 0) +
         (result.retainerCost || 0) +
@@ -1054,6 +1077,9 @@ export function InvoiceCalculator({
         const storedArrAmount = (result.basePricingCost || 0) +
           (result.starterPackageCost || 0) +
           result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
+          // Hybrid tiered pricing (BLS and similar)
+          (result.hybridTieredBreakdown?.ongrid.cost || 0) +
+          (result.hybridTieredBreakdown?.hybrid.cost || 0) +
           (result.minimumContractAdjustment || 0) +
           (result.minimumCharges || 0) +
           (result.retainerCost || 0) +
