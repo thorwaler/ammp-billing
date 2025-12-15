@@ -198,7 +198,8 @@ export async function generateSupportDocumentData(
       solcastAddon.pricePerUnit || 0,
       invoiceDate,
       periodStart,
-      periodEnd
+      periodEnd,
+      ammpCapabilities?.assetBreakdown // Pass asset breakdown for pro-rata calculation
     );
     solcastTotal = solcastAddon.cost;
   }
@@ -373,9 +374,27 @@ function groupInvoicesByPeriod(
     }
 
     // Parse addon data to separate Satellite Data API (solcast)
+    // Fix: Check both 'addonId' and 'id' field names
     const addonsData = invoice.addons_data as any[] || [];
-    const solcastAddon = addonsData.find((a: any) => a.addonId === 'satelliteDataAPI');
-    const solcastFee = solcastAddon?.cost || 0;
+    const solcastAddon = addonsData.find((a: any) => 
+      a.addonId === 'satelliteDataAPI' || a.id === 'satelliteDataAPI'
+    );
+    
+    // Calculate Solcast fee from stored data
+    let solcastFee = 0;
+    if (solcastAddon) {
+      if (solcastAddon.cost !== undefined && solcastAddon.cost > 0) {
+        solcastFee = solcastAddon.cost;
+      } else if (solcastAddon.calculatedTieredPrice?.totalPrice) {
+        // For stored invoices, the cost might be in tiered price format
+        // Need to multiply by period months for stored invoices
+        const periodMonths = billingFrequency === 'quarterly' ? 3 
+          : billingFrequency === 'biannual' ? 6 
+          : billingFrequency === 'annual' ? 12 
+          : 1;
+        solcastFee = solcastAddon.calculatedTieredPrice.totalPrice * periodMonths;
+      }
+    }
 
     grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee;
     grouped[period].solcastFee += solcastFee;
@@ -593,24 +612,55 @@ function generateAssetBreakdown(
 }
 
 /**
- * Generate Solcast breakdown by month
+ * Generate Solcast breakdown by month with pro-rata calculation based on device onboarding dates
  */
 function generateSolcastBreakdown(
   billingFrequency: string,
-  siteCount: number,
+  totalSiteCount: number,
   pricePerSite: number,
   invoiceDate: Date,
   periodStart?: string,
-  periodEnd?: string
+  periodEnd?: string,
+  assetBreakdown?: any[] // Pass asset data with onboardingDate and hasSolcast
 ): SupportDocumentData['solcastBreakdown'] {
   const months = getMonthsForPeriod(billingFrequency, invoiceDate, periodStart, periodEnd);
   
-  return months.map(month => ({
-    month,
-    siteCount,
-    pricePerSite: Math.round(pricePerSite * 100) / 100,
-    totalPerMonth: Math.round(siteCount * pricePerSite * 100) / 100
-  }));
+  // If no asset breakdown, fall back to current behavior (snapshot count for all months)
+  if (!assetBreakdown || assetBreakdown.length === 0) {
+    return months.map(month => ({
+      month,
+      siteCount: totalSiteCount,
+      pricePerSite: Math.round(pricePerSite * 100) / 100,
+      totalPerMonth: Math.round(totalSiteCount * pricePerSite * 100) / 100
+    }));
+  }
+  
+  // Filter to only Solcast-enabled sites
+  const solcastAssets = assetBreakdown.filter(a => a.hasSolcast);
+  
+  return months.map(month => {
+    // Parse month string to get end of that month (e.g., "Nov 2024")
+    const monthParts = month.split(' ');
+    const monthName = monthParts[0];
+    const year = parseInt(monthParts[1]);
+    const monthDate = new Date(`${monthName} 1, ${year}`);
+    const monthIndex = monthDate.getMonth();
+    const endOfMonth = new Date(year, monthIndex + 1, 0); // Last day of month
+    
+    // Count sites that were onboarded on or before the end of this month
+    const siteCountForMonth = solcastAssets.filter(asset => {
+      if (!asset.onboardingDate) return true; // If no date, assume always existed
+      const onboardDate = new Date(asset.onboardingDate);
+      return onboardDate <= endOfMonth;
+    }).length;
+    
+    return {
+      month,
+      siteCount: siteCountForMonth,
+      pricePerSite: Math.round(pricePerSite * 100) / 100,
+      totalPerMonth: Math.round(siteCountForMonth * pricePerSite * 100) / 100
+    };
+  });
 }
 
 /**
