@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2 } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { toast } from "@/hooks/use-toast";
@@ -210,6 +210,36 @@ const ContractDetails = () => {
       title: "Contract extended",
       description: `${contract?.companyName}'s contract has been extended`,
     });
+  };
+
+  const handleClearAMMPData = async () => {
+    if (!contract) return;
+    
+    try {
+      const { error } = await supabase
+        .from('contracts')
+        .update({
+          cached_capabilities: null,
+          ammp_asset_ids: [],
+          ammp_sync_status: 'never_synced',
+          last_ammp_sync: null,
+        })
+        .eq('id', contract.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "AMMP data cleared",
+        description: "Asset data has been removed from this contract. Configuration preserved.",
+      });
+      loadContractData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to clear AMMP data",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
@@ -526,6 +556,30 @@ const ContractDetails = () => {
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={() => handleStatusChange('active')}>
                           Confirm
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+                {hasAMMPData && cachedCapabilities && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem onSelect={(e) => e.preventDefault()} className="text-destructive focus:text-destructive">
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Clear AMMP Data
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Clear AMMP Data</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will remove all synced asset data from this contract. The AMMP configuration (Org ID, Asset Groups) will be preserved so you can re-sync later.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleClearAMMPData} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          Clear Data
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
