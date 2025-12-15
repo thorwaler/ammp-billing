@@ -94,6 +94,7 @@ interface Customer {
   id: string;
   name: string;
   nickname?: string | null;
+  companyName?: string;
   mwManaged: number;
   lastInvoiced?: string;
   signedDate?: string;
@@ -199,6 +200,8 @@ export function InvoiceCalculator({
           contracts (
             id,
             package,
+            contract_name,
+            company_name,
             modules,
             addons,
             custom_pricing,
@@ -261,6 +264,7 @@ export function InvoiceCalculator({
             id: c.id,
             name: c.name,
             nickname: c.nickname,
+            companyName: (contract as any).company_name || undefined,
             package: contract.package as PackageType,
             mwManaged: cachedCaps?.totalMW || Number(c.mwp_managed) || 0,
             modules,
@@ -684,9 +688,11 @@ export function InvoiceCalculator({
       const ongridPrice = selectedCustomer.customPricing?.ongrid_per_mwp || 0;
       const hybridPrice = selectedCustomer.customPricing?.hybrid_per_mwp || 0;
       
-      if (capabilities && capabilities.ongridTotalMW !== undefined && capabilities.hybridTotalMW !== undefined) {
-        const ongridMW = capabilities.ongridTotalMW;
-        const hybridMW = capabilities.hybridTotalMW;
+      // Handle both field naming conventions (ongridTotalMW/hybridTotalMW and ongridMW/hybridMW)
+      const ongridMW = capabilities?.ongridTotalMW ?? capabilities?.ongridMW ?? 0;
+      const hybridMW = capabilities?.hybridTotalMW ?? capabilities?.hybridMW ?? 0;
+      
+      if (capabilities && (ongridMW > 0 || hybridMW > 0)) {
         
         const ongridCost = ongridMW * ongridPrice * frequencyMultiplier;
         const hybridCost = hybridMW * hybridPrice * frequencyMultiplier;
@@ -987,7 +993,7 @@ export function InvoiceCalculator({
         Date: format(invoiceDate, "yyyy-MM-dd"),
         DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), // 30 days from invoice date
         LineItems: lineItems,
-        Reference: `${billingFrequency.toUpperCase()}-${format(invoiceDate, "yyyyMMdd")}`,
+        Reference: `${selectedCustomer.nickname || selectedCustomer.companyName || selectedCustomer.name}-${format(invoiceDate, "yyyyMMdd")}`,
         Currency: selectedCustomer.currency,
         Status: "DRAFT"
       };
@@ -1776,7 +1782,7 @@ export function InvoiceCalculator({
                         <span>{formatCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
                       </div>
                       <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
-                        <span>Total MW Pricing:</span>
+                        <span>Total Portfolio Pricing:</span>
                         <span>{formatCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal + result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
                       </div>
                     </>
