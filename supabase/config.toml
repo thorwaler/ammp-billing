@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.ammp-scheduled-sync]
 verify_jwt = false
 
+[functions.ammp-scheduled-sync.schedule]
+expression = "0 2 * * *"
+
 [functions.ammp-sync-contract]
 verify_jwt = true
 
@@ -26,6 +29,12 @@ verify_jwt = true
 
 [functions.xero-sync-invoices]
 verify_jwt = true
+
+[functions.xero-scheduled-sync]
+verify_jwt = false
+
+[functions.xero-scheduled-sync.schedule]
+expression = "0 3 * * *"
 
 [functions.ammp-token-exchange]
 verify_jwt = true

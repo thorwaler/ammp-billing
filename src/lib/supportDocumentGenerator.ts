@@ -175,12 +175,14 @@ export async function generateSupportDocumentData(
   const yearTotal = (yearInvoices || []).reduce((sum, inv) => sum + Number(inv.invoice_amount), 0);
 
   // Generate asset breakdown based on package type (Fix #1)
+  const frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
   const { assetBreakdown, siteMinimumPricingSummary } = generateAssetBreakdown(
     ammpCapabilities?.assetBreakdown || [],
     calculationResult,
     selectedModules,
     selectedAddons,
-    packageType
+    packageType,
+    frequencyMultiplier
   );
 
   const assetBreakdownTotal = assetBreakdown.reduce((sum, asset) => sum + asset.pricePerYear, 0);
@@ -272,7 +274,6 @@ export async function generateSupportDocumentData(
   }
 
   // Calculate total including all addon costs and validate
-  const frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
   const minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
   
@@ -413,13 +414,15 @@ function generateAssetBreakdown(
   calculationResult: CalculationResult,
   selectedModules: string[],
   selectedAddons: Array<{ id: string }>,
-  packageType: string
+  packageType: string,
+  frequencyMultiplier: number = 1
 ): { 
   assetBreakdown: SupportDocumentData['assetBreakdown']; 
   siteMinimumPricingSummary?: SupportDocumentData['siteMinimumPricingSummary'];
 } {
   
   // For Elum ePM - use the elumEpmBreakdown data
+  // Convert period-adjusted costs back to annual for display with "/y" label
   if (packageType === 'elum_epm' && calculationResult.elumEpmBreakdown) {
     const epmBreak = calculationResult.elumEpmBreakdown;
     const allSites = [...epmBreak.smallSites, ...epmBreak.largeSites];
@@ -436,11 +439,11 @@ function generateAssetBreakdown(
         controlActive: false,
         reportingActive: false,
         pricePerKWp: site.pricePerMWp / 1000,
-        pricePerYear: site.cost,
+        pricePerYear: site.cost / frequencyMultiplier, // Convert to annual
         isSmallSite: site.isSmallSite,
         usesMinimum: site.usesMinimum,
-        calculatedCost: site.calculatedCost,
-        minimumCharge: site.usesMinimum ? site.cost : undefined
+        calculatedCost: site.calculatedCost ? site.calculatedCost / frequencyMultiplier : undefined,
+        minimumCharge: site.usesMinimum ? site.cost / frequencyMultiplier : undefined
       }))
     };
   }
@@ -472,6 +475,7 @@ function generateAssetBreakdown(
   }
   
   // For pro/custom packages WITH site minimum pricing - use the breakdown data
+  // Convert period-adjusted costs back to annual for display with "/y" label
   if ((packageType === 'pro' || packageType === 'custom') && calculationResult.siteMinimumPricingBreakdown) {
     const smpBreakdown = calculationResult.siteMinimumPricingBreakdown;
     const assetBreakdown: SupportDocumentData['assetBreakdown'] = [];
@@ -493,9 +497,9 @@ function generateAssetBreakdown(
         controlActive: selectedModules.includes('control'),
         reportingActive: selectedAddons.some(a => a.id === 'reporting'),
         pricePerKWp: perKWpRate, // Contract's actual per-kWp rate
-        pricePerYear: site.calculatedCost, // This is the actual annual cost
+        pricePerYear: site.calculatedCost / frequencyMultiplier, // Convert to annual
         usesMinimum: false,
-        calculatedCost: site.calculatedCost
+        calculatedCost: site.calculatedCost / frequencyMultiplier
       });
     }
     
@@ -512,10 +516,10 @@ function generateAssetBreakdown(
         controlActive: selectedModules.includes('control'),
         reportingActive: selectedAddons.some(a => a.id === 'reporting'),
         pricePerKWp: 0,
-        pricePerYear: site.minimumCharge, // Use minimum charge as annual price
+        pricePerYear: site.minimumCharge / frequencyMultiplier, // Convert to annual
         usesMinimum: true,
-        calculatedCost: site.calculatedCost,
-        minimumCharge: site.minimumCharge
+        calculatedCost: site.calculatedCost / frequencyMultiplier,
+        minimumCharge: site.minimumCharge / frequencyMultiplier
       });
     }
     
@@ -524,8 +528,8 @@ function generateAssetBreakdown(
       siteMinimumPricingSummary: {
         sitesOnNormal: smpBreakdown.sitesAboveThreshold.length,
         sitesOnMinimum: smpBreakdown.sitesBelowThreshold.length,
-        normalPricingTotal: smpBreakdown.normalPricingTotal,
-        minimumPricingTotal: smpBreakdown.minimumPricingTotal
+        normalPricingTotal: smpBreakdown.normalPricingTotal / frequencyMultiplier, // Convert to annual
+        minimumPricingTotal: smpBreakdown.minimumPricingTotal / frequencyMultiplier // Convert to annual
       }
     };
   }

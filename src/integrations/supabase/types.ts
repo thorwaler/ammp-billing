@@ -846,7 +846,10 @@ export type Database = {
           id: string
           invoice_template: string | null
           is_enabled: boolean | null
+          last_sync_at: string | null
+          next_sync_at: string | null
           refresh_token: string
+          sync_schedule: string | null
           tenant_id: string
           tenant_name: string | null
           updated_at: string
@@ -859,7 +862,10 @@ export type Database = {
           id?: string
           invoice_template?: string | null
           is_enabled?: boolean | null
+          last_sync_at?: string | null
+          next_sync_at?: string | null
           refresh_token: string
+          sync_schedule?: string | null
           tenant_id: string
           tenant_name?: string | null
           updated_at?: string
@@ -872,7 +878,10 @@ export type Database = {
           id?: string
           invoice_template?: string | null
           is_enabled?: boolean | null
+          last_sync_at?: string | null
+          next_sync_at?: string | null
           refresh_token?: string
+          sync_schedule?: string | null
           tenant_id?: string
           tenant_name?: string | null
           updated_at?: string
