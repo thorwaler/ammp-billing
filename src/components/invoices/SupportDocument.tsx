@@ -304,9 +304,27 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   </tr>
                 ))}
                 <tr className="bg-muted font-bold">
-                  <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>Total:</td>
+                  <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>Subtotal (Annual):</td>
                   <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(data.assetBreakdownTotal)}</td>
                 </tr>
+                {data.minimumContractAdjustment > 0 && data.minimumAnnualValue && (
+                  <>
+                    <tr className="bg-amber-50 dark:bg-amber-950/20">
+                      <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>
+                        Minimum Contract Adjustment (Annual):
+                      </td>
+                      <td className="border border-border px-1 py-0.5 text-right text-amber-600 dark:text-amber-400 font-medium">
+                        {formatCurrency(data.minimumAnnualValue - data.assetBreakdownTotal)}
+                      </td>
+                    </tr>
+                    <tr className="bg-muted font-bold">
+                      <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>
+                        Total with Minimum (Annual):
+                      </td>
+                      <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(data.minimumAnnualValue)}</td>
+                    </tr>
+                  </>
+                )}
               </tbody>
             </table>
           </div>

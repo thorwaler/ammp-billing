@@ -165,38 +165,51 @@ Deno.serve(async (req) => {
       throw new Error('No authorization header');
     }
 
-    // Verify user
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    );
+    const token = authHeader.replace('Bearer ', '');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-    if (authError || !user) {
-      throw new Error('Not authenticated');
+    // Check if this is an internal service call (from xero-scheduled-sync)
+    const isServiceCall = token === serviceKey;
+    let userId: string | null = null;
+
+    if (!isServiceCall) {
+      // Only verify user for external (browser) calls
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        throw new Error('Not authenticated');
+      }
+      userId = user.id;
     }
 
-    console.log('Syncing Xero invoices for user:', user.id, 'fromDate:', fromDate);
+    console.log('Syncing Xero invoices. Service call:', isServiceCall, 'fromDate:', fromDate);
 
     // Get valid access token (from shared connection)
     const { accessToken, tenantId } = await getValidAccessToken(supabase);
 
-    // Fetch custom account mappings for user (if any)
+    // Fetch custom account mappings (any user's, shared team settings)
     const { data: customMappings } = await supabase
       .from('revenue_account_mappings')
       .select('account_code, revenue_type')
-      .eq('user_id', user.id);
+      .limit(100);
 
-    // Merge default mappings with user's custom mappings
+    // Merge default mappings with custom mappings
     const accountMappings = { ...ACCOUNT_MAPPINGS };
     customMappings?.forEach((mapping: any) => {
       accountMappings[mapping.account_code] = mapping.revenue_type;
     });
 
     // Get existing invoices with xero_invoice_id to check for duplicates and updates
-    const { data: existingInvoices } = await supabase
+    // For service calls, get all invoices; for user calls, filter by user
+    let existingInvoicesQuery = supabase
       .from('invoices')
-      .select('id, xero_invoice_id, source')
-      .eq('user_id', user.id)
+      .select('id, xero_invoice_id, source, user_id')
       .not('xero_invoice_id', 'is', null);
+    
+    if (!isServiceCall && userId) {
+      existingInvoicesQuery = existingInvoicesQuery.eq('user_id', userId);
+    }
+    
+    const { data: existingInvoices } = await existingInvoicesQuery;
 
     // Build maps for existing invoices
     // Xero-only invoices (source='xero') - skip entirely
@@ -264,13 +277,12 @@ Deno.serve(async (req) => {
     const xeroInvoices = allXeroInvoices;
     console.log(`Found ${xeroInvoices.length} total invoices across ${page} page(s) (filtered by date: ${fromDate || 'all time'})`);
 
-    // Get all customers to match by name
+    // Get all customers to match by name (shared across team)
     const { data: customers } = await supabase
       .from('customers')
-      .select('id, name')
-      .eq('user_id', user.id);
+      .select('id, name, user_id');
 
-    const customerNameMap = new Map(customers?.map(c => [c.name.toLowerCase(), c.id]) || []);
+    const customerNameMap = new Map(customers?.map(c => [c.name.toLowerCase(), { id: c.id, userId: c.user_id }]) || []);
 
     // Process invoices
     let syncedCount = 0;
@@ -363,16 +375,25 @@ Deno.serve(async (req) => {
 
       // Try to match customer by name
       const contactName = xeroInv.Contact?.Name || '';
-      const customerId = customerNameMap.get(contactName.toLowerCase());
+      const customerMatch = customerNameMap.get(contactName.toLowerCase());
       
       console.log(`Inserting new invoice from Xero: ${xeroInv.InvoiceNumber} (Total=${invoiceTotal}, Credited=${amountCredited})`);
+
+      // Determine user_id: use matched customer's user_id, or first existing invoice's user_id
+      const invoiceUserId = customerMatch?.userId || existingInvoices?.[0]?.user_id || null;
+      
+      if (!invoiceUserId) {
+        console.warn(`Skipping invoice ${xeroInv.InvoiceNumber}: no user_id could be determined`);
+        skippedCount++;
+        continue;
+      }
 
       // Insert new invoice from Xero
       const { error: insertError } = await supabase
         .from('invoices')
         .insert({
-          user_id: user.id,
-          customer_id: customerId || null,
+          user_id: invoiceUserId,
+          customer_id: customerMatch?.id || null,
           invoice_date: parseXeroDate(xeroInv.Date) || new Date().toISOString().split('T')[0],
           invoice_amount: invoiceTotal,
           invoice_amount_eur: invoiceAmountEur,
