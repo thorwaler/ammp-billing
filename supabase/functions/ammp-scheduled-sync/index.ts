@@ -111,6 +111,8 @@ async function syncContract(
 }
 
 Deno.serve(async (req) => {
+  console.log(`[AMMP Scheduled Sync] Function invoked at ${new Date().toISOString()}`);
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -119,6 +121,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
+
+    console.log(`[AMMP Scheduled Sync] Supabase client created`);
 
     // Check if manual trigger or scheduled
     let isManual = false;
@@ -223,6 +227,17 @@ Deno.serve(async (req) => {
               .from('contracts')
               .update({ ammp_sync_status: 'error' })
               .eq('id', contract.id);
+            
+            // Create notification for contract-level failure (Bug #4)
+            await supabase.from('notifications').insert({
+              user_id,
+              contract_id: contract.id,
+              type: 'ammp_sync_failed',
+              title: 'AMMP Contract Sync Failed',
+              message: `Contract "${contract.company_name}" sync failed: ${result.error}`,
+              severity: 'error',
+              metadata: { contractId: contract.id, error: result.error, isManual },
+            });
           }
         }
 

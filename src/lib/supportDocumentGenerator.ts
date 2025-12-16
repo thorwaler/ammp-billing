@@ -616,7 +616,8 @@ function generateAssetBreakdown(
 }
 
 /**
- * Generate Solcast breakdown by month with pro-rata calculation based on device onboarding dates
+ * Generate Solcast breakdown by month with pro-rata calculation based on SOLCAST DEVICE onboarding dates
+ * Bug #1: Uses solcastOnboardingDate (satellite device created date) NOT asset onboardingDate
  */
 function generateSolcastBreakdown(
   billingFrequency: string,
@@ -625,7 +626,7 @@ function generateSolcastBreakdown(
   invoiceDate: Date,
   periodStart?: string,
   periodEnd?: string,
-  assetBreakdown?: any[] // Pass asset data with onboardingDate and hasSolcast
+  assetBreakdown?: any[] // Pass asset data with solcastOnboardingDate and hasSolcast
 ): SupportDocumentData['solcastBreakdown'] {
   const months = getMonthsForPeriod(billingFrequency, invoiceDate, periodStart, periodEnd);
   
@@ -651,10 +652,13 @@ function generateSolcastBreakdown(
     const monthIndex = monthDate.getMonth();
     const endOfMonth = new Date(year, monthIndex + 1, 0); // Last day of month
     
-    // Count sites that were onboarded on or before the end of this month
+    // Count sites where the Solcast/satellite device was created on or before the end of this month
+    // Bug #1 fix: Use solcastOnboardingDate (device created date), not asset onboardingDate
     const siteCountForMonth = solcastAssets.filter(asset => {
-      if (!asset.onboardingDate) return true; // If no date, assume always existed
-      const onboardDate = new Date(asset.onboardingDate);
+      // Use solcastOnboardingDate if available, otherwise fall back to onboardingDate
+      const deviceDate = asset.solcastOnboardingDate || asset.onboardingDate;
+      if (!deviceDate) return true; // If no date, assume always existed
+      const onboardDate = new Date(deviceDate);
       return onboardDate <= endOfMonth;
     }).length;
     

@@ -11,7 +11,7 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
   const workbook = XLSX.utils.book_new();
 
   // Sheet 1: Year Overview
-  const yearOverviewData = [
+  const yearOverviewRows: any[][] = [
     ['Period', 'Monitoring Fee', 'Solcast Fee', 'Additional Work', `Total (${data.currency})`],
     ...data.yearInvoices.map(inv => [
       inv.period,
@@ -22,11 +22,18 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
     ]),
     ['', '', '', 'Year Total:', data.yearTotal]
   ];
-  const wsYearOverview = XLSX.utils.aoa_to_sheet(yearOverviewData);
+  
+  // Bug #5: Add minimum contract adjustment row if applicable
+  if (data.minimumContractAdjustment > 0) {
+    yearOverviewRows.push(['', '', '', 'Minimum Contract Adjustment (Annual):', data.minimumContractAdjustment]);
+    yearOverviewRows.push(['', '', '', 'Total with Minimum:', data.yearTotal + data.minimumContractAdjustment]);
+  }
+  
+  const wsYearOverview = XLSX.utils.aoa_to_sheet(yearOverviewRows);
   XLSX.utils.book_append_sheet(workbook, wsYearOverview, 'Year Overview');
 
   // Sheet 2: Asset Breakdown
-  const assetBreakdownData = [
+  const assetBreakdownRows: any[][] = [
     [
       'Asset ID',
       'Asset Name',
@@ -53,9 +60,17 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
       asset.pricePerKWp,
       asset.pricePerYear
     ]),
-    ['', '', '', '', '', '', '', '', '', 'Total:', data.assetBreakdownTotal]
+    ['', '', '', '', '', '', '', '', '', 'Asset Subtotal:', data.assetBreakdownTotal]
   ];
-  const wsAssetBreakdown = XLSX.utils.aoa_to_sheet(assetBreakdownData);
+  
+  // Bug #5: Add minimum contract adjustment row if applicable
+  if (data.minimumContractAdjustment > 0) {
+    assetBreakdownRows.push(['', '', '', '', '', '', '', '', '', '', '']); // Empty row
+    assetBreakdownRows.push(['', '', '', '', '', '', '', '', '', 'Minimum Contract Adjustment:', data.minimumContractAdjustment]);
+    assetBreakdownRows.push(['', '', '', '', '', '', '', '', '', 'Total (Min Annual Value):', data.assetBreakdownTotal + data.minimumContractAdjustment]);
+  }
+  
+  const wsAssetBreakdown = XLSX.utils.aoa_to_sheet(assetBreakdownRows);
   XLSX.utils.book_append_sheet(workbook, wsAssetBreakdown, 'Asset Breakdown');
 
   // Sheet 3: Solcast (if applicable)

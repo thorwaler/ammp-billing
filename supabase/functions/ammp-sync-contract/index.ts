@@ -24,6 +24,7 @@ interface AssetCapabilities {
   hasGenset: boolean;
   hasHybridEMS: boolean;
   onboardingDate?: string | null;
+  solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
   deviceCount: number;
   devices: DeviceInfo[];
 }
@@ -45,6 +46,7 @@ interface CachedCapabilities {
     hasSolcast: boolean;
     deviceCount: number;
     onboardingDate?: string | null;
+    solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
     devices: DeviceInfo[];
   }>;
   lastSynced: string;
@@ -73,6 +75,7 @@ function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'
     hasGenset: false,
     hasHybridEMS: false,
     onboardingDate: stored.onboardingDate,
+    solcastOnboardingDate: stored.solcastOnboardingDate,
     deviceCount: stored.deviceCount,
     devices: stored.devices || [],
   };
@@ -133,12 +136,22 @@ async function fetchAMMPData(token: string, path: string, method: string = 'GET'
 function calculateCapabilities(
   asset: any,
   devices: any[],
-  cachedOnboardingDate?: string | null
+  cachedOnboardingDate?: string | null,
+  cachedSolcastOnboardingDate?: string | null
 ): AssetCapabilities {
   // Correct Solcast detection: data_provider === 'solcast' OR device_type === 'satellite'
   const hasSolcast = devices.some(d => 
     d.data_provider === 'solcast' || d.device_type === 'satellite'
   );
+  
+  // Find Solcast/satellite device's created date for pro-rata fee calculations
+  // The 'created' field format: "2024-12-06T08:49:01.994000" (may include timezone later)
+  const solcastDevice = devices.find(d => 
+    d.data_provider === 'solcast' || d.device_type === 'satellite'
+  );
+  const solcastOnboardingDate = hasSolcast 
+    ? (solcastDevice?.created || cachedSolcastOnboardingDate || null) 
+    : null;
   
   // Battery detection
   const hasBattery = devices.some(d => 
@@ -171,6 +184,7 @@ function calculateCapabilities(
     hasGenset,
     hasHybridEMS,
     onboardingDate,
+    solcastOnboardingDate,
     deviceCount: devices.length,
     devices: devices.map(d => ({
       deviceId: d.device_id,
@@ -242,6 +256,7 @@ async function processContractSync(
   
   // Build sets for continuation and date preservation
   const cachedDates: Record<string, string | null> = {};
+  const cachedSolcastDates: Record<string, string | null> = {};
   const alreadySyncedIds = new Set<string>();
   const existingCapabilities: AssetCapabilities[] = [];
   
@@ -249,6 +264,7 @@ async function processContractSync(
     for (const asset of existingCached.assetBreakdown) {
       if (asset.assetId) {
         cachedDates[asset.assetId] = asset.onboardingDate || null;
+        cachedSolcastDates[asset.assetId] = asset.solcastOnboardingDate || null;
         // Only use existing data for continuation if we're resuming a partial sync
         if (existingSyncStatus === 'partial') {
           alreadySyncedIds.add(asset.assetId);
@@ -383,11 +399,13 @@ async function processContractSync(
         
         // Use cached onboarding date if available, otherwise use asset.created
         const cachedDate = cachedDates[member.asset_id] || assetData.created || null;
+        const cachedSolcastDate = cachedSolcastDates[member.asset_id] || null;
         
         return calculateCapabilities(
           { ...assetData, asset_id: member.asset_id, asset_name: member.asset_name },
           devices,
-          cachedDate
+          cachedDate,
+          cachedSolcastDate
         );
       } catch (error) {
         console.error(`[AMMP Sync Contract] Error processing asset ${member.asset_id}:`, error);
@@ -401,6 +419,7 @@ async function processContractSync(
           hasGenset: false,
           hasHybridEMS: false,
           onboardingDate: cachedDates[member.asset_id] || null,
+          solcastOnboardingDate: cachedSolcastDates[member.asset_id] || null,
           deviceCount: 0,
           devices: [],
         };
@@ -446,6 +465,7 @@ async function processContractSync(
       hasSolcast: c.hasSolcast,
       deviceCount: c.deviceCount,
       onboardingDate: c.onboardingDate,
+      solcastOnboardingDate: c.solcastOnboardingDate,
       devices: c.devices,
     })),
     lastSynced: new Date().toISOString(),
