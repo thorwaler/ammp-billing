@@ -138,18 +138,23 @@ Deno.serve(async (req) => {
 
     console.log(`[AMMP Scheduled Sync] Started. Manual: ${isManual}, Target: ${targetUserId || 'all'}`);
 
-    // Get AMMP connections
+    // Get AMMP connections - shared across team, don't filter by user_id for manual syncs
+    // For scheduled syncs, process all connections; for manual, get the shared connection
     let query = supabase
       .from('ammp_connections')
-      .select('user_id, api_key, sync_schedule');
+      .select('id, user_id, api_key, sync_schedule');
     
-    if (targetUserId) {
-      query = query.eq('user_id', targetUserId);
+    // Don't filter by user_id - connections are shared across team
+    // Just limit to 1 for manual triggers since there should only be one shared connection
+    if (isManual || targetUserId) {
+      query = query.limit(1);
     }
 
     const { data: connections, error: connError } = await query;
 
     if (connError) throw connError;
+
+    console.log(`[AMMP Scheduled Sync] Found ${connections?.length || 0} AMMP connection(s)`);
 
     if (!connections || connections.length === 0) {
       return new Response(
@@ -168,15 +173,15 @@ Deno.serve(async (req) => {
 
     // Process each connection
     for (const connection of connections) {
-      const { user_id, api_key, sync_schedule } = connection;
+      const { id: connectionId, user_id, api_key, sync_schedule } = connection;
 
       // Skip if schedule doesn't match (unless manual)
       if (!isManual && !shouldRunToday(sync_schedule || 'disabled')) {
-        console.log(`[AMMP Scheduled Sync] Skipping user ${user_id} - schedule doesn't match`);
+        console.log(`[AMMP Scheduled Sync] Skipping connection ${connectionId} - schedule doesn't match`);
         continue;
       }
 
-      console.log(`[AMMP Scheduled Sync] Processing user ${user_id}`);
+      console.log(`[AMMP Scheduled Sync] Processing connection ${connectionId} (user ${user_id})`);
 
       try {
         // Get all active non-POC contracts with AMMP org ID (on contract or customer)
@@ -241,15 +246,16 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Update connection timestamps
+        // Update connection timestamps using connection ID (shared connection)
         const nextSyncAt = calculateNextSyncAt(sync_schedule || 'disabled');
+        console.log(`[AMMP Scheduled Sync] Updating connection ${connectionId} last_sync_at`);
         await supabase
           .from('ammp_connections')
           .update({
             last_sync_at: new Date().toISOString(),
             next_sync_at: nextSyncAt?.toISOString() || null,
           })
-          .eq('user_id', user_id);
+          .eq('id', connectionId);
 
         // Create notification
         await supabase.from('notifications').insert({

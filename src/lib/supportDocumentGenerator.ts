@@ -111,6 +111,7 @@ export interface SupportDocumentData {
   calculatedTotal: number;
   invoiceTotal: number;
   minimumContractAdjustment: number;
+  minimumAnnualValue?: number; // The minimum annual contract value
   totalsMatch: boolean;
   // Detailed breakdown for validation
   calculationBreakdown: {
@@ -144,7 +145,8 @@ export async function generateSupportDocumentData(
   retainerHours?: number,
   retainerHourlyRate?: number,
   retainerMinimumValue?: number,
-  contractName?: string
+  contractName?: string,
+  minimumAnnualValue?: number
 ): Promise<SupportDocumentData> {
   
   // Fetch year-to-date invoices filtered by contract if available
@@ -327,6 +329,7 @@ export async function generateSupportDocumentData(
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
+    minimumAnnualValue, // Pass through the minimum annual value from contract
     totalsMatch,
     calculationBreakdown: {
       assetBreakdownPeriod: assetBreakdownPeriodTotal,

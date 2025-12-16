@@ -1287,7 +1287,8 @@ export function InvoiceCalculator({
         selectedCustomer.retainerHours, // Fix #5: Pass retainer params
         selectedCustomer.retainerHourlyRate,
         selectedCustomer.retainerMinimumValue,
-        selectedCustomer.contractName // Add contract name to support document
+        selectedCustomer.contractName, // Add contract name to support document
+        selectedCustomer.minimumAnnualValue // Pass minimum annual value for PDF display
       );
       
       // Validate totals (show warning but continue)
