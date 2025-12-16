@@ -51,6 +51,8 @@ function calculateNextSyncAt(schedule: string): Date | null {
 }
 
 Deno.serve(async (req) => {
+  console.log(`[Xero Scheduled Sync] Function invoked at ${new Date().toISOString()}`);
+  
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -59,6 +61,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
+
+    console.log(`[Xero Scheduled Sync] Supabase client created`);
 
     // Check if manual trigger or scheduled
     let isManual = false;

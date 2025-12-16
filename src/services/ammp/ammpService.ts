@@ -41,6 +41,15 @@ export async function calculateCapabilities(
 
   // Use pre-fetched metadata if provided, otherwise try asset.created (may be null)
   const onboardingDate = assetMetadata?.created || asset.created || null;
+  
+  // Find Solcast/satellite device's created date for pro-rata fee calculations
+  const solcastDevice = devices.find(d => 
+    d.data_provider === 'solcast' || d.device_type === 'satellite'
+  );
+  // Type cast to access 'created' which may exist on the device but not in DeviceResponse type
+  const solcastOnboardingDate = hasSolcast 
+    ? ((solcastDevice as any)?.created || null) 
+    : null;
 
   return {
     assetId: asset.asset_id,
@@ -51,6 +60,7 @@ export async function calculateCapabilities(
     hasGenset,
     hasHybridEMS,
     onboardingDate,
+    solcastOnboardingDate,
     deviceCount: devices.length,
     devices,
   };

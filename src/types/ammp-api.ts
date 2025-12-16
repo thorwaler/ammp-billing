@@ -91,6 +91,7 @@ export interface AssetCapabilities {
   hasGenset: boolean
   hasHybridEMS: boolean
   onboardingDate: string | null
+  solcastOnboardingDate: string | null // Date when satellite/solcast device was created (for pro-rata fee calc)
   deviceCount: number
   devices: DeviceResponse[]
 }
