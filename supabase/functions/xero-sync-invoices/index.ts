@@ -228,11 +228,17 @@ Deno.serve(async (req) => {
     // Build Xero API where clause with optional date filter
     let whereClause = 'Type=="ACCREC"';
     if (fromDate) {
-      // Parse the date and format for Xero API
-      const dateParts = fromDate.split('-');
+      // Parse the date - handle ISO strings like "2025-11-16T10:55:59.916Z"
+      // Extract only the date portion before 'T'
+      let dateOnly = fromDate;
+      if (fromDate.includes('T')) {
+        dateOnly = fromDate.split('T')[0];  // "2025-11-16"
+      }
+      const dateParts = dateOnly.split('-');
       const year = dateParts[0];
       const month = dateParts[1];
       const day = dateParts[2];
+      console.log(`Date filter: fromDate=${fromDate}, parsed as year=${year}, month=${month}, day=${day}`);
       whereClause += ` AND Date >= DateTime(${year}, ${month}, ${day})`;
     }
     

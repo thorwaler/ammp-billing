@@ -111,6 +111,7 @@ async function syncContract(
 }
 
 Deno.serve(async (req) => {
+  const startTime = Date.now();
   console.log(`[AMMP Scheduled Sync] Function invoked at ${new Date().toISOString()}`);
   
   if (req.method === 'OPTIONS') {
@@ -118,8 +119,14 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    
+    if (!supabaseUrl || !serviceKey) {
+      console.error('[AMMP Scheduled Sync] Missing environment variables');
+      throw new Error('Missing required environment variables');
+    }
+    
     const supabase = createClient(supabaseUrl, serviceKey);
 
     console.log(`[AMMP Scheduled Sync] Supabase client created`);
