@@ -218,12 +218,21 @@ const AmmpIntegration = () => {
 
       if (error) throw error;
 
-      const result = data?.results?.[0];
-      if (result?.success) {
-        toast.success(`Sync complete! ${result.customersProcessed} customer(s) synced.`);
-        await fetchSyncSettings();
+      if (data?.success) {
+        if (data.backgroundProcessing) {
+          // Background processing started - show info toast
+          toast.info(`Sync started for ${data.totalContracts} contracts. Watch the notification bell for updates!`);
+          await fetchSyncSettings(); // Refresh to show updated last_sync_at
+        } else if (data.totalContracts === 0) {
+          toast.info('No contracts with AMMP configuration to sync.');
+        } else {
+          // Synchronous completion (shouldn't happen with new code, but handle it)
+          const result = data.results?.[0];
+          toast.success(`Sync complete! ${result?.contractsProcessed || 0} contracts synced.`);
+          await fetchSyncSettings();
+        }
       } else {
-        toast.error('Sync failed: ' + (result?.error || 'Unknown error'));
+        toast.error('Sync failed: ' + (data?.error || 'Unknown error'));
       }
     } catch (error: any) {
       console.error('Error triggering manual sync:', error);
