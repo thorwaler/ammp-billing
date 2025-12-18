@@ -967,13 +967,18 @@ export function InvoiceCalculator({
         });
       }
       
-      // Add addon costs (Implementation Fees - NRR)
+      // Add addon costs - Solcast is ARR (recurring), other addons are NRR
       result.addonCosts.forEach(ac => {
+        // Solcast (Satellite Data API) is recurring revenue - ARR
+        const accountCode = ac.addonId === 'satelliteDataAPI' 
+          ? ACCOUNT_PLATFORM_FEES  // 1002 - ARR
+          : ACCOUNT_IMPLEMENTATION_FEES;  // 1000 - NRR
+        
         lineItems.push({
           Description: ac.addonName,
           Quantity: 1,
           UnitAmount: ac.cost,
-          AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          AccountCode: accountCode
         });
       });
       
@@ -1029,7 +1034,10 @@ export function InvoiceCalculator({
         }
       }
       
-      // Calculate ARR (Platform Fees - all MW-based pricing)
+      // Get Solcast addon cost separately (it's ARR, not NRR)
+      const solcastCost = result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
+
+      // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const arrAmount = (result.basePricingCost || 0) +
         (result.starterPackageCost || 0) +
         result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
@@ -1043,10 +1051,14 @@ export function InvoiceCalculator({
         (result.discountedAssetsTotal || 0) +
         // Per-site fees are ARR
         (result.perSiteBreakdown?.onboardingCost || 0) +
-        (result.perSiteBreakdown?.annualSubscriptionCost || 0);
+        (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
+        // Solcast is recurring revenue - ARR
+        solcastCost;
 
-      // Calculate NRR (Implementation Fees - all addons)
-      const nrrAmount = result.addonCosts.reduce((sum, ac) => sum + ac.cost, 0);
+      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast)
+      const nrrAmount = result.addonCosts
+        .filter(ac => ac.addonId !== 'satelliteDataAPI')
+        .reduce((sum, ac) => sum + ac.cost, 0);
       
       const xeroInvoice = {
         Type: "ACCREC",
@@ -1111,7 +1123,8 @@ export function InvoiceCalculator({
       // Save invoice record to database for history tracking
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Recalculate ARR/NRR for storage
+        // Recalculate ARR/NRR for storage - Solcast is ARR, not NRR
+        const storedSolcastCost = result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
         const storedArrAmount = (result.basePricingCost || 0) +
           (result.starterPackageCost || 0) +
           result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
@@ -1125,8 +1138,12 @@ export function InvoiceCalculator({
           (result.discountedAssetsTotal || 0) +
           // Per-site fees are ARR
           (result.perSiteBreakdown?.onboardingCost || 0) +
-          (result.perSiteBreakdown?.annualSubscriptionCost || 0);
-        const storedNrrAmount = result.addonCosts.reduce((sum, ac) => sum + ac.cost, 0);
+          (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
+          // Solcast is recurring revenue - ARR
+          storedSolcastCost;
+        const storedNrrAmount = result.addonCosts
+          .filter(ac => ac.addonId !== 'satelliteDataAPI')
+          .reduce((sum, ac) => sum + ac.cost, 0);
 
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')
