@@ -154,7 +154,7 @@ export function CustomerInvoiceGroup({
   // Multiple contracts - show grouped card with selection
   return (
     <Card className={`${getBorderColor()} hover:shadow-lg transition-shadow`}>
-      <CardHeader className="pb-2">
+      <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -182,51 +182,59 @@ export function CustomerInvoiceGroup({
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-3">
+      <CardContent className="space-y-4">
         {/* Contract list with checkboxes */}
-        <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
+        <div className="border rounded-lg bg-muted/30 divide-y">
           {contracts.map((contract) => (
             <div 
               key={contract.contractId} 
-              className="flex items-center justify-between py-2 border-b last:border-b-0"
+              className="p-4 space-y-3"
             >
-              <div className="flex items-center gap-3">
-                <Checkbox
-                  id={contract.contractId}
-                  checked={selectedContracts.has(contract.contractId)}
-                  onCheckedChange={() => toggleContract(contract.contractId)}
-                />
-                <div className="flex-1">
+              {/* Row 1: Checkbox + Contract Name + Amount */}
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-3 flex-1 min-w-0">
+                  <Checkbox
+                    id={contract.contractId}
+                    checked={selectedContracts.has(contract.contractId)}
+                    onCheckedChange={() => toggleContract(contract.contractId)}
+                    className="mt-0.5"
+                  />
                   <label 
                     htmlFor={contract.contractId}
-                    className="text-sm font-medium cursor-pointer"
+                    className="font-medium cursor-pointer truncate"
                   >
                     {contract.contractName || contract.packageType}
                   </label>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <Badge variant="outline" className="text-xs">{contract.packageType}</Badge>
-                    <Badge variant="outline" className="text-xs capitalize">{contract.billingFrequency}</Badge>
-                    {contract.currency !== primaryCurrency && (
-                      <Badge variant="secondary" className="text-xs">{contract.currency}</Badge>
-                    )}
-                  </div>
                 </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">
+                <span className="font-semibold whitespace-nowrap">
                   {contract.estimatedAmount !== null 
                     ? `${contract.currency === 'EUR' ? '€' : '$'}${contract.estimatedAmount.toLocaleString()}`
                     : '-'
                   }
                 </span>
+              </div>
+              
+              {/* Row 2: Badges */}
+              <div className="flex items-center gap-2 pl-7">
+                <Badge variant="outline" className="text-xs">{contract.packageType}</Badge>
+                <Badge variant="outline" className="text-xs capitalize">{contract.billingFrequency}</Badge>
+                {contract.currency !== primaryCurrency && (
+                  <Badge variant="secondary" className="text-xs">{contract.currency}</Badge>
+                )}
+                {contract.manualInvoicing && (
+                  <Badge className="bg-orange-500 text-xs">Manual</Badge>
+                )}
+              </div>
+              
+              {/* Row 3: Individual invoice button */}
+              <div className="flex justify-end pl-7">
                 <Button 
                   variant="outline" 
                   size="sm"
                   onClick={() => onCreateIndividualInvoice(contract)}
                 >
-                  <FileText className="h-3.5 w-3.5 mr-1" />
-                  Invoice
+                  <FileText className="h-4 w-4 mr-2" />
+                  Create Invoice
                 </Button>
               </div>
             </div>
@@ -237,7 +245,7 @@ export function CustomerInvoiceGroup({
         <Button 
           onClick={handleMergedInvoice} 
           className="w-full" 
-          size="sm"
+          size="default"
           variant="default"
         >
           <Layers className="h-4 w-4 mr-2" />

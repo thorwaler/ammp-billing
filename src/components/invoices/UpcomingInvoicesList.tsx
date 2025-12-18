@@ -325,26 +325,30 @@ export function UpcomingInvoicesList({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       {groupedInvoices.map((group) => (
-        <CustomerInvoiceGroup
+        <div 
           key={`${group.customerId}-${group.invoiceDate}`}
-          customerId={group.customerId}
-          customerName={group.customerName}
-          invoiceDate={group.invoiceDate}
-          contracts={group.contracts.map(c => ({
-            contractId: c.contractId,
-            contractName: c.contractName,
-            customerId: c.customerId,
-            customerName: c.customerName,
-            nextInvoiceDate: c.nextInvoiceDate,
-            billingFrequency: c.billingFrequency,
-            currency: c.currency,
-            packageType: c.packageType,
-            estimatedAmount: c.packageType === 'per_site' ? null : calculateEstimatedAmount(c),
-            manualInvoicing: c.manualInvoicing,
-          }))}
-          onCreateIndividualInvoice={handleCreateIndividualInvoice}
-          onCreateMergedInvoice={handleCreateMergedInvoice}
-        />
+          className={group.contracts.length > 1 ? "md:col-span-2 lg:col-span-2" : ""}
+        >
+          <CustomerInvoiceGroup
+            customerId={group.customerId}
+            customerName={group.customerName}
+            invoiceDate={group.invoiceDate}
+            contracts={group.contracts.map(c => ({
+              contractId: c.contractId,
+              contractName: c.contractName,
+              customerId: c.customerId,
+              customerName: c.customerName,
+              nextInvoiceDate: c.nextInvoiceDate,
+              billingFrequency: c.billingFrequency,
+              currency: c.currency,
+              packageType: c.packageType,
+              estimatedAmount: c.packageType === 'per_site' ? null : calculateEstimatedAmount(c),
+              manualInvoicing: c.manualInvoicing,
+            }))}
+            onCreateIndividualInvoice={handleCreateIndividualInvoice}
+            onCreateMergedInvoice={handleCreateMergedInvoice}
+          />
+        </div>
       ))}
     </div>
   );
