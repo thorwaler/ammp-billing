@@ -232,7 +232,8 @@ export function InvoiceCalculator({
             ammp_asset_group_id_not,
             cached_capabilities,
             contract_ammp_org_id,
-            graduated_mw_tiers
+            graduated_mw_tiers,
+            custom_asset_pricing
           )
         `)
         .eq('status', 'active');
@@ -306,6 +307,8 @@ export function InvoiceCalculator({
             graduatedMWTiers: Array.isArray((contract as any).graduated_mw_tiers) 
               ? (contract as any).graduated_mw_tiers 
               : undefined,
+            // Custom asset pricing
+            customAssetPricing: (contract as any).custom_asset_pricing || undefined,
           };
         });
 
@@ -813,6 +816,8 @@ export function InvoiceCalculator({
       aboveThresholdPricePerMWp: selectedCustomer.aboveThresholdPricePerMWp,
       // Elum Internal fields
       graduatedMWTiers: selectedCustomer.graduatedMWTiers,
+      // Custom asset discount pricing
+      customAssetPricing: selectedCustomer.customAssetPricing,
     };
     
     calculationResult = calculateInvoice(params);
@@ -933,6 +938,19 @@ export function InvoiceCalculator({
         }
       }
       
+      // Add discounted assets line items (Platform Fees - ARR)
+      if (result.discountedAssets && result.discountedAssets.length > 0) {
+        result.discountedAssets.forEach(asset => {
+          const mwDisplay = asset.mw ? ` (${asset.mw.toFixed(2)} MW)` : '';
+          lineItems.push({
+            Description: `Discounted Rate - ${asset.assetName}${mwDisplay}`,
+            Quantity: 1,
+            UnitAmount: asset.cost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        });
+      }
+      
       // Add addon costs (Implementation Fees - NRR)
       result.addonCosts.forEach(ac => {
         lineItems.push({
@@ -1005,6 +1023,8 @@ export function InvoiceCalculator({
         (result.minimumContractAdjustment || 0) +
         (result.minimumCharges || 0) +
         (result.retainerCost || 0) +
+        // Discounted assets are ARR
+        (result.discountedAssetsTotal || 0) +
         // Per-site fees are ARR
         (result.perSiteBreakdown?.onboardingCost || 0) +
         (result.perSiteBreakdown?.annualSubscriptionCost || 0);
@@ -1085,6 +1105,8 @@ export function InvoiceCalculator({
           (result.minimumContractAdjustment || 0) +
           (result.minimumCharges || 0) +
           (result.retainerCost || 0) +
+          // Discounted assets are ARR
+          (result.discountedAssetsTotal || 0) +
           // Per-site fees are ARR
           (result.perSiteBreakdown?.onboardingCost || 0) +
           (result.perSiteBreakdown?.annualSubscriptionCost || 0);
@@ -1961,6 +1983,34 @@ export function InvoiceCalculator({
                       <span>{formatCurrency(result.perSiteBreakdown.annualSubscriptionCost)}</span>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* Discounted Assets breakdown */}
+            {result.discountedAssets && result.discountedAssets.length > 0 && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm text-purple-600 dark:text-purple-400">Discounted Assets:</h4>
+                <p className="text-xs text-muted-foreground pl-2">
+                  These assets have special discounted rates and are excluded from standard MW-based calculations.
+                </p>
+                <div className="space-y-1 text-sm pl-2">
+                  {result.discountedAssets.map((asset) => (
+                    <div key={asset.assetId} className="flex justify-between">
+                      <span>
+                        {asset.assetName} 
+                        <span className="text-muted-foreground">
+                          {' '}({asset.mw.toFixed(2)} MW × {asset.pricingType === 'annual' ? 'Fixed' : `${selectedCustomer?.currency === 'USD' ? '$' : '€'}${asset.rate}/MW`})
+                        </span>
+                        {asset.note && <span className="text-xs text-muted-foreground ml-1">- {asset.note}</span>}
+                      </span>
+                      <span className="font-medium">{formatCurrency(asset.cost)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
+                    <span>Total Discounted Assets:</span>
+                    <span>{formatCurrency(result.discountedAssetsTotal || 0)}</span>
+                  </div>
                 </div>
               </div>
             )}

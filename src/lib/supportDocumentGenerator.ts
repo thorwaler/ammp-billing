@@ -107,6 +107,18 @@ export interface SupportDocumentData {
     totalCost: number;
   };
   
+  // Discounted assets breakdown
+  discountedAssetsBreakdown?: {
+    assetId: string;
+    assetName: string;
+    mw: number;
+    pricingType: 'annual' | 'per_mw';
+    rate: number;
+    cost: number;
+    note?: string;
+  }[];
+  discountedAssetsTotal?: number;
+  
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
@@ -121,6 +133,7 @@ export interface SupportDocumentData {
     baseMonthlyPrice: number;
     retainerCost: number;
     addonsTotal: number;
+    discountedAssetsTotal: number;
   };
 }
 
@@ -275,6 +288,23 @@ export async function generateSupportDocumentData(
     };
   }
 
+  // Generate discounted assets breakdown if applicable
+  let discountedAssetsBreakdown: SupportDocumentData['discountedAssetsBreakdown'];
+  let discountedAssetsTotal = 0;
+  
+  if (calculationResult.discountedAssets && calculationResult.discountedAssets.length > 0) {
+    discountedAssetsBreakdown = calculationResult.discountedAssets.map(asset => ({
+      assetId: asset.assetId,
+      assetName: asset.assetName,
+      mw: asset.mw,
+      pricingType: asset.pricingType,
+      rate: asset.rate,
+      cost: asset.cost,
+      note: asset.note
+    }));
+    discountedAssetsTotal = calculationResult.discountedAssetsTotal || 0;
+  }
+
   // Calculate total including all addon costs and validate
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
   const minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
@@ -301,6 +331,7 @@ export async function generateSupportDocumentData(
     minimumContractAdjustment +
     calculationResult.basePricingCost +
     calculationResult.retainerCost +
+    discountedAssetsTotal +
     totalAddonCosts;
   
   const invoiceTotal = calculationResult.totalPrice;
@@ -326,6 +357,8 @@ export async function generateSupportDocumentData(
     elumEpmBreakdown,
     elumJubailiBreakdown,
     elumInternalBreakdown,
+    discountedAssetsBreakdown,
+    discountedAssetsTotal,
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
@@ -337,7 +370,8 @@ export async function generateSupportDocumentData(
       minimumContractAdjustment,
       baseMonthlyPrice: calculationResult.basePricingCost,
       retainerCost: calculationResult.retainerCost,
-      addonsTotal: totalAddonCosts
+      addonsTotal: totalAddonCosts,
+      discountedAssetsTotal
     }
   };
 }
