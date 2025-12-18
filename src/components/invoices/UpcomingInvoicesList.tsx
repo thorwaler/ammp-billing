@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
-import { InvoiceCard } from "./InvoiceCard";
+import { useState, useEffect, useMemo } from "react";
+import { CustomerInvoiceGroup } from "./CustomerInvoiceGroup";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { calculateInvoice } from "@/lib/invoiceCalculations";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
 
-interface UpcomingInvoice {
+export interface UpcomingInvoice {
   contractId: string;
   contractName?: string;
   customerId: string;
@@ -42,12 +42,24 @@ interface UpcomingInvoice {
   graduatedMWTiers?: GraduatedMWTier[];
 }
 
+interface CustomerGroup {
+  customerId: string;
+  customerName: string;
+  invoiceDate: string;
+  contracts: UpcomingInvoice[];
+}
+
 interface UpcomingInvoicesListProps {
   onCreateInvoice: (invoice: UpcomingInvoice) => void;
+  onCreateMergedInvoice?: (invoices: UpcomingInvoice[]) => void;
   refreshTrigger?: number;
 }
 
-export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: UpcomingInvoicesListProps) {
+export function UpcomingInvoicesList({ 
+  onCreateInvoice, 
+  onCreateMergedInvoice,
+  refreshTrigger 
+}: UpcomingInvoicesListProps) {
   const [invoices, setInvoices] = useState<UpcomingInvoice[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -241,6 +253,58 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
     return result.totalPrice;
   };
 
+  // Group invoices by customer + date
+  const groupedInvoices = useMemo((): CustomerGroup[] => {
+    const groups = new Map<string, CustomerGroup>();
+    
+    for (const invoice of invoices) {
+      // Use date only (not time) for grouping
+      const dateKey = invoice.nextInvoiceDate.split('T')[0];
+      const key = `${invoice.customerId}-${dateKey}`;
+      
+      if (!groups.has(key)) {
+        groups.set(key, {
+          customerId: invoice.customerId,
+          customerName: invoice.customerName,
+          invoiceDate: invoice.nextInvoiceDate,
+          contracts: []
+        });
+      }
+      
+      // Add estimated amount to the invoice for display
+      const estimatedAmount = invoice.packageType === 'per_site' ? null : calculateEstimatedAmount(invoice);
+      
+      groups.get(key)!.contracts.push({
+        ...invoice,
+        // Store estimated amount for display in the group
+      });
+    }
+    
+    // Sort by date
+    return Array.from(groups.values()).sort((a, b) => 
+      new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime()
+    );
+  }, [invoices]);
+
+  const handleCreateIndividualInvoice = (contract: any) => {
+    // Find the full invoice data
+    const invoice = invoices.find(i => i.contractId === contract.contractId);
+    if (invoice) {
+      onCreateInvoice(invoice);
+    }
+  };
+
+  const handleCreateMergedInvoice = (contracts: any[]) => {
+    // Find full invoice data for all contracts
+    const fullInvoices = contracts.map(c => 
+      invoices.find(i => i.contractId === c.contractId)
+    ).filter(Boolean) as UpcomingInvoice[];
+    
+    if (onCreateMergedInvoice && fullInvoices.length > 0) {
+      onCreateMergedInvoice(fullInvoices);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -260,19 +324,26 @@ export function UpcomingInvoicesList({ onCreateInvoice, refreshTrigger }: Upcomi
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {invoices.map((invoice) => (
-        <InvoiceCard
-          key={invoice.contractId}
-          contractId={invoice.contractId}
-          contractName={invoice.contractName}
-          customerName={invoice.customerName}
-          nextInvoiceDate={invoice.nextInvoiceDate}
-          billingFrequency={invoice.billingFrequency}
-          currency={invoice.currency}
-          packageType={invoice.packageType}
-          estimatedAmount={invoice.packageType === 'per_site' ? null : calculateEstimatedAmount(invoice)}
-          manualInvoicing={invoice.manualInvoicing}
-          onCreateInvoice={() => onCreateInvoice(invoice)}
+      {groupedInvoices.map((group) => (
+        <CustomerInvoiceGroup
+          key={`${group.customerId}-${group.invoiceDate}`}
+          customerId={group.customerId}
+          customerName={group.customerName}
+          invoiceDate={group.invoiceDate}
+          contracts={group.contracts.map(c => ({
+            contractId: c.contractId,
+            contractName: c.contractName,
+            customerId: c.customerId,
+            customerName: c.customerName,
+            nextInvoiceDate: c.nextInvoiceDate,
+            billingFrequency: c.billingFrequency,
+            currency: c.currency,
+            packageType: c.packageType,
+            estimatedAmount: c.packageType === 'per_site' ? null : calculateEstimatedAmount(c),
+            manualInvoicing: c.manualInvoicing,
+          }))}
+          onCreateIndividualInvoice={handleCreateIndividualInvoice}
+          onCreateMergedInvoice={handleCreateMergedInvoice}
         />
       ))}
     </div>

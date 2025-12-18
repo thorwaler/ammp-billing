@@ -1,34 +1,28 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
-import { UpcomingInvoicesList } from "@/components/invoices/UpcomingInvoicesList";
+import { UpcomingInvoicesList, UpcomingInvoice } from "@/components/invoices/UpcomingInvoicesList";
 import { InvoiceCalculatorDialog } from "@/components/invoices/InvoiceCalculatorDialog";
+import { MergedInvoiceDialog } from "@/components/invoices/MergedInvoiceDialog";
 import { Button } from "@/components/ui/button";
 import { FileText, Calculator, Plus, History } from "lucide-react";
-
-interface UpcomingInvoice {
-  contractId: string;
-  customerId: string;
-  customerName: string;
-  nextInvoiceDate: string;
-  billingFrequency: string;
-  packageType: string;
-  mwpManaged: number;
-  modules: any[];
-  addons: any[];
-  minimumCharge: number;
-  customPricing: any;
-}
 
 const InvoiceCreator = () => {
   const navigate = useNavigate();
   const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [mergedDialogOpen, setMergedDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<UpcomingInvoice | null>(null);
+  const [selectedMergeInvoices, setSelectedMergeInvoices] = useState<UpcomingInvoice[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleCreateInvoice = (invoice: UpcomingInvoice) => {
     setSelectedInvoice(invoice);
     setCalculatorOpen(true);
+  };
+
+  const handleCreateMergedInvoice = (invoices: UpcomingInvoice[]) => {
+    setSelectedMergeInvoices(invoices);
+    setMergedDialogOpen(true);
   };
 
   const handleOpenBlankCalculator = () => {
@@ -39,6 +33,7 @@ const InvoiceCreator = () => {
   const handleInvoiceCreated = () => {
     setRefreshTrigger(prev => prev + 1);
     setSelectedInvoice(null);
+    setSelectedMergeInvoices([]);
   };
 
   return (
@@ -81,6 +76,7 @@ const InvoiceCreator = () => {
         {/* Upcoming Invoices Grid */}
         <UpcomingInvoicesList 
           onCreateInvoice={handleCreateInvoice}
+          onCreateMergedInvoice={handleCreateMergedInvoice}
           refreshTrigger={refreshTrigger}
         />
 
@@ -91,6 +87,14 @@ const InvoiceCreator = () => {
           preselectedCustomerId={selectedInvoice?.customerId}
           preselectedContractId={selectedInvoice?.contractId}
           prefilledDate={selectedInvoice ? new Date(selectedInvoice.nextInvoiceDate) : undefined}
+          onInvoiceCreated={handleInvoiceCreated}
+        />
+
+        {/* Merged Invoice Dialog */}
+        <MergedInvoiceDialog
+          open={mergedDialogOpen}
+          onOpenChange={setMergedDialogOpen}
+          contracts={selectedMergeInvoices}
           onInvoiceCreated={handleInvoiceCreated}
         />
       </div>

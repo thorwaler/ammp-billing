@@ -1114,7 +1114,9 @@ export function InvoiceCalculator({
         Date: format(invoiceDate, "yyyy-MM-dd"),
         DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), // 30 days from invoice date
         LineItems: lineItems,
-        Reference: `${selectedCustomer.nickname || selectedCustomer.companyName || selectedCustomer.name}-${format(invoiceDate, "yyyyMMdd")}`,
+        Reference: selectedCustomer.contractName 
+          ? `${selectedCustomer.contractName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 30)}-${format(invoiceDate, "yyyyMMdd")}`
+          : `${selectedCustomer.nickname || selectedCustomer.companyName || selectedCustomer.name}-${format(invoiceDate, "yyyyMMdd")}`,
         CurrencyCode: selectedCustomer.currency,
         Status: "DRAFT"
       };
