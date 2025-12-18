@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -151,115 +151,86 @@ export function CustomerInvoiceGroup({
     );
   }
 
-  // Multiple contracts - show grouped card with selection
+  // Multiple contracts - show grouped card with compact horizontal table
   return (
     <Card className={`${getBorderColor()} hover:shadow-lg transition-shadow`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold text-lg">{customerName}</h3>
-              <Badge variant="secondary" className="flex items-center gap-1">
-                <Layers className="h-3 w-3" />
-                {contracts.length} Contracts
-              </Badge>
-            </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>{formatDateCET(invoiceDate, "MMM d, yyyy")}</span>
-              <span className="text-xs">
-                ({daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
-              </span>
-            </div>
+      {/* Compact header row */}
+      <div className="flex items-center justify-between px-4 py-3 border-b">
+        <div className="flex items-center gap-3">
+          <h3 className="font-semibold">{customerName}</h3>
+          <Badge variant="secondary" className="text-xs">
+            <Layers className="h-3 w-3 mr-1" />
+            {contracts.length}
+          </Badge>
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5" />
+            <span>{formatDateCET(invoiceDate, "MMM d, yyyy")}</span>
           </div>
           {getUrgencyBadge()}
         </div>
-        
-        <div className="flex items-center gap-2 text-lg font-semibold mt-2">
-          <span className="text-muted-foreground">{currencySymbol}</span>
-          <span>{totalEstimatedAmount.toLocaleString()}</span>
-          <span className="text-sm text-muted-foreground font-normal">total estimated</span>
+        <div className="font-semibold">
+          {currencySymbol}{totalEstimatedAmount.toLocaleString()}
         </div>
-      </CardHeader>
+      </div>
       
-      <CardContent className="space-y-4">
-        {/* Contract list with checkboxes */}
-        <div className="border rounded-lg bg-muted/30 divide-y">
-          {contracts.map((contract) => (
-            <div 
-              key={contract.contractId} 
-              className="p-4 space-y-3"
-            >
-              {/* Row 1: Checkbox + Contract Name + Amount */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <Checkbox
-                    id={contract.contractId}
-                    checked={selectedContracts.has(contract.contractId)}
-                    onCheckedChange={() => toggleContract(contract.contractId)}
-                    className="mt-0.5"
-                  />
-                  <label 
-                    htmlFor={contract.contractId}
-                    className="font-medium cursor-pointer truncate"
-                  >
-                    {contract.contractName || contract.packageType}
-                  </label>
-                </div>
-                <span className="font-semibold whitespace-nowrap">
-                  {contract.estimatedAmount !== null 
-                    ? `${contract.currency === 'EUR' ? '€' : '$'}${contract.estimatedAmount.toLocaleString()}`
-                    : '-'
-                  }
-                </span>
-              </div>
-              
-              {/* Row 2: Badges */}
-              <div className="flex items-center gap-2 pl-7">
-                <Badge variant="outline" className="text-xs">{contract.packageType}</Badge>
-                <Badge variant="outline" className="text-xs capitalize">{contract.billingFrequency}</Badge>
-                {contract.currency !== primaryCurrency && (
-                  <Badge variant="secondary" className="text-xs">{contract.currency}</Badge>
-                )}
-                {contract.manualInvoicing && (
-                  <Badge className="bg-orange-500 text-xs">Manual</Badge>
-                )}
-              </div>
-              
-              {/* Row 3: Individual invoice button */}
-              <div className="flex justify-end pl-7">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => onCreateIndividualInvoice(contract)}
-                >
-                  <FileText className="h-4 w-4 mr-2" />
-                  Create Invoice
-                </Button>
-              </div>
+      {/* Compact contract table */}
+      <div className="divide-y">
+        {contracts.map((contract) => (
+          <div 
+            key={contract.contractId} 
+            className="flex items-center gap-3 px-4 py-2 hover:bg-muted/30"
+          >
+            <Checkbox
+              id={contract.contractId}
+              checked={selectedContracts.has(contract.contractId)}
+              onCheckedChange={() => toggleContract(contract.contractId)}
+            />
+            <span className="font-medium min-w-0 truncate flex-1">
+              {contract.contractName || contract.packageType}
+            </span>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Badge variant="outline" className="text-xs">{contract.packageType}</Badge>
+              <Badge variant="outline" className="text-xs capitalize">{contract.billingFrequency}</Badge>
+              {contract.currency !== primaryCurrency && (
+                <Badge variant="secondary" className="text-xs">{contract.currency}</Badge>
+              )}
+              {contract.manualInvoicing && (
+                <Badge className="bg-orange-500 text-xs">Manual</Badge>
+              )}
             </div>
-          ))}
-        </div>
-        
-        {/* Merged invoice button */}
+            <span className="font-semibold w-24 text-right shrink-0">
+              {contract.estimatedAmount !== null 
+                ? `${contract.currency === 'EUR' ? '€' : '$'}${contract.estimatedAmount.toLocaleString()}`
+                : '-'
+              }
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="shrink-0"
+              onClick={() => onCreateIndividualInvoice(contract)}
+            >
+              Invoice
+            </Button>
+          </div>
+        ))}
+      </div>
+      
+      {/* Merged invoice footer */}
+      <div className="px-4 py-3 border-t bg-muted/20">
         <Button 
           onClick={handleMergedInvoice} 
           className="w-full" 
-          size="default"
-          variant="default"
+          size="sm"
         >
           <Layers className="h-4 w-4 mr-2" />
           Create Merged Invoice
-          {selectedContracts.size > 0 && selectedContracts.size < contracts.length && (
-            <span className="ml-1">({selectedContracts.size} selected)</span>
-          )}
-          {(selectedContracts.size === 0 || selectedContracts.size === contracts.length) && (
-            <span className="ml-1 text-muted-foreground">
-              ({currencySymbol}{selectedAmount.toLocaleString()})
-            </span>
-          )}
+          {selectedContracts.size > 0 && selectedContracts.size < contracts.length 
+            ? ` (${selectedContracts.size} selected)`
+            : ` (${currencySymbol}${selectedAmount.toLocaleString()})`
+          }
         </Button>
-      </CardContent>
+      </div>
     </Card>
   );
 }
