@@ -47,7 +47,7 @@ const WebhookNotifications = () => {
   const [settings, setSettings] = useState<NotificationSettings>({
     zapier_webhook_url: '',
     webhook_enabled: false,
-    notification_types: ['contract_expired', 'contract_expiring_soon', 'mw_warning', 'mw_exceeded'],
+    notification_types: ['contract_expired', 'contract_expiring_soon', 'mw_warning', 'mw_exceeded', 'ammp_sync_complete', 'ammp_contract_synced', 'xero_sync_complete'],
     min_severity: 'info',
   });
 
