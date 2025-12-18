@@ -491,6 +491,7 @@ export type Database = {
           invoice_amount: number
           invoice_amount_eur: number | null
           invoice_date: string
+          merged_contract_ids: Json | null
           modules_data: Json | null
           mw_change: number | null
           mw_managed: number
@@ -523,6 +524,7 @@ export type Database = {
           invoice_amount: number
           invoice_amount_eur?: number | null
           invoice_date: string
+          merged_contract_ids?: Json | null
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed: number
@@ -555,6 +557,7 @@ export type Database = {
           invoice_amount?: number
           invoice_amount_eur?: number | null
           invoice_date?: string
+          merged_contract_ids?: Json | null
           modules_data?: Json | null
           mw_change?: number | null
           mw_managed?: number

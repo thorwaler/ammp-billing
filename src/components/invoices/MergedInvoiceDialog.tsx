@@ -510,6 +510,7 @@ export function MergedInvoiceDialog({
           xero_status: 'DRAFT',
           xero_synced_at: new Date().toISOString(),
           xero_line_items: lineItems as any,
+          merged_contract_ids: selectedContractsList.map(c => c.contractId),
           support_document_data: Array.from(supportDocuments.entries())
             .filter(([id]) => selectedContracts.has(id))
             .map(([id, doc]) => ({ contractId: id, data: doc })) as any
