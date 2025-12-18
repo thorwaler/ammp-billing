@@ -201,6 +201,56 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* Discounted Assets (if applicable) */}
+      {data.discountedAssetsBreakdown && data.discountedAssetsBreakdown.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-base font-bold mb-3 text-purple-600 dark:text-purple-400">Discounted Assets</h2>
+          <p className="text-xs text-muted-foreground mb-2">
+            These assets have special discounted rates and are excluded from standard calculations.
+          </p>
+          <table className="w-full border-collapse border border-border text-xs">
+            <thead>
+              <tr className="bg-muted">
+                <th className="border border-border p-1 text-left">Asset Name</th>
+                <th className="border border-border p-1 text-right">MW</th>
+                <th className="border border-border p-1 text-center">Pricing Type</th>
+                <th className="border border-border p-1 text-right">Rate ({data.currency})</th>
+                <th className="border border-border p-1 text-right">Cost ({data.currency})</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.discountedAssetsBreakdown.map((asset, idx) => (
+                <tr key={idx} className="bg-purple-50 dark:bg-purple-950/20">
+                  <td className="border border-border p-1">
+                    {asset.assetName}
+                    {asset.note && (
+                      <span className="text-xs text-muted-foreground ml-1">({asset.note})</span>
+                    )}
+                  </td>
+                  <td className="border border-border p-1 text-right">{asset.mw.toFixed(2)}</td>
+                  <td className="border border-border p-1 text-center">
+                    {asset.pricingType === 'annual' ? 'Annual Fixed' : 'Per MW'}
+                  </td>
+                  <td className="border border-border p-1 text-right">
+                    {asset.pricingType === 'annual' 
+                      ? formatCurrency(asset.rate) + '/yr'
+                      : formatCurrency(asset.rate) + '/MW'
+                    }
+                  </td>
+                  <td className="border border-border p-1 text-right font-medium">
+                    {formatCurrency(asset.cost)}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-muted font-bold">
+                <td className="border border-border p-1" colSpan={4}>Total Discounted Assets:</td>
+                <td className="border border-border p-1 text-right">{formatCurrency(data.discountedAssetsTotal || 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      )}
+
       {/* Retainer Hours (if applicable) */}
       {data.retainerBreakdown && data.retainerBreakdown.totalCost > 0 && (
         <section className="mb-6">
@@ -394,6 +444,12 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               <div className="flex justify-between">
                 <span>+ Retainer Hours:</span>
                 <span>{formatCurrency(data.calculationBreakdown.retainerCost)}</span>
+              </div>
+            )}
+            {data.calculationBreakdown.discountedAssetsTotal > 0 && (
+              <div className="flex justify-between text-purple-600 dark:text-purple-400">
+                <span>+ Discounted Assets:</span>
+                <span>{formatCurrency(data.calculationBreakdown.discountedAssetsTotal)}</span>
               </div>
             )}
             {data.calculationBreakdown.addonsTotal > 0 && (
