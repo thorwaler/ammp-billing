@@ -352,9 +352,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue('ammpAssetGroupIdNot', existingContract.ammpAssetGroupIdNot || '');
       form.setValue('ammpAssetGroupNameNot', existingContract.ammpAssetGroupNameNot || '');
       form.setValue('contractAmmpOrgId', existingContract.ammpOrgId || existingContract.contractAmmpOrgId || '');
-      form.setValue('siteSizeThresholdKwp', existingContract.siteSizeThresholdKwp || undefined);
-      form.setValue('belowThresholdPricePerMWp', existingContract.belowThresholdPricePerMWp || undefined);
-      form.setValue('aboveThresholdPricePerMWp', existingContract.aboveThresholdPricePerMWp || undefined);
+      form.setValue('siteSizeThresholdKwp', existingContract.siteSizeThresholdKwp ?? undefined);
+      form.setValue('belowThresholdPricePerMWp', existingContract.belowThresholdPricePerMWp ?? undefined);
+      form.setValue('aboveThresholdPricePerMWp', existingContract.aboveThresholdPricePerMWp ?? undefined);
+      form.setValue('onboardingFeePerSite', existingContract.onboardingFeePerSite ?? undefined);
+      form.setValue('annualFeePerSite', existingContract.annualFeePerSite ?? undefined);
       
       // Store contract ID for update if not extending
       if (!isExtending) {
