@@ -177,6 +177,15 @@ export function InvoiceCalculator({
   const [mwChange, setMwChange] = useState<number>(0);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { formatCurrency } = useCurrency();
+  
+  // Format currency using the contract's currency, not user display preference
+  const formatContractCurrency = (amount: number): string => {
+    const symbol = selectedCustomer?.currency === 'USD' ? '$' : '€';
+    return `${symbol}${amount.toLocaleString('en-US', { 
+      minimumFractionDigits: 0, 
+      maximumFractionDigits: 2 
+    })}`;
+  };
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
   
@@ -1039,7 +1048,7 @@ export function InvoiceCalculator({
         DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), // 30 days from invoice date
         LineItems: lineItems,
         Reference: `${selectedCustomer.nickname || selectedCustomer.companyName || selectedCustomer.name}-${format(invoiceDate, "yyyyMMdd")}`,
-        Currency: selectedCustomer.currency,
+        CurrencyCode: selectedCustomer.currency,
         Status: "DRAFT"
       };
       
@@ -1806,7 +1815,7 @@ export function InvoiceCalculator({
               <div className="space-y-1 text-sm mb-3">
                 <div className="flex justify-between">
                   <span>AMMP OS Starter Package:</span>
-                  <span>{formatCurrency(result.starterPackageCost)}</span>
+                  <span>{formatContractCurrency(result.starterPackageCost)}</span>
                 </div>
               </div>
             )}
@@ -1821,43 +1830,43 @@ export function InvoiceCalculator({
                       {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
                         <div className="flex justify-between">
                           <span>
-                            Sites above threshold ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites, {result.siteMinimumPricingBreakdown.sitesAboveThreshold.reduce((sum, s) => sum + s.mw, 0).toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.moduleCosts[0]?.rate || 0}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):
+                            Sites above threshold ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites, {result.siteMinimumPricingBreakdown.sitesAboveThreshold.reduce((sum, s) => sum + s.mw, 0).toFixed(2)} MW × {formatContractCurrency(result.moduleCosts[0]?.rate || 0)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):
                           </span>
-                          <span>{formatCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal)}</span>
+                          <span>{formatContractCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-orange-600 dark:text-orange-400">
                         <span>
                           Sites on minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length} sites × min charge):
                         </span>
-                        <span>{formatCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
+                        <span>{formatContractCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
                       </div>
                       <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
                         <span>Total Portfolio Pricing:</span>
-                        <span>{formatCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal + result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
+                        <span>{formatContractCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal + result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
                       </div>
                     </>
                   ) : result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesAboveThreshold.length === 0 ? (
                     /* ALL sites on minimum pricing (no MW-based pricing) - show total prominently */
                     <div className="flex justify-between font-medium">
                       <span>Site Minimum Charges ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length} sites):</span>
-                      <span>{formatCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
+                      <span>{formatContractCurrency(result.siteMinimumPricingBreakdown.minimumPricingTotal)}</span>
                     </div>
                   ) : (
                     /* Standard module costs display when no site minimum pricing */
                     result.moduleCosts.map((item) => (
                       <div key={item.moduleId} className="flex justify-between">
-                        <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{item.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
-                        <span>{formatCurrency(item.cost)}</span>
+                        <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {formatContractCurrency(item.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                        <span>{formatContractCurrency(item.cost)}</span>
                       </div>
                     ))
                   )}
                 </div>
                 
-                {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && !result.siteMinimumPricingBreakdown && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency) && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
+            {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && !result.siteMinimumPricingBreakdown && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency) && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Contract Value Applied:</span>
-                    <span>{formatCurrency((selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency))}</span>
+                    <span>{formatContractCurrency((selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency))}</span>
                   </div>
                 )}
               </div>
@@ -1868,12 +1877,12 @@ export function InvoiceCalculator({
                 <h4 className="font-medium text-sm">Hybrid Tiered Pricing:</h4>
                 <div className="space-y-1 text-sm pl-2">
                   <div className="flex justify-between">
-                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.ongrid.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
-                    <span>{formatCurrency(result.hybridTieredBreakdown.ongrid.cost)}</span>
+                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.ongrid.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                    <span>{formatContractCurrency(result.hybridTieredBreakdown.ongrid.cost)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{result.hybridTieredBreakdown.hybrid.rate}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
-                    <span>{formatCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
+                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.hybrid.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                    <span>{formatContractCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
                   </div>
                 </div>
               </div>
@@ -1890,17 +1899,17 @@ export function InvoiceCalculator({
                   {result.elumEpmBreakdown.smallSites.length > 0 && (
                     <div className="flex justify-between">
                       <span>
-                        Small Sites ≤{result.elumEpmBreakdown.threshold}kWp ({result.elumEpmBreakdown.smallSites.length} sites, {result.elumEpmBreakdown.smallSites.reduce((sum, s) => sum + s.capacityMW, 0).toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.belowThresholdPricePerMWp}/MWp):
+                        Small Sites ≤{result.elumEpmBreakdown.threshold}kWp ({result.elumEpmBreakdown.smallSites.length} sites, {result.elumEpmBreakdown.smallSites.reduce((sum, s) => sum + s.capacityMW, 0).toFixed(2)} MW × {formatContractCurrency(selectedCustomer?.belowThresholdPricePerMWp || 0)}/MWp):
                       </span>
-                      <span>{formatCurrency(result.elumEpmBreakdown.smallSitesTotal)}</span>
+                      <span>{formatContractCurrency(result.elumEpmBreakdown.smallSitesTotal)}</span>
                     </div>
                   )}
                   {result.elumEpmBreakdown.largeSites.length > 0 && (
                     <div className="flex justify-between">
                       <span>
-                        Large Sites &gt;{result.elumEpmBreakdown.threshold}kWp ({result.elumEpmBreakdown.largeSites.length} sites, {result.elumEpmBreakdown.largeSites.reduce((sum, s) => sum + s.capacityMW, 0).toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.aboveThresholdPricePerMWp}/MWp):
+                        Large Sites &gt;{result.elumEpmBreakdown.threshold}kWp ({result.elumEpmBreakdown.largeSites.length} sites, {result.elumEpmBreakdown.largeSites.reduce((sum, s) => sum + s.capacityMW, 0).toFixed(2)} MW × {formatContractCurrency(selectedCustomer?.aboveThresholdPricePerMWp || 0)}/MWp):
                       </span>
-                      <span>{formatCurrency(result.elumEpmBreakdown.largeSitesTotal)}</span>
+                      <span>{formatContractCurrency(result.elumEpmBreakdown.largeSitesTotal)}</span>
                     </div>
                   )}
                   {(result.elumEpmBreakdown.sitesUsingMinimum || 0) > 0 && (
@@ -1921,14 +1930,14 @@ export function InvoiceCalculator({
                   {result.elumInternalBreakdown.tiers.map((tier: any, index: number) => (
                     <div key={index} className="flex justify-between">
                       <span>
-                        {tier.label} ({tier.mwInTier.toFixed(2)} MW × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{tier.pricePerMW}/MW):
+                        {tier.label} ({tier.mwInTier.toFixed(2)} MW × {formatContractCurrency(tier.pricePerMW)}/MW):
                       </span>
-                      <span>{formatCurrency(tier.cost)}</span>
+                      <span>{formatContractCurrency(tier.cost)}</span>
                     </div>
                   ))}
                   <div className="flex justify-between font-medium border-t border-border pt-2">
                     <span>Total ({result.elumInternalBreakdown.totalMW.toFixed(2)} MW):</span>
-                    <span>{formatCurrency(result.elumInternalBreakdown.totalCost)}</span>
+                    <span>{formatContractCurrency(result.elumInternalBreakdown.totalCost)}</span>
                   </div>
                 </div>
               </div>
@@ -1950,7 +1959,7 @@ export function InvoiceCalculator({
                             className={`flex justify-between ${isApplied ? 'font-medium text-primary' : 'text-muted-foreground'}`}
                           >
                             <span>{tier.label || `Tier ${index + 1}`} ({tier.minMW}-{tier.maxMW || '∞'} MW):</span>
-                            <span>{formatCurrency(tier.chargePerSite)}/site {isApplied && '← Applied'}</span>
+                            <span>{formatContractCurrency(tier.chargePerSite)}/site {isApplied && '← Applied'}</span>
                           </div>
                         );
                       })}
@@ -1958,9 +1967,9 @@ export function InvoiceCalculator({
                   )}
                   <div className="flex justify-between font-medium border-t border-border pt-2">
                     <span>
-                      Site Fees ({result.elumJubailiBreakdown.siteCount} sites × {formatCurrency(result.elumJubailiBreakdown.perSiteFee)}/site):
+                      Site Fees ({result.elumJubailiBreakdown.siteCount} sites × {formatContractCurrency(result.elumJubailiBreakdown.perSiteFee)}/site):
                     </span>
-                    <span>{formatCurrency(result.elumJubailiBreakdown.totalCost)}</span>
+                    <span>{formatContractCurrency(result.elumJubailiBreakdown.totalCost)}</span>
                   </div>
                 </div>
               </div>
@@ -1973,14 +1982,14 @@ export function InvoiceCalculator({
                 <div className="space-y-1 text-sm pl-2">
                   {result.perSiteBreakdown.onboardingCost > 0 && (
                     <div className="flex justify-between">
-                      <span>Site Onboarding ({result.perSiteBreakdown.sitesOnboarded} sites × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.onboardingFeePerSite || 1000}):</span>
-                      <span>{formatCurrency(result.perSiteBreakdown.onboardingCost)}</span>
+                      <span>Site Onboarding ({result.perSiteBreakdown.sitesOnboarded} sites × {formatContractCurrency(selectedCustomer?.onboardingFeePerSite || 1000)}):</span>
+                      <span>{formatContractCurrency(result.perSiteBreakdown.onboardingCost)}</span>
                     </div>
                   )}
                   {result.perSiteBreakdown.annualSubscriptionCost > 0 && (
                     <div className="flex justify-between">
-                      <span>Annual Subscription ({result.perSiteBreakdown.sitesRenewed} sites × {selectedCustomer?.currency === 'USD' ? '$' : '€'}{selectedCustomer?.annualFeePerSite || 1000}):</span>
-                      <span>{formatCurrency(result.perSiteBreakdown.annualSubscriptionCost)}</span>
+                      <span>Annual Subscription ({result.perSiteBreakdown.sitesRenewed} sites × {formatContractCurrency(selectedCustomer?.annualFeePerSite || 1000)}):</span>
+                      <span>{formatContractCurrency(result.perSiteBreakdown.annualSubscriptionCost)}</span>
                     </div>
                   )}
                 </div>
@@ -2000,16 +2009,16 @@ export function InvoiceCalculator({
                       <span>
                         {asset.assetName} 
                         <span className="text-muted-foreground">
-                          {' '}({asset.mw.toFixed(2)} MW × {asset.pricingType === 'annual' ? 'Fixed' : `${selectedCustomer?.currency === 'USD' ? '$' : '€'}${asset.rate}/MW`})
+                          {' '}({asset.mw.toFixed(2)} MW × {asset.pricingType === 'annual' ? 'Fixed' : `${formatContractCurrency(asset.rate)}/MW`})
                         </span>
                         {asset.note && <span className="text-xs text-muted-foreground ml-1">- {asset.note}</span>}
                       </span>
-                      <span className="font-medium">{formatCurrency(asset.cost)}</span>
+                      <span className="font-medium">{formatContractCurrency(asset.cost)}</span>
                     </div>
                   ))}
                   <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
                     <span>Total Discounted Assets:</span>
-                    <span>{formatCurrency(result.discountedAssetsTotal || 0)}</span>
+                    <span>{formatContractCurrency(result.discountedAssetsTotal || 0)}</span>
                   </div>
                 </div>
               </div>
@@ -2029,21 +2038,21 @@ export function InvoiceCalculator({
                             {item.addonName}
                             {quantity > 1 && item.addonId === 'satelliteDataAPI' && item.pricePerUnit && (
                               <span className="text-muted-foreground">
-                                {' '}({quantity} sites × {formatCurrency(item.pricePerUnit)}/mo × {getPeriodMonthsMultiplier(billingFrequency)} months)
+                                {' '}({quantity} sites × {formatContractCurrency(item.pricePerUnit)}/mo × {getPeriodMonthsMultiplier(billingFrequency)} months)
                               </span>
                             )}
                             {quantity > 1 && item.addonId !== 'satelliteDataAPI' && (
                               <span className="text-muted-foreground">
-                                {' '}({quantity} × {formatCurrency(item.cost / quantity / getFrequencyMultiplier(billingFrequency))})
+                                {' '}({quantity} × {formatContractCurrency(item.cost / quantity / getFrequencyMultiplier(billingFrequency))})
                               </span>
                             )}:
                           </span>
-                          <span className="font-medium">{formatCurrency(item.cost)}</span>
+                          <span className="font-medium">{formatContractCurrency(item.cost)}</span>
                         </div>
                         {/* Show tier details for tiered addons */}
                         {item.tierApplied && (
                           <div className="text-xs text-muted-foreground pl-2">
-                            Tier: {item.tierApplied.label} @ {formatCurrency(item.pricePerUnit)}/site
+                            Tier: {item.tierApplied.label} @ {formatContractCurrency(item.pricePerUnit)}/site
                           </div>
                         )}
                       </div>
@@ -2058,7 +2067,7 @@ export function InvoiceCalculator({
               <div className="space-y-2 mb-3">
                 <div className="flex justify-between text-sm">
                   <span>Minimum Charges:</span>
-                  <span>{formatCurrency(result.minimumCharges)}</span>
+                  <span>{formatContractCurrency(result.minimumCharges)}</span>
                 </div>
               </div>
             )}
@@ -2070,7 +2079,7 @@ export function InvoiceCalculator({
                   View site-by-site pricing breakdown
                 </summary>
                 <div className="space-y-3 mt-2">
-                  {result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 && (
+                    {result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0 && (
                     <div>
                       <div className="font-medium mb-1 text-orange-600 dark:text-orange-400">
                         Sites on minimum pricing ({result.siteMinimumPricingBreakdown.sitesBelowThreshold.length}):
@@ -2083,8 +2092,8 @@ export function InvoiceCalculator({
                               <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
                             </div>
                             <div className="text-right">
-                              <div className="line-through text-muted-foreground">{formatCurrency(site.calculatedCost)}</div>
-                              <div className="font-medium text-orange-600 dark:text-orange-400">{formatCurrency(site.minimumCharge)}</div>
+                              <div className="line-through text-muted-foreground">{formatContractCurrency(site.calculatedCost)}</div>
+                              <div className="font-medium text-orange-600 dark:text-orange-400">{formatContractCurrency(site.minimumCharge)}</div>
                             </div>
                           </div>
                         ))}
@@ -2104,7 +2113,7 @@ export function InvoiceCalculator({
                               <div className="font-medium">{site.assetName}</div>
                               <div className="text-muted-foreground">{site.mw.toFixed(2)} MWp</div>
                             </div>
-                            <div className="font-medium">{formatCurrency(site.calculatedCost)}</div>
+                            <div className="font-medium">{formatContractCurrency(site.calculatedCost)}</div>
                           </div>
                         ))}
                       </div>
@@ -2118,15 +2127,15 @@ export function InvoiceCalculator({
               <div className="flex justify-between text-sm text-orange-600 dark:text-orange-400 mb-3">
                 <span>Minimum Contract Value Adjustment:</span>
                 <span className="font-medium">
-                  {formatCurrency(result.minimumContractAdjustment)}
+                  {formatContractCurrency(result.minimumContractAdjustment)}
                 </span>
               </div>
             )}
             
             {result.basePricingCost > 0 && (
               <div className="flex justify-between text-sm mb-3">
-                <span>Base Pricing ({getPeriodMonthsMultiplier(billingFrequency)} months × {formatCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
-                <span>{formatCurrency(result.basePricingCost)}</span>
+                <span>Base Pricing ({getPeriodMonthsMultiplier(billingFrequency)} months × {formatContractCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
+                <span>{formatContractCurrency(result.basePricingCost)}</span>
               </div>
             )}
             
@@ -2136,10 +2145,10 @@ export function InvoiceCalculator({
                   Retainer Hours
                   {result.retainerMinimumApplied 
                     ? ' (Minimum applied)'
-                    : ` (${selectedCustomer.retainerHours || 0} hrs × ${formatCurrency(selectedCustomer.retainerHourlyRate || 0)}/hr)`
+                    : ` (${selectedCustomer.retainerHours || 0} hrs × ${formatContractCurrency(selectedCustomer.retainerHourlyRate || 0)}/hr)`
                   }:
                 </span>
-                <span>{formatCurrency(result.retainerCost)}</span>
+                <span>{formatContractCurrency(result.retainerCost)}</span>
               </div>
             )}
             
@@ -2147,7 +2156,7 @@ export function InvoiceCalculator({
             
             <div className="flex justify-between font-medium">
               <span>Total Invoice Amount:</span>
-              <span>{formatCurrency(result.totalPrice)}</span>
+              <span>{formatContractCurrency(result.totalPrice)}</span>
             </div>
             
             {selectedCustomer?.manualInvoicing ? (
