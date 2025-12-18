@@ -323,6 +323,19 @@ export async function generateSupportDocumentData(
                                  calculationResult.siteMinimumPricingBreakdown.minimumPricingTotal;
     // Don't add minimumCharges separately - it's already included in minimumPricingTotal
     minimumChargesForBreakdown = 0;
+  } else if (calculationResult.elumInternalBreakdown) {
+    // For Elum Internal, use the graduated tier total cost (already period-adjusted)
+    assetBreakdownPeriodTotal = calculationResult.elumInternalBreakdown.totalCost;
+    minimumChargesForBreakdown = 0;
+  } else if (calculationResult.elumJubailiBreakdown) {
+    // For Elum Jubaili, use the per-site total (already period-adjusted)
+    assetBreakdownPeriodTotal = calculationResult.elumJubailiBreakdown.totalCost;
+    minimumChargesForBreakdown = 0;
+  } else if (calculationResult.elumEpmBreakdown) {
+    // For Elum ePM, use the combined tier totals (already period-adjusted)
+    assetBreakdownPeriodTotal = calculationResult.elumEpmBreakdown.smallSitesTotal + 
+                                 calculationResult.elumEpmBreakdown.largeSitesTotal;
+    minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
     assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
