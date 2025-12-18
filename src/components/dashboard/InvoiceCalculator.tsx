@@ -779,7 +779,10 @@ export function InvoiceCalculator({
       assetId: asset.assetId,
       assetName: asset.assetName,
       totalMW: asset.totalMW,
-      isHybrid: asset.isHybrid
+      isHybrid: asset.isHybrid,
+      hasSolcast: asset.hasSolcast,
+      solcastOnboardingDate: asset.solcastOnboardingDate,
+      onboardingDate: asset.onboardingDate
     }));
     
     // Enable site minimum pricing if we have asset breakdown and minimum charge tiers
@@ -827,6 +830,10 @@ export function InvoiceCalculator({
       graduatedMWTiers: selectedCustomer.graduatedMWTiers,
       // Custom asset discount pricing
       customAssetPricing: selectedCustomer.customAssetPricing,
+      // Pro-rata Solcast calculation fields
+      invoiceDate,
+      periodStart: selectedCustomer.periodStart,
+      periodEnd: selectedCustomer.periodEnd,
     };
     
     calculationResult = calculateInvoice(params);

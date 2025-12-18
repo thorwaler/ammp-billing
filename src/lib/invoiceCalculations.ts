@@ -82,6 +82,9 @@ export interface CalculationParams {
     assetName: string;
     totalMW: number;
     isHybrid?: boolean;
+    hasSolcast?: boolean;
+    solcastOnboardingDate?: string;
+    onboardingDate?: string;
   }>;
   enableSiteMinimumPricing?: boolean;
   baseMonthlyPrice?: number;
@@ -101,6 +104,10 @@ export interface CalculationParams {
   graduatedMWTiers?: GraduatedMWTier[];
   // Custom asset discount pricing
   customAssetPricing?: CustomAssetPricing;
+  // Pro-rata Solcast calculation fields
+  invoiceDate?: Date;
+  periodStart?: string;
+  periodEnd?: string;
 }
 
 export interface SiteMinimumPricingResult {
@@ -316,12 +323,48 @@ export function calculateModuleCosts(params: CalculationParams): {
 }
 
 /**
+ * Get months for a billing period (working backward from invoice date)
+ */
+function getMonthsForPeriodCalc(
+  billingFrequency: string,
+  invoiceDate?: Date,
+  periodStart?: string,
+  periodEnd?: string
+): Date[] {
+  const months: Date[] = [];
+  const monthCount = getPeriodMonthsMultiplier(billingFrequency);
+  
+  // Use invoice date or current date
+  const baseDate = invoiceDate || new Date();
+  
+  // Work backward from the invoice date month to get the billing period months
+  for (let i = monthCount - 1; i >= 0; i--) {
+    const monthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
+    months.push(monthDate);
+  }
+  
+  return months;
+}
+
+/**
+ * Get end of month for a given date
+ */
+function getEndOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
+}
+
+/**
  * Calculate addon costs with tiered pricing support
+ * Now supports pro-rata Solcast calculation based on solcastOnboardingDate
  */
 export function calculateAddonCosts(
   selectedAddons: CalculationParams['selectedAddons'],
   frequencyMultiplier: number,
-  billingFrequency?: string
+  billingFrequency?: string,
+  assetBreakdown?: CalculationParams['assetBreakdown'],
+  invoiceDate?: Date,
+  periodStart?: string,
+  periodEnd?: string
 ): CalculationResult['addonCosts'] {
   return selectedAddons.map(addon => {
     const addonDef = ADDONS.find(a => a.id === addon.id);
@@ -331,8 +374,40 @@ export function calculateAddonCosts(
     if (addonDef.tieredPricing && addon.quantity) {
       const tierCalc = calculateTieredPrice(addonDef, addon.quantity, addon.customTiers);
       
-      // Satellite Data API uses monthly pricing, multiply by period months
-      // Other addons are one-off costs, no multiplication needed
+      // Satellite Data API - use pro-rata calculation if we have asset breakdown
+      if (addon.id === 'satelliteDataAPI' && billingFrequency && assetBreakdown && assetBreakdown.length > 0) {
+        const solcastAssets = assetBreakdown.filter(a => a.hasSolcast);
+        
+        if (solcastAssets.length > 0) {
+          const months = getMonthsForPeriodCalc(billingFrequency, invoiceDate, periodStart, periodEnd);
+          
+          let totalSiteMonths = 0;
+          for (const month of months) {
+            const endOfMonth = getEndOfMonth(month);
+            // Count Solcast assets that were onboarded before or during this month
+            const activeSites = solcastAssets.filter(asset => {
+              const deviceDate = asset.solcastOnboardingDate || asset.onboardingDate;
+              if (!deviceDate) return true; // No date = assume active
+              return new Date(deviceDate) <= endOfMonth;
+            }).length;
+            totalSiteMonths += activeSites;
+          }
+          
+          // Pro-rata cost: site-months × price per unit
+          const proRataCost = totalSiteMonths * tierCalc.pricePerUnit;
+          
+          return {
+            addonId: addon.id,
+            addonName: addonDef.name,
+            cost: proRataCost,
+            quantity: addon.quantity,
+            tierApplied: tierCalc.appliedTier,
+            pricePerUnit: tierCalc.pricePerUnit
+          };
+        }
+      }
+      
+      // Non-Solcast addons or no asset data - use flat calculation
       const priceMultiplier = addon.id === 'satelliteDataAPI' && billingFrequency
         ? getPeriodMonthsMultiplier(billingFrequency)
         : 1;
@@ -864,8 +939,16 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     }
   }
   
-  // Calculate addon costs
-  result.addonCosts = calculateAddonCosts(selectedAddons, frequencyMultiplier, params.billingFrequency);
+  // Calculate addon costs (with pro-rata Solcast calculation if asset breakdown available)
+  result.addonCosts = calculateAddonCosts(
+    selectedAddons, 
+    frequencyMultiplier, 
+    params.billingFrequency,
+    params.assetBreakdown,
+    params.invoiceDate,
+    params.periodStart,
+    params.periodEnd
+  );
   
   // Calculate minimum charges (with tier support) - only if not already set by site-level pricing
   // Skip for elum_epm as minimum is applied per-site as a floor in the breakdown
