@@ -327,7 +327,7 @@ export function UpcomingInvoicesList({
       {groupedInvoices.map((group) => (
         <div 
           key={`${group.customerId}-${group.invoiceDate}`}
-          className={group.contracts.length > 1 ? "md:col-span-2 lg:col-span-2" : ""}
+          className={group.contracts.length > 1 ? "col-span-full" : ""}
         >
           <CustomerInvoiceGroup
             customerId={group.customerId}
