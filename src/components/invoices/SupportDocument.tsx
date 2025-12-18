@@ -1,5 +1,5 @@
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
-import { format } from "date-fns";
+import { formatDateCET } from "@/lib/dateUtils";
 
 interface SupportDocumentProps {
   data: SupportDocumentData;
@@ -29,7 +29,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             <p><strong>Invoice Period:</strong> {data.invoicePeriod}</p>
           </div>
           <div>
-            <p><strong>Date:</strong> {format(data.invoiceDate, 'dd MMM yyyy')}</p>
+            <p><strong>Date:</strong> {formatDateCET(data.invoiceDate.toISOString(), 'dd MMM yyyy')}</p>
             <p><strong>Currency:</strong> {data.currency}</p>
             {data.discountPercent > 0 && (
               <p><strong>Portfolio Discount:</strong> {data.discountPercent}%</p>

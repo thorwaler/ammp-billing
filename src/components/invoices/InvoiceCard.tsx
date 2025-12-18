@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FileText, Calendar, DollarSign } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { format, differenceInDays } from "date-fns";
+import { differenceInDays } from "date-fns";
+import { parseDateCET, formatDateCET } from "@/lib/dateUtils";
 
 interface InvoiceCardProps {
   contractId: string;
@@ -31,7 +32,7 @@ export function InvoiceCard({
 }: InvoiceCardProps) {
   const { formatCurrency } = useCurrency();
   const currencySymbol = currency === 'EUR' ? '€' : '$';
-  const invoiceDate = new Date(nextInvoiceDate);
+  const invoiceDate = parseDateCET(nextInvoiceDate);
   const daysUntil = differenceInDays(invoiceDate, new Date());
   
   // Determine border color based on urgency
@@ -61,7 +62,7 @@ export function InvoiceCard({
             )}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Calendar className="h-3.5 w-3.5" />
-              <span>{format(invoiceDate, "MMM d, yyyy")}</span>
+              <span>{formatDateCET(nextInvoiceDate, "MMM d, yyyy")}</span>
               <span className="text-xs">
                 ({daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
               </span>
