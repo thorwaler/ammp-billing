@@ -414,6 +414,27 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   <span>{formatCurrency(data.calculationBreakdown.assetBreakdownPeriod)}</span>
                 </div>
               </>
+            ) : data.elumInternalBreakdown ? (
+              <div className="flex justify-between">
+                <span>Elum Internal Graduated Tiers ({data.elumInternalBreakdown.totalMW.toFixed(2)} MW):</span>
+                <span>{formatCurrency(data.elumInternalBreakdown.totalCost)}</span>
+              </div>
+            ) : data.elumJubailiBreakdown ? (
+              <div className="flex justify-between">
+                <span>Elum Jubaili Per-Site ({data.elumJubailiBreakdown.siteCount} sites):</span>
+                <span>{formatCurrency(data.elumJubailiBreakdown.totalCost)}</span>
+              </div>
+            ) : data.elumEpmBreakdown ? (
+              <>
+                <div className="flex justify-between">
+                  <span>Elum ePM Small Sites ({data.elumEpmBreakdown.smallSitesCount} sites):</span>
+                  <span>{formatCurrency(data.elumEpmBreakdown.smallSitesTotal)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>+ Elum ePM Large Sites ({data.elumEpmBreakdown.largeSitesCount} sites):</span>
+                  <span>{formatCurrency(data.elumEpmBreakdown.largeSitesTotal)}</span>
+                </div>
+              </>
             ) : (
               data.calculationBreakdown.assetBreakdownPeriod > 0 && (
                 <div className="flex justify-between">
