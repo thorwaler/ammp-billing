@@ -463,7 +463,12 @@ const ContractDetails = () => {
                     ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
                     ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
                     cachedCapabilities: contract.cached_capabilities,
-                    graduatedMWTiers: contract.graduated_mw_tiers
+                    graduatedMWTiers: contract.graduated_mw_tiers,
+                    siteSizeThresholdKwp: contract.site_size_threshold_kwp,
+                    belowThresholdPricePerMWp: contract.below_threshold_price_per_mwp,
+                    aboveThresholdPricePerMWp: contract.above_threshold_price_per_mwp,
+                    onboardingFeePerSite: contract.onboarding_fee_per_site,
+                    annualFeePerSite: contract.annual_fee_per_site
                   }}
                   onComplete={() => {
                     setShowEditDialog(false);
