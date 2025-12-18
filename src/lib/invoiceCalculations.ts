@@ -11,6 +11,26 @@ import {
   type GraduatedMWTier
 } from "@/data/pricingData";
 
+// Custom asset discount pricing interface
+export interface CustomAssetPricing {
+  [assetId: string]: {
+    pricingType: 'annual' | 'per_mw';
+    price: number;
+    note?: string;
+  };
+}
+
+// Discounted asset result interface
+export interface DiscountedAssetResult {
+  assetId: string;
+  assetName: string;
+  mw: number;
+  pricingType: 'annual' | 'per_mw';
+  rate: number;
+  cost: number;
+  note?: string;
+}
+
 export interface SiteBillingItem {
   assetId: string;
   assetName: string;
@@ -79,6 +99,8 @@ export interface CalculationParams {
   aboveThresholdPricePerMWp?: number;
   // Elum Internal Assets package fields
   graduatedMWTiers?: GraduatedMWTier[];
+  // Custom asset discount pricing
+  customAssetPricing?: CustomAssetPricing;
 }
 
 export interface SiteMinimumPricingResult {
@@ -186,6 +208,9 @@ export interface CalculationResult {
   elumEpmBreakdown?: ElumEpmBreakdown;
   elumJubailiBreakdown?: ElumJubailiBreakdown;
   elumInternalBreakdown?: ElumInternalBreakdown;
+  // Discounted assets results
+  discountedAssets?: DiscountedAssetResult[];
+  discountedAssetsTotal?: number;
 }
 
 /**
@@ -565,6 +590,59 @@ export function calculateElumInternalBreakdown(
 }
 
 /**
+ * Calculate discounted assets total
+ * Assets with custom pricing are excluded from normal calculations
+ */
+function calculateDiscountedAssets(
+  customAssetPricing: CustomAssetPricing | undefined,
+  assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number }> | undefined,
+  frequencyMultiplier: number
+): { discountedAssets: DiscountedAssetResult[]; discountedAssetsTotal: number } {
+  if (!customAssetPricing || !assetBreakdown) {
+    return { discountedAssets: [], discountedAssetsTotal: 0 };
+  }
+  
+  const discountedAssets: DiscountedAssetResult[] = [];
+  let discountedAssetsTotal = 0;
+  
+  for (const asset of assetBreakdown) {
+    const customPricing = customAssetPricing[asset.assetId];
+    if (customPricing) {
+      const cost = customPricing.pricingType === 'annual'
+        ? customPricing.price * frequencyMultiplier
+        : customPricing.price * asset.totalMW * frequencyMultiplier;
+      
+      discountedAssets.push({
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        mw: asset.totalMW,
+        pricingType: customPricing.pricingType,
+        rate: customPricing.price,
+        cost,
+        note: customPricing.note
+      });
+      
+      discountedAssetsTotal += cost;
+    }
+  }
+  
+  return { discountedAssets, discountedAssetsTotal };
+}
+
+/**
+ * Filter out discounted assets from asset breakdown
+ */
+function filterNonDiscountedAssets(
+  assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number; isHybrid?: boolean }> | undefined,
+  customAssetPricing: CustomAssetPricing | undefined
+): Array<{ assetId: string; assetName: string; totalMW: number; isHybrid?: boolean }> {
+  if (!assetBreakdown) return [];
+  if (!customAssetPricing) return assetBreakdown;
+  
+  return assetBreakdown.filter(asset => !customAssetPricing[asset.assetId]);
+}
+
+/**
  * Main calculation function
  */
 export function calculateInvoice(params: CalculationParams): CalculationResult {
@@ -575,7 +653,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     frequencyMultiplier,
     minimumCharge,
     sitesUnderThreshold,
-    selectedAddons
+    selectedAddons,
+    customAssetPricing
   } = params;
   
   const result: CalculationResult = {
@@ -593,6 +672,32 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   };
   
   const periodMonths = getPeriodMonthsMultiplier(params.billingFrequency || 'annual');
+  
+  // Calculate discounted assets first (these are excluded from normal calculations)
+  const { discountedAssets, discountedAssetsTotal } = calculateDiscountedAssets(
+    customAssetPricing,
+    params.assetBreakdown,
+    frequencyMultiplier
+  );
+  
+  if (discountedAssets.length > 0) {
+    result.discountedAssets = discountedAssets;
+    result.discountedAssetsTotal = discountedAssetsTotal;
+  }
+  
+  // Filter out discounted assets from asset breakdown for normal calculations
+  const normalAssets = filterNonDiscountedAssets(params.assetBreakdown, customAssetPricing);
+  
+  // Calculate adjusted total MW (excluding discounted assets)
+  const discountedMW = discountedAssets.reduce((sum, a) => sum + a.mw, 0);
+  const adjustedTotalMW = totalMW - discountedMW;
+  
+  // Use adjusted params for remaining calculations
+  const adjustedParams = {
+    ...params,
+    totalMW: adjustedTotalMW,
+    assetBreakdown: normalAssets
+  };
   
   // Calculate base pricing (monthly × period months)
   result.basePricingCost = (params.baseMonthlyPrice || 0) * periodMonths;
@@ -669,11 +774,11 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const threshold = params.siteSizeThresholdKwp || 100;
     const belowPrice = params.belowThresholdPricePerMWp || 50;
     const abovePrice = params.aboveThresholdPricePerMWp || 30;
-    const assets = params.assetBreakdown || [];
+    const assets = normalAssets; // Use filtered assets (excluding discounted)
     
     // Get applicable minimum fee per site from tiers (used as floor, not additive)
     const minimumFeePerSite = params.minimumChargeTiers && params.minimumChargeTiers.length > 0
-      ? getApplicableMinimumCharge(totalMW, params.minimumChargeTiers)
+      ? getApplicableMinimumCharge(adjustedTotalMW, params.minimumChargeTiers)
       : 0;
     
     if (assets.length > 0) {
@@ -691,14 +796,14 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   } else if (packageType === 'elum_jubaili') {
     // Elum Jubaili - per-site fee with tiered support
     const perSiteFee = params.annualFeePerSite || 500;
-    const assets = params.assetBreakdown || [];
+    const assets = normalAssets; // Use filtered assets (excluding discounted)
     
     if (assets.length > 0) {
       const breakdown = calculateElumJubailiBreakdown(
         assets,
         perSiteFee,
         frequencyMultiplier,
-        totalMW,
+        adjustedTotalMW,
         params.minimumChargeTiers
       );
       result.elumJubailiBreakdown = breakdown;
@@ -706,16 +811,16 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     }
   } else if (packageType === 'elum_portfolio_os') {
     // Elum Portfolio OS - full pricing flexibility like pro/custom
-    const { moduleCosts, totalMWCost } = calculateModuleCosts(params);
+    const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
   } else if (packageType === 'elum_internal') {
     // Elum Internal Assets - graduated MW pricing
     const tiers = params.graduatedMWTiers || [];
     
-    if (tiers.length > 0 && totalMW > 0) {
+    if (tiers.length > 0 && adjustedTotalMW > 0) {
       const breakdown = calculateElumInternalBreakdown(
-        totalMW,
+        adjustedTotalMW,
         tiers,
         frequencyMultiplier
       );
@@ -724,14 +829,13 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     }
   } else {
     // Pro or Custom - calculate module costs
-    const { moduleCosts, totalMWCost } = calculateModuleCosts(params);
+    const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
     
     // Apply site-level minimum pricing if enabled and data available
     if (params.enableSiteMinimumPricing && 
-        params.assetBreakdown && 
-        params.assetBreakdown.length > 0 &&
+        normalAssets.length > 0 &&
         params.minimumChargeTiers &&
         params.minimumChargeTiers.length > 0) {
       
@@ -744,9 +848,9 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       
       // Calculate site minimum pricing breakdown
       const siteMinPricing = calculateSiteMinimumPricing(
-        params.assetBreakdown,
+        normalAssets,
         perMWpRate,
-        totalMW,
+        adjustedTotalMW,
         params.minimumChargeTiers,
         frequencyMultiplier,
         params.siteChargeFrequency || "annual",
@@ -800,9 +904,9 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   result.retainerMinimumApplied = hasRetainer && calculatedRetainer < retainerMinimum;
   result.retainerCost = hasRetainer ? Math.max(calculatedRetainer, retainerMinimum) : 0;
   
-  // Calculate final total: base cost + addons + base pricing + retainer
+  // Calculate final total: base cost + addons + base pricing + retainer + discounted assets
   const addonTotal = result.addonCosts.reduce((sum, item) => sum + item.cost, 0);
-  result.totalPrice = baseCost + addonTotal + result.basePricingCost + result.retainerCost;
+  result.totalPrice = baseCost + addonTotal + result.basePricingCost + result.retainerCost + discountedAssetsTotal;
   
   return result;
 }
