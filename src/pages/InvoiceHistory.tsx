@@ -27,6 +27,7 @@ interface Invoice {
   invoice_date: string;
   customer_id: string;
   contract_id: string | null;
+  merged_contract_ids: string[] | null;
   invoice_amount: number;
   invoice_amount_eur: number | null;
   billing_frequency: string;
@@ -209,7 +210,6 @@ export default function InvoiceHistory() {
     try {
       // Get invoice details before deletion
       const invoiceDate = new Date(selectedInvoice.invoice_date);
-      const contractId = selectedInvoice.contract_id;
       const billingFrequency = selectedInvoice.billing_frequency;
 
       // Delete the invoice
@@ -220,8 +220,16 @@ export default function InvoiceHistory() {
 
       if (error) throw error;
 
-      // Roll back the contract's next_invoice_date if we have a contract_id
-      if (contractId) {
+      // Determine which contracts to update
+      // For merged invoices, use merged_contract_ids; otherwise use contract_id
+      const contractIds: string[] = [];
+      if (selectedInvoice.merged_contract_ids && selectedInvoice.merged_contract_ids.length > 0) {
+        contractIds.push(...selectedInvoice.merged_contract_ids);
+      } else if (selectedInvoice.contract_id) {
+        contractIds.push(selectedInvoice.contract_id);
+      }
+
+      if (contractIds.length > 0) {
         // Calculate the period end (day before invoice date)
         const periodEnd = new Date(invoiceDate);
         periodEnd.setDate(periodEnd.getDate() - 1);
@@ -247,6 +255,7 @@ export default function InvoiceHistory() {
             break;
         }
 
+        // Update ALL contracts (handles both single and merged invoices)
         const { error: updateError } = await supabase
           .from('contracts')
           .update({
@@ -254,13 +263,14 @@ export default function InvoiceHistory() {
             period_start: previousPeriodStart.toISOString(),
             period_end: periodEnd.toISOString()
           })
-          .eq('id', contractId);
+          .in('id', contractIds);
 
         if (updateError) {
-          console.error('Error updating contract:', updateError);
+          console.error('Error updating contracts:', updateError);
           toast.warning('Invoice deleted but contract dates may not have been updated');
         } else {
-          toast.success('Invoice deleted - contract will reappear in upcoming invoices');
+          const contractWord = contractIds.length > 1 ? 'contracts' : 'contract';
+          toast.success(`Invoice deleted - ${contractIds.length} ${contractWord} will reappear in upcoming invoices`);
         }
       } else {
         toast.success('Invoice deleted successfully');
