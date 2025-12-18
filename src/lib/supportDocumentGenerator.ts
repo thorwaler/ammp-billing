@@ -218,7 +218,10 @@ export async function generateSupportDocumentData(
       periodEnd,
       ammpCapabilities?.assetBreakdown // Pass asset breakdown for pro-rata calculation
     );
-    solcastTotal = solcastAddon.cost;
+    // Sum actual pro-rata monthly totals instead of using flat addon cost
+    solcastTotal = solcastBreakdown 
+      ? solcastBreakdown.reduce((sum, month) => sum + month.totalPerMonth, 0)
+      : 0;
   }
 
   // Generate other addons breakdown (excluding Solcast/Satellite Data API)
