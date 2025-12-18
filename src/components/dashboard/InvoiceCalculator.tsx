@@ -136,6 +136,8 @@ interface Customer {
   contractAmmpOrgId?: string;
   // Elum Internal fields
   graduatedMWTiers?: any[];
+  // Custom asset discount pricing
+  customAssetPricing?: any;
 }
 
 // Default modules and addons from shared data

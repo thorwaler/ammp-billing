@@ -228,6 +228,7 @@ export type Database = {
           contract_status: string | null
           created_at: string
           currency: string | null
+          custom_asset_pricing: Json | null
           custom_pricing: Json | null
           customer_id: string
           graduated_mw_tiers: Json | null
@@ -285,6 +286,7 @@ export type Database = {
           contract_status?: string | null
           created_at?: string
           currency?: string | null
+          custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
           customer_id: string
           graduated_mw_tiers?: Json | null
@@ -342,6 +344,7 @@ export type Database = {
           contract_status?: string | null
           created_at?: string
           currency?: string | null
+          custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
           customer_id?: string
           graduated_mw_tiers?: Json | null

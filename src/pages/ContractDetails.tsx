@@ -9,11 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2 } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
+import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import type { CustomAssetPricing } from "@/lib/invoiceCalculations";
 
 // Helper function to map module IDs to names
 const moduleNames: {[key: string]: string} = {
@@ -61,6 +63,8 @@ const ContractDetails = () => {
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
   const [showAllAssets, setShowAllAssets] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
+  const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
+  const [discountEditAsset, setDiscountEditAsset] = useState<any | null>(null);
 
   // All contracts now use contract-level sync via cached_capabilities
   const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
@@ -240,6 +244,59 @@ const ContractDetails = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handleSaveAssetDiscount = async (
+    assetId: string, 
+    discount: { pricingType: 'annual' | 'per_mw'; price: number; note?: string } | null
+  ) => {
+    if (!contract) return;
+    
+    try {
+      const currentPricing = (contract.custom_asset_pricing || {}) as CustomAssetPricing;
+      let updatedPricing: CustomAssetPricing;
+      
+      if (discount) {
+        updatedPricing = { ...currentPricing, [assetId]: discount };
+      } else {
+        // Remove discount
+        const { [assetId]: _, ...rest } = currentPricing;
+        updatedPricing = rest;
+      }
+      
+      const { error } = await supabase
+        .from('contracts')
+        .update({ custom_asset_pricing: updatedPricing })
+        .eq('id', contract.id);
+
+      if (error) throw error;
+
+      toast({
+        title: discount ? "Discount saved" : "Discount removed",
+        description: discount 
+          ? `Custom discounted rate applied to asset.`
+          : `Asset returned to normal pricing.`,
+      });
+      
+      loadContractData();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save asset discount",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openDiscountDialog = (asset: any, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDiscountEditAsset(asset);
+    setDiscountDialogOpen(true);
+  };
+
+  const getAssetDiscount = (assetId: string) => {
+    const pricing = contract?.custom_asset_pricing as CustomAssetPricing | undefined;
+    return pricing?.[assetId];
   };
 
   if (loading) {
@@ -1257,38 +1314,67 @@ const ContractDetails = () => {
                 <table className="w-full text-sm">
                   <thead className="bg-muted sticky top-0">
                     <tr>
-                      <th className="text-left p-2 font-medium">Asset ID</th>
                       <th className="text-left p-2 font-medium">Asset Name</th>
                       <th className="text-right p-2 font-medium">MW</th>
                       <th className="text-center p-2 font-medium">Hybrid</th>
                       <th className="text-center p-2 font-medium">Solcast</th>
+                      <th className="text-center p-2 font-medium">Discount</th>
                       <th className="text-right p-2 font-medium">Devices</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {cachedCapabilities.assetBreakdown.map((asset: any) => (
-                      <tr 
-                        key={asset.assetId} 
-                        className="border-t hover:bg-muted/50 cursor-pointer"
-                        onClick={() => setSelectedAsset(asset)}
-                      >
-                        <td className="p-2 font-mono text-xs text-muted-foreground" title={asset.assetId}>
-                          {asset.assetId?.substring(0, 8)}...
-                        </td>
-                        <td className="p-2">{asset.assetName}</td>
-                        <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
-                        <td className="p-2 text-center">
-                          {asset.isHybrid ? <Badge variant="outline" className="bg-purple-50">Yes</Badge> : '-'}
-                        </td>
-                        <td className="p-2 text-center">
-                          {asset.hasSolcast ? <Badge variant="outline" className="bg-blue-50">Yes</Badge> : '-'}
-                        </td>
-                        <td className="p-2 text-right">{asset.deviceCount || '-'}</td>
-                      </tr>
-                    ))}
+                    {cachedCapabilities.assetBreakdown.map((asset: any) => {
+                      const discount = getAssetDiscount(asset.assetId);
+                      return (
+                        <tr 
+                          key={asset.assetId} 
+                          className={`border-t hover:bg-muted/50 cursor-pointer ${discount ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}`}
+                          onClick={() => setSelectedAsset(asset)}
+                        >
+                          <td className="p-2">{asset.assetName}</td>
+                          <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
+                          <td className="p-2 text-center">
+                            {asset.isHybrid ? <Badge variant="outline" className="bg-purple-50">Yes</Badge> : '-'}
+                          </td>
+                          <td className="p-2 text-center">
+                            {asset.hasSolcast ? <Badge variant="outline" className="bg-blue-50">Yes</Badge> : '-'}
+                          </td>
+                          <td className="p-2 text-center">
+                            {discount ? (
+                              <DiscountBadge 
+                                pricingType={discount.pricingType} 
+                                price={discount.price} 
+                                currency={(contract?.currency || 'EUR') as 'EUR' | 'USD'} 
+                              />
+                            ) : (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-6 px-2 text-xs"
+                                onClick={(e) => openDiscountDialog(asset, e)}
+                              >
+                                <Percent className="h-3 w-3 mr-1" />
+                                Add
+                              </Button>
+                            )}
+                          </td>
+                          <td className="p-2 text-right">{asset.deviceCount || '-'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
+
+              {/* Asset Discount Dialog */}
+              <AssetDiscountDialog
+                open={discountDialogOpen}
+                onOpenChange={setDiscountDialogOpen}
+                asset={discountEditAsset}
+                currentDiscount={discountEditAsset ? getAssetDiscount(discountEditAsset.assetId) : undefined}
+                currency={(contract?.currency || 'EUR') as 'EUR' | 'USD'}
+                onSave={handleSaveAssetDiscount}
+              />
 
               {/* Device Details Dialog */}
               <Dialog open={!!selectedAsset} onOpenChange={() => setSelectedAsset(null)}>
