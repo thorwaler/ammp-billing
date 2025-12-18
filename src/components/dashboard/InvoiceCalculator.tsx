@@ -954,6 +954,50 @@ export function InvoiceCalculator({
         }
       }
       
+      // Add Elum Internal graduated MW tier line items
+      if (result.elumInternalBreakdown) {
+        result.elumInternalBreakdown.tiers.forEach((tier: any) => {
+          if (tier.cost > 0) {
+            lineItems.push({
+              Description: `${tier.label || `${tier.minMW}-${tier.maxMW === Infinity ? '∞' : tier.maxMW} MW`} (${tier.mwInTier.toFixed(2)} MW × €${tier.pricePerMW}/MW)`,
+              Quantity: 1,
+              UnitAmount: tier.cost,
+              AccountCode: ACCOUNT_PLATFORM_FEES
+            });
+          }
+        });
+      }
+      
+      // Add Elum ePM site pricing line items
+      if (result.elumEpmBreakdown) {
+        if (result.elumEpmBreakdown.smallSitesTotal > 0) {
+          lineItems.push({
+            Description: `Small Sites ≤${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.smallSites?.length || 0} sites)`,
+            Quantity: 1,
+            UnitAmount: result.elumEpmBreakdown.smallSitesTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+        if (result.elumEpmBreakdown.largeSitesTotal > 0) {
+          lineItems.push({
+            Description: `Large Sites >${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.largeSites?.length || 0} sites)`,
+            Quantity: 1,
+            UnitAmount: result.elumEpmBreakdown.largeSitesTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
+      
+      // Add Elum Jubaili per-site fee line item
+      if (result.elumJubailiBreakdown) {
+        lineItems.push({
+          Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × €${result.elumJubailiBreakdown.perSiteFee}/site)`,
+          Quantity: 1,
+          UnitAmount: result.elumJubailiBreakdown.totalCost,
+          AccountCode: ACCOUNT_PLATFORM_FEES
+        });
+      }
+      
       // Add discounted assets line items (Platform Fees - ARR)
       if (result.discountedAssets && result.discountedAssets.length > 0) {
         result.discountedAssets.forEach(asset => {
@@ -1044,6 +1088,10 @@ export function InvoiceCalculator({
         // Hybrid tiered pricing (BLS and similar)
         (result.hybridTieredBreakdown?.ongrid.cost || 0) +
         (result.hybridTieredBreakdown?.hybrid.cost || 0) +
+        // Elum package costs are ARR
+        (result.elumInternalBreakdown?.totalCost || 0) +
+        (result.elumEpmBreakdown?.totalCost || 0) +
+        (result.elumJubailiBreakdown?.totalCost || 0) +
         (result.minimumContractAdjustment || 0) +
         (result.minimumCharges || 0) +
         (result.retainerCost || 0) +
@@ -1131,6 +1179,10 @@ export function InvoiceCalculator({
           // Hybrid tiered pricing (BLS and similar)
           (result.hybridTieredBreakdown?.ongrid.cost || 0) +
           (result.hybridTieredBreakdown?.hybrid.cost || 0) +
+          // Elum package costs are ARR
+          (result.elumInternalBreakdown?.totalCost || 0) +
+          (result.elumEpmBreakdown?.totalCost || 0) +
+          (result.elumJubailiBreakdown?.totalCost || 0) +
           (result.minimumContractAdjustment || 0) +
           (result.minimumCharges || 0) +
           (result.retainerCost || 0) +
