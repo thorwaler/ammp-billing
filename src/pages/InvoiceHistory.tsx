@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter } from "date-fns";
 import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatDateCET } from "@/lib/dateUtils";
 
 interface Invoice {
   id: string;
@@ -450,7 +451,7 @@ export default function InvoiceHistory() {
                     {filteredInvoices.map((invoice) => (
                       <TableRow key={invoice.id}>
                         <TableCell className="font-medium">
-                          {format(new Date(invoice.invoice_date), 'MMM dd, yyyy')}
+                          {formatDateCET(invoice.invoice_date, 'MMM dd, yyyy')}
                         </TableCell>
                         <TableCell>
                           {invoice.customer?.name || invoice.xero_contact_name || 'Unknown'}

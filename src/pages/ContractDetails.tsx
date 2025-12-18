@@ -41,11 +41,11 @@ const addonNames: {[key: string]: string} = {
   spCustomReport: "Custom Report"
 };
 
-// Helper function to format date
+// Helper function to format date in CET timezone
+import { formatDateCET } from "@/lib/dateUtils";
 const formatDate = (dateString: string) => {
   try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
+    return formatDateCET(dateString, 'MMM d, yyyy');
   } catch (e) {
     return dateString;
   }

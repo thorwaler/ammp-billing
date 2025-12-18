@@ -16,6 +16,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
 import { getModuleById, getAddonById } from "@/data/pricingData";
 import { getCustomerDisplayName } from "@/utils/customerUtils";
+import { formatDateCET } from "@/lib/dateUtils";
 
 const getDisplayName = (id: string, isModule: boolean): string => {
   // Special case for Satellite Data API
@@ -207,11 +208,11 @@ export function CustomerCard({
   };
 
   const formattedJoinDate = joinDate 
-    ? new Date(joinDate).toLocaleDateString() 
+    ? formatDateCET(joinDate, 'MMM d, yyyy')
     : undefined;
   
   const formattedLastInvoiced = lastInvoiced 
-    ? new Date(lastInvoiced).toLocaleDateString() 
+    ? formatDateCET(lastInvoiced, 'MMM d, yyyy')
     : "Not yet invoiced";
 
   return (
