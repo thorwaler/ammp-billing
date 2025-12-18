@@ -1160,7 +1160,14 @@ export function InvoiceCalculator({
             invoice_amount: result.totalPrice,
             currency: selectedCustomer.currency,
             modules_data: modules.filter(m => m.selected) as any,
-            addons_data: addons.filter(a => a.selected) as any,
+            // Merge calculated addon costs into addons data - ensures pro-rata Solcast cost is stored correctly
+            addons_data: addons.filter(a => a.selected).map(addon => {
+              const calculatedAddon = result.addonCosts.find(ac => ac.addonId === addon.id);
+              return {
+                ...addon,
+                cost: calculatedAddon?.cost || addon.calculatedTieredPrice?.totalPrice || 0
+              };
+            }) as any,
             source: 'internal',
             arr_amount: storedArrAmount,
             nrr_amount: storedNrrAmount,
