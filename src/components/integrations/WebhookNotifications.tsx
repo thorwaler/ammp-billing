@@ -19,6 +19,9 @@ const NOTIFICATION_TYPES = [
   { id: 'mw_exceeded', label: 'MW Capacity Exceeded' },
   { id: 'ammp_sync_complete', label: 'AMMP Sync Complete' },
   { id: 'ammp_sync_failed', label: 'AMMP Sync Failed' },
+  { id: 'ammp_contract_synced', label: 'AMMP Contract Synced (per-contract)' },
+  { id: 'xero_sync_complete', label: 'Xero Sync Complete' },
+  { id: 'xero_sync_failed', label: 'Xero Sync Failed' },
 ];
 
 const SEVERITY_LEVELS = [
