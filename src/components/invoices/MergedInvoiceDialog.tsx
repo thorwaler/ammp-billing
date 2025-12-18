@@ -241,7 +241,7 @@ export function MergedInvoiceDialog({
       if (result.moduleCosts && result.moduleCosts.length > 0) {
         result.moduleCosts.forEach((mc: any) => {
           lineItems.push({
-            Description: `[${contractLabel}] ${mc.name}`,
+            Description: `[${contractLabel}] ${mc.moduleName}`,
             Quantity: 1,
             UnitAmount: mc.cost,
             AccountCode: ACCOUNT_PLATFORM_FEES
