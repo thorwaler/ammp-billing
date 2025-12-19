@@ -6,6 +6,7 @@ import { InvoiceCalculatorDialog } from "@/components/invoices/InvoiceCalculator
 import { MergedInvoiceDialog } from "@/components/invoices/MergedInvoiceDialog";
 import { Button } from "@/components/ui/button";
 import { FileText, Calculator, Plus, History } from "lucide-react";
+import { parseDateCET } from "@/lib/dateUtils";
 
 const InvoiceCreator = () => {
   const navigate = useNavigate();
@@ -86,7 +87,7 @@ const InvoiceCreator = () => {
           onOpenChange={setCalculatorOpen}
           preselectedCustomerId={selectedInvoice?.customerId}
           preselectedContractId={selectedInvoice?.contractId}
-          prefilledDate={selectedInvoice ? new Date(selectedInvoice.nextInvoiceDate) : undefined}
+          prefilledDate={selectedInvoice ? parseDateCET(selectedInvoice.nextInvoiceDate) : undefined}
           onInvoiceCreated={handleInvoiceCreated}
         />
 

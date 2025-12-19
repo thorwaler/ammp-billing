@@ -24,6 +24,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { format, formatDistanceToNow } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { supabase } from "@/integrations/supabase/client";
 import { ContractPackageSelector } from "@/components/contracts/ContractPackageSelector";
@@ -1526,7 +1527,7 @@ export function InvoiceCalculator({
                         className="w-full justify-start text-left font-normal"
                       >
                         <CalendarIcon className="mr-2 h-4 w-4" />
-                        {invoiceDate ? format(invoiceDate, "PPP") : "Select date"}
+                        {invoiceDate ? formatInTimeZone(invoiceDate, 'Europe/Amsterdam', "PPP") : "Select date"}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
