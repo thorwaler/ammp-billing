@@ -1238,6 +1238,12 @@ export function InvoiceCalculator({
           // Store invoice ID for support document generation
           setLastCreatedInvoiceId(insertedInvoice.id);
           
+          // Update customer's last_invoiced date
+          await supabase
+            .from('customers')
+            .update({ last_invoiced: invoiceDate.toISOString() })
+            .eq('id', selectedCustomer.id);
+          
           // Check MW capacity for capped contracts
           if (selectedCustomer.contractId) {
             await monitorMWAndNotify(
