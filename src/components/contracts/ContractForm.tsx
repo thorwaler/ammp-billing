@@ -228,8 +228,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       notes: existingContract.notes,
       signedDate: existingContract.signedDate?.substring(0, 10) || "",
       contractExpiryDate: existingContract.contractExpiryDate?.substring(0, 10) || "",
-      periodStart: existingContract.periodStart?.split('T')[0] || "",
-      periodEnd: existingContract.periodEnd?.split('T')[0] || "",
+      periodStart: existingContract.periodStart?.substring(0, 10) || "",
+      periodEnd: existingContract.periodEnd?.substring(0, 10) || "",
       contractStatus: existingContract.contractStatus as any,
       // Elum asset group fields
       ammpAssetGroupId: existingContract.ammpAssetGroupId || "",
