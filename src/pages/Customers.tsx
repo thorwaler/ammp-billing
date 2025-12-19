@@ -178,7 +178,7 @@ const Customers = () => {
         modules: modules,
         addOns: addons,
         joinDate: firstSignedDate || c.join_date || new Date().toISOString(),
-        lastInvoiced: c.last_invoiced || new Date().toISOString(),
+        lastInvoiced: c.last_invoiced || undefined,
         contractId: firstActiveContract?.id || '',
         contractCount,
         contracts: (c.contracts || []).map((contract: any) => ({
