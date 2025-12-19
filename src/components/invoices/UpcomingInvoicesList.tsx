@@ -40,6 +40,8 @@ export interface UpcomingInvoice {
   ammpAssetGroupIdNot?: string;
   // Elum Internal fields
   graduatedMWTiers?: GraduatedMWTier[];
+  // Elum Jubaili fields
+  annualFeePerSite?: number;
 }
 
 interface CustomerGroup {
@@ -104,6 +106,7 @@ export function UpcomingInvoicesList({
           ammp_asset_group_id_not,
           cached_capabilities,
           graduated_mw_tiers,
+          annual_fee_per_site,
           customers (
             id,
             name,
@@ -167,6 +170,8 @@ export function UpcomingInvoicesList({
             graduatedMWTiers: Array.isArray((c as any).graduated_mw_tiers) 
               ? (c as any).graduated_mw_tiers as GraduatedMWTier[]
               : undefined,
+            // Elum Jubaili fields
+            annualFeePerSite: Number((c as any).annual_fee_per_site) || undefined,
           };
         });
 
@@ -248,6 +253,8 @@ export function UpcomingInvoicesList({
       aboveThresholdPricePerMWp: invoice.aboveThresholdPricePerMWp,
       // Elum Internal fields
       graduatedMWTiers: invoice.graduatedMWTiers,
+      // Elum Jubaili fields
+      annualFeePerSite: invoice.annualFeePerSite,
     });
     
     return result.totalPrice;
