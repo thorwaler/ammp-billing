@@ -214,7 +214,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       currency: existingContract.currency as "USD" | "EUR",
       billingFrequency: existingContract.billingFrequency as any,
       manualInvoicing: existingContract.manualInvoicing || false,
-      nextInvoiceDate: existingContract.nextInvoiceDate?.split('T')[0] || "",
+      nextInvoiceDate: existingContract.nextInvoiceDate?.substring(0, 10) || "",
       package: existingContract.package as any,
       maxMw: existingContract.maxMw,
       modules: existingContract.modules || [],
@@ -226,8 +226,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       baseMonthlyPrice: existingContract.baseMonthlyPrice,
       siteChargeFrequency: (existingContract.siteChargeFrequency as any) || "annual",
       notes: existingContract.notes,
-      signedDate: existingContract.signedDate?.split('T')[0] || "",
-      contractExpiryDate: existingContract.contractExpiryDate?.split('T')[0] || "",
+      signedDate: existingContract.signedDate?.substring(0, 10) || "",
+      contractExpiryDate: existingContract.contractExpiryDate?.substring(0, 10) || "",
       periodStart: existingContract.periodStart?.split('T')[0] || "",
       periodEnd: existingContract.periodEnd?.split('T')[0] || "",
       contractStatus: existingContract.contractStatus as any,
@@ -413,11 +413,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         form.setValue('initialMW', contract.initial_mw);
         form.setValue('currency', contract.currency as "USD" | "EUR");
         form.setValue('billingFrequency', contract.billing_frequency as "monthly" | "quarterly" | "biannual" | "annual");
-        form.setValue('nextInvoiceDate', contract.next_invoice_date ? contract.next_invoice_date.split('T')[0] : '');
-        form.setValue('signedDate', (contract as any).signed_date ? (contract as any).signed_date.split('T')[0] : '');
-        form.setValue('contractExpiryDate', (contract as any).contract_expiry_date ? (contract as any).contract_expiry_date.split('T')[0] : '');
-        form.setValue('periodStart', (contract as any).period_start ? (contract as any).period_start.split('T')[0] : '');
-        form.setValue('periodEnd', (contract as any).period_end ? (contract as any).period_end.split('T')[0] : '');
+        form.setValue('nextInvoiceDate', contract.next_invoice_date ? contract.next_invoice_date.substring(0, 10) : '');
+        form.setValue('signedDate', (contract as any).signed_date ? (contract as any).signed_date.substring(0, 10) : '');
+        form.setValue('contractExpiryDate', (contract as any).contract_expiry_date ? (contract as any).contract_expiry_date.substring(0, 10) : '');
+        form.setValue('periodStart', (contract as any).period_start ? (contract as any).period_start.substring(0, 10) : '');
+        form.setValue('periodEnd', (contract as any).period_end ? (contract as any).period_end.substring(0, 10) : '');
         form.setValue('package', contract.package as "starter" | "pro" | "custom");
         form.setValue('modules', (contract.modules || []) as string[]);
         form.setValue('customPricing', (contract.custom_pricing || {}) as any);
