@@ -357,6 +357,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue('aboveThresholdPricePerMWp', existingContract.aboveThresholdPricePerMWp ?? undefined);
       form.setValue('onboardingFeePerSite', existingContract.onboardingFeePerSite ?? undefined);
       form.setValue('annualFeePerSite', existingContract.annualFeePerSite ?? undefined);
+      form.setValue('nextInvoiceDate', existingContract.nextInvoiceDate?.substring(0, 10) || '');
       
       // Store contract ID for update if not extending
       if (!isExtending) {
