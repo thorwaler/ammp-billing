@@ -47,6 +47,7 @@ export function ContractList() {
   const [dateRangeEnd, setDateRangeEnd] = useState<Date | undefined>();
   const [showEditForm, setShowEditForm] = useState(false);
   const [selectedContract, setSelectedContract] = useState<any>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -146,9 +147,20 @@ export function ContractList() {
   const handleEdit = async (contractId: string) => {
     setIsLoadingEdit(true);
     try {
+      // Fetch contract WITH customer data
       const { data, error } = await supabase
         .from('contracts')
-        .select('*')
+        .select(`
+          *,
+          customers (
+            id,
+            name,
+            nickname,
+            location,
+            mwp_managed,
+            ammp_org_id
+          )
+        `)
         .eq('id', contractId)
         .maybeSingle();
       
@@ -156,6 +168,19 @@ export function ContractList() {
       if (!data) {
         toast({ title: "Contract not found", variant: "destructive" });
         return;
+      }
+
+      // Set customer data to match existingCustomer prop format
+      if (data.customers) {
+        const capabilities = data.cached_capabilities as { totalMW?: number } | null;
+        setSelectedCustomer({
+          id: data.customers.id,
+          name: data.customers.name,
+          nickname: data.customers.nickname,
+          location: data.customers.location,
+          mwpManaged: capabilities?.totalMW || data.customers.mwp_managed || 0,
+          ammpOrgId: data.customers.ammp_org_id,
+        });
       }
 
       // Transform to expected format for ContractForm
@@ -461,21 +486,30 @@ export function ContractList() {
           </div>
         )}
 
-        <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+        <Dialog open={showEditForm} onOpenChange={(open) => {
+          setShowEditForm(open);
+          if (!open) {
+            setSelectedContract(null);
+            setSelectedCustomer(null);
+          }
+        }}>
           <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit Contract</DialogTitle>
             </DialogHeader>
             {selectedContract && (
               <ContractForm 
+                existingCustomer={selectedCustomer}
                 existingContract={selectedContract}
                 onCancel={() => {
                   setShowEditForm(false);
                   setSelectedContract(null);
+                  setSelectedCustomer(null);
                 }}
                 onComplete={() => {
                   setShowEditForm(false);
                   setSelectedContract(null);
+                  setSelectedCustomer(null);
                   loadContracts();
                 }}
               />
