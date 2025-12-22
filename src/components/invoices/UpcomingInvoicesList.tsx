@@ -260,14 +260,14 @@ export function UpcomingInvoicesList({
     return result.totalPrice;
   };
 
-  // Group invoices by customer + date
+  // Group invoices by customer + date + currency (prevents merging different currencies)
   const groupedInvoices = useMemo((): CustomerGroup[] => {
     const groups = new Map<string, CustomerGroup>();
     
     for (const invoice of invoices) {
-      // Use date only (not time) for grouping
+      // Use date only (not time) for grouping, plus currency to prevent mixed-currency merges
       const dateKey = invoice.nextInvoiceDate.split('T')[0];
-      const key = `${invoice.customerId}-${dateKey}`;
+      const key = `${invoice.customerId}-${dateKey}-${invoice.currency}`;
       
       if (!groups.has(key)) {
         groups.set(key, {
