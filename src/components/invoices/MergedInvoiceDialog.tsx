@@ -42,6 +42,7 @@ interface ContractForMerge {
   belowThresholdPricePerMWp?: number;
   aboveThresholdPricePerMWp?: number;
   graduatedMWTiers?: GraduatedMWTier[];
+  annualFeePerSite?: number;
 }
 
 interface MergedInvoiceDialogProps {
@@ -156,6 +157,7 @@ export function MergedInvoiceDialog({
       belowThresholdPricePerMWp: contract.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: contract.aboveThresholdPricePerMWp,
       graduatedMWTiers: contract.graduatedMWTiers,
+      annualFeePerSite: contract.annualFeePerSite,
     });
   };
 
