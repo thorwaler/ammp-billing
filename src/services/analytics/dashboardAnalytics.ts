@@ -306,6 +306,8 @@ export function calculateSingleContractARR(
         siteSizeThresholdKwp: contract.site_size_threshold_kwp || undefined,
         belowThresholdPricePerMWp: contract.below_threshold_price_per_mwp || undefined,
         aboveThresholdPricePerMWp: contract.above_threshold_price_per_mwp || undefined,
+        // Elum Jubaili per-site pricing
+        annualFeePerSite: contract.annual_fee_per_site || undefined,
         // Elum Internal Assets graduated MW tiers
         graduatedMWTiers: (contract.graduated_mw_tiers as any[]) || undefined,
       });
