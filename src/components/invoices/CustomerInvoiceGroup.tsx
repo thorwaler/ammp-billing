@@ -48,17 +48,9 @@ export function CustomerInvoiceGroup({
     return contracts.reduce((sum, c) => sum + (c.estimatedAmount || 0), 0);
   }, [contracts]);
   
-  // Get primary currency (most common among contracts)
-  const primaryCurrency = useMemo(() => {
-    const currencies = contracts.map(c => c.currency);
-    const counts = currencies.reduce((acc, cur) => {
-      acc[cur] = (acc[cur] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'EUR';
-  }, [contracts]);
-  
-  const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
+  // All contracts in a group now have the same currency (grouped by customer + date + currency)
+  const groupCurrency = contracts[0]?.currency || 'EUR';
+  const currencySymbol = groupCurrency === 'EUR' ? '€' : '$';
   
   const toggleContract = (contractId: string) => {
     const newSelected = new Set(selectedContracts);
@@ -191,9 +183,6 @@ export function CustomerInvoiceGroup({
             <div className="flex items-center gap-1.5 shrink-0">
               <Badge variant="outline" className="text-xs">{contract.packageType}</Badge>
               <Badge variant="outline" className="text-xs capitalize">{contract.billingFrequency}</Badge>
-              {contract.currency !== primaryCurrency && (
-                <Badge variant="secondary" className="text-xs">{contract.currency}</Badge>
-              )}
               {contract.manualInvoicing && (
                 <Badge className="bg-orange-500 text-xs">Manual</Badge>
               )}

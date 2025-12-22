@@ -223,10 +223,17 @@ export function MergedInvoiceDialog({
     }, 0);
   }, [selectedContractsList, calculationResults]);
 
+  // All contracts should have the same currency (enforced by grouping logic)
   const primaryCurrency = contracts[0]?.currency || 'EUR';
   const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
   const customerName = contracts[0]?.customerName || 'Customer';
   const invoiceDate = new Date(contracts[0]?.nextInvoiceDate || new Date());
+  
+  // Defensive check: warn if mixed currencies somehow passed through
+  const hasMixedCurrencies = useMemo(() => {
+    const currencies = new Set(contracts.map(c => c.currency));
+    return currencies.size > 1;
+  }, [contracts]);
 
   const buildMergedLineItems = () => {
     const lineItems: any[] = [];
@@ -567,6 +574,13 @@ export function MergedInvoiceDialog({
             </div>
           ) : (
             <div className="space-y-4">
+              {/* Warning for mixed currencies (defensive) */}
+              {hasMixedCurrencies && (
+                <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-sm text-destructive">
+                  Warning: These contracts have mixed currencies. Please invoice them separately.
+                </div>
+              )}
+              
               {/* Contract selection */}
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Select contracts to include:</h4>
