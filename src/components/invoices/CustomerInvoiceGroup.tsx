@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Calendar, FileText, Layers } from "lucide-react";
+import { Calendar, FileText, Layers, SkipForward, CheckCircle } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { differenceInDays } from "date-fns";
 import { parseDateCET, formatDateCET } from "@/lib/dateUtils";
@@ -28,6 +28,8 @@ interface CustomerInvoiceGroupProps {
   contracts: ContractInvoice[];
   onCreateIndividualInvoice: (contract: ContractInvoice) => void;
   onCreateMergedInvoice: (contracts: ContractInvoice[]) => void;
+  onSkipInvoice: (contract: ContractInvoice) => void;
+  onMarkAsSent: (contract: ContractInvoice) => void;
 }
 
 export function CustomerInvoiceGroup({
@@ -36,6 +38,8 @@ export function CustomerInvoiceGroup({
   contracts,
   onCreateIndividualInvoice,
   onCreateMergedInvoice,
+  onSkipInvoice,
+  onMarkAsSent,
 }: CustomerInvoiceGroupProps) {
   const [selectedContracts, setSelectedContracts] = useState<Set<string>>(new Set());
   const { formatCurrency } = useCurrency();
@@ -134,10 +138,22 @@ export function CustomerInvoiceGroup({
             )}
           </div>
           
-          <Button onClick={() => onCreateIndividualInvoice(contract)} className="w-full" size="sm">
-            <FileText className="h-4 w-4 mr-2" />
-            Create Invoice
-          </Button>
+          <div className="flex gap-2">
+            {contract.manualInvoicing ? (
+              <Button onClick={() => onMarkAsSent(contract)} className="flex-1" size="sm" variant="secondary">
+                <CheckCircle className="h-4 w-4 mr-2" />
+                Mark as Sent
+              </Button>
+            ) : (
+              <Button onClick={() => onCreateIndividualInvoice(contract)} className="flex-1" size="sm">
+                <FileText className="h-4 w-4 mr-2" />
+                Create Invoice
+              </Button>
+            )}
+            <Button onClick={() => onSkipInvoice(contract)} size="sm" variant="outline" title="Skip to next period">
+              <SkipForward className="h-4 w-4" />
+            </Button>
+          </div>
         </CardContent>
       </Card>
     );
@@ -193,14 +209,20 @@ export function CustomerInvoiceGroup({
                 : '-'
               }
             </span>
-            <Button 
-              variant="outline" 
-              size="sm"
-              className="shrink-0"
-              onClick={() => onCreateIndividualInvoice(contract)}
-            >
-              Invoice
-            </Button>
+            <div className="flex gap-1 shrink-0">
+              {contract.manualInvoicing ? (
+                <Button variant="secondary" size="sm" onClick={() => onMarkAsSent(contract)}>
+                  Mark Sent
+                </Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => onCreateIndividualInvoice(contract)}>
+                  Invoice
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => onSkipInvoice(contract)} title="Skip to next period">
+                <SkipForward className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         ))}
       </div>

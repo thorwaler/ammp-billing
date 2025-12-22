@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { calculateInvoice } from "@/lib/invoiceCalculations";
+import { addMonths, addYears } from "date-fns";
+import { parseDateCET } from "@/lib/dateUtils";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
 
 export interface UpcomingInvoice {
@@ -312,6 +314,115 @@ export function UpcomingInvoicesList({
     }
   };
 
+  // Calculate the next invoice date based on billing frequency
+  const calculateNextInvoiceDate = (currentDate: string, billingFrequency: string): Date => {
+    const date = parseDateCET(currentDate);
+    switch (billingFrequency) {
+      case 'monthly':
+        return addMonths(date, 1);
+      case 'quarterly':
+        return addMonths(date, 3);
+      case 'biannual':
+        return addMonths(date, 6);
+      case 'annual':
+      default:
+        return addYears(date, 1);
+    }
+  };
+
+  const handleSkipInvoice = async (contract: any) => {
+    try {
+      const invoice = invoices.find(i => i.contractId === contract.contractId);
+      if (!invoice) return;
+
+      const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+      
+      const { error } = await supabase
+        .from('contracts')
+        .update({
+          next_invoice_date: nextDate.toISOString(),
+          period_start: invoice.nextInvoiceDate,
+          period_end: nextDate.toISOString(),
+        })
+        .eq('id', contract.contractId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Invoice skipped",
+        description: `Next invoice date moved to ${nextDate.toLocaleDateString()}`,
+      });
+
+      // Refresh the list
+      loadUpcomingInvoices();
+    } catch (error) {
+      console.error('Error skipping invoice:', error);
+      toast({
+        title: "Error",
+        description: "Failed to skip invoice. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleMarkAsSent = async (contract: any) => {
+    try {
+      const invoice = invoices.find(i => i.contractId === contract.contractId);
+      if (!invoice) return;
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+      const estimatedAmount = calculateEstimatedAmount(invoice);
+
+      // Create invoice record marked as manual
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .insert({
+          user_id: user.id,
+          customer_id: invoice.customerId,
+          contract_id: invoice.contractId,
+          invoice_date: invoice.nextInvoiceDate,
+          mw_managed: invoice.mwpManaged,
+          total_mw: invoice.mwpManaged,
+          invoice_amount: estimatedAmount,
+          billing_frequency: invoice.billingFrequency,
+          currency: invoice.currency,
+          source: 'manual',
+        });
+
+      if (invoiceError) throw invoiceError;
+
+      // Update contract with next invoice date
+      const { error: contractError } = await supabase
+        .from('contracts')
+        .update({
+          next_invoice_date: nextDate.toISOString(),
+          period_start: invoice.nextInvoiceDate,
+          period_end: nextDate.toISOString(),
+        })
+        .eq('id', contract.contractId);
+
+      if (contractError) throw contractError;
+
+      toast({
+        title: "Invoice marked as sent",
+        description: `Next invoice date moved to ${nextDate.toLocaleDateString()}`,
+      });
+
+      // Refresh the list
+      loadUpcomingInvoices();
+    } catch (error) {
+      console.error('Error marking invoice as sent:', error);
+      toast({
+        title: "Error",
+        description: "Failed to mark invoice as sent. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -354,6 +465,8 @@ export function UpcomingInvoicesList({
             }))}
             onCreateIndividualInvoice={handleCreateIndividualInvoice}
             onCreateMergedInvoice={handleCreateMergedInvoice}
+            onSkipInvoice={handleSkipInvoice}
+            onMarkAsSent={handleMarkAsSent}
           />
         </div>
       ))}
