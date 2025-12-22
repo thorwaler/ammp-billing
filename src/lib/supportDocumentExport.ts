@@ -140,7 +140,7 @@ export function exportToPDF(elementId: string, filename: string) {
     })
     .join('\n');
 
-  // Write content to print window
+  // Write content to print window with print-friendly styles
   printWindow.document.write(`
     <!DOCTYPE html>
     <html>
@@ -148,6 +148,14 @@ export function exportToPDF(elementId: string, filename: string) {
         <title>${filename}</title>
         <style>
           ${styles}
+          
+          /* Force exact color printing */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+          }
+          
           @media print {
             body { margin: 0; padding: 20px; }
             .no-print { display: none !important; }

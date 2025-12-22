@@ -43,7 +43,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         <h2 className="text-base font-bold mb-3">Year-to-Date Invoice Summary</h2>
         <table className="w-full border-collapse border border-border text-xs">
           <thead>
-            <tr className="bg-muted">
+            <tr style={{ backgroundColor: '#f4f4f5' }}>
               <th className="border border-border p-1 text-left">Period</th>
               <th className="border border-border p-1 text-right">Monitoring Fee</th>
               <th className="border border-border p-1 text-right">Solcast Fee</th>
@@ -61,7 +61,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <td className="border border-border p-1 text-right font-medium">{formatCurrency(inv.total)}</td>
               </tr>
             ))}
-            <tr className="bg-muted font-bold">
+            <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
               <td className="border border-border p-1" colSpan={4}>Year Total:</td>
               <td className="border border-border p-1 text-right">{formatCurrency(data.yearTotal)}</td>
             </tr>
@@ -108,7 +108,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           <h2 className="text-base font-bold mb-3">Elum Internal Assets - Graduated Tier Pricing</h2>
           <table className="w-full border-collapse border border-border text-xs">
             <thead>
-              <tr className="bg-muted">
+              <tr style={{ backgroundColor: '#f4f4f5' }}>
                 <th className="border border-border p-1 text-left">Tier</th>
                 <th className="border border-border p-1 text-right">MW in Tier</th>
                 <th className="border border-border p-1 text-right">Price per MW ({data.currency})</th>
@@ -124,7 +124,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   <td className="border border-border p-1 text-right font-medium">{formatCurrency(tier.cost)}</td>
                 </tr>
               ))}
-              <tr className="bg-muted font-bold">
+              <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
                 <td className="border border-border p-1">Total</td>
                 <td className="border border-border p-1 text-right">{data.elumInternalBreakdown.totalMW.toFixed(2)}</td>
                 <td className="border border-border p-1"></td>
@@ -141,7 +141,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           <h2 className="text-base font-bold mb-3">Solcast Fee Breakdown</h2>
           <table className="w-full border-collapse border border-border text-xs">
             <thead>
-              <tr className="bg-muted">
+              <tr style={{ backgroundColor: '#f4f4f5' }}>
                 <th className="border border-border p-1 text-left">Month</th>
                 <th className="border border-border p-1 text-right">Number of Sites</th>
                 <th className="border border-border p-1 text-right">Price per Site ({data.currency})</th>
@@ -157,7 +157,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   <td className="border border-border p-1 text-right">{formatCurrency(item.totalPerMonth)}</td>
                 </tr>
               ))}
-              <tr className="bg-muted font-bold">
+              <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
                 <td className="border border-border p-1" colSpan={3}>Total:</td>
                 <td className="border border-border p-1 text-right">{formatCurrency(data.solcastTotal || 0)}</td>
               </tr>
@@ -172,7 +172,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           <h2 className="text-base font-bold mb-3">Other Addons</h2>
           <table className="w-full border-collapse border border-border text-xs">
             <thead>
-              <tr className="bg-muted">
+              <tr style={{ backgroundColor: '#f4f4f5' }}>
                 <th className="border border-border p-1 text-left">Addon</th>
                 <th className="border border-border p-1 text-right">Quantity</th>
                 <th className="border border-border p-1 text-right">Price per Unit ({data.currency})</th>
@@ -192,7 +192,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   </td>
                 </tr>
               ))}
-              <tr className="bg-muted font-bold">
+              <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
                 <td className="border border-border p-1" colSpan={3}>Total:</td>
                 <td className="border border-border p-1 text-right">{formatCurrency(data.addonsTotal || 0)}</td>
               </tr>
@@ -210,7 +210,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           </p>
           <table className="w-full border-collapse border border-border text-xs">
             <thead>
-              <tr className="bg-muted">
+              <tr style={{ backgroundColor: '#f4f4f5' }}>
                 <th className="border border-border p-1 text-left">Asset Name</th>
                 <th className="border border-border p-1 text-right">MW</th>
                 <th className="border border-border p-1 text-center">Pricing Type</th>
@@ -220,7 +220,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             </thead>
             <tbody>
               {data.discountedAssetsBreakdown.map((asset, idx) => (
-                <tr key={idx} className="bg-purple-50 dark:bg-purple-950/20">
+                <tr key={idx} style={{ backgroundColor: '#faf5ff' }}>
                   <td className="border border-border p-1">
                     {asset.assetName}
                     {asset.note && (
@@ -242,7 +242,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   </td>
                 </tr>
               ))}
-              <tr className="bg-muted font-bold">
+              <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
                 <td className="border border-border p-1" colSpan={4}>Total Discounted Assets:</td>
                 <td className="border border-border p-1 text-right">{formatCurrency(data.discountedAssetsTotal || 0)}</td>
               </tr>
@@ -257,7 +257,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           <h2 className="text-base font-bold mb-3">Retainer Hours</h2>
           <table className="w-full border-collapse border border-border text-xs">
             <thead>
-              <tr className="bg-muted">
+              <tr style={{ backgroundColor: '#f4f4f5' }}>
                 <th className="border border-border p-1 text-left">Description</th>
                 <th className="border border-border p-1 text-right">Hours</th>
                 <th className="border border-border p-1 text-right">Hourly Rate ({data.currency})</th>
@@ -297,7 +297,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           
           {/* Site minimum pricing summary if applicable */}
           {data.siteMinimumPricingSummary && (
-            <div className="mb-3 p-2 bg-muted/50 rounded text-xs">
+            <div className="mb-3 p-2 rounded text-xs" style={{ backgroundColor: 'rgba(244, 244, 245, 0.5)' }}>
               <p className="font-medium mb-1">Site Pricing Summary:</p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -317,7 +317,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           <div className="overflow-x-auto">
             <table className="w-full border-collapse border border-border" style={{ fontSize: '8px' }}>
               <thead>
-                <tr className="bg-muted">
+                <tr style={{ backgroundColor: '#f4f4f5' }}>
                   <th className="border border-border px-1 py-0.5 text-left">Asset Name</th>
                   <th className="border border-border px-1 py-0.5 text-right">kWp</th>
                   <th className="border border-border px-1 py-0.5 text-center">Hybrid</th>
@@ -334,7 +334,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               </thead>
               <tbody>
                 {data.assetBreakdown.map((asset, idx) => (
-                  <tr key={idx} className={asset.usesMinimum ? 'bg-amber-50 dark:bg-amber-950/20' : ''}>
+                  <tr key={idx} style={asset.usesMinimum ? { backgroundColor: '#fffbeb' } : undefined}>
                     <td className="border border-border px-1 py-0.5" title={asset.assetId}>{asset.assetName}</td>
                     <td className="border border-border px-1 py-0.5 text-right">{asset.pvCapacityKWp.toFixed(1)}</td>
                     <td className="border border-border px-1 py-0.5 text-center">{asset.isHybrid ? 'Y' : '-'}</td>
@@ -343,7 +343,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     <td className="border border-border px-1 py-0.5 text-center">{asset.controlActive ? 'Y' : '-'}</td>
                     <td className="border border-border px-1 py-0.5 text-center">{asset.reportingActive ? 'Y' : '-'}</td>
                     {data.siteMinimumPricingSummary && (
-                      <td className={`border border-border px-1 py-0.5 text-center font-medium ${asset.usesMinimum ? 'text-orange-600 dark:text-orange-400' : 'text-green-600 dark:text-green-400'}`}>
+                      <td className="border border-border px-1 py-0.5 text-center font-medium" style={{ color: asset.usesMinimum ? '#ea580c' : '#16a34a' }}>
                         {asset.usesMinimum ? 'Min' : 'kWp'}
                       </td>
                     )}
@@ -353,21 +353,21 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     </td>
                   </tr>
                 ))}
-                <tr className="bg-muted font-bold">
+                <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
                   <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>Subtotal (Annual):</td>
                   <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(data.assetBreakdownTotal)}</td>
                 </tr>
                 {data.minimumContractAdjustment > 0 && data.minimumAnnualValue && (
                   <>
-                    <tr className="bg-amber-50 dark:bg-amber-950/20">
+                    <tr style={{ backgroundColor: '#fffbeb' }}>
                       <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>
                         Minimum Contract Adjustment (Annual):
                       </td>
-                      <td className="border border-border px-1 py-0.5 text-right text-amber-600 dark:text-amber-400 font-medium">
+                      <td className="border border-border px-1 py-0.5 text-right font-medium" style={{ color: '#d97706' }}>
                         {formatCurrency(data.minimumAnnualValue - data.assetBreakdownTotal)}
                       </td>
                     </tr>
-                    <tr className="bg-muted font-bold">
+                    <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
                       <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>
                         Total with Minimum (Annual):
                       </td>
@@ -380,15 +380,15 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           </div>
           {data.siteMinimumPricingSummary && (
             <p className="text-muted-foreground mt-1" style={{ fontSize: '7px' }}>
-              Pricing: <span className="text-green-600 dark:text-green-400 font-medium">kWp</span> = per-kWp rate, 
-              <span className="text-orange-600 dark:text-orange-400 font-medium ml-1">Min</span> = minimum site fee (highlighted rows)
+              Pricing: <span style={{ color: '#16a34a' }} className="font-medium">kWp</span> = per-kWp rate, 
+              <span style={{ color: '#ea580c' }} className="font-medium ml-1">Min</span> = minimum site fee (highlighted rows)
             </p>
           )}
         </section>
       )}
 
       {/* Validation Summary with Detailed Breakdown */}
-      <section className="mt-6 p-3 border rounded-lg bg-muted/50">
+      <section className="mt-6 p-3 border rounded-lg" style={{ backgroundColor: 'rgba(244, 244, 245, 0.5)' }}>
         <h3 className="font-bold mb-2 text-xs">Calculation Breakdown</h3>
         
         {/* Detailed breakdown */}
@@ -450,7 +450,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               </div>
             )}
             {data.calculationBreakdown.minimumContractAdjustment > 0 && (
-              <div className="flex justify-between text-amber-600 dark:text-amber-400 font-medium">
+              <div className="flex justify-between font-medium" style={{ color: '#d97706' }}>
                 <span>+ Min. Contract Adjustment:</span>
                 <span>{formatCurrency(data.calculationBreakdown.minimumContractAdjustment)}</span>
               </div>
@@ -468,7 +468,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               </div>
             )}
             {data.calculationBreakdown.discountedAssetsTotal > 0 && (
-              <div className="flex justify-between text-purple-600 dark:text-purple-400">
+              <div className="flex justify-between" style={{ color: '#9333ea' }}>
                 <span>+ Discounted Assets:</span>
                 <span>{formatCurrency(data.calculationBreakdown.discountedAssetsTotal)}</span>
               </div>
@@ -493,7 +493,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           </div>
           <div>
             {data.totalsMatch ? (
-              <p className="text-green-600 dark:text-green-400 font-medium">✓ Totals Match</p>
+              <p style={{ color: '#16a34a' }} className="font-medium">✓ Totals Match</p>
             ) : (
               <div>
                 <p className="text-destructive font-medium">⚠ Totals Mismatch</p>
