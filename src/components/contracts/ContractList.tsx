@@ -16,7 +16,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FileText, Download, Search, MoreHorizontal, Pencil, Eye, CalendarIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { FileText, Download, Search, MoreHorizontal, Pencil, Eye, CalendarIcon, X, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { syncContractAMMPData } from "@/services/ammp/ammpService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ContractForm from "@/components/contracts/ContractForm";
@@ -53,6 +54,7 @@ export function ContractList() {
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
+  const [syncingContractId, setSyncingContractId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const loadContracts = useCallback(async () => {
@@ -246,6 +248,31 @@ export function ContractList() {
     });
   };
 
+  const handleSync = async (contractId: string) => {
+    setSyncingContractId(contractId);
+    try {
+      const result = await syncContractAMMPData(contractId);
+      
+      if (result.success) {
+        toast({
+          title: "Asset data refreshed",
+          description: `Synced ${result.totalSites} sites (${result.totalMW?.toFixed(4)} MW)`,
+        });
+        loadContracts();
+      } else {
+        throw new Error(result.error || 'Sync failed');
+      }
+    } catch (error: any) {
+      toast({
+        title: "Sync failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setSyncingContractId(null);
+    }
+  };
+
   const toggleStatusFilter = (status: string) => {
     setStatusFilter(prev => 
       prev.includes(status) 
@@ -436,6 +463,15 @@ export function ContractList() {
                           title="View"
                         >
                           <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleSync(contract.id)}
+                          disabled={syncingContractId === contract.id}
+                          title="Sync AMMP Data"
+                        >
+                          <RefreshCw className={cn("h-4 w-4", syncingContractId === contract.id && "animate-spin")} />
                         </Button>
                         <Button 
                           variant="ghost" 
