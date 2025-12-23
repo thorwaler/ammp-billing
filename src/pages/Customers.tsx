@@ -118,7 +118,8 @@ const Customers = () => {
             contract_expiry_date,
             notes,
             max_mw,
-            onboarding_fee_per_site
+            onboarding_fee_per_site,
+            graduated_mw_tiers
           )
         `)
         ;
@@ -224,6 +225,7 @@ const Customers = () => {
           notes: contract.notes,
           max_mw: contract.max_mw,
           onboarding_fee_per_site: contract.onboarding_fee_per_site,
+          graduated_mw_tiers: contract.graduated_mw_tiers,
         })),
         package: firstActiveContract?.package || undefined,
         manualStatusOverride: c.manual_status_override || false,
