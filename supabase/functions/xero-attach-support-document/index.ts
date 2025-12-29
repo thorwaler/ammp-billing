@@ -154,7 +154,19 @@ Deno.serve(async (req) => {
     
     // Handle new format: pre-generated PDFs
     if (pdfBase64Array && Array.isArray(pdfBase64Array)) {
-      pdfsToAttach.push(...pdfBase64Array.filter((p: any) => p.pdfBase64));
+      for (const p of pdfBase64Array) {
+        if (p.pdfBase64) {
+          // Map contractName to filename with .pdf extension
+          // Remove special characters that could cause issues in filenames
+          const baseName = (p.filename || p.contractName || 'SupportDocument')
+            .replace(/[^a-zA-Z0-9-_]/g, '_');
+          const pdfFilename = `${baseName}_SupportDoc.pdf`;
+          pdfsToAttach.push({ 
+            pdfBase64: p.pdfBase64, 
+            filename: pdfFilename 
+          });
+        }
+      }
     } else if (pdfBase64 && filename) {
       pdfsToAttach.push({ pdfBase64, filename });
     }
