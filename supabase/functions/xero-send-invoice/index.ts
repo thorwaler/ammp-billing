@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.81.1';
 
+// Declare EdgeRuntime for Supabase Edge Functions
+declare const EdgeRuntime: {
+  waitUntil(promise: Promise<unknown>): void;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -70,6 +75,42 @@ async function getValidAccessToken(supabase: any) {
   return { accessToken: connection.access_token, tenantId: connection.tenant_id };
 }
 
+async function attachSupportDocuments(
+  authHeader: string,
+  xeroInvoiceId: string,
+  supportDocumentData: any,
+  supportDocumentDataArray: any
+) {
+  try {
+    console.log('Starting background task to attach support documents...');
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    
+    const response = await fetch(`${supabaseUrl}/functions/v1/xero-attach-support-document`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader,
+      },
+      body: JSON.stringify({
+        xeroInvoiceId,
+        supportDocumentData,
+        supportDocumentDataArray,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Failed to attach support documents:', errorText);
+    } else {
+      const result = await response.json();
+      console.log('Support document attachment result:', result);
+    }
+  } catch (error) {
+    console.error('Error in background task for support document attachment:', error);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -92,7 +133,8 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    let { invoice } = await req.json();
+    // Parse request body with new parameters
+    let { invoice, attachSupportDoc, supportDocumentData, supportDocumentDataArray } = await req.json();
     
     // Get valid access token (from shared connection)
     const { accessToken, tenantId } = await getValidAccessToken(supabase);
@@ -155,6 +197,20 @@ Deno.serve(async (req) => {
     }
     
     console.log('Invoice sent successfully for user:', user.id);
+
+    // Get the Xero invoice ID from the response
+    const xeroInvoiceId = result?.Invoices?.[0]?.InvoiceID;
+
+    // If attachment is requested and we have the invoice ID, trigger background task
+    if (attachSupportDoc && xeroInvoiceId && (supportDocumentData || supportDocumentDataArray)) {
+      console.log('Triggering background task to attach support document(s)...');
+      
+      // Use EdgeRuntime.waitUntil for background processing
+      // This allows the response to return immediately while the attachment happens in background
+      EdgeRuntime.waitUntil(
+        attachSupportDocuments(authHeader, xeroInvoiceId, supportDocumentData, supportDocumentDataArray)
+      );
+    }
 
     return new Response(
       JSON.stringify({ success: true, invoice: result }),

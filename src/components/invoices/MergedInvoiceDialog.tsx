@@ -69,6 +69,7 @@ export function MergedInvoiceDialog({
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [currentSupportDoc, setCurrentSupportDoc] = useState<SupportDocumentData | null>(null);
   const [currentSupportDocContract, setCurrentSupportDocContract] = useState<ContractForMerge | null>(null);
+  const [attachSupportDoc, setAttachSupportDoc] = useState(true);
 
   // Initialize all contracts as selected
   useEffect(() => {
@@ -448,10 +449,20 @@ export function MergedInvoiceDialog({
         Status: "DRAFT"
       };
       
+      // Build support document data array for attachment
+      const supportDocumentDataArray = selectedContractsList.map(c => ({
+        contractName: c.contractName || c.packageType,
+        data: supportDocuments.get(c.contractId)
+      })).filter(d => d.data);
+
       const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
-        body: { invoice: xeroInvoice }
+        body: { 
+          invoice: xeroInvoice,
+          attachSupportDoc: attachSupportDoc,
+          supportDocumentDataArray
+        }
       });
-      
+
       if (error) throw error;
       
       const xeroInvoiceId = data?.invoice?.Invoices?.[0]?.InvoiceID;
