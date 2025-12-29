@@ -202,7 +202,7 @@ Deno.serve(async (req) => {
     // For service calls, get all invoices; for user calls, filter by user
     let existingInvoicesQuery = supabase
       .from('invoices')
-      .select('id, xero_invoice_id, source, user_id')
+      .select('id, xero_invoice_id, source, user_id, xero_status, xero_amount_credited')
       .not('xero_invoice_id', 'is', null);
     
     if (!isServiceCall && userId) {
@@ -355,23 +355,33 @@ Deno.serve(async (req) => {
         const existingInvoice = existingInvoices?.find(i => i.xero_invoice_id === xeroInvoiceId);
         
         if (existingInvoice) {
-          // Update Xero-only invoice with latest status from Xero
-          const { error: updateError } = await supabase
-            .from('invoices')
-            .update({
-              xero_status: xeroInv.Status,
-              xero_synced_at: new Date().toISOString(),
-              xero_amount_credited: amountCredited,
-              xero_amount_credited_eur: amountCreditedEur,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', existingInvoice.id);
+          // Check if data actually changed before updating
+          const statusChanged = existingInvoice.xero_status !== xeroInv.Status;
+          const creditedChanged = existingInvoice.xero_amount_credited !== amountCredited;
+          
+          if (statusChanged || creditedChanged) {
+            // Update Xero-only invoice with latest status from Xero
+            const { error: updateError } = await supabase
+              .from('invoices')
+              .update({
+                xero_status: xeroInv.Status,
+                xero_synced_at: new Date().toISOString(),
+                xero_amount_credited: amountCredited,
+                xero_amount_credited_eur: amountCreditedEur,
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existingInvoice.id);
 
-          if (updateError) {
-            console.error('Error updating Xero-only invoice status:', existingInvoice.id, updateError);
-            skippedCount++;
+            if (updateError) {
+              console.error('Error updating Xero-only invoice status:', existingInvoice.id, updateError);
+              skippedCount++;
+            } else {
+              console.log(`Updated invoice ${existingInvoice.id}: status ${existingInvoice.xero_status} -> ${xeroInv.Status}, credited ${existingInvoice.xero_amount_credited} -> ${amountCredited}`);
+              updatedCount++;
+            }
           } else {
-            updatedCount++;
+            // No changes, just skip silently
+            skippedCount++;
           }
         } else {
           skippedCount++;
