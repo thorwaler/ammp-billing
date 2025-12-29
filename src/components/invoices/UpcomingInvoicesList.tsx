@@ -44,6 +44,8 @@ export interface UpcomingInvoice {
   graduatedMWTiers?: GraduatedMWTier[];
   // Elum Jubaili fields
   annualFeePerSite?: number;
+  // Tax category for Xero invoicing
+  taxCategory?: 'non_eu' | 'eu' | 'tax_exempt';
 }
 
 interface CustomerGroup {
@@ -113,7 +115,8 @@ export function UpcomingInvoicesList({
             id,
             name,
             nickname,
-            mwp_managed
+            mwp_managed,
+            tax_category
           )
         `)
         .eq('contract_status', 'active')
@@ -174,6 +177,8 @@ export function UpcomingInvoicesList({
               : undefined,
             // Elum Jubaili fields
             annualFeePerSite: Number((c as any).annual_fee_per_site) || undefined,
+            // Tax category from customer
+            taxCategory: (customer as any).tax_category || 'non_eu',
           };
         });
 

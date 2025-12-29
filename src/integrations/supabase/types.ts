@@ -432,6 +432,7 @@ export type Database = {
           name: string
           nickname: string | null
           status: string | null
+          tax_category: string | null
           updated_at: string
           user_id: string
         }
@@ -452,6 +453,7 @@ export type Database = {
           name: string
           nickname?: string | null
           status?: string | null
+          tax_category?: string | null
           updated_at?: string
           user_id: string
         }
@@ -472,6 +474,7 @@ export type Database = {
           name?: string
           nickname?: string | null
           status?: string | null
+          tax_category?: string | null
           updated_at?: string
           user_id?: string
         }
