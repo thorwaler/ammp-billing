@@ -17,19 +17,64 @@ interface InvoiceData {
   currentSiteCount: number;
 }
 
-interface SyncHistoryEntry {
-  synced_at: string;
-  total_mw: number;
-  total_sites: number;
-  asset_breakdown: unknown;
+export interface AlertSettings {
+  invoice_increase_warning: number;
+  invoice_increase_critical: number;
+  invoice_increase_enabled: boolean;
+  mw_decrease_enabled: boolean;
+  mw_decrease_threshold: number;
+  site_decrease_enabled: boolean;
+  site_decrease_threshold: number;
+  asset_manipulation_enabled: boolean;
+  asset_manipulation_window_days: number;
+  asset_manipulation_threshold: number;
 }
 
-// Thresholds for anomaly detection
-const THRESHOLDS = {
-  INVOICE_INCREASE_WARNING: 0.30,  // 30% increase
-  INVOICE_INCREASE_CRITICAL: 0.50, // 50% increase
-  ASSET_MANIPULATION_WINDOW_DAYS: 30, // Days before/after invoice to check for manipulation
+const DEFAULT_SETTINGS: AlertSettings = {
+  invoice_increase_warning: 0.30,
+  invoice_increase_critical: 0.50,
+  invoice_increase_enabled: true,
+  mw_decrease_enabled: true,
+  mw_decrease_threshold: 0,
+  site_decrease_enabled: true,
+  site_decrease_threshold: 0,
+  asset_manipulation_enabled: true,
+  asset_manipulation_window_days: 30,
+  asset_manipulation_threshold: 0.05,
 };
+
+/**
+ * Fetch alert settings from database
+ */
+async function getAlertSettings(): Promise<AlertSettings> {
+  try {
+    const { data, error } = await supabase
+      .from('alert_settings')
+      .select('*')
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) {
+      return DEFAULT_SETTINGS;
+    }
+
+    return {
+      invoice_increase_warning: Number(data.invoice_increase_warning),
+      invoice_increase_critical: Number(data.invoice_increase_critical),
+      invoice_increase_enabled: data.invoice_increase_enabled,
+      mw_decrease_enabled: data.mw_decrease_enabled,
+      mw_decrease_threshold: Number(data.mw_decrease_threshold),
+      site_decrease_enabled: data.site_decrease_enabled,
+      site_decrease_threshold: data.site_decrease_threshold,
+      asset_manipulation_enabled: data.asset_manipulation_enabled,
+      asset_manipulation_window_days: data.asset_manipulation_window_days,
+      asset_manipulation_threshold: Number(data.asset_manipulation_threshold),
+    };
+  } catch (err) {
+    console.error('Error fetching alert settings:', err);
+    return DEFAULT_SETTINGS;
+  }
+}
 
 /**
  * Check if current invoice amount is significantly higher than historical average
@@ -37,8 +82,11 @@ const THRESHOLDS = {
 export async function checkInvoiceAmountIncrease(
   customerId: string,
   currentAmount: number,
-  currency: string
+  currency: string,
+  settings: AlertSettings
 ): Promise<InvoiceAlert | null> {
+  if (!settings.invoice_increase_enabled) return null;
+
   try {
     // Get last 4 invoices for this customer
     const { data: previousInvoices, error } = await supabase
@@ -62,7 +110,7 @@ export async function checkInvoiceAmountIncrease(
 
     const increasePercentage = (currentAmount - averageAmount) / averageAmount;
 
-    if (increasePercentage >= THRESHOLDS.INVOICE_INCREASE_CRITICAL) {
+    if (increasePercentage >= settings.invoice_increase_critical) {
       return {
         alert_type: 'invoice_increase',
         severity: 'critical',
@@ -75,7 +123,7 @@ export async function checkInvoiceAmountIncrease(
           previous_invoice_count: previousInvoices.length,
         },
       };
-    } else if (increasePercentage >= THRESHOLDS.INVOICE_INCREASE_WARNING) {
+    } else if (increasePercentage >= settings.invoice_increase_warning) {
       return {
         alert_type: 'invoice_increase',
         severity: 'warning',
@@ -102,8 +150,11 @@ export async function checkInvoiceAmountIncrease(
  */
 export async function checkMWDecrease(
   contractId: string,
-  currentMW: number
+  currentMW: number,
+  settings: AlertSettings
 ): Promise<InvoiceAlert | null> {
+  if (!settings.mw_decrease_enabled) return null;
+
   try {
     // Get the last invoice for this contract
     const { data: lastInvoice, error } = await supabase
@@ -123,6 +174,11 @@ export async function checkMWDecrease(
     if (currentMW < previousMW) {
       const decrease = previousMW - currentMW;
       const decreasePercentage = (decrease / previousMW) * 100;
+      
+      // Check against threshold
+      if (settings.mw_decrease_threshold > 0 && decreasePercentage < settings.mw_decrease_threshold * 100) {
+        return null;
+      }
       
       return {
         alert_type: 'mw_decrease',
@@ -151,8 +207,11 @@ export async function checkMWDecrease(
  */
 export async function checkSiteCountDecrease(
   customerId: string,
-  currentSiteCount: number
+  currentSiteCount: number,
+  settings: AlertSettings
 ): Promise<InvoiceAlert | null> {
+  if (!settings.site_decrease_enabled) return null;
+
   try {
     // Get the last two sync history entries
     const { data: syncHistory, error } = await supabase
@@ -171,6 +230,11 @@ export async function checkSiteCountDecrease(
 
     if (currentSiteCount < previousSiteCount) {
       const decrease = previousSiteCount - currentSiteCount;
+      
+      // Check against threshold
+      if (settings.site_decrease_threshold > 0 && decrease < settings.site_decrease_threshold) {
+        return null;
+      }
       
       return {
         alert_type: 'site_decrease',
@@ -199,17 +263,20 @@ export async function checkSiteCountDecrease(
 export async function detectAssetManipulation(
   contractId: string,
   customerId: string,
-  invoiceDate: Date
+  invoiceDate: Date,
+  settings: AlertSettings
 ): Promise<InvoiceAlert[]> {
+  if (!settings.asset_manipulation_enabled) return [];
+
   const alerts: InvoiceAlert[] = [];
   
   try {
-    // Get sync history around the invoice date
+    // Get sync history around the invoice date using configured window
     const windowStart = new Date(invoiceDate);
-    windowStart.setDate(windowStart.getDate() - THRESHOLDS.ASSET_MANIPULATION_WINDOW_DAYS);
+    windowStart.setDate(windowStart.getDate() - settings.asset_manipulation_window_days);
     
     const windowEnd = new Date(invoiceDate);
-    windowEnd.setDate(windowEnd.getDate() + THRESHOLDS.ASSET_MANIPULATION_WINDOW_DAYS);
+    windowEnd.setDate(windowEnd.getDate() + settings.asset_manipulation_window_days);
 
     const { data: syncHistory, error } = await supabase
       .from('ammp_sync_history')
@@ -233,29 +300,31 @@ export async function detectAssetManipulation(
 
     const lastSyncBefore = syncsBefore[syncsBefore.length - 1];
     const firstSyncAfter = syncsAfter[0];
+    const threshold = 1 - settings.asset_manipulation_threshold;
 
     // Check for significant MW drop before invoice
     if (lastSyncBefore.total_mw && syncsBefore.length > 1) {
       const earlierSync = syncsBefore[0];
-      if (earlierSync.total_mw && lastSyncBefore.total_mw < earlierSync.total_mw * 0.9) {
+      if (earlierSync.total_mw && lastSyncBefore.total_mw < earlierSync.total_mw * threshold) {
         alerts.push({
           alert_type: 'asset_disappeared',
           severity: 'critical',
           title: 'Assets Removed Before Invoice Period',
-          description: `MW capacity dropped from ${earlierSync.total_mw.toFixed(2)} MW to ${lastSyncBefore.total_mw.toFixed(2)} MW in the ${THRESHOLDS.ASSET_MANIPULATION_WINDOW_DAYS} days before the invoice date. This could indicate intentional manipulation to reduce invoice amount.`,
+          description: `MW capacity dropped from ${earlierSync.total_mw.toFixed(2)} MW to ${lastSyncBefore.total_mw.toFixed(2)} MW in the ${settings.asset_manipulation_window_days} days before the invoice date. This could indicate intentional manipulation to reduce invoice amount.`,
           metadata: {
             mw_before: earlierSync.total_mw,
             mw_at_invoice: lastSyncBefore.total_mw,
             drop_percentage: ((earlierSync.total_mw - lastSyncBefore.total_mw) / earlierSync.total_mw) * 100,
-            window_days: THRESHOLDS.ASSET_MANIPULATION_WINDOW_DAYS,
+            window_days: settings.asset_manipulation_window_days,
           },
         });
       }
     }
 
     // Check for MW increase after invoice (assets returning)
+    const increaseThreshold = 1 + settings.asset_manipulation_threshold;
     if (firstSyncAfter.total_mw && lastSyncBefore.total_mw && 
-        firstSyncAfter.total_mw > lastSyncBefore.total_mw * 1.1) {
+        firstSyncAfter.total_mw > lastSyncBefore.total_mw * increaseThreshold) {
       alerts.push({
         alert_type: 'asset_reappeared',
         severity: 'critical',
@@ -265,7 +334,7 @@ export async function detectAssetManipulation(
           mw_at_invoice: lastSyncBefore.total_mw,
           mw_after: firstSyncAfter.total_mw,
           increase_percentage: ((firstSyncAfter.total_mw - lastSyncBefore.total_mw) / lastSyncBefore.total_mw) * 100,
-          window_days: THRESHOLDS.ASSET_MANIPULATION_WINDOW_DAYS,
+          window_days: settings.asset_manipulation_window_days,
         },
       });
     }
@@ -282,6 +351,9 @@ export async function detectAssetManipulation(
  */
 export async function runAllAnomalyChecks(invoiceData: InvoiceData): Promise<InvoiceAlert[]> {
   const alerts: InvoiceAlert[] = [];
+  
+  // Fetch settings from database
+  const settings = await getAlertSettings();
 
   // Run all checks in parallel
   const [
@@ -290,13 +362,13 @@ export async function runAllAnomalyChecks(invoiceData: InvoiceData): Promise<Inv
     siteDecreaseAlert,
     manipulationAlerts,
   ] = await Promise.all([
-    checkInvoiceAmountIncrease(invoiceData.customerId, invoiceData.invoiceAmount, invoiceData.currency),
+    checkInvoiceAmountIncrease(invoiceData.customerId, invoiceData.invoiceAmount, invoiceData.currency, settings),
     invoiceData.contractId 
-      ? checkMWDecrease(invoiceData.contractId, invoiceData.currentMW)
+      ? checkMWDecrease(invoiceData.contractId, invoiceData.currentMW, settings)
       : Promise.resolve(null),
-    checkSiteCountDecrease(invoiceData.customerId, invoiceData.currentSiteCount),
+    checkSiteCountDecrease(invoiceData.customerId, invoiceData.currentSiteCount, settings),
     invoiceData.contractId 
-      ? detectAssetManipulation(invoiceData.contractId, invoiceData.customerId, new Date())
+      ? detectAssetManipulation(invoiceData.contractId, invoiceData.customerId, new Date(), settings)
       : Promise.resolve([]),
   ]);
 

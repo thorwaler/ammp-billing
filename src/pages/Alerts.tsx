@@ -1,15 +1,17 @@
 import { useState, useMemo } from "react";
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertTriangle, AlertCircle, Info, RefreshCw } from "lucide-react";
+import { AlertTriangle, AlertCircle, Info, RefreshCw, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useInvoiceAlerts } from "@/hooks/useInvoiceAlerts";
 import { AlertCard } from "@/components/alerts/AlertCard";
 import { AlertFilters } from "@/components/alerts/AlertFilters";
 import { AcknowledgeDialog } from "@/components/alerts/AcknowledgeDialog";
+import { AlertSettingsDialog } from "@/components/alerts/AlertSettingsDialog";
 import { toast } from "@/hooks/use-toast";
 
 export default function Alerts() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const {
     alerts,
     loading,
@@ -115,10 +117,16 @@ export default function Alerts() {
               Monitor anomalies and sanity checks for invoices and contracts
             </p>
           </div>
-          <Button variant="outline" onClick={refetch} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => setSettingsOpen(true)}>
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
+            <Button variant="outline" onClick={refetch} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -210,6 +218,11 @@ export default function Alerts() {
         alertTitle={selectedAlert?.title || ""}
         onConfirm={handleConfirmAcknowledge}
         isLoading={isAcknowledging}
+      />
+
+      <AlertSettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
       />
     </Layout>
   );
