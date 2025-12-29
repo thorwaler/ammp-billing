@@ -21,6 +21,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     location: existingCustomer?.location || "",
     mwpManaged: existingCustomer?.mwpManaged || "",
     status: existingCustomer?.status || "active",
+    taxCategory: existingCustomer?.taxCategory || "non_eu",
   });
   
   // Track original status to detect manual changes
@@ -64,6 +65,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
         status: formData.status,
         // Set manual_status_override to true if status was manually changed
         manual_status_override: statusChanged ? true : (existingCustomer?.manual_status_override || false),
+        tax_category: formData.taxCategory,
         user_id: user.id,
       };
 
@@ -187,6 +189,26 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                 Status will be manually managed (Xero sync won't change it)
               </p>
             )}
+          </div>
+          
+          <div className="space-y-2">
+            <Label htmlFor="taxCategory">Tax Category (for Xero)</Label>
+            <Select 
+              value={formData.taxCategory}
+              onValueChange={(value) => handleSelectChange("taxCategory", value)}
+            >
+              <SelectTrigger id="taxCategory">
+                <SelectValue placeholder="Select tax category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="non_eu">Non-EU (Zero Rated)</SelectItem>
+                <SelectItem value="eu">EU (Reverse Charge)</SelectItem>
+                <SelectItem value="tax_exempt">Tax Exempt (UN/Intl Orgs)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Determines the tax type applied to Xero invoices
+            </p>
           </div>
         </div>
 
