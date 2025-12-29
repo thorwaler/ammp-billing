@@ -195,6 +195,7 @@ Deno.serve(async (req) => {
           mwp_managed: 0, // Default value, can be updated manually
           status: customerStatus,
           join_date: parseXeroDate(contact.UpdatedDateUTC),
+          xero_tax_type: contact.AccountsReceivableTaxType || null,
         };
 
         // Upsert customer (create or update by name)

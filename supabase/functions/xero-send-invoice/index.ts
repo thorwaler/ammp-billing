@@ -92,12 +92,35 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { invoice } = await req.json();
+    let { invoice } = await req.json();
     
     // Get valid access token (from shared connection)
     const { accessToken, tenantId } = await getValidAccessToken(supabase);
 
     console.log('Attempting to send invoice to Xero for user:', user.id);
+    
+    // Fetch customer's xero_tax_type from our database
+    const contactName = invoice.Contact?.Name;
+    if (contactName) {
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('xero_tax_type')
+        .eq('name', contactName)
+        .single();
+      
+      // If customer has a tax type configured, apply it to all line items
+      if (customer?.xero_tax_type && invoice.LineItems) {
+        console.log(`Applying tax type "${customer.xero_tax_type}" to invoice for ${contactName}`);
+        invoice = {
+          ...invoice,
+          LineItems: invoice.LineItems.map((item: any) => ({
+            ...item,
+            TaxType: customer.xero_tax_type
+          }))
+        };
+      }
+    }
+    
     console.log('Invoice data:', JSON.stringify(invoice, null, 2));
     
     // Send invoice to Xero

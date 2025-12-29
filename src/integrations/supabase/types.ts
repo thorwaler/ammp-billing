@@ -432,8 +432,10 @@ export type Database = {
           name: string
           nickname: string | null
           status: string | null
+          tax_category: string | null
           updated_at: string
           user_id: string
+          xero_tax_type: string | null
         }
         Insert: {
           ammp_asset_ids?: Json | null
@@ -452,8 +454,10 @@ export type Database = {
           name: string
           nickname?: string | null
           status?: string | null
+          tax_category?: string | null
           updated_at?: string
           user_id: string
+          xero_tax_type?: string | null
         }
         Update: {
           ammp_asset_ids?: Json | null
@@ -472,8 +476,10 @@ export type Database = {
           name?: string
           nickname?: string | null
           status?: string | null
+          tax_category?: string | null
           updated_at?: string
           user_id?: string
+          xero_tax_type?: string | null
         }
         Relationships: []
       }
