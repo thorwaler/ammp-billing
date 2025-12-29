@@ -531,10 +531,14 @@ export function InvoiceCalculator({
         const currentDate = invoiceDate || new Date();
         
         const siteBillingItems: SiteBillingItem[] = sites.map(site => {
-          const needsOnboarding = !site.onboarding_fee_paid;
-          const needsAnnualRenewal = site.next_annual_due_date 
-            ? new Date(site.next_annual_due_date) <= currentDate
-            : false;
+        const needsOnboarding = !site.onboarding_fee_paid;
+          // If site needs onboarding, also charge the first year's annual fee upfront
+          // Otherwise, check if annual renewal is due based on next_annual_due_date
+          const needsAnnualRenewal = needsOnboarding 
+            ? true  // New sites get annual fee charged upfront with onboarding
+            : (site.next_annual_due_date 
+                ? new Date(site.next_annual_due_date) <= currentDate
+                : false);
           
           return {
             assetId: site.asset_id,
