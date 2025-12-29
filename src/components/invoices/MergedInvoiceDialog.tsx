@@ -664,6 +664,18 @@ export function MergedInvoiceDialog({
                 </div>
               </div>
               
+              {/* Attach Support Document Option */}
+              <div className="flex items-center space-x-2">
+                <Checkbox 
+                  id="attach-support-doc-merged"
+                  checked={attachSupportDoc}
+                  onCheckedChange={(checked) => setAttachSupportDoc(checked === true)}
+                />
+                <label htmlFor="attach-support-doc-merged" className="text-sm cursor-pointer">
+                  Attach support documents to Xero invoice
+                </label>
+              </div>
+              
               {/* Actions */}
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => onOpenChange(false)}>

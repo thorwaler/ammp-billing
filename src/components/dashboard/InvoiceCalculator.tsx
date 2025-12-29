@@ -2298,23 +2298,35 @@ export function InvoiceCalculator({
                 </p>
               </div>
             ) : (
-              <Button 
-                className="w-full mt-4" 
-                onClick={handleSendToXero}
-                disabled={isSending || generatingSupportDoc}
-              >
-                {isSending || generatingSupportDoc ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {generatingSupportDoc ? 'Generating Documents...' : 'Sending...'}
-                  </>
-                ) : (
-                  <>
-                    <Send className="mr-2 h-4 w-4" />
-                    Send to Xero
-                  </>
-                )}
-              </Button>
+              <div className="mt-4 space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="attach-support-doc"
+                    checked={attachSupportDoc}
+                    onCheckedChange={(checked) => setAttachSupportDoc(checked === true)}
+                  />
+                  <Label htmlFor="attach-support-doc" className="text-sm cursor-pointer">
+                    Attach support document to Xero invoice
+                  </Label>
+                </div>
+                <Button 
+                  className="w-full" 
+                  onClick={handleSendToXero}
+                  disabled={isSending || generatingSupportDoc}
+                >
+                  {isSending || generatingSupportDoc ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      {generatingSupportDoc ? 'Generating Documents...' : 'Sending...'}
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send to Xero
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
         )}
