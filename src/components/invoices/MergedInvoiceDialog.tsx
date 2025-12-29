@@ -43,8 +43,6 @@ interface ContractForMerge {
   aboveThresholdPricePerMWp?: number;
   graduatedMWTiers?: GraduatedMWTier[];
   annualFeePerSite?: number;
-  // Tax category for Xero invoicing
-  taxCategory?: 'non_eu' | 'eu' | 'tax_exempt';
 }
 
 interface MergedInvoiceDialogProps {
@@ -56,13 +54,6 @@ interface MergedInvoiceDialogProps {
 
 const ACCOUNT_PLATFORM_FEES = "1002";
 const ACCOUNT_IMPLEMENTATION_FEES = "1000";
-
-// Tax type mapping based on customer tax category
-const TAX_TYPE_MAPPING: Record<string, string> = {
-  'non_eu': 'ZERORATEDOUTPUT',      // Non EU Sales of Services (Zero Rated)
-  'eu': 'ECZRSERVICES',              // EU Export of Goods/Services (Reverse Charge)
-  'tax_exempt': 'EXEMPTOUTPUT'       // Tax Exempt
-};
 
 export function MergedInvoiceDialog({
   open,
@@ -446,22 +437,12 @@ export function MergedInvoiceDialog({
         totalNRR += contractNRR;
       }
       
-      // Get tax category from the first contract (all contracts in a merge are for the same customer)
-      const taxCategory = contracts[0]?.taxCategory || 'non_eu';
-      const taxType = TAX_TYPE_MAPPING[taxCategory] || 'ZERORATEDOUTPUT';
-      
-      // Add TaxType to all line items
-      const lineItemsWithTax = lineItems.map(item => ({
-        ...item,
-        TaxType: taxType
-      }));
-      
       const xeroInvoice = {
         Type: "ACCREC",
         Contact: { Name: customerName },
         Date: format(invoiceDate, "yyyy-MM-dd"),
         DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
-        LineItems: lineItemsWithTax,
+        LineItems: lineItems,
         Reference: `${customerName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 20)}-Merged-${format(invoiceDate, "yyyyMMdd")}`,
         CurrencyCode: primaryCurrency,
         Status: "DRAFT"

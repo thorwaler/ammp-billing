@@ -139,8 +139,6 @@ interface Customer {
   graduatedMWTiers?: any[];
   // Custom asset discount pricing
   customAssetPricing?: any;
-  // Tax category for Xero invoicing
-  taxCategory?: 'non_eu' | 'eu' | 'tax_exempt';
 }
 
 // Default modules and addons from shared data
@@ -211,7 +209,6 @@ export function InvoiceCalculator({
           nickname,
           mwp_managed,
           ammp_capabilities,
-          tax_category,
           contracts (
             id,
             package,
@@ -322,8 +319,6 @@ export function InvoiceCalculator({
               : undefined,
             // Custom asset pricing
             customAssetPricing: (contract as any).custom_asset_pricing || undefined,
-            // Tax category from customer
-            taxCategory: (c as any).tax_category || 'non_eu',
           };
         });
 
@@ -882,24 +877,13 @@ export function InvoiceCalculator({
     
     try {
       // Format invoice data for Xero API
-      const lineItems: any[] = [];
+      const lineItems = [];
       
       // Account code constants:
       // 1002 = Platform Fees (ARR - MW-based pricing)
       // 1000 = Implementation Fees (NRR - addons)
       const ACCOUNT_PLATFORM_FEES = "1002";
       const ACCOUNT_IMPLEMENTATION_FEES = "1000";
-      
-      // Tax type mapping based on customer tax category
-      // non_eu -> ZERORATEDOUTPUT (Non EU Sales of Services - Zero Rated)
-      // eu -> ECZRSERVICES (EU Export of Goods/Services - Reverse Charge)
-      // tax_exempt -> EXEMPTOUTPUT (Tax Exempt)
-      const TAX_TYPE_MAPPING: Record<string, string> = {
-        'non_eu': 'ZERORATEDOUTPUT',
-        'eu': 'ECZRSERVICES',
-        'tax_exempt': 'EXEMPTOUTPUT'
-      };
-      const taxType = TAX_TYPE_MAPPING[selectedCustomer.taxCategory || 'non_eu'] || 'ZERORATEDOUTPUT';
 
       // Add base pricing if applicable (Platform Fee - ARR)
       if (result.basePricingCost > 0) {
@@ -1129,18 +1113,12 @@ export function InvoiceCalculator({
         .filter(ac => ac.addonId !== 'satelliteDataAPI')
         .reduce((sum, ac) => sum + ac.cost, 0);
       
-      // Add TaxType to all line items based on customer's tax category
-      const lineItemsWithTax = lineItems.map(item => ({
-        ...item,
-        TaxType: taxType
-      }));
-      
       const xeroInvoice = {
         Type: "ACCREC",
         Contact: { Name: selectedCustomer.name },
         Date: format(invoiceDate, "yyyy-MM-dd"),
         DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), // 30 days from invoice date
-        LineItems: lineItemsWithTax,
+        LineItems: lineItems,
         Reference: selectedCustomer.contractName 
           ? `${selectedCustomer.contractName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 30)}-${format(invoiceDate, "yyyyMMdd")}`
           : `${selectedCustomer.nickname || selectedCustomer.companyName || selectedCustomer.name}-${format(invoiceDate, "yyyyMMdd")}`,
