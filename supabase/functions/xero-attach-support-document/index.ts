@@ -490,6 +490,10 @@ Deno.serve(async (req) => {
 
     console.log(`Generating and attaching ${documents.length} support document(s)`);
 
+    let successCount = 0;
+    let failureCount = 0;
+    const errors: string[] = [];
+
     for (const doc of documents) {
       try {
         console.log('Document data keys:', Object.keys(doc.data || {}));
@@ -507,15 +511,34 @@ Deno.serve(async (req) => {
         await attachPdfToXeroInvoice(accessToken, tenantId, xeroInvoiceId, pdfBytes, filename);
         
         console.log(`Successfully attached: ${filename}`);
-      } catch (docError) {
+        successCount++;
+      } catch (docError: any) {
         console.error(`Error processing document:`, docError);
+        failureCount++;
+        const errorMsg = docError?.message || String(docError);
+        errors.push(errorMsg);
         // Continue with other documents even if one fails
       }
     }
 
+    // Return truthful response reflecting actual success/failure
+    const allFailed = successCount === 0 && failureCount > 0;
+    const responseData = {
+      success: !allFailed,
+      attachedCount: successCount,
+      failedCount: failureCount,
+      errors: errors.length > 0 ? errors : undefined,
+      needsReconnect: errors.some(e => e.includes('401') || e.includes('Unauthorized'))
+    };
+    
+    console.log('Attachment result:', responseData);
+
     return new Response(
-      JSON.stringify({ success: true, attachedCount: documents.length }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify(responseData),
+      { 
+        status: allFailed ? 400 : 200,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
     
   } catch (error) {

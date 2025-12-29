@@ -1158,6 +1158,12 @@ export function InvoiceCalculator({
         selectedCustomer.minimumAnnualValue
       );
 
+      // Show sending toast
+      toast({
+        title: "Sending invoice to Xero...",
+        description: "Creating invoice draft in Xero.",
+      });
+
       const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
         body: { 
           invoice: xeroInvoice,
@@ -1171,10 +1177,35 @@ export function InvoiceCalculator({
       // Extract Xero invoice ID from response
       const xeroInvoiceId = data?.invoice?.Invoices?.[0]?.InvoiceID;
       
+      // Show invoice creation success
       toast({
-        title: "Invoice sent to Xero",
-        description: "The invoice has been created in Xero as a draft.",
+        title: "Invoice created in Xero",
+        description: "Invoice has been created as a draft.",
       });
+      
+      // Handle attachment result
+      if (attachSupportDoc && data?.attachmentResult) {
+        const { attachmentResult } = data;
+        
+        if (attachmentResult.success && attachmentResult.attachedCount > 0) {
+          toast({
+            title: "Support document attached",
+            description: `Successfully attached ${attachmentResult.attachedCount} document(s) to the Xero invoice.`,
+          });
+        } else if (attachmentResult.needsReconnect) {
+          toast({
+            title: "Attachment failed - Reconnection needed",
+            description: "Please reconnect Xero in Settings → Integrations to enable attachments.",
+            variant: "destructive",
+          });
+        } else if (attachmentResult.failedCount > 0) {
+          toast({
+            title: "Attachment failed",
+            description: attachmentResult.errors?.[0] || "Failed to attach support document.",
+            variant: "destructive",
+          });
+        }
+      }
       
       // Update period dates for next invoice
       if (selectedCustomer) {
