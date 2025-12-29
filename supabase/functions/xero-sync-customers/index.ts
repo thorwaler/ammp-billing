@@ -100,10 +100,10 @@ Deno.serve(async (req) => {
     // Get valid access token (from shared connection)
     const { accessToken, tenantId } = await getValidAccessToken(supabase);
 
-    // Fetch all local customers first to track deletions
+    // Fetch all local customers first to track deletions and preserve inactive status
     const { data: localCustomers, error: localError } = await supabase
       .from('customers')
-      .select('id, name, manual_status_override')
+      .select('id, name, status, manual_status_override')
       .eq('user_id', user.id);
 
     if (localError) {
@@ -115,6 +115,7 @@ Deno.serve(async (req) => {
       localCustomers?.map(c => [c.name.toLowerCase(), { 
         id: c.id, 
         name: c.name,
+        status: c.status,
         manual_status_override: c.manual_status_override 
       }]) || []
     );
@@ -175,19 +176,29 @@ Deno.serve(async (req) => {
         // Track this customer as seen
         seenCustomers.add(contact.Name.toLowerCase());
 
-        // Check if this customer exists locally and has manual override
+        // Check if this customer exists locally
         const existingCustomer = localCustomerMap.get(contact.Name.toLowerCase());
         const hasManualOverride = existingCustomer?.manual_status_override === true;
+        const isLocallyInactive = existingCustomer?.status === 'inactive';
 
-        // If manual override is set, skip updating this customer's status from Xero
+        // If manual override is set, skip updating this customer entirely
         if (hasManualOverride) {
           console.log(`Customer "${contact.Name}" has manual status override, skipping status update`);
           skippedManualOverride++;
           continue;
         }
 
+        // Determine customer status:
+        // 1. If customer is locally inactive, NEVER reactivate via sync
+        // 2. Otherwise, use the Xero status
+        let customerStatus = getCustomerStatus(contact.ContactStatus);
+        
+        if (isLocallyInactive && customerStatus === 'active') {
+          console.log(`Customer "${contact.Name}" is locally inactive, preserving inactive status`);
+          customerStatus = 'inactive';
+        }
+
         // Map Xero contact to our customers table structure
-        const customerStatus = getCustomerStatus(contact.ContactStatus);
         const customerData = {
           user_id: user.id,
           name: contact.Name || 'Unknown',
