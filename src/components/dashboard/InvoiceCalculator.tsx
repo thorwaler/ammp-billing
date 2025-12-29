@@ -12,6 +12,7 @@ import { generateSupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { exportToExcel, exportToPDF, generateFilename } from "@/lib/supportDocumentExport";
 import { SupportDocument } from "@/components/invoices/SupportDocument";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
+import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
 import { getApplicableDiscount, SiteBillingItem } from "@/lib/invoiceCalculations";
 import { SiteBillingSelector } from "@/components/invoices/SiteBillingSelector";
 import { 
@@ -1164,11 +1165,27 @@ export function InvoiceCalculator({
         description: "Creating invoice draft in Xero.",
       });
 
+      // Generate PDF in browser if support doc is being attached
+      let pdfBase64: string | undefined;
+      if (attachSupportDoc && supportDocData) {
+        try {
+          toast({
+            title: "Generating support document...",
+            description: "Creating PDF for Xero attachment.",
+          });
+          pdfBase64 = await renderSupportDocumentToPdf(supportDocData);
+        } catch (pdfError) {
+          console.error('Error generating PDF:', pdfError);
+          // Continue without PDF - will fall back to server-side generation
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
         body: { 
           invoice: xeroInvoice,
           attachSupportDoc: attachSupportDoc,
-          supportDocumentData: supportDocData
+          supportDocumentData: supportDocData,
+          pdfBase64Array: pdfBase64 ? [{ contractName: selectedCustomer.contractName || selectedCustomer.name, pdfBase64 }] : undefined
         }
       });
 

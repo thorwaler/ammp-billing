@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { SupportDocumentDownloadDialog } from "./SupportDocumentDownloadDialog";
 import { generateSupportDocumentData, SupportDocumentData } from "@/lib/supportDocumentGenerator";
+import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
 
 interface ContractForMerge {
@@ -459,11 +460,38 @@ export function MergedInvoiceDialog({
         data: supportDocuments.get(c.contractId)
       })).filter(d => d.data);
 
+      // Generate PDFs in browser if support docs are being attached
+      let pdfBase64Array: Array<{ contractName: string; pdfBase64: string }> | undefined;
+      if (attachSupportDoc && supportDocumentDataArray.length > 0) {
+        try {
+          toast({
+            title: "Generating support documents...",
+            description: `Creating ${supportDocumentDataArray.length} PDF(s) for Xero attachment.`,
+          });
+          
+          pdfBase64Array = [];
+          for (const doc of supportDocumentDataArray) {
+            if (doc.data) {
+              const pdfBase64 = await renderSupportDocumentToPdf(doc.data);
+              pdfBase64Array.push({
+                contractName: doc.contractName || 'Support Document',
+                pdfBase64
+              });
+            }
+          }
+        } catch (pdfError) {
+          console.error('Error generating PDFs:', pdfError);
+          // Continue without PDFs - will fall back to server-side generation
+          pdfBase64Array = undefined;
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
         body: { 
           invoice: xeroInvoice,
           attachSupportDoc: attachSupportDoc,
-          supportDocumentDataArray
+          supportDocumentDataArray,
+          pdfBase64Array
         }
       });
 
