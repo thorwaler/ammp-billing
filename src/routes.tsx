@@ -1,4 +1,3 @@
-
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import Auth from "./pages/Auth";
@@ -13,6 +12,7 @@ import UserManagement from "./pages/UserManagement";
 import ContractDetails from "./pages/ContractDetails";
 import Integrations from "./pages/Integrations";
 import Notifications from "./pages/Notifications";
+import Alerts from "./pages/Alerts";
 
 const AppRoutes = () => (
   <BrowserRouter>
@@ -25,6 +25,7 @@ const AppRoutes = () => (
       <Route path="/contracts/:id" element={<ProtectedRoute><ContractDetails /></ProtectedRoute>} />
       <Route path="/invoices" element={<ProtectedRoute><InvoiceCreator /></ProtectedRoute>} />
       <Route path="/invoice-history" element={<ProtectedRoute><InvoiceHistory /></ProtectedRoute>} />
+      <Route path="/alerts" element={<ProtectedRoute><Alerts /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
       <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />

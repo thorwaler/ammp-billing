@@ -1,9 +1,9 @@
-
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { NavLink } from "react-router-dom";
-import { Home, Users, FileText, BarChart, Link2, UserCircle, X, History, ScrollText } from "lucide-react";
+import { Home, Users, FileText, BarChart, Link2, UserCircle, X, History, ScrollText, AlertTriangle } from "lucide-react";
+import { useInvoiceAlerts } from "@/hooks/useInvoiceAlerts";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   isOpen: boolean;
@@ -11,6 +11,8 @@ interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function Sidebar({ className, isOpen, closeSidebar }: SidebarProps) {
+  const { unacknowledgedCount, criticalCount } = useInvoiceAlerts();
+
   return (
     <aside
       className={cn(
@@ -91,6 +93,31 @@ export function Sidebar({ className, isOpen, closeSidebar }: SidebarProps) {
           >
             <History className="h-5 w-5" />
             Invoice History
+          </NavLink>
+          <NavLink 
+            to="/alerts" 
+            className={({ isActive }) => 
+              cn("flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isActive 
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground" 
+                  : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )
+            }
+          >
+            <div className="flex items-center gap-3">
+              <AlertTriangle className={cn("h-5 w-5", criticalCount > 0 && "text-destructive")} />
+              Alerts
+            </div>
+            {unacknowledgedCount > 0 && (
+              <span className={cn(
+                "flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium",
+                criticalCount > 0 
+                  ? "bg-destructive text-destructive-foreground" 
+                  : "bg-amber-500 text-white"
+              )}>
+                {unacknowledgedCount}
+              </span>
+            )}
           </NavLink>
           <NavLink 
             to="/reports"

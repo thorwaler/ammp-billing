@@ -483,6 +483,85 @@ export type Database = {
         }
         Relationships: []
       }
+      invoice_alerts: {
+        Row: {
+          acknowledged_at: string | null
+          acknowledged_by: string | null
+          acknowledgment_note: string | null
+          alert_type: string
+          contract_id: string | null
+          created_at: string | null
+          customer_id: string | null
+          description: string
+          id: string
+          invoice_id: string | null
+          is_acknowledged: boolean | null
+          metadata: Json | null
+          severity: string
+          title: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          acknowledgment_note?: string | null
+          alert_type: string
+          contract_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          description: string
+          id?: string
+          invoice_id?: string | null
+          is_acknowledged?: boolean | null
+          metadata?: Json | null
+          severity?: string
+          title: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          acknowledged_at?: string | null
+          acknowledged_by?: string | null
+          acknowledgment_note?: string | null
+          alert_type?: string
+          contract_id?: string | null
+          created_at?: string | null
+          customer_id?: string | null
+          description?: string
+          id?: string
+          invoice_id?: string | null
+          is_acknowledged?: boolean | null
+          metadata?: Json | null
+          severity?: string
+          title?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_alerts_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_alerts_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoice_alerts_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           addons_data: Json | null
