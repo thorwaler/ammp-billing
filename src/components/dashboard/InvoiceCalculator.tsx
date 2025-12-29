@@ -1128,7 +1128,7 @@ export function InvoiceCalculator({
         Status: "DRAFT"
       };
       
-      // Generate support document data before sending
+      // Prepare support doc generation params (used after DB save)
       const discountPercent = selectedCustomer.portfolioDiscountTiers?.length > 0
         ? getApplicableDiscount(Number(mwManaged), selectedCustomer.portfolioDiscountTiers)
         : 0;
@@ -1136,57 +1136,15 @@ export function InvoiceCalculator({
         && selectedCustomer.cachedCapabilities 
         ? selectedCustomer.cachedCapabilities 
         : selectedCustomer.ammpCapabilities;
-      
-      const supportDocData = await generateSupportDocumentData(
-        selectedCustomer.id,
-        selectedCustomer.nickname || selectedCustomer.name,
-        selectedCustomer.currency,
-        invoiceDate,
-        result,
-        modules.filter(m => m.selected).map(m => m.id),
-        addons.filter(a => a.selected).map(a => ({ id: a.id, quantity: a.quantity })),
-        effectiveCapabilities,
-        selectedCustomer.package,
-        billingFrequency,
-        discountPercent,
-        selectedCustomer.periodStart,
-        selectedCustomer.periodEnd,
-        selectedCustomer.contractId,
-        selectedCustomer.retainerHours,
-        selectedCustomer.retainerHourlyRate,
-        selectedCustomer.retainerMinimumValue,
-        selectedCustomer.contractName,
-        selectedCustomer.minimumAnnualValue
-      );
 
-      // Show sending toast
+      // STEP 1: Send invoice to Xero (without attachment)
       toast({
         title: "Sending invoice to Xero...",
         description: "Creating invoice draft in Xero.",
       });
 
-      // Generate PDF in browser if support doc is being attached
-      let pdfBase64: string | undefined;
-      if (attachSupportDoc && supportDocData) {
-        try {
-          toast({
-            title: "Generating support document...",
-            description: "Creating PDF for Xero attachment.",
-          });
-          pdfBase64 = await renderSupportDocumentToPdf(supportDocData);
-        } catch (pdfError) {
-          console.error('Error generating PDF:', pdfError);
-          // Continue without PDF - will fall back to server-side generation
-        }
-      }
-
       const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
-        body: { 
-          invoice: xeroInvoice,
-          attachSupportDoc: attachSupportDoc,
-          supportDocumentData: supportDocData,
-          pdfBase64Array: pdfBase64 ? [{ contractName: selectedCustomer.contractName || selectedCustomer.name, pdfBase64 }] : undefined
-        }
+        body: { invoice: xeroInvoice }
       });
 
       if (error) throw error;
@@ -1199,30 +1157,6 @@ export function InvoiceCalculator({
         title: "Invoice created in Xero",
         description: "Invoice has been created as a draft.",
       });
-      
-      // Handle attachment result
-      if (attachSupportDoc && data?.attachmentResult) {
-        const { attachmentResult } = data;
-        
-        if (attachmentResult.success && attachmentResult.attachedCount > 0) {
-          toast({
-            title: "Support document attached",
-            description: `Successfully attached ${attachmentResult.attachedCount} document(s) to the Xero invoice.`,
-          });
-        } else if (attachmentResult.needsReconnect) {
-          toast({
-            title: "Attachment failed - Reconnection needed",
-            description: "Please reconnect Xero in Settings → Integrations to enable attachments.",
-            variant: "destructive",
-          });
-        } else if (attachmentResult.failedCount > 0) {
-          toast({
-            title: "Attachment failed",
-            description: attachmentResult.errors?.[0] || "Failed to attach support document.",
-            variant: "destructive",
-          });
-        }
-      }
       
       // Update period dates for next invoice
       if (selectedCustomer) {
@@ -1376,8 +1310,100 @@ export function InvoiceCalculator({
             console.log(`[Invoice] Updated site_billing_status for ${selectedSitesToBill.length} sites`);
           }
           
-          // Generate support document data and store it
-          await generateAndStoreSupportDocument(insertedInvoice.id);
+          // STEP 3: Generate support document data AFTER saving to DB (so YTD includes this invoice)
+          if (attachSupportDoc) {
+            try {
+              toast({
+                title: "Generating support document...",
+                description: "Creating PDF for Xero attachment.",
+              });
+              
+              const supportDocData = await generateSupportDocumentData(
+                selectedCustomer.id,
+                selectedCustomer.nickname || selectedCustomer.name,
+                selectedCustomer.currency,
+                invoiceDate,
+                result,
+                modules.filter(m => m.selected).map(m => m.id),
+                addons.filter(a => a.selected).map(a => ({ id: a.id, quantity: a.quantity })),
+                effectiveCapabilities,
+                selectedCustomer.package,
+                billingFrequency,
+                discountPercent,
+                selectedCustomer.periodStart,
+                selectedCustomer.periodEnd,
+                selectedCustomer.contractId,
+                selectedCustomer.retainerHours,
+                selectedCustomer.retainerHourlyRate,
+                selectedCustomer.retainerMinimumValue,
+                selectedCustomer.contractName,
+                selectedCustomer.minimumAnnualValue
+              );
+              
+              // Store support document data on the invoice record
+              await supabase
+                .from('invoices')
+                .update({ support_document_data: supportDocData })
+                .eq('id', insertedInvoice.id);
+              
+              // STEP 4: Generate PDF in browser
+              const pdfBase64 = await renderSupportDocumentToPdf(supportDocData);
+              
+              // STEP 5: Attach PDF to Xero invoice separately
+              if (xeroInvoiceId && pdfBase64) {
+                toast({
+                  title: "Attaching support document...",
+                  description: "Uploading PDF to Xero invoice.",
+                });
+                
+                const { data: attachResult, error: attachError } = await supabase.functions.invoke('xero-attach-support-document', {
+                  body: {
+                    xeroInvoiceId,
+                    pdfBase64Array: [{ 
+                      contractName: selectedCustomer.contractName || selectedCustomer.name, 
+                      pdfBase64 
+                    }]
+                  }
+                });
+                
+                if (attachError) {
+                  console.error('Attachment error:', attachError);
+                  toast({
+                    title: "Attachment failed",
+                    description: "Invoice saved but support document could not be attached.",
+                    variant: "destructive",
+                  });
+                } else if (attachResult?.attachedCount > 0) {
+                  toast({
+                    title: "Support document attached",
+                    description: `Successfully attached support document to the Xero invoice.`,
+                  });
+                } else if (attachResult?.needsReconnect) {
+                  toast({
+                    title: "Attachment failed - Reconnection needed",
+                    description: "Please reconnect Xero in Settings → Integrations to enable attachments.",
+                    variant: "destructive",
+                  });
+                } else if (attachResult?.failedCount > 0) {
+                  toast({
+                    title: "Attachment failed",
+                    description: attachResult.errors?.[0] || "Failed to attach support document.",
+                    variant: "destructive",
+                  });
+                }
+              }
+            } catch (pdfError) {
+              console.error('Error generating/attaching PDF:', pdfError);
+              toast({
+                title: "Support document error",
+                description: "Invoice saved but support document could not be generated.",
+                variant: "destructive",
+              });
+            }
+          } else {
+            // Not attaching to Xero, but still store the support doc data
+            await generateAndStoreSupportDocument(insertedInvoice.id);
+          }
         }
       }
       
