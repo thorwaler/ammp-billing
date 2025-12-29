@@ -189,6 +189,7 @@ export function InvoiceCalculator({
   };
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
+  const [attachSupportDoc, setAttachSupportDoc] = useState(true);
   
   // Per-site billing state
   const [siteBillingData, setSiteBillingData] = useState<SiteBillingItem[]>([]);
@@ -1126,10 +1127,45 @@ export function InvoiceCalculator({
         Status: "DRAFT"
       };
       
-      const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
-        body: { invoice: xeroInvoice }
-      });
+      // Generate support document data before sending
+      const discountPercent = selectedCustomer.portfolioDiscountTiers?.length > 0
+        ? getApplicableDiscount(Number(mwManaged), selectedCustomer.portfolioDiscountTiers)
+        : 0;
+      const effectiveCapabilities = (selectedCustomer.ammpAssetGroupId || selectedCustomer.contractAmmpOrgId) 
+        && selectedCustomer.cachedCapabilities 
+        ? selectedCustomer.cachedCapabilities 
+        : selectedCustomer.ammpCapabilities;
       
+      const supportDocData = await generateSupportDocumentData(
+        selectedCustomer.id,
+        selectedCustomer.nickname || selectedCustomer.name,
+        selectedCustomer.currency,
+        invoiceDate,
+        result,
+        modules.filter(m => m.selected).map(m => m.id),
+        addons.filter(a => a.selected).map(a => ({ id: a.id, quantity: a.quantity })),
+        effectiveCapabilities,
+        selectedCustomer.package,
+        billingFrequency,
+        discountPercent,
+        selectedCustomer.periodStart,
+        selectedCustomer.periodEnd,
+        selectedCustomer.contractId,
+        selectedCustomer.retainerHours,
+        selectedCustomer.retainerHourlyRate,
+        selectedCustomer.retainerMinimumValue,
+        selectedCustomer.contractName,
+        selectedCustomer.minimumAnnualValue
+      );
+
+      const { data, error } = await supabase.functions.invoke('xero-send-invoice', {
+        body: { 
+          invoice: xeroInvoice,
+          attachSupportDoc: attachSupportDoc,
+          supportDocumentData: supportDocData
+        }
+      });
+
       if (error) throw error;
       
       // Extract Xero invoice ID from response
