@@ -86,6 +86,7 @@ interface AttachmentResult {
 async function attachSupportDocuments(
   authHeader: string,
   xeroInvoiceId: string,
+  pdfBase64Array: Array<{ pdfBase64: string; filename: string }> | undefined,
   supportDocumentData: any,
   supportDocumentDataArray: any,
   accessToken: string,
@@ -104,6 +105,9 @@ async function attachSupportDocuments(
       },
       body: JSON.stringify({
         xeroInvoiceId,
+        // New format: pre-generated PDFs
+        pdfBase64Array,
+        // Legacy format (will be rejected by the attachment function)
         supportDocumentData,
         supportDocumentDataArray,
         accessToken,
@@ -164,7 +168,7 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body with new parameters
-    let { invoice, attachSupportDoc, supportDocumentData, supportDocumentDataArray } = await req.json();
+    let { invoice, attachSupportDoc, pdfBase64Array, supportDocumentData, supportDocumentDataArray } = await req.json();
     
     // Get valid access token (from shared connection)
     const { accessToken, tenantId } = await getValidAccessToken(supabase);
@@ -233,11 +237,12 @@ Deno.serve(async (req) => {
 
     // If attachment is requested and we have the invoice ID, await the attachment
     let attachmentResult: AttachmentResult | undefined;
-    if (attachSupportDoc && xeroInvoiceId && (supportDocumentData || supportDocumentDataArray)) {
+    if (attachSupportDoc && xeroInvoiceId && (pdfBase64Array?.length > 0 || supportDocumentData || supportDocumentDataArray)) {
       console.log('Attaching support document(s) to Xero invoice...');
       attachmentResult = await attachSupportDocuments(
         authHeader, 
-        xeroInvoiceId, 
+        xeroInvoiceId,
+        pdfBase64Array,
         supportDocumentData, 
         supportDocumentDataArray, 
         accessToken, 
