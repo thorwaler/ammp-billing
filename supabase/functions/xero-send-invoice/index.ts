@@ -79,7 +79,9 @@ async function attachSupportDocuments(
   authHeader: string,
   xeroInvoiceId: string,
   supportDocumentData: any,
-  supportDocumentDataArray: any
+  supportDocumentDataArray: any,
+  accessToken: string,
+  tenantId: string
 ) {
   try {
     console.log('Starting background task to attach support documents...');
@@ -96,6 +98,8 @@ async function attachSupportDocuments(
         xeroInvoiceId,
         supportDocumentData,
         supportDocumentDataArray,
+        accessToken,
+        tenantId,
       }),
     });
     
@@ -208,7 +212,7 @@ Deno.serve(async (req) => {
       // Use EdgeRuntime.waitUntil for background processing
       // This allows the response to return immediately while the attachment happens in background
       EdgeRuntime.waitUntil(
-        attachSupportDocuments(authHeader, xeroInvoiceId, supportDocumentData, supportDocumentDataArray)
+        attachSupportDocuments(authHeader, xeroInvoiceId, supportDocumentData, supportDocumentDataArray, accessToken, tenantId)
       );
     }
 

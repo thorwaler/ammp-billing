@@ -444,7 +444,13 @@ Deno.serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { xeroInvoiceId, supportDocumentData, supportDocumentDataArray } = await req.json();
+    const { 
+      xeroInvoiceId, 
+      supportDocumentData, 
+      supportDocumentDataArray,
+      accessToken: passedAccessToken,
+      tenantId: passedTenantId
+    } = await req.json();
 
     if (!xeroInvoiceId) {
       throw new Error('Missing xeroInvoiceId');
@@ -452,7 +458,18 @@ Deno.serve(async (req) => {
 
     console.log(`Processing attachment for Xero invoice: ${xeroInvoiceId}`);
 
-    const { accessToken, tenantId } = await getValidAccessToken(supabase);
+    // Use passed tokens if available, otherwise fetch from database (fallback for direct calls)
+    let accessToken = passedAccessToken;
+    let tenantId = passedTenantId;
+    
+    if (!accessToken || !tenantId) {
+      console.log('No tokens passed, fetching from database...');
+      const tokenData = await getValidAccessToken(supabase);
+      accessToken = tokenData.accessToken;
+      tenantId = tokenData.tenantId;
+    } else {
+      console.log('Using passed access token and tenant ID');
+    }
 
     // Handle single document or array of documents
     const documents: Array<{ contractName?: string; data: SupportDocumentData }> = [];
