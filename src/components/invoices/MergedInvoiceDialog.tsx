@@ -401,6 +401,11 @@ export function MergedInvoiceDialog({
     
     setSending(true);
     
+    // Show sending toast
+    toast({
+      title: "Sending invoice to Xero...",
+      description: "Creating merged invoice draft in Xero.",
+    });
     try {
       const lineItems = buildMergedLineItems();
       
@@ -449,7 +454,6 @@ export function MergedInvoiceDialog({
         Status: "DRAFT"
       };
       
-      // Build support document data array for attachment
       const supportDocumentDataArray = selectedContractsList.map(c => ({
         contractName: c.contractName || c.packageType,
         data: supportDocuments.get(c.contractId)
@@ -466,6 +470,36 @@ export function MergedInvoiceDialog({
       if (error) throw error;
       
       const xeroInvoiceId = data?.invoice?.Invoices?.[0]?.InvoiceID;
+      
+      // Show invoice creation success
+      toast({
+        title: "Invoice created in Xero",
+        description: "Merged invoice has been created as a draft.",
+      });
+      
+      // Handle attachment result
+      if (attachSupportDoc && data?.attachmentResult) {
+        const { attachmentResult } = data;
+        
+        if (attachmentResult.success && attachmentResult.attachedCount > 0) {
+          toast({
+            title: "Support documents attached",
+            description: `Successfully attached ${attachmentResult.attachedCount} document(s) to the Xero invoice.`,
+          });
+        } else if (attachmentResult.needsReconnect) {
+          toast({
+            title: "Attachment failed - Reconnection needed",
+            description: "Please reconnect Xero in Settings → Integrations to enable attachments.",
+            variant: "destructive",
+          });
+        } else if (attachmentResult.failedCount > 0) {
+          toast({
+            title: "Attachment failed",
+            description: attachmentResult.errors?.[0] || "Failed to attach support documents.",
+            variant: "destructive",
+          });
+        }
+      }
       
       // Update period dates for all included contracts
       for (const contract of selectedContractsList) {
@@ -537,10 +571,7 @@ export function MergedInvoiceDialog({
         }]);
       }
       
-      toast({
-        title: "Merged invoice sent to Xero",
-        description: `Invoice created for ${selectedContractsList.length} contracts totaling ${currencySymbol}${totalAmount.toLocaleString()}`,
-      });
+      // Final success toast already shown above
       
       onOpenChange(false);
       onInvoiceCreated?.();

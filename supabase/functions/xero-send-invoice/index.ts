@@ -75,6 +75,14 @@ async function getValidAccessToken(supabase: any) {
   return { accessToken: connection.access_token, tenantId: connection.tenant_id };
 }
 
+interface AttachmentResult {
+  success: boolean;
+  attachedCount?: number;
+  failedCount?: number;
+  errors?: string[];
+  needsReconnect?: boolean;
+}
+
 async function attachSupportDocuments(
   authHeader: string,
   xeroInvoiceId: string,
@@ -82,9 +90,9 @@ async function attachSupportDocuments(
   supportDocumentDataArray: any,
   accessToken: string,
   tenantId: string
-) {
+): Promise<AttachmentResult> {
   try {
-    console.log('Starting background task to attach support documents...');
+    console.log('Attaching support documents...');
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     
@@ -106,12 +114,30 @@ async function attachSupportDocuments(
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Failed to attach support documents:', errorText);
-    } else {
-      const result = await response.json();
-      console.log('Support document attachment result:', result);
+      let errorData: any = {};
+      try {
+        errorData = JSON.parse(errorText);
+      } catch {}
+      return { 
+        success: false, 
+        attachedCount: 0, 
+        failedCount: 1,
+        errors: [errorData.error || errorText],
+        needsReconnect: errorText.includes('401') || errorText.includes('Unauthorized')
+      };
     }
-  } catch (error) {
-    console.error('Error in background task for support document attachment:', error);
+    
+    const result = await response.json();
+    console.log('Support document attachment result:', result);
+    return result as AttachmentResult;
+  } catch (error: any) {
+    console.error('Error attaching support documents:', error);
+    return { 
+      success: false, 
+      attachedCount: 0, 
+      failedCount: 1,
+      errors: [error?.message || String(error)]
+    };
   }
 }
 
@@ -205,19 +231,27 @@ Deno.serve(async (req) => {
     // Get the Xero invoice ID from the response
     const xeroInvoiceId = result?.Invoices?.[0]?.InvoiceID;
 
-    // If attachment is requested and we have the invoice ID, trigger background task
+    // If attachment is requested and we have the invoice ID, await the attachment
+    let attachmentResult: AttachmentResult | undefined;
     if (attachSupportDoc && xeroInvoiceId && (supportDocumentData || supportDocumentDataArray)) {
-      console.log('Triggering background task to attach support document(s)...');
-      
-      // Use EdgeRuntime.waitUntil for background processing
-      // This allows the response to return immediately while the attachment happens in background
-      EdgeRuntime.waitUntil(
-        attachSupportDocuments(authHeader, xeroInvoiceId, supportDocumentData, supportDocumentDataArray, accessToken, tenantId)
+      console.log('Attaching support document(s) to Xero invoice...');
+      attachmentResult = await attachSupportDocuments(
+        authHeader, 
+        xeroInvoiceId, 
+        supportDocumentData, 
+        supportDocumentDataArray, 
+        accessToken, 
+        tenantId
       );
+      console.log('Attachment completed:', attachmentResult);
     }
 
     return new Response(
-      JSON.stringify({ success: true, invoice: result }),
+      JSON.stringify({ 
+        success: true, 
+        invoice: result,
+        attachmentResult
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
