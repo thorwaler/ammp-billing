@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      alert_settings: {
+        Row: {
+          asset_manipulation_enabled: boolean
+          asset_manipulation_threshold: number
+          asset_manipulation_window_days: number
+          created_at: string
+          id: string
+          invoice_increase_critical: number
+          invoice_increase_enabled: boolean
+          invoice_increase_warning: number
+          mw_decrease_enabled: boolean
+          mw_decrease_threshold: number
+          site_decrease_enabled: boolean
+          site_decrease_threshold: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          asset_manipulation_enabled?: boolean
+          asset_manipulation_threshold?: number
+          asset_manipulation_window_days?: number
+          created_at?: string
+          id?: string
+          invoice_increase_critical?: number
+          invoice_increase_enabled?: boolean
+          invoice_increase_warning?: number
+          mw_decrease_enabled?: boolean
+          mw_decrease_threshold?: number
+          site_decrease_enabled?: boolean
+          site_decrease_threshold?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          asset_manipulation_enabled?: boolean
+          asset_manipulation_threshold?: number
+          asset_manipulation_window_days?: number
+          created_at?: string
+          id?: string
+          invoice_increase_critical?: number
+          invoice_increase_enabled?: boolean
+          invoice_increase_warning?: number
+          mw_decrease_enabled?: boolean
+          mw_decrease_threshold?: number
+          site_decrease_enabled?: boolean
+          site_decrease_threshold?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       ammp_connections: {
         Row: {
           api_key: string

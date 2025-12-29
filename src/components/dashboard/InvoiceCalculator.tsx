@@ -1343,7 +1343,7 @@ export function InvoiceCalculator({
               // Store support document data on the invoice record
               await supabase
                 .from('invoices')
-                .update({ support_document_data: supportDocData })
+                .update({ support_document_data: supportDocData as unknown as Record<string, never> })
                 .eq('id', insertedInvoice.id);
               
               // STEP 4: Generate PDF in browser
