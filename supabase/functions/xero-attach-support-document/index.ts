@@ -10,7 +10,7 @@ interface SupportDocumentData {
   customerName: string;
   contractName?: string;
   invoicePeriod: string;
-  invoiceDate: string;
+  invoiceDate: string | Date;
   currency: string;
   discountPercent?: number;
   yearInvoices: Array<{
@@ -32,7 +32,15 @@ interface SupportDocumentData {
   discountedAssetsBreakdown?: any[];
   discountedAssetsTotal?: number;
   retainerBreakdown?: any;
-  grandTotal: number;
+  // Support both old and new field names
+  grandTotal?: number;
+  calculatedTotal?: number;
+  invoiceTotal?: number;
+  minimumContractAdjustment?: number;
+  minimumAnnualValue?: number;
+  totalsMatch?: boolean;
+  calculationBreakdown?: any;
+  siteMinimumPricingSummary?: any;
 }
 
 async function getValidAccessToken(supabase: any) {
@@ -85,9 +93,27 @@ async function getValidAccessToken(supabase: any) {
   return { accessToken: connection.access_token, tenantId: connection.tenant_id };
 }
 
-function formatCurrency(amount: number, currency: string): string {
+function formatCurrency(amount: number | undefined | null, currency: string): string {
+  if (amount === undefined || amount === null || isNaN(amount)) {
+    return '-';
+  }
   const symbol = currency === 'EUR' ? '€' : '$';
   return `${symbol}${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatDate(date: string | Date | undefined): string {
+  if (!date) return '-';
+  try {
+    const d = date instanceof Date ? date : new Date(date);
+    return d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+  } catch {
+    return String(date);
+  }
+}
+
+function getGrandTotal(data: SupportDocumentData): number {
+  // Support multiple field names for backward compatibility
+  return data.invoiceTotal ?? data.calculatedTotal ?? data.grandTotal ?? 0;
 }
 
 function generatePdfFromData(data: SupportDocumentData): ArrayBuffer {
@@ -107,69 +133,111 @@ function generatePdfFromData(data: SupportDocumentData): ArrayBuffer {
   // Header info
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Customer: ${data.customerName}`, leftMargin, yPos);
+  doc.text(`Customer: ${data.customerName || '-'}`, leftMargin, yPos);
   yPos += 5;
   if (data.contractName) {
     doc.text(`Contract: ${data.contractName}`, leftMargin, yPos);
     yPos += 5;
   }
-  doc.text(`Invoice Period: ${data.invoicePeriod}`, leftMargin, yPos);
+  doc.text(`Invoice Period: ${data.invoicePeriod || '-'}`, leftMargin, yPos);
   yPos += 5;
-  doc.text(`Date: ${data.invoiceDate}`, leftMargin, yPos);
+  doc.text(`Date: ${formatDate(data.invoiceDate)}`, leftMargin, yPos);
   yPos += 5;
-  doc.text(`Currency: ${data.currency}`, leftMargin, yPos);
+  doc.text(`Currency: ${data.currency || 'EUR'}`, leftMargin, yPos);
   yPos += 10;
   
   // Year-to-Date Summary
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Year-to-Date Invoice Summary', leftMargin, yPos);
-  yPos += 7;
-  
-  // Table header
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  const colWidths = [35, 35, 30, 35, 30];
-  const headers = ['Period', 'Monitoring', 'Solcast', 'Add. Work', 'Total'];
-  
-  doc.setFillColor(244, 244, 245);
-  doc.rect(leftMargin, yPos - 4, contentWidth, 6, 'F');
-  
-  let xPos = leftMargin;
-  headers.forEach((header, i) => {
-    doc.text(header, xPos + 2, yPos);
-    xPos += colWidths[i];
-  });
-  yPos += 6;
-  
-  // Table rows
-  doc.setFont('helvetica', 'normal');
-  data.yearInvoices.forEach((inv) => {
-    if (yPos > 270) {
-      doc.addPage();
-      yPos = 20;
-    }
+  if (data.yearInvoices && data.yearInvoices.length > 0) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Year-to-Date Invoice Summary', leftMargin, yPos);
+    yPos += 7;
     
-    xPos = leftMargin;
-    doc.text(inv.period, xPos + 2, yPos);
-    xPos += colWidths[0];
-    doc.text(formatCurrency(inv.monitoringFee, data.currency), xPos + 2, yPos);
-    xPos += colWidths[1];
-    doc.text(formatCurrency(inv.solcastFee, data.currency), xPos + 2, yPos);
-    xPos += colWidths[2];
-    doc.text(formatCurrency(inv.additionalWork, data.currency), xPos + 2, yPos);
-    xPos += colWidths[3];
-    doc.text(formatCurrency(inv.total, data.currency), xPos + 2, yPos);
-    yPos += 5;
-  });
+    // Table header
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const colWidths = [35, 35, 30, 35, 30];
+    const headers = ['Period', 'Monitoring', 'Solcast', 'Add. Work', 'Total'];
+    
+    doc.setFillColor(244, 244, 245);
+    doc.rect(leftMargin, yPos - 4, contentWidth, 6, 'F');
+    
+    let xPos = leftMargin;
+    headers.forEach((header, i) => {
+      doc.text(header, xPos + 2, yPos);
+      xPos += colWidths[i];
+    });
+    yPos += 6;
+    
+    // Table rows
+    doc.setFont('helvetica', 'normal');
+    data.yearInvoices.forEach((inv) => {
+      if (yPos > 270) {
+        doc.addPage();
+        yPos = 20;
+      }
+      
+      xPos = leftMargin;
+      doc.text(inv.period || '', xPos + 2, yPos);
+      xPos += colWidths[0];
+      doc.text(formatCurrency(inv.monitoringFee, data.currency), xPos + 2, yPos);
+      xPos += colWidths[1];
+      doc.text(formatCurrency(inv.solcastFee, data.currency), xPos + 2, yPos);
+      xPos += colWidths[2];
+      doc.text(formatCurrency(inv.additionalWork, data.currency), xPos + 2, yPos);
+      xPos += colWidths[3];
+      doc.text(formatCurrency(inv.total, data.currency), xPos + 2, yPos);
+      yPos += 5;
+    });
+    
+    // Total row
+    doc.setFillColor(244, 244, 245);
+    doc.rect(leftMargin, yPos - 4, contentWidth, 6, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.text('Year Total:', leftMargin + 2, yPos);
+    doc.text(formatCurrency(data.yearTotal, data.currency), leftMargin + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 2, yPos);
+    yPos += 12;
+  }
   
-  // Total row
-  doc.setFillColor(244, 244, 245);
-  doc.rect(leftMargin, yPos - 4, contentWidth, 6, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.text('Year Total:', leftMargin + 2, yPos);
-  doc.text(formatCurrency(data.yearTotal, data.currency), leftMargin + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 2, yPos);
-  yPos += 12;
+  // Asset Breakdown
+  if (data.assetBreakdown && data.assetBreakdown.length > 0) {
+    if (yPos > 240) { doc.addPage(); yPos = 20; }
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Asset Breakdown', leftMargin, yPos);
+    yPos += 7;
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    const assetColWidths = [60, 30, 35, 40];
+    const assetHeaders = ['Asset', 'Capacity (kWp)', 'Price/kWp', 'Annual Price'];
+    
+    doc.setFillColor(244, 244, 245);
+    doc.rect(leftMargin, yPos - 4, contentWidth, 6, 'F');
+    
+    let xPos = leftMargin;
+    assetHeaders.forEach((h, i) => {
+      doc.text(h, xPos + 2, yPos);
+      xPos += assetColWidths[i];
+    });
+    yPos += 6;
+    
+    doc.setFont('helvetica', 'normal');
+    data.assetBreakdown.forEach((asset: any) => {
+      if (yPos > 270) { doc.addPage(); yPos = 20; }
+      xPos = leftMargin;
+      const assetName = (asset.assetName || asset.name || '').substring(0, 25);
+      doc.text(assetName, xPos + 2, yPos);
+      xPos += assetColWidths[0];
+      doc.text(String(asset.capacityKwp || asset.capacity || 0), xPos + 2, yPos);
+      xPos += assetColWidths[1];
+      doc.text(formatCurrency(asset.pricePerKWp || asset.pricePerKwp || 0, data.currency), xPos + 2, yPos);
+      xPos += assetColWidths[2];
+      doc.text(formatCurrency(asset.pricePerYear || asset.annualPrice || 0, data.currency), xPos + 2, yPos);
+      yPos += 5;
+    });
+    yPos += 7;
+  }
   
   // Elum ePM Breakdown
   if (data.elumEpmBreakdown) {
@@ -180,11 +248,11 @@ function generatePdfFromData(data: SupportDocumentData): ArrayBuffer {
     yPos += 7;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Site Size Threshold: ${data.elumEpmBreakdown.threshold} kWp`, leftMargin, yPos);
+    doc.text(`Site Size Threshold: ${data.elumEpmBreakdown.threshold || 0} kWp`, leftMargin, yPos);
     yPos += 5;
-    doc.text(`Small Sites (≤ threshold): ${data.elumEpmBreakdown.smallSitesCount} sites @ ${formatCurrency(data.elumEpmBreakdown.belowThresholdRate, data.currency)}/MWp`, leftMargin, yPos);
+    doc.text(`Small Sites (≤ threshold): ${data.elumEpmBreakdown.smallSitesCount || 0} sites @ ${formatCurrency(data.elumEpmBreakdown.belowThresholdRate, data.currency)}/MWp`, leftMargin, yPos);
     yPos += 5;
-    doc.text(`Large Sites (> threshold): ${data.elumEpmBreakdown.largeSitesCount} sites @ ${formatCurrency(data.elumEpmBreakdown.aboveThresholdRate, data.currency)}/MWp`, leftMargin, yPos);
+    doc.text(`Large Sites (> threshold): ${data.elumEpmBreakdown.largeSitesCount || 0} sites @ ${formatCurrency(data.elumEpmBreakdown.aboveThresholdRate, data.currency)}/MWp`, leftMargin, yPos);
     yPos += 5;
     doc.text(`Small Sites Total: ${formatCurrency(data.elumEpmBreakdown.smallSitesTotal, data.currency)}`, leftMargin, yPos);
     yPos += 5;
@@ -203,7 +271,7 @@ function generatePdfFromData(data: SupportDocumentData): ArrayBuffer {
     doc.setFont('helvetica', 'normal');
     doc.text(`Per-Site Annual Fee: ${formatCurrency(data.elumJubailiBreakdown.perSiteFee, data.currency)}`, leftMargin, yPos);
     yPos += 5;
-    doc.text(`Site Count: ${data.elumJubailiBreakdown.siteCount}`, leftMargin, yPos);
+    doc.text(`Site Count: ${data.elumJubailiBreakdown.siteCount || 0}`, leftMargin, yPos);
     yPos += 5;
     doc.text(`Total Cost: ${formatCurrency(data.elumJubailiBreakdown.totalCost, data.currency)}`, leftMargin, yPos);
     yPos += 10;
@@ -225,7 +293,7 @@ function generatePdfFromData(data: SupportDocumentData): ArrayBuffer {
     doc.setFillColor(244, 244, 245);
     doc.rect(leftMargin, yPos - 4, contentWidth, 6, 'F');
     
-    xPos = leftMargin;
+    let xPos = leftMargin;
     tierHeaders.forEach((h, i) => {
       doc.text(h, xPos + 2, yPos);
       xPos += tierColWidths[i];
@@ -270,7 +338,7 @@ function generatePdfFromData(data: SupportDocumentData): ArrayBuffer {
     doc.setFillColor(244, 244, 245);
     doc.rect(leftMargin, yPos - 4, contentWidth, 6, 'F');
     
-    xPos = leftMargin;
+    let xPos = leftMargin;
     solHeaders.forEach((h, i) => {
       doc.text(h, xPos + 2, yPos);
       xPos += solColWidths[i];
@@ -299,13 +367,25 @@ function generatePdfFromData(data: SupportDocumentData): ArrayBuffer {
     yPos += 12;
   }
   
+  // Minimum Contract Adjustment
+  if (data.minimumContractAdjustment && data.minimumContractAdjustment > 0) {
+    if (yPos > 260) { doc.addPage(); yPos = 20; }
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Minimum Contract Value: ${formatCurrency(data.minimumAnnualValue, data.currency)}`, leftMargin, yPos);
+    yPos += 5;
+    doc.text(`Minimum Contract Adjustment: ${formatCurrency(data.minimumContractAdjustment, data.currency)}`, leftMargin, yPos);
+    yPos += 10;
+  }
+  
   // Grand Total
   if (yPos > 260) { doc.addPage(); yPos = 20; }
+  const grandTotal = getGrandTotal(data);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.setFillColor(230, 230, 235);
   doc.rect(leftMargin, yPos - 5, contentWidth, 10, 'F');
-  doc.text(`Grand Total: ${formatCurrency(data.grandTotal, data.currency)}`, leftMargin + 2, yPos + 2);
+  doc.text(`Invoice Total: ${formatCurrency(grandTotal, data.currency)}`, leftMargin + 2, yPos + 2);
   
   // Get PDF as array buffer and convert to standard ArrayBuffer
   const pdfOutput = doc.output('arraybuffer') as ArrayBuffer;
@@ -395,6 +475,7 @@ Deno.serve(async (req) => {
 
     for (const doc of documents) {
       try {
+        console.log('Document data keys:', Object.keys(doc.data || {}));
         const pdfBytes = generatePdfFromData(doc.data);
         
         // Create filename based on document data
