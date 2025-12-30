@@ -411,4 +411,31 @@ export async function saveAlerts(
   if (error) {
     console.error('Error saving alerts:', error);
   }
+
+  // Trigger webhook for each alert
+  for (const alert of alerts) {
+    try {
+      await supabase.functions.invoke('push-notification-webhook', {
+        body: {
+          notification_id: crypto.randomUUID(),
+          user_id: userId,
+          type: alert.alert_type,
+          title: alert.title,
+          message: alert.description,
+          severity: alert.severity === 'critical' ? 'error' : alert.severity,
+          metadata: {
+            ...alert.metadata,
+            customer_id: customerId,
+            contract_id: contractId,
+            invoice_id: invoiceId,
+          },
+          contract_id: contractId || null,
+          created_at: new Date().toISOString(),
+        },
+      });
+    } catch (webhookError) {
+      console.error('Error sending webhook notification:', webhookError);
+      // Don't throw - webhook failure shouldn't block alert saving
+    }
+  }
 }
