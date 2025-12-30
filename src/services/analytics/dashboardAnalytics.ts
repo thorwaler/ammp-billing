@@ -747,8 +747,9 @@ export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): P
 
 /**
  * Get revenue by customer (top customers by total revenue)
+ * Pass limit = undefined to return all customers
  */
-export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters): Promise<CustomerRevenueData[]> {
+export async function getRevenueByCustomer(limit?: number, filters?: ReportFilters): Promise<CustomerRevenueData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -795,16 +796,18 @@ export async function getRevenueByCustomer(limit = 10, filters?: ReportFilters):
     });
   });
 
-  // Sort by total revenue and return top customers
-  return Array.from(customerMap.values())
-    .sort((a, b) => b.total - a.total)
-    .slice(0, limit)
-    .map(c => ({
-      name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
-      total: parseFloat(c.total.toFixed(2)),
-      arr: parseFloat(c.arr.toFixed(2)),
-      nrr: parseFloat(c.nrr.toFixed(2)),
-    }));
+  // Sort by total revenue and optionally limit
+  const sorted = Array.from(customerMap.values())
+    .sort((a, b) => b.total - a.total);
+  
+  const limited = limit !== undefined ? sorted.slice(0, limit) : sorted;
+  
+  return limited.map(c => ({
+    name: limit !== undefined && c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
+    total: parseFloat(c.total.toFixed(2)),
+    arr: parseFloat(c.arr.toFixed(2)),
+    nrr: parseFloat(c.nrr.toFixed(2)),
+  }));
 }
 
 /**
@@ -997,8 +1000,12 @@ export interface CustomerARRData {
 /**
  * Get ARR by customer based on current contract values (not invoices)
  */
+/**
+ * Get ARR by customer (from contract values)
+ * Pass limit = undefined to return all customers
+ */
 export async function getARRByCustomer(
-  limit: number = 10,
+  limit?: number,
   filters?: ReportFilters
 ): Promise<CustomerARRData[]> {
   const { data: { user } } = await supabase.auth.getUser();
@@ -1067,15 +1074,17 @@ export async function getARRByCustomer(
     }
   }
 
-  // Convert to array, sort by ARR, and limit
-  return Array.from(customerARRMap.values())
-    .sort((a, b) => b.arr - a.arr)
-    .slice(0, limit)
-    .map(c => ({
-      name: c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
-      arr: parseFloat(c.arr.toFixed(2)),
-      customerId: c.customerId,
-    }));
+  // Convert to array, sort by ARR, and optionally limit
+  const sorted = Array.from(customerARRMap.values())
+    .sort((a, b) => b.arr - a.arr);
+  
+  const limited = limit !== undefined ? sorted.slice(0, limit) : sorted;
+  
+  return limited.map(c => ({
+    name: limit !== undefined && c.name.length > 20 ? c.name.substring(0, 20) + '...' : c.name,
+    arr: parseFloat(c.arr.toFixed(2)),
+    customerId: c.customerId,
+  }));
 }
 
 /**

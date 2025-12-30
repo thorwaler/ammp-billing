@@ -56,6 +56,8 @@ import { ReportsFilters, ReportFilters } from "@/components/reports/ReportsFilte
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import StatCard from "@/components/dashboard/StatCard";
+import { exportReportsToExcel } from "@/lib/reportsExport";
+import { toast } from "sonner";
 
 interface CombinedRevenueData {
   month: string;
@@ -66,7 +68,7 @@ interface CombinedRevenueData {
 }
 
 const Reports = () => {
-  const { formatCurrency, convertToDisplayCurrency } = useCurrency();
+  const { formatCurrency, convertToDisplayCurrency, currency } = useCurrency();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [mwGrowthData, setMwGrowthData] = useState<MWGrowthData[]>([]);
@@ -81,6 +83,7 @@ const Reports = () => {
   const [arrByCustomer, setArrByCustomer] = useState<CustomerARRData[]>([]);
   const [contractARR, setContractARR] = useState<{ eur: number; usd: number }>({ eur: 0, usd: 0 });
   const [showARROnly, setShowARROnly] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   
   // Filter state
   const [filters, setFilters] = useState<ReportFilters>({});
@@ -192,6 +195,77 @@ const Reports = () => {
     setFilters(newFilters);
   };
 
+  const handleExportData = async () => {
+    setIsExporting(true);
+    try {
+      const analyticsFilters: AnalyticsFilters = {
+        startDate: filters.startDate,
+        endDate: filters.endDate,
+        customerIds: filters.customerIds,
+      };
+
+      // Fetch all customer data (no limit) for export
+      const [fullCustomerRevenue, fullCustomerARR] = await Promise.all([
+        getRevenueByCustomer(undefined, analyticsFilters),
+        getARRByCustomer(undefined, analyticsFilters),
+      ]);
+
+      // Get the year from filters or current year
+      const year = filters.startDate?.getFullYear() || new Date().getFullYear();
+
+      // Build monthly data from combinedRevenueData and arrNrrData
+      const monthlyData = combinedRevenueData.map(d => {
+        const arrNrrEntry = arrNrrData.find(a => a.monthKey === d.monthKey);
+        return {
+          month: d.month,
+          monthKey: d.monthKey,
+          forecast: d.projected,
+          actual: d.actual,
+          actualARR: arrNrrEntry?.arr || 0,
+          actualNRR: arrNrrEntry?.nrr || 0,
+        };
+      });
+
+      // Build customer data by merging invoice revenue and contract ARR
+      const customerData = fullCustomerRevenue.map(c => {
+        const contractARREntry = fullCustomerARR.find(a => a.name === c.name);
+        return {
+          name: c.name,
+          totalRevenue: c.total,
+          arr: c.arr,
+          nrr: c.nrr,
+          contractARR: contractARREntry?.arr || 0,
+        };
+      });
+
+      // Calculate summary data
+      const totalForecast = monthlyData.reduce((sum, m) => sum + m.forecast, 0);
+      const totalActual = monthlyData.reduce((sum, m) => sum + m.actual, 0);
+
+      exportReportsToExcel({
+        year,
+        currency: currency,
+        monthlyData,
+        customerData,
+        summaryData: {
+          totalForecast,
+          totalActual,
+          totalARR,
+          totalNRR,
+          contractARR: contractARRDisplay,
+          arrPercentage,
+        },
+      });
+
+      toast.success('Report exported successfully');
+    } catch (error) {
+      console.error('Error exporting report:', error);
+      toast.error('Failed to export report');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const arrPercentage = totalARR + totalNRR > 0 
     ? Math.round((totalARR / (totalARR + totalNRR)) * 100) 
     : 0;
@@ -248,9 +322,9 @@ const Reports = () => {
               <FileText className="mr-2 h-4 w-4" />
               Generate Report
             </Button>
-            <Button variant="outline">
-              <DownloadCloud className="mr-2 h-4 w-4" />
-              Export Data
+            <Button variant="outline" onClick={handleExportData} disabled={isExporting || isLoading}>
+              <DownloadCloud className={`mr-2 h-4 w-4 ${isExporting ? 'animate-pulse' : ''}`} />
+              {isExporting ? 'Exporting...' : 'Export Data'}
             </Button>
           </div>
         </div>
