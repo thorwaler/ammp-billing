@@ -1,11 +1,11 @@
-
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Sun, Moon, Menu, LogOut, User } from 'lucide-react';
+import { Menu, LogOut, User } from 'lucide-react';
 import { CurrencySwitcher } from "@/components/ui/currency-switcher";
 import { useAuth } from "@/contexts/AuthContext";
 import { NotificationCenter } from "@/components/notifications/NotificationCenter";
+import { AmmpLogo } from "@/components/ui/ammp-logo";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,15 +29,15 @@ const Navbar = ({ toggleSidebar }: NavbarProps) => {
   };
 
   return (
-    <header className="border-b bg-background sticky top-0 z-10">
+    <header className="border-b border-border bg-card sticky top-0 z-10">
       <div className="container flex h-16 items-center justify-between py-4">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" className="md:hidden" onClick={toggleSidebar}>
             <Menu className="h-5 w-5" />
             <span className="sr-only">Toggle menu</span>
           </Button>
-          <Link to="/" className="flex items-center gap-2">
-            <span className="text-2xl font-bold text-ammp-blue">AMMP</span>
+          <Link to="/" className="flex items-center gap-3">
+            <AmmpLogo size="default" />
             <span className="text-sm text-muted-foreground hidden sm:block">Revenue & Invoicing</span>
           </Link>
         </div>
@@ -75,4 +75,3 @@ const Navbar = ({ toggleSidebar }: NavbarProps) => {
 };
 
 export default Navbar;
-
