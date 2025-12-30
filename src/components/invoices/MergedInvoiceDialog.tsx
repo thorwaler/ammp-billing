@@ -14,6 +14,7 @@ import { SupportDocumentDownloadDialog } from "./SupportDocumentDownloadDialog";
 import { generateSupportDocumentData, SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
+import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
 
 interface ContractForMerge {
   contractId: string;
@@ -540,6 +541,8 @@ export function MergedInvoiceDialog({
         }]);
         
         // STEP 3 & 4: Generate support documents and PDFs AFTER saving to DB (so YTD includes this invoice)
+        let generatedPdfs: Array<{ contractName: string; pdfBase64: string }> = [];
+        
         if (attachSupportDoc) {
           try {
             const supportDocumentDataArray = selectedContractsList.map(c => ({
@@ -563,6 +566,9 @@ export function MergedInvoiceDialog({
                   });
                 }
               }
+              
+              // Store for SharePoint upload later
+              generatedPdfs = pdfBase64Array;
               
               // STEP 5: Attach PDFs to Xero invoice separately
               if (pdfBase64Array.length > 0 && xeroInvoiceId) {
@@ -612,6 +618,40 @@ export function MergedInvoiceDialog({
               description: "Invoice saved but support documents could not be generated.",
               variant: "destructive",
             });
+          }
+        }
+        
+        // STEP 6: Upload to SharePoint (non-blocking, separate from Xero attachment)
+        if (generatedPdfs.length > 0) {
+          try {
+            const sharePointDocs = generatedPdfs.map(doc => ({
+              pdfBase64: doc.pdfBase64,
+              fileName: `${customerName.replace(/[^a-zA-Z0-9\s]/g, '')}_${doc.contractName.replace(/[^a-zA-Z0-9\s]/g, '')}_SupportDoc_${format(invoiceDate, 'yyyy-MM-dd')}.pdf`,
+              documentType: 'support_document' as const
+            }));
+            
+            const sharePointResults = await uploadMultipleToSharePoint(sharePointDocs);
+            
+            const successCount = sharePointResults.filter(r => r.success).length;
+            const failedCount = sharePointResults.filter(r => !r.success && !r.skipped).length;
+            
+            if (successCount > 0) {
+              toast({
+                title: "Uploaded to SharePoint",
+                description: `${successCount} support document(s) uploaded successfully.`,
+              });
+            }
+            
+            if (failedCount > 0) {
+              toast({
+                title: "SharePoint upload issue",
+                description: `${failedCount} document(s) failed to upload.`,
+                variant: "destructive",
+              });
+            }
+          } catch (spError) {
+            console.error('[SharePoint] Error uploading documents:', spError);
+            // Don't show error toast - SharePoint is optional
           }
         }
       }
