@@ -60,7 +60,7 @@ const contractFormSchema = z.object({
   initialMW: z.coerce.number().min(0, { message: "Initial MW is required" }),
   currency: z.enum(["USD", "EUR"]),
   billingFrequency: z.enum(["monthly", "quarterly", "biannual", "annual"]),
-  manualInvoicing: z.boolean().optional(),
+  invoicingType: z.enum(["standard", "manual", "automated"]).optional(),
   nextInvoiceDate: z.string().optional(),
   signedDate: z.string().optional(),
   contractExpiryDate: z.string().optional(),
@@ -137,7 +137,7 @@ interface ContractFormProps {
     addons: any[];
     initialMW: number;
     billingFrequency: string;
-    manualInvoicing?: boolean;
+    invoicingType?: string;
     nextInvoiceDate?: string;
     customPricing?: any;
     volumeDiscounts?: any;
@@ -213,7 +213,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       initialMW: existingContract.initialMW,
       currency: existingContract.currency as "USD" | "EUR",
       billingFrequency: existingContract.billingFrequency as any,
-      manualInvoicing: existingContract.manualInvoicing || false,
+      invoicingType: (existingContract.invoicingType as "standard" | "manual" | "automated") || "standard",
       nextInvoiceDate: existingContract.nextInvoiceDate?.substring(0, 10) || "",
       package: existingContract.package as any,
       maxMw: existingContract.maxMw,
@@ -248,7 +248,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       initialMW: existingCustomer?.mwpManaged || 0,
       currency: userCurrency || "EUR",
       billingFrequency: "annual",
-      manualInvoicing: false,
+      invoicingType: "standard" as const,
       nextInvoiceDate: "",
       signedDate: "",
       contractExpiryDate: "",
@@ -820,7 +820,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         initial_mw: data.initialMW,
         currency: data.currency,
         billing_frequency: data.billingFrequency,
-        manual_invoicing: data.manualInvoicing || false,
+        invoicing_type: data.invoicingType || 'standard',
         // POC contracts don't have invoicing
         next_invoice_date: data.package === 'poc' ? null : (data.nextInvoiceDate || null),
         signed_date: data.signedDate || null,
@@ -1527,23 +1527,26 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
 
             <FormField
               control={form.control}
-              name="manualInvoicing"
+              name="invoicingType"
               render={({ field }) => (
-                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <div className="space-y-1 leading-none">
-                    <FormLabel>
-                      Manual Invoicing
-                    </FormLabel>
-                    <FormDescription>
-                      Check if invoices for this contract are handled manually or automated directly in Xero. These will not be sent to Xero from this app.
-                    </FormDescription>
-                  </div>
+                <FormItem>
+                  <FormLabel>Invoicing Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || "standard"}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select invoicing type" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="standard">Standard (Create invoices here)</SelectItem>
+                      <SelectItem value="manual">Manual (Invoiced externally, mark as sent)</SelectItem>
+                      <SelectItem value="automated">Automated (Xero repeating invoice)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Standard: Create and send invoices from this app. Manual: Mark as sent when invoiced externally. Automated: Managed automatically in Xero.
+                  </FormDescription>
+                  <FormMessage />
                 </FormItem>
               )}
             />

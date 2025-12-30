@@ -285,8 +285,8 @@ export type Database = {
           graduated_mw_tiers: Json | null
           id: string
           initial_mw: number
+          invoicing_type: string | null
           last_ammp_sync: string | null
-          manual_invoicing: boolean | null
           max_mw: number | null
           minimum_annual_value: number | null
           minimum_charge: number | null
@@ -343,8 +343,8 @@ export type Database = {
           graduated_mw_tiers?: Json | null
           id?: string
           initial_mw: number
+          invoicing_type?: string | null
           last_ammp_sync?: string | null
-          manual_invoicing?: boolean | null
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
@@ -401,8 +401,8 @@ export type Database = {
           graduated_mw_tiers?: Json | null
           id?: string
           initial_mw?: number
+          invoicing_type?: string | null
           last_ammp_sync?: string | null
-          manual_invoicing?: boolean | null
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null

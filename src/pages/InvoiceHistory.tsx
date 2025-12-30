@@ -419,6 +419,8 @@ export default function InvoiceHistory() {
                   <SelectContent>
                     <SelectItem value="all">All Sources</SelectItem>
                     <SelectItem value="internal">Internal</SelectItem>
+                    <SelectItem value="manual">Manual</SelectItem>
+                    <SelectItem value="automated">Automated</SelectItem>
                     <SelectItem value="xero">Xero</SelectItem>
                   </SelectContent>
                 </Select>
