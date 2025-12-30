@@ -48,6 +48,7 @@ import {
   type CalculationResult 
 } from "@/lib/invoiceCalculations";
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
+import { uploadToSharePoint } from "@/utils/sharePointUpload";
 // Asset group filtering now handled server-side in ammp-sync-contract
 
 // Simplified interfaces - complex types moved to shared files
@@ -1390,6 +1391,31 @@ export function InvoiceCalculator({
                     description: attachResult.errors?.[0] || "Failed to attach support document.",
                     variant: "destructive",
                   });
+                }
+              }
+              
+              // STEP 6: Upload to SharePoint (non-blocking)
+              if (pdfBase64) {
+                try {
+                  const fileName = `${(selectedCustomer.nickname || selectedCustomer.name).replace(/[^a-zA-Z0-9\s]/g, '')}_SupportDoc_${format(invoiceDate, 'yyyy-MM-dd')}.pdf`;
+                  const spResult = await uploadToSharePoint(pdfBase64, fileName, 'support_document');
+                  
+                  if (spResult.success) {
+                    toast({
+                      title: "Uploaded to SharePoint",
+                      description: "Support document uploaded successfully.",
+                    });
+                  } else if (!spResult.skipped && spResult.error) {
+                    toast({
+                      title: "SharePoint upload issue",
+                      description: spResult.error,
+                      variant: "destructive",
+                    });
+                  }
+                  // If skipped, don't show any toast
+                } catch (spError) {
+                  console.error('[SharePoint] Error uploading document:', spError);
+                  // Don't show error toast - SharePoint is optional
                 }
               }
             } catch (pdfError) {
