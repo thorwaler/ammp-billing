@@ -27,7 +27,7 @@ export interface UpcomingInvoice {
   minimumAnnualValue: number;
   customPricing: any;
   cachedCapabilities: any;
-  manualInvoicing: boolean;
+  invoicingType: 'standard' | 'manual' | 'automated';
   baseMonthlyPrice: number;
   siteChargeFrequency: "monthly" | "annual";
   retainerHours: number;
@@ -94,7 +94,7 @@ export function UpcomingInvoicesList({
           minimum_annual_value,
           custom_pricing,
           initial_mw,
-          manual_invoicing,
+          invoicing_type,
           base_monthly_price,
           site_charge_frequency,
           retainer_hours,
@@ -155,7 +155,7 @@ export function UpcomingInvoicesList({
             minimumAnnualValue: Number(c.minimum_annual_value) || 0,
             customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {},
             cachedCapabilities: (c as any).cached_capabilities || null,
-            manualInvoicing: c.manual_invoicing || false,
+            invoicingType: (c.invoicing_type as 'standard' | 'manual' | 'automated') || 'standard',
             baseMonthlyPrice: Number(c.base_monthly_price) || 0,
             siteChargeFrequency: (c.site_charge_frequency as "monthly" | "annual") || "annual",
             retainerHours: Number((c as any).retainer_hours) || 0,
@@ -176,6 +176,41 @@ export function UpcomingInvoicesList({
             annualFeePerSite: Number((c as any).annual_fee_per_site) || undefined,
           };
         });
+
+      // Auto-advance automated contracts with past due dates
+      const now = new Date();
+      const automatedPastDue = transformedInvoices.filter(inv => 
+        inv.invoicingType === 'automated' && new Date(inv.nextInvoiceDate) < now
+      );
+
+      if (automatedPastDue.length > 0) {
+        // Helper to calculate next date inline (since the function is defined later)
+        const getNextDate = (currentDate: string, billingFrequency: string): Date => {
+          const date = parseDateCET(currentDate);
+          switch (billingFrequency) {
+            case 'monthly': return addMonths(date, 1);
+            case 'quarterly': return addMonths(date, 3);
+            case 'biannual': return addMonths(date, 6);
+            case 'annual': default: return addYears(date, 1);
+          }
+        };
+
+        // Update each automated contract to next cycle
+        for (const inv of automatedPastDue) {
+          const nextDate = getNextDate(inv.nextInvoiceDate, inv.billingFrequency);
+          await supabase
+            .from('contracts')
+            .update({
+              next_invoice_date: nextDate.toISOString(),
+              period_start: inv.nextInvoiceDate,
+              period_end: nextDate.toISOString(),
+            })
+            .eq('id', inv.contractId);
+          
+          // Update local data
+          inv.nextInvoiceDate = nextDate.toISOString();
+        }
+      }
 
       setInvoices(transformedInvoices);
     } catch (error) {
@@ -461,7 +496,7 @@ export function UpcomingInvoicesList({
               currency: c.currency,
               packageType: c.packageType,
               estimatedAmount: c.packageType === 'per_site' ? null : calculateEstimatedAmount(c),
-              manualInvoicing: c.manualInvoicing,
+              invoicingType: c.invoicingType,
             }))}
             onCreateIndividualInvoice={handleCreateIndividualInvoice}
             onCreateMergedInvoice={handleCreateMergedInvoice}

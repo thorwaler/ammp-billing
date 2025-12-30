@@ -117,7 +117,7 @@ interface Customer {
   currency: 'USD' | 'EUR';
   sites?: number;
   ammpCapabilities?: any;
-  manualInvoicing?: boolean;
+  invoicingType?: 'standard' | 'manual' | 'automated';
   baseMonthlyPrice?: number;
   siteChargeFrequency?: 'monthly' | 'annual';
   retainerHours?: number;
@@ -228,7 +228,7 @@ export function InvoiceCalculator({
             volume_discounts,
             currency,
             billing_frequency,
-            manual_invoicing,
+            invoicing_type,
             base_monthly_price,
             period_start,
             period_end,
@@ -294,7 +294,7 @@ export function InvoiceCalculator({
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
             billingFrequency: (contract.billing_frequency as 'monthly' | 'quarterly' | 'biannual' | 'annual') || 'annual',
             ammpCapabilities: cachedCaps || c.ammp_capabilities || null,
-            manualInvoicing: contract.manual_invoicing || false,
+            invoicingType: (contract.invoicing_type as 'standard' | 'manual' | 'automated') || 'standard',
             baseMonthlyPrice: Number(contract.base_monthly_price) || 0,
             siteChargeFrequency: siteChargeFrequency as 'monthly' | 'annual',
             periodStart: contract.period_start,
@@ -2391,10 +2391,13 @@ export function InvoiceCalculator({
               <span>{formatContractCurrency(result.totalPrice)}</span>
             </div>
             
-            {selectedCustomer?.manualInvoicing ? (
+            {selectedCustomer?.invoicingType === 'manual' || selectedCustomer?.invoicingType === 'automated' ? (
               <div className="mt-4 p-3 bg-muted rounded-md border">
                 <p className="text-sm text-muted-foreground">
-                  ⓘ This contract is set up for manual invoicing. The invoice will be saved to history but not sent to Xero.
+                  {selectedCustomer?.invoicingType === 'automated' 
+                    ? '🔄 This contract is automated in Xero. The invoice will be saved to history for tracking.'
+                    : 'ⓘ This contract is set up for manual invoicing. The invoice will be saved to history but not sent to Xero.'
+                  }
                 </p>
               </div>
             ) : (

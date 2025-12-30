@@ -18,7 +18,7 @@ interface ContractInvoice {
   currency: string;
   packageType: string;
   estimatedAmount: number | null;
-  manualInvoicing?: boolean;
+  invoicingType?: 'standard' | 'manual' | 'automated';
 }
 
 interface CustomerInvoiceGroupProps {
@@ -123,7 +123,8 @@ export function CustomerInvoiceGroup({
             <Badge variant="outline">{contract.packageType}</Badge>
             <Badge variant="outline" className="capitalize">{contract.billingFrequency}</Badge>
             <Badge variant="secondary">{contract.currency}</Badge>
-            {contract.manualInvoicing && <Badge className="bg-orange-500">Manual</Badge>}
+            {contract.invoicingType === 'manual' && <Badge className="bg-orange-500">Manual</Badge>}
+            {contract.invoicingType === 'automated' && <Badge className="bg-blue-500">Automated</Badge>}
           </div>
           
           <div className="flex items-center gap-2 text-lg font-semibold">
@@ -138,22 +139,28 @@ export function CustomerInvoiceGroup({
             )}
           </div>
           
-          <div className="flex gap-2">
-            {contract.manualInvoicing ? (
-              <Button onClick={() => onMarkAsSent(contract)} className="flex-1" size="sm" variant="secondary">
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Mark as Sent
+          {contract.invoicingType === 'automated' ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 rounded-md p-3">
+              <span>🔄 Auto-managed in Xero</span>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {contract.invoicingType === 'manual' ? (
+                <Button onClick={() => onMarkAsSent(contract)} className="flex-1" size="sm" variant="secondary">
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Mark as Sent
+                </Button>
+              ) : (
+                <Button onClick={() => onCreateIndividualInvoice(contract)} className="flex-1" size="sm">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Create Invoice
+                </Button>
+              )}
+              <Button onClick={() => onSkipInvoice(contract)} size="sm" variant="outline" title="Skip to next period">
+                <SkipForward className="h-4 w-4" />
               </Button>
-            ) : (
-              <Button onClick={() => onCreateIndividualInvoice(contract)} className="flex-1" size="sm">
-                <FileText className="h-4 w-4 mr-2" />
-                Create Invoice
-              </Button>
-            )}
-            <Button onClick={() => onSkipInvoice(contract)} size="sm" variant="outline" title="Skip to next period">
-              <SkipForward className="h-4 w-4" />
-            </Button>
-          </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -199,8 +206,11 @@ export function CustomerInvoiceGroup({
             <div className="flex items-center gap-1.5 shrink-0">
               <Badge variant="outline" className="text-xs">{contract.packageType}</Badge>
               <Badge variant="outline" className="text-xs capitalize">{contract.billingFrequency}</Badge>
-              {contract.manualInvoicing && (
+              {contract.invoicingType === 'manual' && (
                 <Badge className="bg-orange-500 text-xs">Manual</Badge>
+              )}
+              {contract.invoicingType === 'automated' && (
+                <Badge className="bg-blue-500 text-xs">Automated</Badge>
               )}
             </div>
             <span className="font-semibold w-24 text-right shrink-0">
@@ -210,7 +220,9 @@ export function CustomerInvoiceGroup({
               }
             </span>
             <div className="flex gap-1 shrink-0">
-              {contract.manualInvoicing ? (
+              {contract.invoicingType === 'automated' ? (
+                <span className="text-xs text-muted-foreground px-2">Auto</span>
+              ) : contract.invoicingType === 'manual' ? (
                 <Button variant="secondary" size="sm" onClick={() => onMarkAsSent(contract)}>
                   Mark Sent
                 </Button>
@@ -219,9 +231,11 @@ export function CustomerInvoiceGroup({
                   Invoice
                 </Button>
               )}
-              <Button variant="ghost" size="sm" onClick={() => onSkipInvoice(contract)} title="Skip to next period">
-                <SkipForward className="h-4 w-4" />
-              </Button>
+              {contract.invoicingType !== 'automated' && (
+                <Button variant="ghost" size="sm" onClick={() => onSkipInvoice(contract)} title="Skip to next period">
+                  <SkipForward className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </div>
         ))}
