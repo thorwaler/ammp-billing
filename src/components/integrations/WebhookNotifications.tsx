@@ -13,15 +13,24 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const NOTIFICATION_TYPES = [
-  { id: 'contract_expired', label: 'Contract Expired' },
-  { id: 'contract_expiring_soon', label: 'Contract Expiring Soon' },
-  { id: 'mw_warning', label: 'MW Capacity Warning' },
-  { id: 'mw_exceeded', label: 'MW Capacity Exceeded' },
-  { id: 'ammp_sync_complete', label: 'AMMP Sync Complete' },
-  { id: 'ammp_sync_failed', label: 'AMMP Sync Failed' },
-  { id: 'ammp_contract_synced', label: 'AMMP Contract Synced (per-contract)' },
-  { id: 'xero_sync_complete', label: 'Xero Sync Complete' },
-  { id: 'xero_sync_failed', label: 'Xero Sync Failed' },
+  // Contract alerts
+  { id: 'contract_expired', label: 'Contract Expired', group: 'Contract' },
+  { id: 'contract_expiring_soon', label: 'Contract Expiring Soon', group: 'Contract' },
+  // MW alerts
+  { id: 'mw_warning', label: 'MW Capacity Warning', group: 'MW' },
+  { id: 'mw_exceeded', label: 'MW Capacity Exceeded', group: 'MW' },
+  // Sync alerts
+  { id: 'ammp_sync_complete', label: 'AMMP Sync Complete', group: 'Sync' },
+  { id: 'ammp_sync_failed', label: 'AMMP Sync Failed', group: 'Sync' },
+  { id: 'ammp_contract_synced', label: 'AMMP Contract Synced (per-contract)', group: 'Sync' },
+  { id: 'xero_sync_complete', label: 'Xero Sync Complete', group: 'Sync' },
+  { id: 'xero_sync_failed', label: 'Xero Sync Failed', group: 'Sync' },
+  // Invoice alerts (anomaly detection)
+  { id: 'invoice_increase', label: 'Invoice Amount Increase', group: 'Invoice' },
+  { id: 'mw_decrease', label: 'MW Decrease Alert', group: 'Invoice' },
+  { id: 'site_decrease', label: 'Site Count Decrease', group: 'Invoice' },
+  { id: 'asset_disappeared', label: 'Asset Disappeared (Manipulation)', group: 'Invoice' },
+  { id: 'asset_reappeared', label: 'Asset Reappeared (Manipulation)', group: 'Invoice' },
 ];
 
 const SEVERITY_LEVELS = [
@@ -47,7 +56,11 @@ const WebhookNotifications = () => {
   const [settings, setSettings] = useState<NotificationSettings>({
     zapier_webhook_url: '',
     webhook_enabled: false,
-    notification_types: ['contract_expired', 'contract_expiring_soon', 'mw_warning', 'mw_exceeded', 'ammp_sync_complete', 'ammp_contract_synced', 'xero_sync_complete'],
+    notification_types: [
+      'contract_expired', 'contract_expiring_soon', 'mw_warning', 'mw_exceeded',
+      'ammp_sync_complete', 'ammp_contract_synced', 'xero_sync_complete',
+      'invoice_increase', 'mw_decrease', 'site_decrease', 'asset_disappeared', 'asset_reappeared',
+    ],
     min_severity: 'info',
   });
 
