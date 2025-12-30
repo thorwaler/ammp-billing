@@ -873,6 +873,101 @@ export type Database = {
         }
         Relationships: []
       }
+      sharepoint_connections: {
+        Row: {
+          access_token: string
+          account_name: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          is_enabled: boolean | null
+          last_sync_at: string | null
+          refresh_token: string
+          tenant_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          account_name?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          is_enabled?: boolean | null
+          last_sync_at?: string | null
+          refresh_token: string
+          tenant_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          account_name?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          is_enabled?: boolean | null
+          last_sync_at?: string | null
+          refresh_token?: string
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sharepoint_folder_settings: {
+        Row: {
+          connection_id: string
+          created_at: string
+          document_type: string
+          drive_id: string
+          drive_name: string | null
+          folder_id: string | null
+          folder_path: string | null
+          id: string
+          site_id: string
+          site_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          document_type?: string
+          drive_id: string
+          drive_name?: string | null
+          folder_id?: string | null
+          folder_path?: string | null
+          id?: string
+          site_id: string
+          site_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          document_type?: string
+          drive_id?: string
+          drive_name?: string | null
+          folder_id?: string | null
+          folder_path?: string | null
+          id?: string
+          site_id?: string
+          site_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sharepoint_folder_settings_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "sharepoint_connections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       site_billing_status: {
         Row: {
           asset_capacity_kwp: number | null

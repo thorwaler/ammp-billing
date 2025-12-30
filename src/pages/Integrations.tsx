@@ -2,6 +2,7 @@ import Layout from "@/components/layout/Layout";
 import XeroIntegration from "@/components/integrations/XeroIntegration";
 import AmmpIntegration from "@/components/integrations/AmmpIntegration";
 import WebhookNotifications from "@/components/integrations/WebhookNotifications";
+import SharePointIntegration from "@/components/integrations/SharePointIntegration";
 import { Link2 } from "lucide-react";
 
 const Integrations = () => {
@@ -21,6 +22,7 @@ const Integrations = () => {
         <div className="grid gap-6 md:grid-cols-2">
           <XeroIntegration />
           <AmmpIntegration />
+          <SharePointIntegration />
           <WebhookNotifications />
         </div>
       </div>
