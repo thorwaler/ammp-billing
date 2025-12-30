@@ -460,30 +460,47 @@ export async function getCustomerGrowthByQuarter(filters?: ReportFilters): Promi
   const customerIdsWithContracts = await getCustomersWithNonPocContracts(user.id);
   if (customerIdsWithContracts.length === 0) return [];
 
-  let query = supabase
+  // Determine which customer IDs to use
+  let targetCustomerIds = customerIdsWithContracts;
+  if (filters?.customerIds && filters.customerIds.length > 0) {
+    targetCustomerIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
+    if (targetCustomerIds.length === 0) return [];
+  }
+
+  // Fetch customers
+  const { data: customers } = await supabase
     .from('customers')
     .select('id, join_date, created_at')
     .eq('status', 'active')
-    .in('id', customerIdsWithContracts);
+    .in('id', targetCustomerIds);
 
-  // Filter by customer IDs if specified (intersection with non-POC customers)
-  if (filters?.customerIds && filters.customerIds.length > 0) {
-    const filteredIds = filters.customerIds.filter(id => customerIdsWithContracts.includes(id));
-    if (filteredIds.length === 0) return [];
-    query = supabase
-      .from('customers')
-      .select('id, join_date, created_at')
-      .eq('status', 'active')
-      .in('id', filteredIds);
-  }
+  if (!customers || customers.length === 0) return [];
 
-  const { data: customers } = await query;
+  // Fetch contracts with signed_date for these customers
+  const { data: contracts } = await supabase
+    .from('contracts')
+    .select('customer_id, signed_date')
+    .in('customer_id', targetCustomerIds)
+    .not('signed_date', 'is', null);
 
-  // Group by quarter
+  // Build a map of customer_id -> earliest signed_date
+  const customerSignedDates = new Map<string, Date>();
+  contracts?.forEach(contract => {
+    if (contract.signed_date) {
+      const signedDate = new Date(contract.signed_date);
+      const existing = customerSignedDates.get(contract.customer_id);
+      if (!existing || signedDate < existing) {
+        customerSignedDates.set(contract.customer_id, signedDate);
+      }
+    }
+  });
+
+  // Group by quarter using earliest signed_date, falling back to join_date/created_at
   const quarterMap = new Map<string, number>();
   
-  customers?.forEach(customer => {
-    const dateStr = customer.join_date || customer.created_at;
+  customers.forEach(customer => {
+    const signedDate = customerSignedDates.get(customer.id);
+    const dateStr = signedDate?.toISOString() || customer.join_date || customer.created_at;
     if (dateStr) {
       const date = new Date(dateStr);
       
