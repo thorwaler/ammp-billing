@@ -15,8 +15,9 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Settings, DollarSign, Euro, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
+import { toast } from "sonner";
 
 export function CurrencySwitcher() {
   const { 
@@ -29,11 +30,19 @@ export function CurrencySwitcher() {
     isFetchingRate
   } = useCurrency();
   const [tempRate, setTempRate] = useState(exchangeRate.toString());
+  const [open, setOpen] = useState(false);
+
+  // Sync tempRate when exchangeRate changes (e.g., after loading from DB)
+  useEffect(() => {
+    setTempRate(exchangeRate.toString());
+  }, [exchangeRate]);
 
   const handleSaveRate = () => {
     const rate = parseFloat(tempRate);
     if (!isNaN(rate) && rate > 0) {
       setExchangeRate(rate);
+      toast.success("Exchange rate updated");
+      setOpen(false);
     }
   };
 
@@ -66,7 +75,7 @@ export function CurrencySwitcher() {
         </SelectContent>
       </Select>
 
-      <Popover>
+      <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="icon">
             <Settings className="h-4 w-4" />
