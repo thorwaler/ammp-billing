@@ -10,7 +10,7 @@ interface CurrencyContextType {
   formatCurrency: (amount: number) => string;
   convertToDisplayCurrency: (amount: number, sourceCurrency?: string) => number;
   loading: boolean;
-  fetchLiveRate: () => Promise<void>;
+  fetchLiveRate: () => Promise<number | undefined>;
   lastRateUpdate: Date | null;
   isFetchingRate: boolean;
 }
@@ -93,14 +93,14 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     setExchangeRateState(rate);
   };
 
-  const fetchLiveRate = useCallback(async () => {
+  const fetchLiveRate = useCallback(async (): Promise<number | undefined> => {
     setIsFetchingRate(true);
     try {
       const { data, error } = await supabase.functions.invoke('fetch-exchange-rate');
       
       if (error) {
         console.error('Error fetching live rate:', error);
-        return;
+        return undefined;
       }
       
       if (data?.rate && typeof data.rate === 'number') {
@@ -117,9 +117,13 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
             })
             .eq("user_id", user.id);
         }
+        
+        return data.rate;
       }
+      return undefined;
     } catch (error) {
       console.error('Error fetching live rate:', error);
+      return undefined;
     } finally {
       setIsFetchingRate(false);
     }
