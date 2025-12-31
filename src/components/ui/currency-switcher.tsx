@@ -14,11 +14,20 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Settings, DollarSign, Euro } from "lucide-react";
+import { Settings, DollarSign, Euro, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import { formatDistanceToNow } from "date-fns";
 
 export function CurrencySwitcher() {
-  const { currency, exchangeRate, setCurrency, setExchangeRate } = useCurrency();
+  const { 
+    currency, 
+    exchangeRate, 
+    setCurrency, 
+    setExchangeRate,
+    fetchLiveRate,
+    lastRateUpdate,
+    isFetchingRate
+  } = useCurrency();
   const [tempRate, setTempRate] = useState(exchangeRate.toString());
 
   const handleSaveRate = () => {
@@ -26,6 +35,11 @@ export function CurrencySwitcher() {
     if (!isNaN(rate) && rate > 0) {
       setExchangeRate(rate);
     }
+  };
+
+  const handleFetchLiveRate = async () => {
+    await fetchLiveRate();
+    setTempRate(exchangeRate.toString());
   };
 
   return (
@@ -65,20 +79,40 @@ export function CurrencySwitcher() {
                 Configure the USD to EUR exchange rate
               </p>
             </div>
+            
             <div className="space-y-2">
-              <Label htmlFor="exchange-rate">USD to EUR Exchange Rate</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="exchange-rate">USD to EUR Exchange Rate</Label>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleFetchLiveRate}
+                  disabled={isFetchingRate}
+                  className="h-7 px-2"
+                >
+                  <RefreshCw className={`h-3 w-3 mr-1 ${isFetchingRate ? 'animate-spin' : ''}`} />
+                  {isFetchingRate ? 'Fetching...' : 'Live Rate'}
+                </Button>
+              </div>
               <Input
                 id="exchange-rate"
                 type="number"
-                step="0.01"
+                step="0.0001"
                 min="0"
                 value={tempRate}
                 onChange={(e) => setTempRate(e.target.value)}
                 placeholder="0.92"
               />
-              <p className="text-xs text-muted-foreground">
-                Current: 1 USD = {exchangeRate} EUR
-              </p>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs text-muted-foreground">
+                  Current: 1 USD = {exchangeRate.toFixed(4)} EUR
+                </p>
+                {lastRateUpdate && (
+                  <p className="text-xs text-muted-foreground">
+                    Last updated: {formatDistanceToNow(lastRateUpdate, { addSuffix: true })}
+                  </p>
+                )}
+              </div>
             </div>
             <Button onClick={handleSaveRate} className="w-full">
               Save Exchange Rate
