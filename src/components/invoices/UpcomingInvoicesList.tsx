@@ -408,10 +408,21 @@ export function UpcomingInvoicesList({
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Fetch exchange rate from currency_settings
+      const { data: currencySettings } = await supabase
+        .from('currency_settings')
+        .select('exchange_rate')
+        .limit(1)
+        .maybeSingle();
+      const exchangeRate = currencySettings?.exchange_rate || 0.92;
+
       const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
       const estimatedAmount = calculateEstimatedAmount(invoice);
+      
+      // Calculate EUR amount
+      const eurMultiplier = invoice.currency === 'USD' ? exchangeRate : 1;
 
-      // Create invoice record marked as manual
+      // Create invoice record marked as manual with all EUR fields
       const { error: invoiceError } = await supabase
         .from('invoices')
         .insert({
@@ -422,6 +433,11 @@ export function UpcomingInvoicesList({
           mw_managed: invoice.mwpManaged,
           total_mw: invoice.mwpManaged,
           invoice_amount: estimatedAmount,
+          invoice_amount_eur: estimatedAmount * eurMultiplier,
+          arr_amount: estimatedAmount, // Manual invoices are typically all ARR
+          arr_amount_eur: estimatedAmount * eurMultiplier,
+          nrr_amount: 0,
+          nrr_amount_eur: 0,
           billing_frequency: invoice.billingFrequency,
           currency: invoice.currency,
           source: 'manual',

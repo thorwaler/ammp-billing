@@ -648,9 +648,14 @@ export async function getMonthlyRevenue(filters?: ReportFilters): Promise<Actual
 /**
  * Get ARR vs NRR breakdown by month from invoices
  */
-export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvsNRRData[]> {
+export async function getARRvsNRRByMonth(
+  filters?: ReportFilters,
+  exchangeRate?: number
+): Promise<ARRvsNRRData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+
+  const rate = exchangeRate ?? await getExchangeRateFromSettings();
 
   // Default to last 12 months if no filter specified
   const startDate = filters?.startDate || (() => {
@@ -662,7 +667,7 @@ export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvs
 
   let query = supabase
     .from('invoices')
-    .select('invoice_date, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customer_id')
+    .select('invoice_date, invoice_amount_eur, invoice_amount, arr_amount_eur, arr_amount, nrr_amount_eur, nrr_amount, xero_amount_credited_eur, xero_amount_credited, customer_id, currency')
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
@@ -681,13 +686,16 @@ export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvs
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     const existing = monthlyMap.get(monthKey) || { arr: 0, nrr: 0, total: 0 };
     
-    // Calculate net amounts (subtract credits proportionally)
-    const totalAmount = invoice.invoice_amount_eur || 0;
-    const creditAmount = invoice.xero_amount_credited_eur || 0;
+    // Calculate net amounts (subtract credits proportionally) with fallback
+    const totalAmount = getEurAmount(invoice.invoice_amount_eur, invoice.invoice_amount, invoice.currency, rate);
+    const creditAmount = getEurAmount(invoice.xero_amount_credited_eur, invoice.xero_amount_credited, invoice.currency, rate);
     const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
     
-    const netArr = (invoice.arr_amount_eur || 0) * (1 - creditRatio);
-    const netNrr = (invoice.nrr_amount_eur || 0) * (1 - creditRatio);
+    const arrEur = getEurAmount(invoice.arr_amount_eur, invoice.arr_amount, invoice.currency, rate);
+    const nrrEur = getEurAmount(invoice.nrr_amount_eur, invoice.nrr_amount, invoice.currency, rate);
+    
+    const netArr = arrEur * (1 - creditRatio);
+    const netNrr = nrrEur * (1 - creditRatio);
     const netTotal = totalAmount - creditAmount;
     
     monthlyMap.set(monthKey, {
@@ -717,24 +725,58 @@ export async function getARRvsNRRByMonth(filters?: ReportFilters): Promise<ARRvs
 }
 
 /**
+ * Fetch exchange rate from currency_settings (fallback to 0.92)
+ */
+async function getExchangeRateFromSettings(): Promise<number> {
+  const { data } = await supabase
+    .from('currency_settings')
+    .select('exchange_rate')
+    .limit(1)
+    .maybeSingle();
+  return data?.exchange_rate || 0.92;
+}
+
+/**
+ * Get EUR amount with fallback logic for missing EUR fields
+ */
+function getEurAmount(
+  eurValue: number | null | undefined,
+  originalValue: number | null | undefined,
+  currency: string | null | undefined,
+  exchangeRate: number
+): number {
+  if (eurValue != null) return eurValue;
+  if (originalValue == null) return 0;
+  if (currency === 'USD') return originalValue * exchangeRate;
+  return originalValue;
+}
+
+/**
  * Get total ARR from invoices in date range
  */
-export async function getTotalARRFromInvoices(startDate: Date, endDate: Date): Promise<number> {
+export async function getTotalARRFromInvoices(
+  startDate: Date, 
+  endDate: Date,
+  exchangeRate?: number
+): Promise<number> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
 
+  const rate = exchangeRate ?? await getExchangeRateFromSettings();
+
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('arr_amount_eur, invoice_amount_eur, xero_amount_credited_eur')
+    .select('arr_amount_eur, arr_amount, invoice_amount_eur, invoice_amount, xero_amount_credited_eur, xero_amount_credited, currency')
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
   // Calculate net ARR (subtract credits proportionally)
   return invoices?.reduce((sum, inv: any) => {
-    const totalAmount = inv.invoice_amount_eur || 0;
-    const creditAmount = inv.xero_amount_credited_eur || 0;
+    const totalAmount = getEurAmount(inv.invoice_amount_eur, inv.invoice_amount, inv.currency, rate);
+    const creditAmount = getEurAmount(inv.xero_amount_credited_eur, inv.xero_amount_credited, inv.currency, rate);
     const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
-    const netArr = (inv.arr_amount_eur || 0) * (1 - creditRatio);
+    const arrEur = getEurAmount(inv.arr_amount_eur, inv.arr_amount, inv.currency, rate);
+    const netArr = arrEur * (1 - creditRatio);
     return sum + netArr;
   }, 0) || 0;
 }
@@ -742,22 +784,29 @@ export async function getTotalARRFromInvoices(startDate: Date, endDate: Date): P
 /**
  * Get total NRR from invoices in date range
  */
-export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): Promise<number> {
+export async function getTotalNRRFromInvoices(
+  startDate: Date, 
+  endDate: Date,
+  exchangeRate?: number
+): Promise<number> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
 
+  const rate = exchangeRate ?? await getExchangeRateFromSettings();
+
   const { data: invoices } = await supabase
     .from('invoices')
-    .select('nrr_amount_eur, invoice_amount_eur, xero_amount_credited_eur')
+    .select('nrr_amount_eur, nrr_amount, invoice_amount_eur, invoice_amount, xero_amount_credited_eur, xero_amount_credited, currency')
     .gte('invoice_date', startDate.toISOString())
     .lte('invoice_date', endDate.toISOString());
 
   // Calculate net NRR (subtract credits proportionally)
   return invoices?.reduce((sum, inv: any) => {
-    const totalAmount = inv.invoice_amount_eur || 0;
-    const creditAmount = inv.xero_amount_credited_eur || 0;
+    const totalAmount = getEurAmount(inv.invoice_amount_eur, inv.invoice_amount, inv.currency, rate);
+    const creditAmount = getEurAmount(inv.xero_amount_credited_eur, inv.xero_amount_credited, inv.currency, rate);
     const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
-    const netNrr = (inv.nrr_amount_eur || 0) * (1 - creditRatio);
+    const nrrEur = getEurAmount(inv.nrr_amount_eur, inv.nrr_amount, inv.currency, rate);
+    const netNrr = nrrEur * (1 - creditRatio);
     return sum + netNrr;
   }, 0) || 0;
 }
@@ -766,14 +815,20 @@ export async function getTotalNRRFromInvoices(startDate: Date, endDate: Date): P
  * Get revenue by customer (top customers by total revenue)
  * Pass limit = undefined to return all customers
  */
-export async function getRevenueByCustomer(limit?: number, filters?: ReportFilters): Promise<CustomerRevenueData[]> {
+export async function getRevenueByCustomer(
+  limit?: number, 
+  filters?: ReportFilters,
+  exchangeRate?: number
+): Promise<CustomerRevenueData[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
+
+  const rate = exchangeRate ?? await getExchangeRateFromSettings();
 
   // Build query with date range if specified
   let query = supabase
     .from('invoices')
-    .select('customer_id, invoice_amount_eur, arr_amount_eur, nrr_amount_eur, xero_amount_credited_eur, customers!inner(name, nickname)');
+    .select('customer_id, invoice_amount_eur, invoice_amount, arr_amount_eur, arr_amount, nrr_amount_eur, nrr_amount, xero_amount_credited_eur, xero_amount_credited, currency, customers!inner(name, nickname)');
 
   if (filters?.startDate) {
     query = query.gte('invoice_date', filters.startDate.toISOString());
@@ -796,13 +851,16 @@ export async function getRevenueByCustomer(limit?: number, filters?: ReportFilte
     const customerDisplayName = invoice.customers?.nickname || invoice.customers?.name || 'Unknown';
     const existing = customerMap.get(customerId) || { name: customerDisplayName, total: 0, arr: 0, nrr: 0 };
 
-    // Calculate net amounts (subtract credits proportionally)
-    const totalAmount = invoice.invoice_amount_eur || 0;
-    const creditAmount = invoice.xero_amount_credited_eur || 0;
+    // Calculate net amounts (subtract credits proportionally) with fallback
+    const totalAmount = getEurAmount(invoice.invoice_amount_eur, invoice.invoice_amount, invoice.currency, rate);
+    const creditAmount = getEurAmount(invoice.xero_amount_credited_eur, invoice.xero_amount_credited, invoice.currency, rate);
     const creditRatio = totalAmount > 0 ? creditAmount / totalAmount : 0;
 
-    const netArr = (invoice.arr_amount_eur || 0) * (1 - creditRatio);
-    const netNrr = (invoice.nrr_amount_eur || 0) * (1 - creditRatio);
+    const arrEur = getEurAmount(invoice.arr_amount_eur, invoice.arr_amount, invoice.currency, rate);
+    const nrrEur = getEurAmount(invoice.nrr_amount_eur, invoice.nrr_amount, invoice.currency, rate);
+    
+    const netArr = arrEur * (1 - creditRatio);
+    const netNrr = nrrEur * (1 - creditRatio);
     const netTotal = totalAmount - creditAmount;
 
     customerMap.set(customerId, {

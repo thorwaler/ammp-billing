@@ -68,7 +68,7 @@ interface CombinedRevenueData {
 }
 
 const Reports = () => {
-  const { formatCurrency, convertToDisplayCurrency, currency } = useCurrency();
+  const { formatCurrency, convertToDisplayCurrency, currency, exchangeRate } = useCurrency();
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [mwGrowthData, setMwGrowthData] = useState<MWGrowthData[]>([]);
@@ -118,12 +118,12 @@ const Reports = () => {
         getMWGrowthByMonth(analyticsFilters),
         getCustomerGrowthByQuarter(analyticsFilters),
         getMWpByCustomer(8, analyticsFilters),
-        getRevenueByCustomer(8, analyticsFilters),
+        getRevenueByCustomer(8, analyticsFilters, exchangeRate),
         getProjectedRevenueByMonth(12, analyticsFilters),
         getMonthlyRevenue(analyticsFilters),
-        getARRvsNRRByMonth(analyticsFilters),
-        getTotalARRFromInvoices(startDate, endDate),
-        getTotalNRRFromInvoices(startDate, endDate),
+        getARRvsNRRByMonth(analyticsFilters, exchangeRate),
+        getTotalARRFromInvoices(startDate, endDate, exchangeRate),
+        getTotalNRRFromInvoices(startDate, endDate, exchangeRate),
         getARRByCustomer(8, analyticsFilters),
         getTotalContractARR(analyticsFilters),
       ]);
@@ -181,7 +181,7 @@ const Reports = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [filters, convertToDisplayCurrency]);
+  }, [filters, convertToDisplayCurrency, exchangeRate]);
 
   useEffect(() => {
     fetchCustomers();

@@ -15,6 +15,7 @@ import { generateSupportDocumentData, SupportDocumentData } from "@/lib/supportD
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
 import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 interface ContractForMerge {
   contractId: string;
@@ -63,6 +64,7 @@ export function MergedInvoiceDialog({
   contracts,
   onInvoiceCreated,
 }: MergedInvoiceDialogProps) {
+  const { exchangeRate } = useCurrency();
   const [selectedContracts, setSelectedContracts] = useState<Set<string>>(new Set());
   const [calculationResults, setCalculationResults] = useState<Map<string, CalculationResult>>(new Map());
   const [loading, setLoading] = useState(false);
@@ -513,17 +515,20 @@ export function MergedInvoiceDialog({
           return sum + assetBreakdown.reduce((s: number, a: any) => s + (a.totalMW || 0), 0);
         }, 0);
         
+        // Calculate EUR amounts using dynamic exchange rate
+        const eurMultiplier = primaryCurrency === 'USD' ? exchangeRate : 1;
+        
         await supabase.from('invoices').insert([{
           user_id: user.id,
           customer_id: contracts[0].customerId,
           contract_id: contracts[0].contractId, // Primary contract
           invoice_date: format(invoiceDate, "yyyy-MM-dd"),
           invoice_amount: totalAmount,
-          invoice_amount_eur: primaryCurrency === 'EUR' ? totalAmount : totalAmount * 0.92,
+          invoice_amount_eur: totalAmount * eurMultiplier,
           arr_amount: totalARR,
-          arr_amount_eur: primaryCurrency === 'EUR' ? totalARR : totalARR * 0.92,
+          arr_amount_eur: totalARR * eurMultiplier,
           nrr_amount: totalNRR,
-          nrr_amount_eur: primaryCurrency === 'EUR' ? totalNRR : totalNRR * 0.92,
+          nrr_amount_eur: totalNRR * eurMultiplier,
           mw_managed: totalMW,
           total_mw: totalMW,
           billing_frequency: contracts[0].billingFrequency,
