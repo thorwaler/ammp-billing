@@ -80,3 +80,6 @@ verify_jwt = true
 
 [functions.sharepoint-upload-document]
 verify_jwt = true
+
+[functions.fetch-exchange-rate]
+verify_jwt = false

@@ -10,6 +10,9 @@ interface CurrencyContextType {
   formatCurrency: (amount: number) => string;
   convertToDisplayCurrency: (amount: number, sourceCurrency?: string) => number;
   loading: boolean;
+  fetchLiveRate: () => Promise<void>;
+  lastRateUpdate: Date | null;
+  isFetchingRate: boolean;
 }
 
 const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
@@ -21,6 +24,8 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
   const [currency, setCurrencyState] = useState<"EUR" | "USD">("EUR");
   const [exchangeRate, setExchangeRateState] = useState<number>(DEFAULT_EXCHANGE_RATE);
   const [loading, setLoading] = useState(true);
+  const [lastRateUpdate, setLastRateUpdate] = useState<Date | null>(null);
+  const [isFetchingRate, setIsFetchingRate] = useState(false);
 
   // Load currency settings from database
   useEffect(() => {
@@ -88,6 +93,38 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
     setExchangeRateState(rate);
   };
 
+  const fetchLiveRate = useCallback(async () => {
+    setIsFetchingRate(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-exchange-rate');
+      
+      if (error) {
+        console.error('Error fetching live rate:', error);
+        return;
+      }
+      
+      if (data?.rate && typeof data.rate === 'number') {
+        setExchangeRateState(data.rate);
+        setLastRateUpdate(new Date(data.fetchedAt));
+        
+        // Also save to database if user is logged in
+        if (user) {
+          await supabase
+            .from("currency_settings")
+            .update({ 
+              exchange_rate: data.rate,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", user.id);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching live rate:', error);
+    } finally {
+      setIsFetchingRate(false);
+    }
+  }, [user]);
+
   const convertToDisplayCurrency = useCallback((amount: number, sourceCurrency: string = "USD"): number => {
     // If source and display currency are the same, no conversion needed
     if (sourceCurrency === currency) {
@@ -129,6 +166,9 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
         formatCurrency,
         convertToDisplayCurrency,
         loading,
+        fetchLiveRate,
+        lastRateUpdate,
+        isFetchingRate,
       }}
     >
       {children}
