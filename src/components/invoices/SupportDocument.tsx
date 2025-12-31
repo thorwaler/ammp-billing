@@ -135,6 +135,62 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* Per-Site Billing Breakdown (UNHCR-style) */}
+      {data.perSiteBreakdown && (data.perSiteBreakdown.onboardingCost > 0 || data.perSiteBreakdown.annualSubscriptionCost > 0) && (
+        <section className="mb-6">
+          <h2 className="text-base font-bold mb-3">Per-Site Billing Breakdown</h2>
+          
+          {/* Summary stats */}
+          <div className="grid grid-cols-2 gap-4 text-sm mb-3 p-2 rounded" style={{ backgroundColor: 'rgba(244, 244, 245, 0.5)' }}>
+            <div>
+              <p><strong>Onboarding Fee per Site:</strong> {formatCurrency(data.perSiteBreakdown.onboardingFeePerSite)}</p>
+              <p><strong>Sites Onboarded:</strong> {data.perSiteBreakdown.sitesOnboarded}</p>
+              <p><strong>Total Onboarding:</strong> {formatCurrency(data.perSiteBreakdown.onboardingCost)}</p>
+            </div>
+            <div>
+              <p><strong>Annual Fee per Site:</strong> {formatCurrency(data.perSiteBreakdown.annualFeePerSite)}</p>
+              <p><strong>Sites Renewed:</strong> {data.perSiteBreakdown.sitesRenewed}</p>
+              <p><strong>Total Subscriptions:</strong> {formatCurrency(data.perSiteBreakdown.annualSubscriptionCost)}</p>
+            </div>
+          </div>
+          
+          {/* Site-by-site table */}
+          <table className="w-full border-collapse border border-border text-xs">
+            <thead>
+              <tr style={{ backgroundColor: '#f4f4f5' }}>
+                <th className="border border-border p-1 text-left">Site Name</th>
+                <th className="border border-border p-1 text-right">Capacity (kWp)</th>
+                <th className="border border-border p-1 text-center">Onboarding Date</th>
+                <th className="border border-border p-1 text-center">Type</th>
+                <th className="border border-border p-1 text-right">Amount ({data.currency})</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.perSiteBreakdown.siteBreakdown.map((site, idx) => (
+                <tr key={idx}>
+                  <td className="border border-border p-1">{site.assetName}</td>
+                  <td className="border border-border p-1 text-right">{site.capacityKwp?.toFixed(1) || '-'}</td>
+                  <td className="border border-border p-1 text-center">
+                    {site.onboardingDate ? formatDateCET(site.onboardingDate, 'dd MMM yyyy') : '-'}
+                  </td>
+                  <td className="border border-border p-1 text-center">
+                    {site.isOnboarding && site.isRenewal ? 'Onboarding + Renewal' : 
+                     site.isOnboarding ? 'Onboarding' : 'Annual Renewal'}
+                  </td>
+                  <td className="border border-border p-1 text-right font-medium">{formatCurrency(site.fee)}</td>
+                </tr>
+              ))}
+              <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
+                <td className="border border-border p-1" colSpan={4}>Total:</td>
+                <td className="border border-border p-1 text-right">
+                  {formatCurrency(data.perSiteBreakdown.onboardingCost + data.perSiteBreakdown.annualSubscriptionCost)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      )}
+
       {/* Solcast Tracking (if applicable) */}
       {data.solcastBreakdown && data.solcastBreakdown.length > 0 && (
         <section className="mb-6">
@@ -434,6 +490,21 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   <span>+ Elum ePM Large Sites ({data.elumEpmBreakdown.largeSitesCount} sites):</span>
                   <span>{formatCurrency(data.elumEpmBreakdown.largeSitesTotal)}</span>
                 </div>
+              </>
+            ) : data.perSiteBreakdown ? (
+              <>
+                {data.perSiteBreakdown.onboardingCost > 0 && (
+                  <div className="flex justify-between">
+                    <span>Onboarding Fees ({data.perSiteBreakdown.sitesOnboarded} sites):</span>
+                    <span>{formatCurrency(data.perSiteBreakdown.onboardingCost)}</span>
+                  </div>
+                )}
+                {data.perSiteBreakdown.annualSubscriptionCost > 0 && (
+                  <div className="flex justify-between">
+                    <span>+ Annual Subscriptions ({data.perSiteBreakdown.sitesRenewed} sites):</span>
+                    <span>{formatCurrency(data.perSiteBreakdown.annualSubscriptionCost)}</span>
+                  </div>
+                )}
               </>
             ) : (
               data.calculationBreakdown.assetBreakdownPeriod > 0 && (

@@ -107,6 +107,25 @@ export interface SupportDocumentData {
     totalCost: number;
   };
   
+  // Per-site billing breakdown (UNHCR-style)
+  perSiteBreakdown?: {
+    onboardingCost: number;
+    annualSubscriptionCost: number;
+    sitesOnboarded: number;
+    sitesRenewed: number;
+    onboardingFeePerSite: number;
+    annualFeePerSite: number;
+    siteBreakdown: {
+      assetId: string;
+      assetName: string;
+      capacityKwp?: number;
+      onboardingDate?: string;
+      isOnboarding: boolean;
+      isRenewal: boolean;
+      fee: number;
+    }[];
+  };
+  
   // Discounted assets breakdown
   discountedAssetsBreakdown?: {
     assetId: string;
@@ -291,6 +310,31 @@ export async function generateSupportDocumentData(
     };
   }
 
+  // Generate per-site breakdown if applicable (UNHCR-style packages)
+  let perSiteBreakdown: SupportDocumentData['perSiteBreakdown'];
+  if (calculationResult.perSiteBreakdown && 
+      (calculationResult.perSiteBreakdown.onboardingCost > 0 || calculationResult.perSiteBreakdown.annualSubscriptionCost > 0)) {
+    const psBreak = calculationResult.perSiteBreakdown;
+    perSiteBreakdown = {
+      onboardingCost: psBreak.onboardingCost,
+      annualSubscriptionCost: psBreak.annualSubscriptionCost,
+      sitesOnboarded: psBreak.sitesOnboarded,
+      sitesRenewed: psBreak.sitesRenewed,
+      onboardingFeePerSite: psBreak.siteBreakdown[0]?.onboardingFee || 0,
+      annualFeePerSite: psBreak.siteBreakdown[0]?.annualFee || 0,
+      siteBreakdown: psBreak.siteBreakdown.map(site => ({
+        assetId: site.assetId,
+        assetName: site.assetName,
+        capacityKwp: site.capacityKwp,
+        onboardingDate: site.onboardingDate,
+        isOnboarding: site.needsOnboarding,
+        isRenewal: site.needsAnnualRenewal,
+        fee: (site.needsOnboarding ? (site.onboardingFee || 0) : 0) + 
+             (site.needsAnnualRenewal ? (site.annualFee || 0) : 0)
+      }))
+    };
+  }
+
   // Generate discounted assets breakdown if applicable
   let discountedAssetsBreakdown: SupportDocumentData['discountedAssetsBreakdown'];
   let discountedAssetsTotal = 0;
@@ -322,6 +366,11 @@ export async function generateSupportDocumentData(
     assetBreakdownPeriodTotal = calculationResult.siteMinimumPricingBreakdown.normalPricingTotal + 
                                  calculationResult.siteMinimumPricingBreakdown.minimumPricingTotal;
     // Don't add minimumCharges separately - it's already included in minimumPricingTotal
+    minimumChargesForBreakdown = 0;
+  } else if (calculationResult.perSiteBreakdown) {
+    // For per-site packages, use onboarding + annual costs
+    assetBreakdownPeriodTotal = calculationResult.perSiteBreakdown.onboardingCost + 
+                                 calculationResult.perSiteBreakdown.annualSubscriptionCost;
     minimumChargesForBreakdown = 0;
   } else if (calculationResult.elumInternalBreakdown) {
     // For Elum Internal, use the graduated tier total cost (already period-adjusted)
@@ -373,6 +422,7 @@ export async function generateSupportDocumentData(
     elumEpmBreakdown,
     elumJubailiBreakdown,
     elumInternalBreakdown,
+    perSiteBreakdown,
     discountedAssetsBreakdown,
     discountedAssetsTotal,
     calculatedTotal,
@@ -524,6 +574,11 @@ function generateAssetBreakdown(
   
   // For Elum Internal - don't show per-asset, use tier summary
   if (packageType === 'elum_internal' && calculationResult.elumInternalBreakdown) {
+    return { assetBreakdown: [] };
+  }
+  
+  // For per_site packages - don't show asset breakdown, use per-site section instead
+  if (packageType === 'per_site' && calculationResult.perSiteBreakdown) {
     return { assetBreakdown: [] };
   }
   
