@@ -110,9 +110,9 @@ export function RecentActivity() {
           });
         });
 
-        // Sort by timestamp descending and take top 8
+        // Sort by timestamp descending and take top 5 to align with Contract Management card
         allActivities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        setActivities(allActivities.slice(0, 8));
+        setActivities(allActivities.slice(0, 5));
       } catch (error) {
         console.error("Error fetching activities:", error);
       } finally {
@@ -124,7 +124,7 @@ export function RecentActivity() {
   }, [user]);
 
   return (
-    <Card>
+    <Card className="h-full">
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
           <Activity className="h-5 w-5 text-ammp-blue" />
@@ -142,7 +142,7 @@ export function RecentActivity() {
             <p className="text-sm">No recent activity</p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-3">
             {activities.map((activity) => (
               <div key={activity.id} className="flex items-start gap-4">
                 <div className="rounded-full p-2 bg-muted flex items-center justify-center">

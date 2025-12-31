@@ -38,8 +38,10 @@ export function CurrencySwitcher() {
   };
 
   const handleFetchLiveRate = async () => {
-    await fetchLiveRate();
-    setTempRate(exchangeRate.toString());
+    const newRate = await fetchLiveRate();
+    if (newRate) {
+      setTempRate(newRate.toString());
+    }
   };
 
   return (
