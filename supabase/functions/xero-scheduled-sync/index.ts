@@ -51,7 +51,12 @@ function calculateNextSyncAt(schedule: string): Date | null {
 }
 
 Deno.serve(async (req) => {
-  console.log(`[Xero Scheduled Sync] Function invoked at ${new Date().toISOString()}`);
+  const invocationTime = new Date().toISOString();
+  console.log(`========================================`);
+  console.log(`[Xero Scheduled Sync] CRON INVOCATION`);
+  console.log(`[Xero Scheduled Sync] Time: ${invocationTime}`);
+  console.log(`[Xero Scheduled Sync] Method: ${req.method}`);
+  console.log(`========================================`);
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });

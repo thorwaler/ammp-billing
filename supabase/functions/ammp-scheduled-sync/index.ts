@@ -254,7 +254,12 @@ async function processContractsInBackground(
 }
 
 Deno.serve(async (req) => {
-  console.log(`[AMMP Scheduled Sync] Function invoked at ${new Date().toISOString()}`);
+  const invocationTime = new Date().toISOString();
+  console.log(`========================================`);
+  console.log(`[AMMP Scheduled Sync] CRON INVOCATION`);
+  console.log(`[AMMP Scheduled Sync] Time: ${invocationTime}`);
+  console.log(`[AMMP Scheduled Sync] Method: ${req.method}`);
+  console.log(`========================================`);
   
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
