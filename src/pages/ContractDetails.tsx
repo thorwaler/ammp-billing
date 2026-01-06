@@ -12,6 +12,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent } from "lucide-react";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
+import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -1452,6 +1453,14 @@ const ContractDetails = () => {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {/* Asset Status History Timeline */}
+        {hasAMMPData && cachedCapabilities?.assetBreakdown && cachedCapabilities.assetBreakdown.length > 0 && (
+          <AssetStatusTimeline 
+            contractId={contract.id}
+            suspiciousThresholdDays={30}
+          />
         )}
 
         {/* Contract Amendments Section */}

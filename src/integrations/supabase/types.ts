@@ -19,11 +19,14 @@ export type Database = {
           asset_manipulation_enabled: boolean
           asset_manipulation_threshold: number
           asset_manipulation_window_days: number
+          asset_reappear_suspicious_days: number
           created_at: string
           id: string
+          individual_asset_tracking_enabled: boolean
           invoice_increase_critical: number
           invoice_increase_enabled: boolean
           invoice_increase_warning: number
+          minimum_asset_mw_for_alert: number
           mw_decrease_enabled: boolean
           mw_decrease_threshold: number
           site_decrease_enabled: boolean
@@ -35,11 +38,14 @@ export type Database = {
           asset_manipulation_enabled?: boolean
           asset_manipulation_threshold?: number
           asset_manipulation_window_days?: number
+          asset_reappear_suspicious_days?: number
           created_at?: string
           id?: string
+          individual_asset_tracking_enabled?: boolean
           invoice_increase_critical?: number
           invoice_increase_enabled?: boolean
           invoice_increase_warning?: number
+          minimum_asset_mw_for_alert?: number
           mw_decrease_enabled?: boolean
           mw_decrease_threshold?: number
           site_decrease_enabled?: boolean
@@ -51,11 +57,14 @@ export type Database = {
           asset_manipulation_enabled?: boolean
           asset_manipulation_threshold?: number
           asset_manipulation_window_days?: number
+          asset_reappear_suspicious_days?: number
           created_at?: string
           id?: string
+          individual_asset_tracking_enabled?: boolean
           invoice_increase_critical?: number
           invoice_increase_enabled?: boolean
           invoice_increase_warning?: number
+          minimum_asset_mw_for_alert?: number
           mw_decrease_enabled?: boolean
           mw_decrease_threshold?: number
           site_decrease_enabled?: boolean
@@ -193,6 +202,57 @@ export type Database = {
           status?: string
           total_assets?: number | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      asset_status_history: {
+        Row: {
+          asset_id: string
+          asset_name: string
+          capacity_mw: number
+          contract_id: string
+          created_at: string
+          customer_id: string
+          days_absent: number | null
+          detected_at: string
+          id: string
+          metadata: Json | null
+          previous_seen_at: string | null
+          status_change: string
+          sync_id: string | null
+          user_id: string
+        }
+        Insert: {
+          asset_id: string
+          asset_name: string
+          capacity_mw?: number
+          contract_id: string
+          created_at?: string
+          customer_id: string
+          days_absent?: number | null
+          detected_at?: string
+          id?: string
+          metadata?: Json | null
+          previous_seen_at?: string | null
+          status_change: string
+          sync_id?: string | null
+          user_id: string
+        }
+        Update: {
+          asset_id?: string
+          asset_name?: string
+          capacity_mw?: number
+          contract_id?: string
+          created_at?: string
+          customer_id?: string
+          days_absent?: number | null
+          detected_at?: string
+          id?: string
+          metadata?: Json | null
+          previous_seen_at?: string | null
+          status_change?: string
+          sync_id?: string | null
           user_id?: string
         }
         Relationships: []

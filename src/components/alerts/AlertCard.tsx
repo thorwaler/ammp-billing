@@ -42,6 +42,8 @@ const alertTypeLabels: Record<string, string> = {
   site_decrease: "Site Count Decrease",
   asset_disappeared: "Asset Disappeared",
   asset_reappeared: "Asset Reappeared",
+  asset_disappeared_individual: "Asset Disappeared",
+  asset_reappeared_suspicious: "Suspicious Asset Return",
 };
 
 export function AlertCard({ alert, onAcknowledge, onDelete }: AlertCardProps) {

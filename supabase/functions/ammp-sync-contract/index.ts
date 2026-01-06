@@ -488,6 +488,154 @@ async function processContractSync(
 }
 
 /**
+ * Detect and record asset status changes (appeared, disappeared, reappeared)
+ */
+async function detectAssetChanges(
+  supabase: any,
+  contractId: string,
+  customerId: string,
+  userId: string,
+  currentAssets: Array<{ assetId: string; assetName: string; totalMW: number }>,
+  previousCached: CachedCapabilities | null
+): Promise<{ disappeared: number; appeared: number; reappeared: number }> {
+  const now = new Date().toISOString();
+  const currentAssetIds = new Set(currentAssets.map(a => a.assetId));
+  const previousAssetIds = new Set(
+    previousCached?.assetBreakdown?.map(a => a.assetId) || []
+  );
+  
+  // Skip if this is the first sync (no previous data to compare)
+  if (!previousCached?.assetBreakdown || previousCached.assetBreakdown.length === 0) {
+    console.log(`[Asset Change Detection] First sync for contract ${contractId}, skipping change detection`);
+    return { disappeared: 0, appeared: 0, reappeared: 0 };
+  }
+  
+  const results = { disappeared: 0, appeared: 0, reappeared: 0 };
+  
+  // Find disappeared assets (were in previous, not in current)
+  const disappearedAssets = previousCached.assetBreakdown.filter(
+    a => !currentAssetIds.has(a.assetId)
+  );
+  
+  // Find newly appeared assets (in current, not in previous)
+  const appearedAssets = currentAssets.filter(
+    a => !previousAssetIds.has(a.assetId)
+  );
+  
+  console.log(`[Asset Change Detection] Contract ${contractId}: ${disappearedAssets.length} disappeared, ${appearedAssets.length} appeared`);
+  
+  // Record disappeared assets
+  for (const asset of disappearedAssets) {
+    try {
+      await supabase
+        .from('asset_status_history')
+        .insert({
+          contract_id: contractId,
+          customer_id: customerId,
+          user_id: userId,
+          asset_id: asset.assetId,
+          asset_name: asset.assetName,
+          capacity_mw: asset.totalMW,
+          status_change: 'disappeared',
+          detected_at: now,
+          previous_seen_at: previousCached.lastSynced || null,
+          metadata: { previous_sync: previousCached.lastSynced },
+        });
+      results.disappeared++;
+    } catch (err) {
+      console.error(`[Asset Change Detection] Error recording disappeared asset ${asset.assetId}:`, err);
+    }
+  }
+  
+  // Check if appeared assets are actually "reappearing" (existed before, then disappeared)
+  for (const asset of appearedAssets) {
+    try {
+      // Check history for previous disappearance
+      const { data: lastDisappearance } = await supabase
+        .from('asset_status_history')
+        .select('*')
+        .eq('contract_id', contractId)
+        .eq('asset_id', asset.assetId)
+        .eq('status_change', 'disappeared')
+        .order('detected_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (lastDisappearance) {
+        // This is a reappearance
+        const disappearedAt = new Date(lastDisappearance.detected_at);
+        const daysAbsent = Math.floor((new Date().getTime() - disappearedAt.getTime()) / (1000 * 60 * 60 * 24));
+        
+        await supabase
+          .from('asset_status_history')
+          .insert({
+            contract_id: contractId,
+            customer_id: customerId,
+            user_id: userId,
+            asset_id: asset.assetId,
+            asset_name: asset.assetName,
+            capacity_mw: asset.totalMW,
+            status_change: 'reappeared',
+            detected_at: now,
+            previous_seen_at: lastDisappearance.detected_at,
+            days_absent: daysAbsent,
+            metadata: { 
+              disappeared_at: lastDisappearance.detected_at,
+              days_absent: daysAbsent,
+            },
+          });
+        results.reappeared++;
+        
+        // Generate alert for suspicious reappearance (within 30 days)
+        if (daysAbsent <= 30 && asset.totalMW >= 0.01) {
+          await supabase
+            .from('invoice_alerts')
+            .insert({
+              user_id: userId,
+              contract_id: contractId,
+              customer_id: customerId,
+              alert_type: 'asset_reappeared_suspicious',
+              severity: daysAbsent <= 7 ? 'critical' : 'warning',
+              title: `Asset "${asset.assetName}" reappeared after ${daysAbsent} days`,
+              description: `This asset disappeared and then reappeared within ${daysAbsent} days. This pattern may indicate manipulation around billing periods.`,
+              metadata: {
+                asset_id: asset.assetId,
+                asset_name: asset.assetName,
+                capacity_mw: asset.totalMW,
+                days_absent: daysAbsent,
+                disappeared_at: lastDisappearance.detected_at,
+                reappeared_at: now,
+              },
+            });
+          console.log(`[Asset Change Detection] Created suspicious reappearance alert for ${asset.assetName}`);
+        }
+      } else {
+        // Truly new asset
+        await supabase
+          .from('asset_status_history')
+          .insert({
+            contract_id: contractId,
+            customer_id: customerId,
+            user_id: userId,
+            asset_id: asset.assetId,
+            asset_name: asset.assetName,
+            capacity_mw: asset.totalMW,
+            status_change: 'appeared',
+            detected_at: now,
+            metadata: { first_appearance: true },
+          });
+        results.appeared++;
+      }
+    } catch (err) {
+      console.error(`[Asset Change Detection] Error recording appeared asset ${asset.assetId}:`, err);
+    }
+  }
+  
+  console.log(`[Asset Change Detection] Recorded: ${results.disappeared} disappeared, ${results.appeared} new, ${results.reappeared} reappeared`);
+  return results;
+}
+
+/**
  * Populate site_billing_status for per_site contracts
  */
 async function populateSiteBillingStatus(
@@ -664,6 +812,9 @@ Deno.serve(async (req) => {
     const allAssets = await fetchAMMPData(token, '/assets');
     console.log(`[AMMP Sync Contract] Fetched ${allAssets.length} total assets`);
 
+    // Store previous cached capabilities for change detection
+    const previousCached = contract.cached_capabilities as CachedCapabilities | null;
+    
     // Process the contract
     const syncResult = await processContractSync(supabase, contract, token, allAssets);
     const { cachedCapabilities, syncStatus, timedOut, totalExpected, previouslySynced, newlySynced } = syncResult;
@@ -682,6 +833,20 @@ Deno.serve(async (req) => {
     if (updateError) {
       throw new Error(`Failed to update contract: ${updateError.message}`);
     }
+
+    // Detect and record asset status changes (appeared, disappeared, reappeared)
+    const assetChanges = await detectAssetChanges(
+      supabase,
+      contractId,
+      contract.customer_id,
+      effectiveUserId,
+      cachedCapabilities.assetBreakdown.map((a: any) => ({
+        assetId: a.assetId,
+        assetName: a.assetName,
+        totalMW: a.totalMW,
+      })),
+      previousCached
+    );
 
     // Populate site billing status for per_site contracts
     await populateSiteBillingStatus(
@@ -723,6 +888,7 @@ Deno.serve(async (req) => {
         totalExpected,
         previouslySynced,
         newlySynced,
+        assetChanges,
         message: timedOut 
           ? `Partial sync: ${cachedCapabilities.totalSites}/${totalExpected} assets (${newlySynced} new this run)`
           : previouslySynced > 0 

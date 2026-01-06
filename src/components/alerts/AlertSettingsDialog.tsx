@@ -265,6 +265,64 @@ export function AlertSettingsDialog({ open, onOpenChange }: AlertSettingsDialogP
                 </p>
               </div>
             </div>
+
+            <Separator />
+
+            {/* Individual Asset Tracking */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-semibold">Individual Asset Tracking</Label>
+                <Switch
+                  checked={localSettings.individual_asset_tracking_enabled}
+                  onCheckedChange={(checked) => updateLocal('individual_asset_tracking_enabled', checked)}
+                />
+              </div>
+              <div className="space-y-3 pl-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="suspicious-days" className="text-sm text-muted-foreground">
+                      Suspicious reappear threshold
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="suspicious-days"
+                        type="number"
+                        min={1}
+                        max={90}
+                        step={1}
+                        value={localSettings.asset_reappear_suspicious_days}
+                        onChange={(e) => updateLocal('asset_reappear_suspicious_days', Number(e.target.value))}
+                        disabled={!localSettings.individual_asset_tracking_enabled}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground">days</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="min-mw-alert" className="text-sm text-muted-foreground">
+                      Minimum asset MW
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        id="min-mw-alert"
+                        type="number"
+                        min={0}
+                        max={10}
+                        step={0.01}
+                        value={localSettings.minimum_asset_mw_for_alert}
+                        onChange={(e) => updateLocal('minimum_asset_mw_for_alert', Number(e.target.value))}
+                        disabled={!localSettings.individual_asset_tracking_enabled}
+                        className="w-20"
+                      />
+                      <span className="text-sm text-muted-foreground">MW</span>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Track individual asset appearances/disappearances. Alerts generated when assets reappear within the suspicious threshold after being absent.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
