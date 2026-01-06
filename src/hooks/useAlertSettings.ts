@@ -14,6 +14,10 @@ export interface AlertSettings {
   asset_manipulation_enabled: boolean;
   asset_manipulation_window_days: number;
   asset_manipulation_threshold: number;
+  // New asset tracking settings
+  individual_asset_tracking_enabled: boolean;
+  asset_reappear_suspicious_days: number;
+  minimum_asset_mw_for_alert: number;
 }
 
 export const DEFAULT_SETTINGS: AlertSettings = {
@@ -27,6 +31,10 @@ export const DEFAULT_SETTINGS: AlertSettings = {
   asset_manipulation_enabled: true,
   asset_manipulation_window_days: 30,
   asset_manipulation_threshold: 0.05,
+  // New asset tracking defaults
+  individual_asset_tracking_enabled: true,
+  asset_reappear_suspicious_days: 30,
+  minimum_asset_mw_for_alert: 0.01,
 };
 
 export function useAlertSettings() {
@@ -62,6 +70,10 @@ export function useAlertSettings() {
           asset_manipulation_enabled: data.asset_manipulation_enabled,
           asset_manipulation_window_days: data.asset_manipulation_window_days,
           asset_manipulation_threshold: Number(data.asset_manipulation_threshold),
+          // New fields
+          individual_asset_tracking_enabled: data.individual_asset_tracking_enabled ?? true,
+          asset_reappear_suspicious_days: data.asset_reappear_suspicious_days ?? 30,
+          minimum_asset_mw_for_alert: Number(data.minimum_asset_mw_for_alert ?? 0.01),
         });
       }
     } catch (err) {
@@ -100,6 +112,9 @@ export function useAlertSettings() {
             asset_manipulation_enabled: updatedSettings.asset_manipulation_enabled,
             asset_manipulation_window_days: updatedSettings.asset_manipulation_window_days,
             asset_manipulation_threshold: updatedSettings.asset_manipulation_threshold,
+            individual_asset_tracking_enabled: updatedSettings.individual_asset_tracking_enabled,
+            asset_reappear_suspicious_days: updatedSettings.asset_reappear_suspicious_days,
+            minimum_asset_mw_for_alert: updatedSettings.minimum_asset_mw_for_alert,
           })
           .eq('id', settings.id);
 
@@ -120,6 +135,9 @@ export function useAlertSettings() {
             asset_manipulation_enabled: updatedSettings.asset_manipulation_enabled,
             asset_manipulation_window_days: updatedSettings.asset_manipulation_window_days,
             asset_manipulation_threshold: updatedSettings.asset_manipulation_threshold,
+            individual_asset_tracking_enabled: updatedSettings.individual_asset_tracking_enabled,
+            asset_reappear_suspicious_days: updatedSettings.asset_reappear_suspicious_days,
+            minimum_asset_mw_for_alert: updatedSettings.minimum_asset_mw_for_alert,
           })
           .select()
           .single();
