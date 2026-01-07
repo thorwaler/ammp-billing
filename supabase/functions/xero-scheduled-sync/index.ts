@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
       tenantName: string | null;
       synced: number;
       updated: number;
+      verified: number;
       skipped: number;
       success: boolean;
       error?: string;
@@ -127,8 +128,9 @@ Deno.serve(async (req) => {
             'Authorization': `Bearer ${serviceKey}`,
           },
           body: JSON.stringify({ 
-            // Default to last 30 days for scheduled sync
-            fromDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+            // Sync last 90 days + check unpaid invoices beyond that
+            fromDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+            checkUnpaidInvoices: true
           }),
         });
 
@@ -148,17 +150,25 @@ Deno.serve(async (req) => {
           })
           .eq('id', id);
 
-        // Create success notification
+        // Create success notification with accurate counts
+        const hasChanges = (result.syncedCount || 0) > 0 || (result.updatedCount || 0) > 0;
+        const notificationMessage = hasChanges
+          ? `Synced ${result.syncedCount || 0} new, updated ${result.updatedCount || 0}, verified ${result.verifiedCount || 0} invoices.`
+          : `Verified ${result.verifiedCount || 0} invoices, no changes detected.`;
+        
         await supabase.from('notifications').insert({
           user_id,
           type: 'xero_sync_complete',
           title: 'Xero Sync Complete',
-          message: `Successfully synced ${result.syncedCount || 0} invoices, updated ${result.updatedCount || 0}, skipped ${result.skippedCount || 0}.`,
+          message: notificationMessage,
           severity: 'info',
           metadata: { 
             syncedCount: result.syncedCount, 
             updatedCount: result.updatedCount,
+            verifiedCount: result.verifiedCount,
             skippedCount: result.skippedCount,
+            unpaidCheckedCount: result.unpaidCheckedCount,
+            unpaidUpdatedCount: result.unpaidUpdatedCount,
             isManual 
           },
         });
@@ -168,11 +178,12 @@ Deno.serve(async (req) => {
           tenantName: tenant_name,
           synced: result.syncedCount || 0,
           updated: result.updatedCount || 0,
+          verified: result.verifiedCount || 0,
           skipped: result.skippedCount || 0,
           success: true 
         });
 
-        console.log(`[Xero Scheduled Sync] ✓ Connection ${id}: synced ${result.syncedCount}, updated ${result.updatedCount}`);
+        console.log(`[Xero Scheduled Sync] ✓ Connection ${id}: synced ${result.syncedCount}, updated ${result.updatedCount}, verified ${result.verifiedCount}`);
 
       } catch (connError: any) {
         console.error(`[Xero Scheduled Sync] ✗ Connection ${id}:`, connError);
@@ -192,6 +203,7 @@ Deno.serve(async (req) => {
           tenantName: tenant_name,
           synced: 0,
           updated: 0,
+          verified: 0,
           skipped: 0,
           success: false, 
           error: connError.message 

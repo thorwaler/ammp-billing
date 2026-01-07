@@ -150,13 +150,15 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Parse request body for fromDate parameter
+    // Parse request body for parameters
     let fromDate: string | null = null;
+    let checkUnpaidInvoices = false;
     try {
       const body = await req.json();
       fromDate = body?.fromDate || null;
+      checkUnpaidInvoices = body?.checkUnpaidInvoices === true;
     } catch {
-      // No body or invalid JSON, use default (no date filter)
+      // No body or invalid JSON, use defaults
     }
 
     // Get auth header from request
@@ -181,7 +183,7 @@ Deno.serve(async (req) => {
       userId = user.id;
     }
 
-    console.log('Syncing Xero invoices. Service call:', isServiceCall, 'fromDate:', fromDate);
+    console.log('Syncing Xero invoices. Service call:', isServiceCall, 'fromDate:', fromDate, 'checkUnpaidInvoices:', checkUnpaidInvoices);
 
     // Get valid access token (from shared connection)
     const { accessToken, tenantId } = await getValidAccessToken(supabase);
@@ -202,7 +204,7 @@ Deno.serve(async (req) => {
     // For service calls, get all invoices; for user calls, filter by user
     let existingInvoicesQuery = supabase
       .from('invoices')
-      .select('id, xero_invoice_id, source, user_id, xero_status, xero_amount_credited')
+      .select('id, xero_invoice_id, source, user_id, xero_status, xero_amount_credited, invoice_amount')
       .not('xero_invoice_id', 'is', null);
     
     if (!isServiceCall && userId) {
@@ -294,6 +296,7 @@ Deno.serve(async (req) => {
     let syncedCount = 0;
     let updatedCount = 0;
     let skippedCount = 0;
+    let verifiedCount = 0;
 
     for (const xeroInv of xeroInvoices) {
       const xeroInvoiceId = xeroInv.InvoiceID;
@@ -319,32 +322,43 @@ Deno.serve(async (req) => {
       // Check if this is an internal invoice that needs updating
       if (internalInvoiceMap.has(xeroInvoiceId)) {
         const localInvoiceId = internalInvoiceMap.get(xeroInvoiceId)!;
+        const existingInv = existingInvoices?.find(i => i.id === localInvoiceId);
         
-        console.log(`Updating internal invoice ${localInvoiceId} from Xero (${xeroInv.InvoiceNumber})`);
+        // Check if data actually changed before updating
+        const hasChanges = 
+          existingInv?.xero_status !== xeroInv.Status ||
+          existingInv?.invoice_amount !== invoiceTotal ||
+          existingInv?.xero_amount_credited !== amountCredited;
         
-        // Update internal invoice with latest Xero data
-        const { error: updateError } = await supabase
-          .from('invoices')
-          .update({
-            invoice_amount: invoiceTotal,
-            invoice_amount_eur: invoiceAmountEur,
-            xero_status: xeroInv.Status,
-            xero_line_items: lineItems,
-            xero_synced_at: new Date().toISOString(),
-            arr_amount: arrAmount,
-            arr_amount_eur: arrAmountEur,
-            nrr_amount: nrrAmount,
-            nrr_amount_eur: nrrAmountEur,
-            xero_amount_credited: amountCredited,
-            xero_amount_credited_eur: amountCreditedEur,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', localInvoiceId);
+        if (hasChanges) {
+          console.log(`Updating internal invoice ${localInvoiceId} from Xero (${xeroInv.InvoiceNumber}): status ${existingInv?.xero_status} -> ${xeroInv.Status}`);
+          
+          // Update internal invoice with latest Xero data
+          const { error: updateError } = await supabase
+            .from('invoices')
+            .update({
+              invoice_amount: invoiceTotal,
+              invoice_amount_eur: invoiceAmountEur,
+              xero_status: xeroInv.Status,
+              xero_line_items: lineItems,
+              xero_synced_at: new Date().toISOString(),
+              arr_amount: arrAmount,
+              arr_amount_eur: arrAmountEur,
+              nrr_amount: nrrAmount,
+              nrr_amount_eur: nrrAmountEur,
+              xero_amount_credited: amountCredited,
+              xero_amount_credited_eur: amountCreditedEur,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', localInvoiceId);
 
-        if (updateError) {
-          console.error('Error updating internal invoice:', localInvoiceId, updateError);
+          if (updateError) {
+            console.error('Error updating internal invoice:', localInvoiceId, updateError);
+          } else {
+            updatedCount++;
+          }
         } else {
-          updatedCount++;
+          verifiedCount++;
         }
         continue;
       }
@@ -380,8 +394,8 @@ Deno.serve(async (req) => {
               updatedCount++;
             }
           } else {
-            // No changes, just skip silently
-            skippedCount++;
+            // No changes
+            verifiedCount++;
           }
         } else {
           skippedCount++;
@@ -439,14 +453,117 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`Synced ${syncedCount} new, updated ${updatedCount} internal, skipped ${skippedCount} existing`);
+    // Check unpaid invoices from Lovable that are older than the date range
+    let unpaidCheckedCount = 0;
+    let unpaidUpdatedCount = 0;
+    
+    if (checkUnpaidInvoices && fromDate) {
+      console.log('Checking unpaid invoices from Lovable beyond the date range...');
+      
+      // Get invoices marked as unpaid (AUTHORISED) in Lovable that are older than the sync window
+      const { data: unpaidInvoices, error: unpaidError } = await supabase
+        .from('invoices')
+        .select('id, xero_invoice_id, xero_status, invoice_amount, xero_amount_credited')
+        .eq('xero_status', 'AUTHORISED')
+        .not('xero_invoice_id', 'is', null)
+        .lt('billing_period_end', fromDate);
+      
+      if (unpaidError) {
+        console.error('Error fetching unpaid invoices:', unpaidError);
+      } else if (unpaidInvoices && unpaidInvoices.length > 0) {
+        console.log(`Found ${unpaidInvoices.length} unpaid invoices older than ${fromDate}`);
+        
+        // Batch the IDs (Xero has a limit, so we'll do 50 at a time)
+        const batchSize = 50;
+        for (let i = 0; i < unpaidInvoices.length; i += batchSize) {
+          const batch = unpaidInvoices.slice(i, i + batchSize);
+          const xeroIds = batch.map(inv => inv.xero_invoice_id).filter(Boolean);
+          
+          if (xeroIds.length === 0) continue;
+          
+          const idsParam = xeroIds.join(',');
+          const unpaidUrl = `https://api.xero.com/api.xro/2.0/Invoices?IDs=${idsParam}`;
+          
+          console.log(`Fetching batch of ${xeroIds.length} unpaid invoices from Xero...`);
+          
+          const unpaidResponse = await fetch(unpaidUrl, {
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'xero-tenant-id': tenantId,
+              'Accept': 'application/json',
+            },
+          });
+          
+          if (!unpaidResponse.ok) {
+            console.error('Error fetching unpaid invoices from Xero:', await unpaidResponse.text());
+            continue;
+          }
+          
+          const unpaidData = await unpaidResponse.json();
+          const xeroUnpaidInvoices = unpaidData.Invoices || [];
+          
+          // Create a map for quick lookup
+          const xeroDataMap = new Map(xeroUnpaidInvoices.map((inv: any) => [inv.InvoiceID, inv]));
+          
+          // Check each local unpaid invoice against Xero
+          for (const localInv of batch) {
+            unpaidCheckedCount++;
+            const xeroInv: any = xeroDataMap.get(localInv.xero_invoice_id);
+            
+            if (!xeroInv) {
+              console.log(`Invoice ${localInv.id} not found in Xero response`);
+              continue;
+            }
+            
+            const amountCredited = xeroInv.AmountCredited || 0;
+            const currencyCode = xeroInv.CurrencyCode || 'EUR';
+            const currencyRate = xeroInv.CurrencyRate || null;
+            const amountCreditedEur = convertToEUR(amountCredited, currencyCode, currencyRate);
+            
+            // Check if status or credited amount changed
+            const statusChanged = localInv.xero_status !== xeroInv.Status;
+            const creditedChanged = localInv.xero_amount_credited !== amountCredited;
+            
+            if (statusChanged || creditedChanged) {
+              console.log(`Updating unpaid invoice ${localInv.id}: status ${localInv.xero_status} -> ${xeroInv.Status}`);
+              
+              const { error: updateError } = await supabase
+                .from('invoices')
+                .update({
+                  xero_status: xeroInv.Status,
+                  xero_synced_at: new Date().toISOString(),
+                  xero_amount_credited: amountCredited,
+                  xero_amount_credited_eur: amountCreditedEur,
+                  updated_at: new Date().toISOString(),
+                })
+                .eq('id', localInv.id);
+              
+              if (!updateError) {
+                unpaidUpdatedCount++;
+              }
+            } else {
+              verifiedCount++;
+            }
+          }
+        }
+        
+        console.log(`Unpaid invoices: checked ${unpaidCheckedCount}, updated ${unpaidUpdatedCount}`);
+      } else {
+        console.log('No unpaid invoices older than the sync window');
+      }
+    }
+
+    console.log(`Synced ${syncedCount} new, updated ${updatedCount} (+ ${unpaidUpdatedCount} unpaid), verified ${verifiedCount}, skipped ${skippedCount}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         syncedCount,
-        updatedCount,
+        updatedCount: updatedCount + unpaidUpdatedCount,
+        verifiedCount,
         skippedCount,
+        unpaidCheckedCount,
+        unpaidUpdatedCount,
         totalInXero: xeroInvoices.length,
       }),
       {
