@@ -1313,28 +1313,39 @@ const ContractDetails = () => {
             </CardHeader>
             <CardContent>
               {/* Summary Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{cachedCapabilities.totalSites || 0}</p>
-                  <p className="text-xs text-muted-foreground">Total Sites</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{cachedCapabilities.totalMW?.toFixed(2) || 0}</p>
-                  <p className="text-xs text-muted-foreground">Total MW</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{cachedCapabilities.assetBreakdown?.filter((a: any) => !a.isHybrid).length || 0}</p>
-                  <p className="text-xs text-muted-foreground">On-Grid Sites</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{cachedCapabilities.hybridSites || 0}</p>
-                  <p className="text-xs text-muted-foreground">Hybrid Sites</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold">{cachedCapabilities.sitesWithSolcast || 0}</p>
-                  <p className="text-xs text-muted-foreground">With Solcast</p>
-                </div>
-              </div>
+              {(() => {
+                const ongridAssets = cachedCapabilities.assetBreakdown?.filter((a: any) => !a.isHybrid) || [];
+                const hybridAssets = cachedCapabilities.assetBreakdown?.filter((a: any) => a.isHybrid) || [];
+                const solcastAssets = cachedCapabilities.assetBreakdown?.filter((a: any) => a.hasSolcast) || [];
+                const ongridMW = ongridAssets.reduce((sum: number, a: any) => sum + (a.totalMW || 0), 0);
+                const hybridMW = hybridAssets.reduce((sum: number, a: any) => sum + (a.totalMW || 0), 0);
+                const solcastMW = solcastAssets.reduce((sum: number, a: any) => sum + (a.totalMW || 0), 0);
+                
+                return (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 p-3 bg-muted/50 rounded-lg">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold">{cachedCapabilities.totalSites || 0}</p>
+                      <p className="text-sm font-medium text-muted-foreground">{cachedCapabilities.totalMW?.toFixed(2) || 0} MW</p>
+                      <p className="text-xs text-muted-foreground">Total</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold">{ongridAssets.length}</p>
+                      <p className="text-sm font-medium text-muted-foreground">{ongridMW.toFixed(2)} MW</p>
+                      <p className="text-xs text-muted-foreground">On-Grid</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold">{hybridAssets.length}</p>
+                      <p className="text-sm font-medium text-muted-foreground">{hybridMW.toFixed(2)} MW</p>
+                      <p className="text-xs text-muted-foreground">Hybrid</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold">{solcastAssets.length}</p>
+                      <p className="text-sm font-medium text-muted-foreground">{solcastMW.toFixed(2)} MW</p>
+                      <p className="text-xs text-muted-foreground">With Solcast</p>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Device Enrichment Alert */}
               {cachedCapabilities.needsDeviceEnrichment && (
