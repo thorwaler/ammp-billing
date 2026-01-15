@@ -12,6 +12,9 @@ expression = "0 2 * * *"
 [functions.ammp-sync-contract]
 verify_jwt = true
 
+[functions.ammp-device-enrichment]
+verify_jwt = true
+
 [functions.xero-oauth-init]
 verify_jwt = true
 
