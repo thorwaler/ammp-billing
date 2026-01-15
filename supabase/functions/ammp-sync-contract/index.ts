@@ -67,6 +67,7 @@ interface SyncResult {
   totalExpected: number;
   previouslySynced: number;
   newlySynced: number;
+  previousSyncStatus: 'synced' | 'partial' | null;
 }
 
 /**
@@ -516,7 +517,8 @@ async function processContractSync(
     timedOut, 
     totalExpected,
     previouslySynced: existingCapabilities.length,
-    newlySynced: newCapabilities.length
+    newlySynced: newCapabilities.length,
+    previousSyncStatus: existingSyncStatus,
   };
 }
 
@@ -850,7 +852,7 @@ Deno.serve(async (req) => {
     
     // Process the contract
     const syncResult = await processContractSync(supabase, contract, token, allAssets);
-    const { cachedCapabilities, syncStatus, timedOut, totalExpected, previouslySynced, newlySynced } = syncResult;
+    const { cachedCapabilities, syncStatus, timedOut, totalExpected, previouslySynced, newlySynced, previousSyncStatus } = syncResult;
 
     // Update the contract with cached capabilities and sync status
     const { error: updateError } = await supabase
@@ -868,18 +870,25 @@ Deno.serve(async (req) => {
     }
 
     // Detect and record asset status changes (appeared, disappeared, reappeared)
-    const assetChanges = await detectAssetChanges(
-      supabase,
-      contractId,
-      contract.customer_id,
-      effectiveUserId,
-      cachedCapabilities.assetBreakdown.map((a: any) => ({
-        assetId: a.assetId,
-        assetName: a.assetName,
-        totalMW: a.totalMW,
-      })),
-      previousCached
-    );
+    // Only run if previous sync was complete - skip when resuming partial syncs to avoid false alerts
+    let assetChanges = { disappeared: 0, appeared: 0, reappeared: 0 };
+    
+    if (previousSyncStatus !== 'partial') {
+      assetChanges = await detectAssetChanges(
+        supabase,
+        contractId,
+        contract.customer_id,
+        effectiveUserId,
+        cachedCapabilities.assetBreakdown.map((a: any) => ({
+          assetId: a.assetId,
+          assetName: a.assetName,
+          totalMW: a.totalMW,
+        })),
+        previousCached
+      );
+    } else {
+      console.log(`[Asset Change Detection] Skipping - previous sync was partial, no reliable baseline`);
+    }
 
     // Populate site billing status for per_site contracts
     await populateSiteBillingStatus(
