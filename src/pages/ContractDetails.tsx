@@ -1402,12 +1402,22 @@ const ContractDetails = () => {
                 <span className="text-sm text-muted-foreground">
                   {cachedCapabilities.assetBreakdown.length} assets
                   {(() => {
-                    const assetsWithNoDevices = cachedCapabilities.assetBreakdown.filter(
-                      (a: any) => !a.devices || a.devices.length === 0
+                    const confirmedEmptyAssets = cachedCapabilities.assetBreakdown.filter(
+                      (a: any) => a.deviceEnrichmentConfirmedEmpty
                     ).length;
-                    return assetsWithNoDevices > 0 ? (
-                      <span className="text-amber-600 ml-1">({assetsWithNoDevices} missing devices)</span>
-                    ) : null;
+                    const trulyMissingAssets = cachedCapabilities.assetBreakdown.filter(
+                      (a: any) => (!a.devices || a.devices.length === 0) && !a.deviceEnrichmentConfirmedEmpty
+                    ).length;
+                    return (
+                      <>
+                        {trulyMissingAssets > 0 && (
+                          <span className="text-amber-600 ml-1">({trulyMissingAssets} pending device data)</span>
+                        )}
+                        {confirmedEmptyAssets > 0 && (
+                          <span className="text-muted-foreground ml-1">({confirmedEmptyAssets} have no devices in AMMP)</span>
+                        )}
+                      </>
+                    );
                   })()}
                 </span>
                 <div className="flex items-center gap-2">
@@ -1416,8 +1426,8 @@ const ContractDetails = () => {
                       Device data pending
                     </span>
                   )}
-                  {/* Force Refetch button - shows when there are assets with no devices */}
-                  {cachedCapabilities.assetBreakdown.some((a: any) => !a.devices || a.devices.length === 0) && (
+                  {/* Force Refetch button - shows when there are assets with no devices that aren't confirmed empty */}
+                  {cachedCapabilities.assetBreakdown.some((a: any) => (!a.devices || a.devices.length === 0) && !a.deviceEnrichmentConfirmedEmpty) && (
                     <Button 
                       variant="outline" 
                       size="sm" 
