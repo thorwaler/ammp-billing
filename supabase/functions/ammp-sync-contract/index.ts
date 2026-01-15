@@ -23,6 +23,7 @@ interface AssetCapabilities {
   hasBattery: boolean;
   hasGenset: boolean;
   hasHybridEMS: boolean;
+  hasHybridMeter: boolean;
   onboardingDate?: string | null;
   solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
   deviceCount: number;
@@ -80,6 +81,7 @@ function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'
     hasBattery: stored.isHybrid, // Stored as isHybrid
     hasGenset: false,
     hasHybridEMS: false,
+    hasHybridMeter: false,
     onboardingDate: stored.onboardingDate,
     solcastOnboardingDate: stored.solcastOnboardingDate,
     deviceCount: stored.deviceCount,
@@ -174,6 +176,18 @@ function calculateCapabilities(
     d.device_type === 'ems' && d.device_name?.toLowerCase().includes('hybrid')
   );
   
+  // Detect hybrid via meter names (genset/battery meters)
+  const hasHybridMeter = devices.some(d => {
+    if (d.device_type !== 'meter') return false;
+    const name = (d.device_name || '').toLowerCase();
+    return name.includes('gen') || 
+           name.includes('genset') || 
+           name.includes('generator') ||
+           name.includes('battery') || 
+           name.includes('batt') || 
+           name.includes('bess');
+  });
+  
   // Use cached date first, then asset.created
   const onboardingDate = cachedOnboardingDate || asset.created || null;
   
@@ -189,6 +203,7 @@ function calculateCapabilities(
     hasBattery,
     hasGenset,
     hasHybridEMS,
+    hasHybridMeter,
     onboardingDate,
     solcastOnboardingDate,
     deviceCount: devices.length,
@@ -424,6 +439,7 @@ async function processContractSync(
           hasBattery: false,
           hasGenset: false,
           hasHybridEMS: false,
+          hasHybridMeter: false,
           onboardingDate: cachedDates[member.asset_id] || null,
           solcastOnboardingDate: cachedSolcastDates[member.asset_id] || null,
           deviceCount: 0,
@@ -467,7 +483,7 @@ async function processContractSync(
       assetName: c.assetName,
       totalMW: c.totalMW,
       capacityKWp: c.capacityKWp,
-      isHybrid: c.hasBattery || c.hasGenset || c.hasHybridEMS,
+      isHybrid: c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter,
       hasSolcast: c.hasSolcast,
       deviceCount: c.deviceCount,
       onboardingDate: c.onboardingDate,
