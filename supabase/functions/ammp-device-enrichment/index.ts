@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceKey);
     
-    const { contractId, batchSize = 50 } = await req.json();
+    const { contractId, batchSize = 50, forceRecalculate = false } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
       );
     }
     
-    console.log(`[AMMP Device Enrichment] Starting for contract: ${contractId}, batchSize: ${batchSize}`);
+    console.log(`[AMMP Device Enrichment] Starting for contract: ${contractId}, batchSize: ${batchSize}, forceRecalculate: ${forceRecalculate}`);
     
     // Fetch contract data
     const { data: contract, error: contractError } = await supabase
@@ -210,6 +210,72 @@ Deno.serve(async (req) => {
           error: 'No asset breakdown found. Run a full sync first.' 
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    // If forceRecalculate is true, recalculate hybrid status from existing device data
+    if (forceRecalculate) {
+      console.log('[AMMP Device Enrichment] Force recalculating hybrid status from existing devices');
+      
+      const updatedBreakdown = cachedCapabilities.assetBreakdown.map(asset => {
+        // Only recalculate if we have device data
+        if (!asset.devices || asset.devices.length === 0) {
+          return asset;
+        }
+        
+        // Convert DeviceInfo back to device format for calculation
+        const devices = asset.devices.map(d => ({
+          device_id: d.deviceId,
+          device_name: d.deviceName,
+          device_type: d.deviceType,
+          device_metadata: {
+            manufacturer: d.manufacturer,
+            model: d.model,
+            data_provider: d.dataProvider,
+          }
+        }));
+        
+        // Recalculate using updated detection logic
+        return calculateCapabilitiesFromDevices(asset, devices);
+      });
+      
+      // Recalculate aggregates
+      const ongridSites = updatedBreakdown.filter(a => !a.isHybrid);
+      const hybridSites = updatedBreakdown.filter(a => a.isHybrid);
+      
+      const updatedCapabilities: CachedCapabilities = {
+        ...cachedCapabilities,
+        ongridMW: ongridSites.reduce((sum, a) => sum + a.totalMW, 0),
+        hybridMW: hybridSites.reduce((sum, a) => sum + a.totalMW, 0),
+        ongridSites: ongridSites.length,
+        hybridSites: hybridSites.length,
+        assetBreakdown: updatedBreakdown,
+        lastDeviceEnrichment: new Date().toISOString(),
+      };
+      
+      const { error: updateError } = await supabase
+        .from('contracts')
+        .update({ cached_capabilities: updatedCapabilities })
+        .eq('id', contractId);
+      
+      if (updateError) {
+        throw new Error(`Failed to update contract: ${updateError.message}`);
+      }
+      
+      console.log(`[AMMP Device Enrichment] Recalculated: ${hybridSites.length} hybrid, ${ongridSites.length} ongrid`);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Recalculated hybrid status from existing device data',
+          hybridSites: hybridSites.length,
+          ongridSites: ongridSites.length,
+          hybridMW: updatedCapabilities.hybridMW,
+          ongridMW: updatedCapabilities.ongridMW,
+          sitesWithSolcast: updatedBreakdown.filter(a => a.hasSolcast).length,
+          complete: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
