@@ -347,7 +347,8 @@ async function processContractSync(
       timedOut: false,
       totalExpected: 0,
       previouslySynced: 0,
-      newlySynced: 0
+      newlySynced: 0,
+      previousSyncStatus: existingSyncStatus,
     };
   }
   
@@ -371,7 +372,8 @@ async function processContractSync(
       timedOut: false,
       totalExpected: 0,
       previouslySynced: 0,
-      newlySynced: 0
+      newlySynced: 0,
+      previousSyncStatus: existingSyncStatus,
     };
   }
   
