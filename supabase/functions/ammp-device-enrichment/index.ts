@@ -25,6 +25,7 @@ interface AssetBreakdown {
   onboardingDate: string | null;
   solcastOnboardingDate: string | null;
   devices: DeviceInfo[];
+  deviceEnrichmentAttempted?: boolean;
 }
 
 interface CachedCapabilities {
@@ -142,6 +143,7 @@ function calculateCapabilitiesFromDevices(
     isHybrid: assetBreakdown.isHybrid || isHybrid,
     deviceCount: devices.length,
     devices: deviceInfoList,
+    deviceEnrichmentAttempted: true,
   };
 }
 
@@ -196,9 +198,9 @@ Deno.serve(async (req) => {
       );
     }
     
-    // Find assets that need device enrichment (deviceCount === 0)
+    // Find assets that need device enrichment (not yet attempted AND no devices)
     const assetsNeedingEnrichment = cachedCapabilities.assetBreakdown.filter(
-      (a) => a.deviceCount === 0 || !a.devices || a.devices.length === 0
+      (a) => !a.deviceEnrichmentAttempted && (a.deviceCount === 0 || !a.devices || a.devices.length === 0)
     );
     
     if (assetsNeedingEnrichment.length === 0) {
@@ -303,7 +305,7 @@ Deno.serve(async (req) => {
     const hybridSites = updatedBreakdown.filter(a => a.isHybrid);
     
     const remaining = updatedBreakdown.filter(
-      a => a.deviceCount === 0 || !a.devices || a.devices.length === 0
+      a => !a.deviceEnrichmentAttempted && (a.deviceCount === 0 || !a.devices || a.devices.length === 0)
     ).length;
     
     const updatedCapabilities: CachedCapabilities = {
