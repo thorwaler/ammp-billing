@@ -135,7 +135,19 @@ function calculateCapabilitiesFromDevices(
     (d.device_type === 'controller' && d.device_metadata?.controller_type === 'hybrid')
   );
   
-  const isHybrid = hasBattery || hasGenset || hasHybridEMS;
+  // Detect hybrid via meter names (genset/battery meters)
+  const hasHybridMeter = devices.some((d: any) => {
+    if (d.device_type !== 'meter') return false;
+    const name = (d.device_name || '').toLowerCase();
+    return name.includes('gen') || 
+           name.includes('genset') || 
+           name.includes('generator') ||
+           name.includes('battery') || 
+           name.includes('batt') || 
+           name.includes('bess');
+  });
+  
+  const isHybrid = hasBattery || hasGenset || hasHybridEMS || hasHybridMeter;
   
   return {
     ...assetBreakdown,
