@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceKey);
     
-    const { contractId, batchSize = 50, forceRecalculate = false } = await req.json();
+    const { contractId, batchSize = 50, forceRecalculate = false, forceRefetch = false } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
       );
     }
     
-    console.log(`[AMMP Device Enrichment] Starting for contract: ${contractId}, batchSize: ${batchSize}, forceRecalculate: ${forceRecalculate}`);
+    console.log(`[AMMP Device Enrichment] Starting for contract: ${contractId}, batchSize: ${batchSize}, forceRecalculate: ${forceRecalculate}, forceRefetch: ${forceRefetch}`);
     
     // Fetch contract data
     const { data: contract, error: contractError } = await supabase
@@ -279,10 +279,19 @@ Deno.serve(async (req) => {
       );
     }
     
-    // Find assets that need device enrichment (not yet attempted AND no devices)
-    const assetsNeedingEnrichment = cachedCapabilities.assetBreakdown.filter(
+    // Find assets that need device enrichment
+    let assetsNeedingEnrichment = cachedCapabilities.assetBreakdown.filter(
       (a) => !a.deviceEnrichmentAttempted && (a.deviceCount === 0 || !a.devices || a.devices.length === 0)
     );
+    
+    // If forceRefetch, include assets that have deviceEnrichmentAttempted but still have no devices
+    if (forceRefetch) {
+      console.log('[AMMP Device Enrichment] Force refetch enabled - including assets with no devices');
+      assetsNeedingEnrichment = cachedCapabilities.assetBreakdown.filter(
+        (a) => a.deviceCount === 0 || !a.devices || a.devices.length === 0
+      );
+      console.log(`[AMMP Device Enrichment] Found ${assetsNeedingEnrichment.length} assets with no devices to refetch`);
+    }
     
     if (assetsNeedingEnrichment.length === 0) {
       console.log('[AMMP Device Enrichment] All assets already have device data');

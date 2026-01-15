@@ -302,13 +302,13 @@ const ContractDetails = () => {
     return pricing?.[assetId];
   };
 
-  const handleEnrichDevices = async (forceRecalculate = false) => {
+  const handleEnrichDevices = async (forceRecalculate = false, forceRefetch = false) => {
     if (!contract) return;
     
     setIsEnrichingDevices(true);
     try {
       const { data, error } = await supabase.functions.invoke('ammp-device-enrichment', {
-        body: { contractId: contract.id, batchSize: 50, forceRecalculate }
+        body: { contractId: contract.id, batchSize: 50, forceRecalculate, forceRefetch }
       });
       
       if (error) throw error;
@@ -318,6 +318,13 @@ const ContractDetails = () => {
           toast({
             title: "Hybrid status recalculated",
             description: `Found ${data.hybridSites} hybrid sites (${data.hybridMW?.toFixed(2)} MW), ${data.ongridSites} ongrid sites (${data.ongridMW?.toFixed(2)} MW).`,
+          });
+        } else if (forceRefetch) {
+          toast({
+            title: "Device data refetched",
+            description: data.complete 
+              ? `Refetched all assets. Found ${data.sitesWithSolcast} Solcast sites, ${data.hybridSites} hybrid sites.`
+              : `Refetched ${data.enriched} assets. ${data.remaining} remaining - click again to continue.`,
           });
         } else {
           toast({
@@ -333,7 +340,7 @@ const ContractDetails = () => {
       }
     } catch (error: any) {
       toast({
-        title: forceRecalculate ? "Recalculation failed" : "Enrichment failed",
+        title: forceRecalculate ? "Recalculation failed" : forceRefetch ? "Refetch failed" : "Enrichment failed",
         description: error.message,
         variant: "destructive",
       });
@@ -1394,6 +1401,14 @@ const ContractDetails = () => {
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">
                   {cachedCapabilities.assetBreakdown.length} assets
+                  {(() => {
+                    const assetsWithNoDevices = cachedCapabilities.assetBreakdown.filter(
+                      (a: any) => !a.devices || a.devices.length === 0
+                    ).length;
+                    return assetsWithNoDevices > 0 ? (
+                      <span className="text-amber-600 ml-1">({assetsWithNoDevices} missing devices)</span>
+                    ) : null;
+                  })()}
                 </span>
                 <div className="flex items-center gap-2">
                   {cachedCapabilities.needsDeviceEnrichment && !isEnrichingDevices && (
@@ -1401,11 +1416,28 @@ const ContractDetails = () => {
                       Device data pending
                     </span>
                   )}
+                  {/* Force Refetch button - shows when there are assets with no devices */}
+                  {cachedCapabilities.assetBreakdown.some((a: any) => !a.devices || a.devices.length === 0) && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => handleEnrichDevices(false, true)}
+                      disabled={isEnrichingDevices}
+                      className="text-xs border-amber-300 text-amber-700 hover:bg-amber-100"
+                    >
+                      {isEnrichingDevices ? (
+                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <Zap className="h-3 w-3 mr-1" />
+                      )}
+                      Force Refetch Devices
+                    </Button>
+                  )}
                   {!cachedCapabilities.needsDeviceEnrichment && (
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      onClick={() => handleEnrichDevices(true)}
+                      onClick={() => handleEnrichDevices(true, false)}
                       disabled={isEnrichingDevices}
                       className="text-xs"
                     >
