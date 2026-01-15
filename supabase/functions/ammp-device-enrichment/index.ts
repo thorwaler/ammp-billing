@@ -123,10 +123,13 @@ function calculateCapabilitiesFromDevices(
     d.device_type === 'bess'
   );
   
+  // Genset detection - includes genset_control which indicates hybrid systems
   const hasGenset = devices.some((d: any) => 
     d.device_type === 'genset' || 
+    d.device_type === 'genset_control' ||
     d.device_type === 'generator' ||
-    d.device_type === 'diesel_generator'
+    d.device_type === 'diesel_generator' ||
+    d.device_type === 'fuel_sensor'
   );
   
   const hasHybridEMS = devices.some((d: any) => 

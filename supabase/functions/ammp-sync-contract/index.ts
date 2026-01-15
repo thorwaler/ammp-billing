@@ -168,9 +168,13 @@ function calculateCapabilities(
     d.device_type === 'battery_system' || d.device_type === 'battery_inverter'
   );
   
-  // Genset detection
+  // Genset detection - includes genset_control which indicates hybrid systems
   const hasGenset = devices.some(d => 
-    d.device_type === 'fuel_sensor' || d.device_type === 'genset'
+    d.device_type === 'fuel_sensor' || 
+    d.device_type === 'genset' ||
+    d.device_type === 'genset_control' ||
+    d.device_type === 'generator' ||
+    d.device_type === 'diesel_generator'
   );
   
   // Correct Hybrid EMS detection: device_type === 'ems' AND name contains 'hybrid'
