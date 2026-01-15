@@ -26,6 +26,7 @@ interface AssetBreakdown {
   solcastOnboardingDate: string | null;
   devices: DeviceInfo[];
   deviceEnrichmentAttempted?: boolean;
+  deviceEnrichmentConfirmedEmpty?: boolean; // True when AMMP confirmed no devices exist
 }
 
 interface CachedCapabilities {
@@ -152,6 +153,9 @@ function calculateCapabilitiesFromDevices(
   
   const isHybrid = hasBattery || hasGenset || hasHybridEMS || hasHybridMeter;
   
+  // Mark if AMMP confirmed this asset has no devices
+  const confirmedEmpty = devices.length === 0;
+  
   return {
     ...assetBreakdown,
     hasSolcast: assetBreakdown.hasSolcast || hasSolcast,
@@ -159,6 +163,7 @@ function calculateCapabilitiesFromDevices(
     deviceCount: devices.length,
     devices: deviceInfoList,
     deviceEnrichmentAttempted: true,
+    deviceEnrichmentConfirmedEmpty: confirmedEmpty,
   };
 }
 
@@ -284,13 +289,14 @@ Deno.serve(async (req) => {
       (a) => !a.deviceEnrichmentAttempted && (a.deviceCount === 0 || !a.devices || a.devices.length === 0)
     );
     
-    // If forceRefetch, include assets that have deviceEnrichmentAttempted but still have no devices
+    // If forceRefetch, include assets that have no devices BUT exclude those confirmed empty by AMMP
     if (forceRefetch) {
-      console.log('[AMMP Device Enrichment] Force refetch enabled - including assets with no devices');
+      console.log('[AMMP Device Enrichment] Force refetch enabled - including assets with no devices (excluding confirmed empty)');
       assetsNeedingEnrichment = cachedCapabilities.assetBreakdown.filter(
-        (a) => a.deviceCount === 0 || !a.devices || a.devices.length === 0
+        (a) => (a.deviceCount === 0 || !a.devices || a.devices.length === 0) && !a.deviceEnrichmentConfirmedEmpty
       );
-      console.log(`[AMMP Device Enrichment] Found ${assetsNeedingEnrichment.length} assets with no devices to refetch`);
+      const confirmedEmptyCount = cachedCapabilities.assetBreakdown.filter((a) => a.deviceEnrichmentConfirmedEmpty).length;
+      console.log(`[AMMP Device Enrichment] Found ${assetsNeedingEnrichment.length} assets to refetch (${confirmedEmptyCount} confirmed empty, skipped)`);
     }
     
     if (assetsNeedingEnrichment.length === 0) {
