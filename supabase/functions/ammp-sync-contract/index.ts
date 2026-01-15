@@ -50,6 +50,12 @@ interface CachedCapabilities {
     devices: DeviceInfo[];
   }>;
   lastSynced: string;
+  needsDeviceEnrichment?: boolean;
+  lastDeviceEnrichment?: string;
+  deviceEnrichmentProgress?: {
+    processed: number;
+    total: number;
+  };
 }
 
 interface SyncResult {
@@ -469,6 +475,8 @@ async function processContractSync(
       devices: c.devices,
     })),
     lastSynced: new Date().toISOString(),
+    // Flag for device enrichment if we skipped device fetching due to large portfolio
+    needsDeviceEnrichment: skipDevices,
   };
   
   // Determine if sync is complete

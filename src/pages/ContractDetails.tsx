@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
@@ -66,6 +67,7 @@ const ContractDetails = () => {
   const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [discountEditAsset, setDiscountEditAsset] = useState<any | null>(null);
+  const [isEnrichingDevices, setIsEnrichingDevices] = useState(false);
 
   // All contracts now use contract-level sync via cached_capabilities
   const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
@@ -298,6 +300,39 @@ const ContractDetails = () => {
   const getAssetDiscount = (assetId: string) => {
     const pricing = contract?.custom_asset_pricing as CustomAssetPricing | undefined;
     return pricing?.[assetId];
+  };
+
+  const handleEnrichDevices = async () => {
+    if (!contract) return;
+    
+    setIsEnrichingDevices(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ammp-device-enrichment', {
+        body: { contractId: contract.id, batchSize: 50 }
+      });
+      
+      if (error) throw error;
+      
+      if (data.success) {
+        toast({
+          title: "Device data enriched",
+          description: data.complete 
+            ? `All assets now have device data. Found ${data.sitesWithSolcast} Solcast sites, ${data.hybridSites} hybrid sites.`
+            : `Enriched ${data.enriched} assets. ${data.remaining} remaining - click again to continue.`,
+        });
+        loadContractData();
+      } else {
+        throw new Error(data.error || 'Enrichment failed');
+      }
+    } catch (error: any) {
+      toast({
+        title: "Enrichment failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsEnrichingDevices(false);
+    }
   };
 
   if (loading) {
@@ -1301,18 +1336,61 @@ const ContractDetails = () => {
                 </div>
               </div>
 
+              {/* Device Enrichment Alert */}
+              {cachedCapabilities.needsDeviceEnrichment && (
+                <Alert className="mb-4 border-amber-200 bg-amber-50 dark:bg-amber-950/20">
+                  <AlertCircle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="flex items-center justify-between">
+                    <span className="text-amber-800 dark:text-amber-200">
+                      Device data was skipped for this large portfolio ({cachedCapabilities.totalSites} sites). 
+                      {cachedCapabilities.deviceEnrichmentProgress && (
+                        <span className="ml-1">
+                          Progress: {cachedCapabilities.deviceEnrichmentProgress.processed}/{cachedCapabilities.deviceEnrichmentProgress.total} enriched.
+                        </span>
+                      )}
+                    </span>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleEnrichDevices}
+                      disabled={isEnrichingDevices}
+                      className="ml-2 border-amber-300 text-amber-700 hover:bg-amber-100"
+                    >
+                      {isEnrichingDevices ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                          Enriching...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="h-4 w-4 mr-1" />
+                          Fetch Device Data
+                        </>
+                      )}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Asset Table Controls */}
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm text-muted-foreground">
                   {cachedCapabilities.assetBreakdown.length} assets
                 </span>
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={() => setShowAllAssets(!showAllAssets)}
-                >
-                  {showAllAssets ? 'Collapse' : 'Show All'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {cachedCapabilities.needsDeviceEnrichment && !isEnrichingDevices && (
+                    <span className="text-xs text-amber-600">
+                      Device data pending
+                    </span>
+                  )}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setShowAllAssets(!showAllAssets)}
+                  >
+                    {showAllAssets ? 'Collapse' : 'Show All'}
+                  </Button>
+                </div>
               </div>
 
               {/* Asset Table */}
