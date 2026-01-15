@@ -49,6 +49,7 @@ interface CachedCapabilities {
     onboardingDate?: string | null;
     solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
     devices: DeviceInfo[];
+    deviceEnrichmentAttempted?: boolean;
   }>;
   lastSynced: string;
   needsDeviceEnrichment?: boolean;
@@ -478,21 +479,29 @@ async function processContractSync(
     ongridSites: ongridSites.length,
     hybridSites: hybridSites.length,
     sitesWithSolcast: finalCapabilities.filter(c => c.hasSolcast).length,
-    assetBreakdown: finalCapabilities.map(c => ({
-      assetId: c.assetId,
-      assetName: c.assetName,
-      totalMW: c.totalMW,
-      capacityKWp: c.capacityKWp,
-      isHybrid: c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter,
-      hasSolcast: c.hasSolcast,
-      deviceCount: c.deviceCount,
-      onboardingDate: c.onboardingDate,
-      solcastOnboardingDate: c.solcastOnboardingDate,
-      devices: c.devices,
-    })),
+    assetBreakdown: finalCapabilities.map(c => {
+      // Preserve deviceEnrichmentAttempted flag from existing cached data
+      const existingAsset = existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId);
+      return {
+        assetId: c.assetId,
+        assetName: c.assetName,
+        totalMW: c.totalMW,
+        capacityKWp: c.capacityKWp,
+        isHybrid: c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter,
+        hasSolcast: c.hasSolcast,
+        deviceCount: c.deviceCount,
+        onboardingDate: c.onboardingDate,
+        solcastOnboardingDate: c.solcastOnboardingDate,
+        devices: c.devices,
+        deviceEnrichmentAttempted: existingAsset?.deviceEnrichmentAttempted || false,
+      };
+    }),
     lastSynced: new Date().toISOString(),
-    // Flag for device enrichment if we skipped device fetching due to large portfolio
-    needsDeviceEnrichment: skipDevices,
+    // Flag for device enrichment if:
+    // 1. This is a large portfolio (>200 assets total), OR
+    // 2. We have assets without devices that haven't been enrichment-attempted
+    needsDeviceEnrichment: totalExpected > 200 || 
+      finalCapabilities.some(c => c.deviceCount === 0 && !existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId)?.deviceEnrichmentAttempted),
   };
   
   // Determine if sync is complete
