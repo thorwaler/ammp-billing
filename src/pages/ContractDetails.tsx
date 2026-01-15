@@ -302,31 +302,38 @@ const ContractDetails = () => {
     return pricing?.[assetId];
   };
 
-  const handleEnrichDevices = async () => {
+  const handleEnrichDevices = async (forceRecalculate = false) => {
     if (!contract) return;
     
     setIsEnrichingDevices(true);
     try {
       const { data, error } = await supabase.functions.invoke('ammp-device-enrichment', {
-        body: { contractId: contract.id, batchSize: 50 }
+        body: { contractId: contract.id, batchSize: 50, forceRecalculate }
       });
       
       if (error) throw error;
       
       if (data.success) {
-        toast({
-          title: "Device data enriched",
-          description: data.complete 
-            ? `All assets now have device data. Found ${data.sitesWithSolcast} Solcast sites, ${data.hybridSites} hybrid sites.`
-            : `Enriched ${data.enriched} assets. ${data.remaining} remaining - click again to continue.`,
-        });
+        if (forceRecalculate) {
+          toast({
+            title: "Hybrid status recalculated",
+            description: `Found ${data.hybridSites} hybrid sites (${data.hybridMW?.toFixed(2)} MW), ${data.ongridSites} ongrid sites (${data.ongridMW?.toFixed(2)} MW).`,
+          });
+        } else {
+          toast({
+            title: "Device data enriched",
+            description: data.complete 
+              ? `All assets now have device data. Found ${data.sitesWithSolcast} Solcast sites, ${data.hybridSites} hybrid sites.`
+              : `Enriched ${data.enriched} assets. ${data.remaining} remaining - click again to continue.`,
+          });
+        }
         loadContractData();
       } else {
         throw new Error(data.error || 'Enrichment failed');
       }
     } catch (error: any) {
       toast({
-        title: "Enrichment failed",
+        title: forceRecalculate ? "Recalculation failed" : "Enrichment failed",
         description: error.message,
         variant: "destructive",
       });
@@ -1363,7 +1370,7 @@ const ContractDetails = () => {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      onClick={handleEnrichDevices}
+                      onClick={() => handleEnrichDevices(false)}
                       disabled={isEnrichingDevices}
                       className="ml-2 border-amber-300 text-amber-700 hover:bg-amber-100"
                     >
@@ -1393,6 +1400,22 @@ const ContractDetails = () => {
                     <span className="text-xs text-amber-600">
                       Device data pending
                     </span>
+                  )}
+                  {!cachedCapabilities.needsDeviceEnrichment && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleEnrichDevices(true)}
+                      disabled={isEnrichingDevices}
+                      className="text-xs"
+                    >
+                      {isEnrichingDevices ? (
+                        <RefreshCw className="h-3 w-3 mr-1 animate-spin" />
+                      ) : (
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                      )}
+                      Recalculate Hybrid Status
+                    </Button>
                   )}
                   <Button 
                     variant="ghost" 
