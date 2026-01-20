@@ -400,6 +400,54 @@ export function UpcomingInvoicesList({
     }
   };
 
+  const handleSkipSelected = async (contracts: any[]) => {
+    try {
+      // Find full invoice data for all contracts
+      const fullInvoices = contracts.map(c => 
+        invoices.find(i => i.contractId === c.contractId)
+      ).filter(Boolean) as UpcomingInvoice[];
+
+      if (fullInvoices.length === 0) return;
+
+      // Build update promises for each contract
+      const updates = fullInvoices.map(invoice => {
+        const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+        return supabase
+          .from('contracts')
+          .update({
+            next_invoice_date: nextDate.toISOString(),
+            period_start: invoice.nextInvoiceDate,
+            period_end: nextDate.toISOString(),
+          })
+          .eq('id', invoice.contractId);
+      });
+
+      // Execute all updates in parallel
+      const results = await Promise.all(updates);
+      
+      // Check for errors
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        throw new Error(`Failed to skip ${errors.length} contract(s)`);
+      }
+
+      toast({
+        title: "Invoices skipped",
+        description: `${fullInvoices.length} contract(s) moved to next billing period`,
+      });
+
+      // Refresh the list
+      loadUpcomingInvoices();
+    } catch (error) {
+      console.error('Error skipping invoices:', error);
+      toast({
+        title: "Error",
+        description: "Failed to skip some invoices. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleMarkAsSent = async (contract: any) => {
     try {
       const invoice = invoices.find(i => i.contractId === contract.contractId);
@@ -517,6 +565,7 @@ export function UpcomingInvoicesList({
             onCreateIndividualInvoice={handleCreateIndividualInvoice}
             onCreateMergedInvoice={handleCreateMergedInvoice}
             onSkipInvoice={handleSkipInvoice}
+            onSkipSelected={handleSkipSelected}
             onMarkAsSent={handleMarkAsSent}
           />
         </div>
