@@ -29,6 +29,7 @@ interface CustomerInvoiceGroupProps {
   onCreateIndividualInvoice: (contract: ContractInvoice) => void;
   onCreateMergedInvoice: (contracts: ContractInvoice[]) => void;
   onSkipInvoice: (contract: ContractInvoice) => void;
+  onSkipSelected: (contracts: ContractInvoice[]) => void;
   onMarkAsSent: (contract: ContractInvoice) => void;
 }
 
@@ -39,6 +40,7 @@ export function CustomerInvoiceGroup({
   onCreateIndividualInvoice,
   onCreateMergedInvoice,
   onSkipInvoice,
+  onSkipSelected,
   onMarkAsSent,
 }: CustomerInvoiceGroupProps) {
   const [selectedContracts, setSelectedContracts] = useState<Set<string>>(new Set());
@@ -71,6 +73,17 @@ export function CustomerInvoiceGroup({
       ? contracts.filter(c => selectedContracts.has(c.contractId))
       : contracts;
     onCreateMergedInvoice(contractsToMerge);
+  };
+  
+  const handleSkipSelected = () => {
+    // If no contracts selected, skip all non-automated contracts
+    const contractsToSkip = selectedContracts.size > 0
+      ? contracts.filter(c => selectedContracts.has(c.contractId) && c.invoicingType !== 'automated')
+      : contracts.filter(c => c.invoicingType !== 'automated');
+    
+    if (contractsToSkip.length > 0) {
+      onSkipSelected(contractsToSkip);
+    }
   };
   
   const selectedAmount = useMemo(() => {
@@ -242,10 +255,10 @@ export function CustomerInvoiceGroup({
       </div>
       
       {/* Merged invoice footer */}
-      <div className="px-4 py-3 border-t bg-muted/20">
+      <div className="px-4 py-3 border-t bg-muted/20 flex gap-2">
         <Button 
           onClick={handleMergedInvoice} 
-          className="w-full" 
+          className="flex-1" 
           size="sm"
         >
           <Layers className="h-4 w-4 mr-2" />
@@ -254,6 +267,15 @@ export function CustomerInvoiceGroup({
             ? ` (${selectedContracts.size} selected)`
             : ` (${currencySymbol}${selectedAmount.toLocaleString()})`
           }
+        </Button>
+        <Button 
+          onClick={handleSkipSelected}
+          size="sm"
+          variant="outline"
+          title="Skip selected contracts to next period"
+        >
+          <SkipForward className="h-4 w-4 mr-2" />
+          Skip {selectedContracts.size > 0 ? `(${selectedContracts.size})` : 'All'}
         </Button>
       </div>
     </Card>
