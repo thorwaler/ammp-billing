@@ -4,6 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar, FileText, Layers, SkipForward, CheckCircle } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { differenceInDays } from "date-fns";
 import { parseDateCET, formatDateCET } from "@/lib/dateUtils";
@@ -44,6 +54,8 @@ export function CustomerInvoiceGroup({
   onMarkAsSent,
 }: CustomerInvoiceGroupProps) {
   const [selectedContracts, setSelectedContracts] = useState<Set<string>>(new Set());
+  const [skipDialogOpen, setSkipDialogOpen] = useState(false);
+  const [contractsToSkip, setContractsToSkip] = useState<ContractInvoice[]>([]);
   const { formatCurrency } = useCurrency();
   
   const parsedDate = parseDateCET(invoiceDate);
@@ -76,14 +88,22 @@ export function CustomerInvoiceGroup({
   };
   
   const handleSkipSelected = () => {
-    // If no contracts selected, skip all non-automated contracts
-    const contractsToSkip = selectedContracts.size > 0
+    // Determine which contracts to skip
+    const toSkip = selectedContracts.size > 0
       ? contracts.filter(c => selectedContracts.has(c.contractId) && c.invoicingType !== 'automated')
       : contracts.filter(c => c.invoicingType !== 'automated');
     
-    if (contractsToSkip.length > 0) {
-      onSkipSelected(contractsToSkip);
+    if (toSkip.length > 0) {
+      setContractsToSkip(toSkip);
+      setSkipDialogOpen(true);
     }
+  };
+
+  const confirmSkip = () => {
+    onSkipSelected(contractsToSkip);
+    setSkipDialogOpen(false);
+    setContractsToSkip([]);
+    setSelectedContracts(new Set());
   };
   
   const selectedAmount = useMemo(() => {
@@ -278,6 +298,35 @@ export function CustomerInvoiceGroup({
           Skip {selectedContracts.size > 0 ? `(${selectedContracts.size})` : 'All'}
         </Button>
       </div>
+
+      {/* Skip Confirmation Dialog */}
+      <AlertDialog open={skipDialogOpen} onOpenChange={setSkipDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Skip {contractsToSkip.length} Invoice{contractsToSkip.length !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
+                <p>
+                  This will advance the following contract{contractsToSkip.length !== 1 ? 's' : ''} to their next billing period without creating invoices:
+                </p>
+                <ul className="list-disc list-inside text-sm space-y-1 mt-2">
+                  {contractsToSkip.map(c => (
+                    <li key={c.contractId}>
+                      {c.contractName || c.packageType} ({c.billingFrequency})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSkip}>
+              Skip {contractsToSkip.length} Invoice{contractsToSkip.length !== 1 ? 's' : ''}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 }
