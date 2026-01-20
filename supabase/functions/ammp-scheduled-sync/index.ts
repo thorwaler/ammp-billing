@@ -123,6 +123,7 @@ interface SyncableContract {
   company_name: string;
   ammp_org_id: string | null;
   ammp_asset_group_id: string | null;
+  ammp_sync_status?: string;
 }
 
 /**
@@ -334,6 +335,7 @@ Deno.serve(async (req) => {
           company_name, 
           ammp_org_id,
           ammp_asset_group_id,
+          ammp_sync_status,
           customers!inner (
             id,
             ammp_org_id
@@ -354,11 +356,20 @@ Deno.serve(async (req) => {
           company_name: c.company_name,
           ammp_org_id: c.ammp_org_id || c.customers?.[0]?.ammp_org_id || null,
           ammp_asset_group_id: c.ammp_asset_group_id,
+          ammp_sync_status: c.ammp_sync_status,
         }));
 
-      console.log(`[AMMP Scheduled Sync] Found ${syncableContracts.length} syncable contracts for background processing`);
+      // Sort contracts to prioritize partial syncs first
+      const sortedContracts = [...syncableContracts].sort((a, b) => {
+        const aPartial = a.ammp_sync_status === 'partial' ? 0 : 1;
+        const bPartial = b.ammp_sync_status === 'partial' ? 0 : 1;
+        return aPartial - bPartial;
+      });
 
-      if (syncableContracts.length === 0) {
+      const partialCount = sortedContracts.filter(c => c.ammp_sync_status === 'partial').length;
+      console.log(`[AMMP Scheduled Sync] Found ${sortedContracts.length} syncable contracts (${partialCount} partial syncs prioritized)`);
+
+      if (sortedContracts.length === 0) {
         return new Response(
           JSON.stringify({ 
             success: true, 
@@ -370,9 +381,9 @@ Deno.serve(async (req) => {
         );
       }
 
-      // Start background processing
+      // Start background processing with prioritized contracts
       EdgeRuntime.waitUntil(
-        processContractsInBackground(supabase, connection, syncableContracts, isManual)
+        processContractsInBackground(supabase, connection, sortedContracts, isManual)
       );
 
       // Return immediately with background processing acknowledgment
@@ -380,8 +391,9 @@ Deno.serve(async (req) => {
         JSON.stringify({
           success: true,
           backgroundProcessing: true,
-          totalContracts: syncableContracts.length,
-          message: `Sync started for ${syncableContracts.length} contracts. You'll receive notifications as each contract completes.`,
+          totalContracts: sortedContracts.length,
+          partialSyncsQueued: partialCount,
+          message: `Sync started for ${sortedContracts.length} contracts (${partialCount} partial syncs prioritized). You'll receive notifications as each contract completes.`,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -416,6 +428,7 @@ Deno.serve(async (req) => {
             company_name, 
             ammp_org_id,
             ammp_asset_group_id,
+            ammp_sync_status,
             customers!inner (
               id,
               ammp_org_id
@@ -436,14 +449,23 @@ Deno.serve(async (req) => {
             company_name: c.company_name,
             ammp_org_id: c.ammp_org_id || c.customers?.[0]?.ammp_org_id || null,
             ammp_asset_group_id: c.ammp_asset_group_id,
+            ammp_sync_status: c.ammp_sync_status,
           }));
 
-        console.log(`[AMMP Scheduled Sync] Found ${syncableContracts.length} syncable contracts`);
+        // Sort contracts to prioritize partial syncs first
+        const sortedContracts = [...syncableContracts].sort((a, b) => {
+          const aPartial = a.ammp_sync_status === 'partial' ? 0 : 1;
+          const bPartial = b.ammp_sync_status === 'partial' ? 0 : 1;
+          return aPartial - bPartial;
+        });
+
+        const partialCount = sortedContracts.filter(c => c.ammp_sync_status === 'partial').length;
+        console.log(`[AMMP Scheduled Sync] Found ${sortedContracts.length} syncable contracts (${partialCount} partial syncs prioritized)`);
 
         // Process in background for scheduled syncs too
-        await processContractsInBackground(supabase, connection, syncableContracts, false);
+        await processContractsInBackground(supabase, connection, sortedContracts, false);
 
-        results.push({ userId: user_id, contractsProcessed: syncableContracts.length, totalAssets: 0, success: true });
+        results.push({ userId: user_id, contractsProcessed: sortedContracts.length, totalAssets: 0, success: true });
 
       } catch (userError: any) {
         console.error(`[AMMP Scheduled Sync] Error for user ${user_id}:`, userError);

@@ -87,7 +87,7 @@ const Reports = () => {
   
   // Filter state
   const [filters, setFilters] = useState<ReportFilters>({});
-  const [customers, setCustomers] = useState<{ id: string; name: string; nickname?: string | null }[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string; nickname?: string | null; status?: string }[]>([]);
 
   // Fetch customers for filter dropdown
   const fetchCustomers = useCallback(async () => {
@@ -95,7 +95,7 @@ const Reports = () => {
     
     const { data } = await supabase
       .from('customers')
-      .select('id, name, nickname')
+      .select('id, name, nickname, status')
       .order('name');
     
     setCustomers(data || []);
@@ -111,7 +111,8 @@ const Reports = () => {
       };
 
       // Default date range for ARR/NRR totals if no filter
-      const startDate = filters.startDate || new Date(new Date().getFullYear(), 0, 1);
+      // Use 2020 to capture all historical data when "All Time" is selected
+      const startDate = filters.startDate || new Date(2020, 0, 1);
       const endDate = filters.endDate || new Date();
 
       const [mwGrowth, customerGrowth, customerMWp, customerRevenue, projected, actual, arrNrr, arrTotal, nrrTotal, customerARR, totalContractARR] = await Promise.all([
@@ -198,13 +199,23 @@ const Reports = () => {
   const handleExportData = async () => {
     setIsExporting(true);
     try {
+      // Filter to only active customers for export
+      const activeCustomerIds = customers
+        .filter(c => c.status === 'active')
+        .map(c => c.id);
+      
+      // Use active customers for export (respecting any existing customer filter)
+      const exportCustomerIds = filters.customerIds && filters.customerIds.length > 0
+        ? filters.customerIds.filter(id => activeCustomerIds.includes(id))
+        : activeCustomerIds;
+
       const analyticsFilters: AnalyticsFilters = {
         startDate: filters.startDate,
         endDate: filters.endDate,
-        customerIds: filters.customerIds,
+        customerIds: exportCustomerIds.length > 0 ? exportCustomerIds : undefined,
       };
 
-      // Fetch all customer data (no limit) for export
+      // Fetch all customer data (no limit) for export - filtered to active customers
       const [fullCustomerRevenue, fullCustomerARR] = await Promise.all([
         getRevenueByCustomer(undefined, analyticsFilters),
         getARRByCustomer(undefined, analyticsFilters),

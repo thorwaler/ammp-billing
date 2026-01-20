@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { format, subDays, subMonths, subYears, startOfYear } from "date-fns";
 import { CalendarIcon, Filter, X, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -39,15 +39,15 @@ interface ReportsFiltersProps {
   isLoading?: boolean;
 }
 
-type TimePreset = "all" | "30d" | "90d" | "6m" | "1y" | "ytd" | "custom";
+type TimePreset = "all" | "30d" | "90d" | "6m" | "12m" | "ytd" | "custom";
 
 const TIME_PRESETS: { value: TimePreset; label: string }[] = [
-  { value: "all", label: "All Time" },
+  { value: "12m", label: "Last 12 Months" },
   { value: "30d", label: "Last 30 Days" },
   { value: "90d", label: "Last 90 Days" },
   { value: "6m", label: "Last 6 Months" },
-  { value: "1y", label: "Last Year" },
   { value: "ytd", label: "Year to Date" },
+  { value: "all", label: "All Time" },
   { value: "custom", label: "Custom Range" },
 ];
 
@@ -57,11 +57,25 @@ export function ReportsFilters({
   onFiltersChange,
   isLoading,
 }: ReportsFiltersProps) {
-  const [timePreset, setTimePreset] = useState<TimePreset>("all");
+  const [timePreset, setTimePreset] = useState<TimePreset>("12m");
   const [customStartOpen, setCustomStartOpen] = useState(false);
   const [customEndOpen, setCustomEndOpen] = useState(false);
   const [customerDropdownOpen, setCustomerDropdownOpen] = useState(false);
   const [customerSearchQuery, setCustomerSearchQuery] = useState("");
+  const [hasInitialized, setHasInitialized] = useState(false);
+
+  // Apply default "Last 12 Months" filter on mount
+  useEffect(() => {
+    if (!hasInitialized) {
+      const now = new Date();
+      onFiltersChange({
+        ...filters,
+        startDate: subYears(now, 1),
+        endDate: now,
+      });
+      setHasInitialized(true);
+    }
+  }, [hasInitialized]);
 
   const filteredCustomers = customers.filter((customer) => {
     const displayName = customer.nickname || customer.name;
@@ -76,8 +90,8 @@ export function ReportsFilters({
 
     switch (preset) {
       case "all":
-        startDate = undefined;
-        endDate = undefined;
+        startDate = new Date(2020, 0, 1); // Use 2020 to capture all historical data
+        endDate = now;
         break;
       case "30d":
         startDate = subDays(now, 30);
@@ -88,7 +102,7 @@ export function ReportsFilters({
       case "6m":
         startDate = subMonths(now, 6);
         break;
-      case "1y":
+      case "12m":
         startDate = subYears(now, 1);
         break;
       case "ytd":
@@ -317,19 +331,20 @@ export function ReportsFilters({
         </PopoverContent>
       </Popover>
 
-      {/* Clear All Filters */}
-      {(filters.startDate || filters.endDate || filters.customerIds) && (
+      {/* Clear All Filters - resets to Last 12 Months */}
+      {(filters.customerIds && filters.customerIds.length > 0) && (
         <Button
           variant="ghost"
           size="sm"
           onClick={() => {
-            setTimePreset("all");
-            onFiltersChange({});
+            setTimePreset("12m");
+            const now = new Date();
+            onFiltersChange({ startDate: subYears(now, 1), endDate: now });
           }}
           disabled={isLoading}
         >
           <X className="h-4 w-4 mr-1" />
-          Clear All
+          Clear Customers
         </Button>
       )}
     </div>
