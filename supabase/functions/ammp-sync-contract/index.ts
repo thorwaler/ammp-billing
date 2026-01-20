@@ -1,5 +1,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
+// Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
+declare const EdgeRuntime: {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -267,7 +272,8 @@ async function processContractSync(
   supabase: any,
   contract: any,
   token: string,
-  allAssets: any[]
+  allAssets: any[],
+  assetLookup: Map<string, any> // Pre-built lookup map from bulk /assets response
 ): Promise<SyncResult> {
   const packageType = contract.package;
   const contractId = contract.id;
@@ -411,8 +417,14 @@ async function processContractSync(
     
     const batchPromises = batch.map(async (member) => {
       try {
-        // Fetch full asset details including total_pv_power
-        const assetData = await fetchAMMPData(token, `/assets/${member.asset_id}`);
+        // Use pre-fetched asset data from bulk /assets call (OPTIMIZATION: no per-asset API call)
+        // This eliminates ~757 redundant API calls for large portfolios like Daybreak
+        const assetData = assetLookup.get(member.asset_id) || { 
+          asset_id: member.asset_id, 
+          asset_name: member.asset_name,
+          total_pv_power: 0,
+          created: null 
+        };
         
         // Fetch devices for capability detection (skip for large syncs)
         let devices: any[] = [];
@@ -426,7 +438,7 @@ async function processContractSync(
           }
         }
         
-        // Use cached onboarding date if available, otherwise use asset.created
+        // Use cached onboarding date if available, otherwise use asset.created from bulk response
         const cachedDate = cachedDates[member.asset_id] || assetData.created || null;
         const cachedSolcastDate = cachedSolcastDates[member.asset_id] || null;
         
@@ -852,12 +864,15 @@ Deno.serve(async (req) => {
     // Fetch all assets (we'll filter by group/org in processContractSync)
     const allAssets = await fetchAMMPData(token, '/assets');
     console.log(`[AMMP Sync Contract] Fetched ${allAssets.length} total assets`);
+    
+    // Build lookup map for O(1) asset access - eliminates redundant per-asset API calls
+    const assetLookup = new Map<string, any>(allAssets.map((a: any) => [a.asset_id as string, a]));
 
     // Store previous cached capabilities for change detection
     const previousCached = contract.cached_capabilities as CachedCapabilities | null;
     
-    // Process the contract
-    const syncResult = await processContractSync(supabase, contract, token, allAssets);
+    // Process the contract with the pre-built lookup map
+    const syncResult = await processContractSync(supabase, contract, token, allAssets, assetLookup);
     const { cachedCapabilities, syncStatus, timedOut, totalExpected, previouslySynced, newlySynced, previousSyncStatus } = syncResult;
 
     // Update the contract with cached capabilities and sync status
@@ -924,25 +939,168 @@ Deno.serve(async (req) => {
 
     console.log(`[AMMP Sync Contract] Successfully synced contract ${contractId} (status: ${syncStatus})`);
 
+    const responseData = { 
+      success: true,
+      contractId,
+      totalSites: cachedCapabilities.totalSites,
+      totalMW: cachedCapabilities.totalMW,
+      lastSynced: cachedCapabilities.lastSynced,
+      syncStatus,
+      timedOut,
+      totalExpected,
+      previouslySynced,
+      newlySynced,
+      assetChanges,
+      message: timedOut 
+        ? `Partial sync: ${cachedCapabilities.totalSites}/${totalExpected} assets (${newlySynced} new this run)`
+        : previouslySynced > 0 
+          ? `Sync complete: resumed from ${previouslySynced} existing assets, added ${newlySynced} new`
+          : undefined
+    };
+
+    // AUTO-CONTINUATION: If sync is partial, continue in background until complete
+    if (syncStatus === 'partial' && typeof EdgeRuntime !== 'undefined') {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      
+      EdgeRuntime.waitUntil((async () => {
+        const MAX_CONTINUATION_ATTEMPTS = 5;
+        let attempt = 0;
+        let currentStatus: string = 'partial';
+        
+        console.log(`[AMMP Sync Contract] Starting auto-continuation for ${contractId} (${cachedCapabilities.totalSites}/${totalExpected} synced)`);
+        
+        while (currentStatus === 'partial' && attempt < MAX_CONTINUATION_ATTEMPTS) {
+          attempt++;
+          console.log(`[AMMP Sync Contract] Auto-continuation attempt ${attempt}/${MAX_CONTINUATION_ATTEMPTS}`);
+          
+          // Brief pause between attempts (API rate limiting)
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          try {
+            // Re-invoke sync (will resume from cached state)
+            const result = await fetch(`${supabaseUrl}/functions/v1/ammp-sync-contract`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${serviceKey}`,
+              },
+              body: JSON.stringify({ contractId, apiKey, userId: effectiveUserId }),
+            });
+            
+            const data = await result.json();
+            currentStatus = data.syncStatus || 'synced';
+            
+            console.log(`[AMMP Sync Contract] Continuation ${attempt}: status=${currentStatus}, sites=${data.totalSites}/${data.totalExpected}`);
+            
+            if (currentStatus === 'synced') {
+              console.log(`[AMMP Sync Contract] Auto-continuation complete after ${attempt} attempt(s)`);
+              
+              // Create completion notification
+              await supabase.from('notifications').insert({
+                user_id: effectiveUserId,
+                contract_id: contractId,
+                type: 'ammp_sync_complete',
+                title: 'Large Sync Complete',
+                message: `Contract fully synced after ${attempt} continuation(s): ${data.totalSites} sites, ${data.totalMW?.toFixed(2)} MW`,
+                severity: 'info',
+                metadata: { 
+                  contractId, 
+                  totalSites: data.totalSites, 
+                  totalMW: data.totalMW,
+                  continuationAttempts: attempt,
+                },
+              });
+              
+              // AUTO-RUN DEVICE ENRICHMENT after sync completes
+              console.log(`[AMMP Sync Contract] Starting auto device enrichment for ${contractId}`);
+              
+              let enrichmentComplete = false;
+              let enrichAttempt = 0;
+              const MAX_ENRICHMENT_ATTEMPTS = 15; // 15 batches × 50 assets = 750 assets
+              
+              while (!enrichmentComplete && enrichAttempt < MAX_ENRICHMENT_ATTEMPTS) {
+                enrichAttempt++;
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                try {
+                  const enrichResult = await fetch(`${supabaseUrl}/functions/v1/ammp-device-enrichment`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${serviceKey}`,
+                    },
+                    body: JSON.stringify({ contractId, batchSize: 50 }),
+                  });
+                  
+                  const enrichData = await enrichResult.json();
+                  enrichmentComplete = enrichData.complete === true;
+                  
+                  console.log(`[AMMP Sync Contract] Enrichment batch ${enrichAttempt}: ${enrichData.enriched || 0} processed, complete=${enrichmentComplete}`);
+                } catch (enrichError) {
+                  console.error(`[AMMP Sync Contract] Enrichment batch ${enrichAttempt} failed:`, enrichError);
+                  break;
+                }
+              }
+              
+              if (enrichmentComplete) {
+                console.log(`[AMMP Sync Contract] Device enrichment complete for ${contractId}`);
+              }
+            }
+          } catch (contError) {
+            console.error(`[AMMP Sync Contract] Continuation ${attempt} failed:`, contError);
+            break;
+          }
+        }
+        
+        if (currentStatus === 'partial') {
+          console.warn(`[AMMP Sync Contract] Auto-continuation stopped after ${MAX_CONTINUATION_ATTEMPTS} attempts, status still partial`);
+        }
+      })());
+    } else if (syncStatus === 'synced' && cachedCapabilities.needsDeviceEnrichment && typeof EdgeRuntime !== 'undefined') {
+      // If sync completed but needs device enrichment, run it in background
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      
+      EdgeRuntime.waitUntil((async () => {
+        console.log(`[AMMP Sync Contract] Starting background device enrichment for ${contractId}`);
+        
+        let enrichmentComplete = false;
+        let enrichAttempt = 0;
+        const MAX_ENRICHMENT_ATTEMPTS = 15;
+        
+        while (!enrichmentComplete && enrichAttempt < MAX_ENRICHMENT_ATTEMPTS) {
+          enrichAttempt++;
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          try {
+            const enrichResult = await fetch(`${supabaseUrl}/functions/v1/ammp-device-enrichment`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${serviceKey}`,
+              },
+              body: JSON.stringify({ contractId, batchSize: 50 }),
+            });
+            
+            const enrichData = await enrichResult.json();
+            enrichmentComplete = enrichData.complete === true;
+            
+            console.log(`[AMMP Sync Contract] Enrichment batch ${enrichAttempt}: ${enrichData.enriched || 0} processed, complete=${enrichmentComplete}`);
+          } catch (enrichError) {
+            console.error(`[AMMP Sync Contract] Enrichment batch ${enrichAttempt} failed:`, enrichError);
+            break;
+          }
+        }
+        
+        if (enrichmentComplete) {
+          console.log(`[AMMP Sync Contract] Device enrichment complete for ${contractId}`);
+        }
+      })());
+    }
+
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        contractId,
-        totalSites: cachedCapabilities.totalSites,
-        totalMW: cachedCapabilities.totalMW,
-        lastSynced: cachedCapabilities.lastSynced,
-        syncStatus,
-        timedOut,
-        totalExpected,
-        previouslySynced,
-        newlySynced,
-        assetChanges,
-        message: timedOut 
-          ? `Partial sync: ${cachedCapabilities.totalSites}/${totalExpected} assets (${newlySynced} new this run)`
-          : previouslySynced > 0 
-            ? `Sync complete: resumed from ${previouslySynced} existing assets, added ${newlySynced} new`
-            : undefined
-      }),
+      JSON.stringify(responseData),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 

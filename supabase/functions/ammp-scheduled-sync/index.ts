@@ -153,9 +153,41 @@ async function processContractsInBackground(
     // Process batch in parallel
     const batchResults = await Promise.allSettled(
       batch.map(async (contract) => {
-        const result = await syncContract(contract.id, api_key, user_id);
+        let result = await syncContract(contract.id, api_key, user_id);
         
         if (result.success) {
+          // AUTO-CONTINUATION: Check if sync was partial and needs continuation
+          const { data: contractStatus } = await supabase
+            .from('contracts')
+            .select('ammp_sync_status')
+            .eq('id', contract.id)
+            .single();
+          
+          if (contractStatus?.ammp_sync_status === 'partial') {
+            console.log(`[AMMP Background Sync] Contract ${contract.company_name} is partial, auto-continuing (up to 3 attempts)`);
+            
+            for (let continuationAttempt = 0; continuationAttempt < 3; continuationAttempt++) {
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              
+              const contResult = await syncContract(contract.id, api_key, user_id);
+              
+              const { data: newStatus } = await supabase
+                .from('contracts')
+                .select('ammp_sync_status')
+                .eq('id', contract.id)
+                .single();
+              
+              if (newStatus?.ammp_sync_status === 'synced') {
+                console.log(`[AMMP Background Sync] Contract ${contract.company_name} completed after ${continuationAttempt + 1} continuation(s)`);
+                // Update result with final values
+                if (contResult.success) {
+                  result = contResult;
+                }
+                break;
+              }
+            }
+          }
+          
           // Create per-contract SUCCESS notification (triggers webhook via database trigger)
           await supabase.from('notifications').insert({
             user_id,
