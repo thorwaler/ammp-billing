@@ -704,6 +704,17 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   // Handle module selection
   const handleModuleSelection = (moduleId: string, checked: boolean) => {
     const currentModules = form.getValues("modules") || [];
+    const currentPackage = form.getValues("package");
+    const isHybridTiered = currentPackage === "hybrid_tiered" || currentPackage === "hybrid_tiered_assetgroups";
+    
+    // Block technicalMonitoring for hybrid tiered packages
+    if (checked && moduleId === "technicalMonitoring" && isHybridTiered) {
+      toast({
+        title: "Technical Monitoring included",
+        description: "Technical Monitoring is included in the hybrid tiered base rate and cannot be selected separately.",
+      });
+      return;
+    }
     
     if (checked) {
       form.setValue("modules", [...currentModules, moduleId]);
