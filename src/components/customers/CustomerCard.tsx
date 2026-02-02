@@ -384,11 +384,11 @@ export function CustomerCard({
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
             <div className="font-medium">{formattedLastInvoiced}</div>
           </div>
-          {(modules.length > 0 || packageType === 'hybrid_tiered') && (
+          {(modules.length > 0 || packageType === 'hybrid_tiered' || packageType === 'hybrid_tiered_assetgroups') && (
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Modules</div>
               <div className="flex flex-wrap gap-1">
-                {packageType === 'hybrid_tiered' ? (
+                {packageType === 'hybrid_tiered' || packageType === 'hybrid_tiered_assetgroups' ? (
                   <>
                     <Badge variant="outline" className="text-xs">
                       Technical Monitoring

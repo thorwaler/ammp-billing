@@ -166,6 +166,7 @@ export type PackageType =
   | "pro" 
   | "custom" 
   | "hybrid_tiered" 
+  | "hybrid_tiered_assetgroups"
   | "capped" 
   | "poc" 
   | "per_site"

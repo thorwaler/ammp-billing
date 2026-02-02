@@ -465,8 +465,8 @@ export function InvoiceCalculator({
         const updatedModules = defaultModules.map(module => {
           let customPrice = customerData.customPricing?.[module.id];
           
-          // For hybrid_tiered pricing, exclude technical monitoring from selection
-          const shouldSelect = customerData.package === 'hybrid_tiered' && module.id === 'technicalMonitoring'
+          // For hybrid_tiered/hybrid_tiered_assetgroups pricing, exclude technical monitoring from selection
+          const shouldSelect = (customerData.package === 'hybrid_tiered' || customerData.package === 'hybrid_tiered_assetgroups') && module.id === 'technicalMonitoring'
             ? false
             : customerData.modules.includes(module.id);
           
@@ -704,7 +704,7 @@ export function InvoiceCalculator({
       
       // Only Technical Monitoring included
       // No module-based charges for Starter package
-    } else if (selectedCustomer.package === 'hybrid_tiered') {
+    } else if (selectedCustomer.package === 'hybrid_tiered' || selectedCustomer.package === 'hybrid_tiered_assetgroups') {
       // Hybrid Tiered package - uses fixed per-MWp rates for ongrid vs hybrid
       const capabilities = selectedCustomer.ammpCapabilities;
       const ongridPrice = selectedCustomer.customPricing?.ongrid_per_mwp || 0;
@@ -1792,7 +1792,7 @@ export function InvoiceCalculator({
                       key={module.id} 
                       className={`border rounded-md p-3 ${
                         (selectedCustomer.package === 'starter' && module.id !== 'technicalMonitoring') ||
-                        (selectedCustomer.package === 'hybrid_tiered' && module.id === 'technicalMonitoring')
+                        ((selectedCustomer.package === 'hybrid_tiered' || selectedCustomer.package === 'hybrid_tiered_assetgroups') && module.id === 'technicalMonitoring')
                           ? 'opacity-60' : ''
                       }`}
                     >
@@ -1803,7 +1803,7 @@ export function InvoiceCalculator({
                           onCheckedChange={() => handleModuleToggle(module.id)}
                           disabled={
                             (selectedCustomer.package === 'starter' && module.id !== 'technicalMonitoring') ||
-                            (selectedCustomer.package === 'hybrid_tiered' && module.id === 'technicalMonitoring')
+                            ((selectedCustomer.package === 'hybrid_tiered' || selectedCustomer.package === 'hybrid_tiered_assetgroups') && module.id === 'technicalMonitoring')
                           }
                         />
                         <Label 

@@ -823,8 +823,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     // Starter package - flat fee
     const minimumValue = minimumAnnualValue || 3000;
     result.starterPackageCost = minimumValue * frequencyMultiplier;
-  } else if (packageType === 'hybrid_tiered') {
-    // Hybrid tiered - special per-MWp rates
+  } else if (packageType === 'hybrid_tiered' || packageType === 'hybrid_tiered_assetgroups') {
+    // Hybrid tiered - special per-MWp rates (asset group filtering happens at sync time)
     const breakdown = calculateHybridTieredBreakdown(params);
     result.hybridTieredBreakdown = breakdown;
     

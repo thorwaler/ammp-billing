@@ -675,7 +675,7 @@ function generateAssetBreakdown(
   
   let baseRatePerMWp = 0;
   
-  if (packageType === 'hybrid_tiered') {
+  if (packageType === 'hybrid_tiered' || packageType === 'hybrid_tiered_assetgroups') {
     const breakdown = calculationResult.hybridTieredBreakdown;
     if (breakdown) {
       baseRatePerMWp = breakdown.ongrid.mw > 0 
@@ -697,7 +697,7 @@ function generateAssetBreakdown(
       const isPV = !isHybrid;
 
       let assetRate = baseRatePerMWp;
-      if (packageType === 'hybrid_tiered' && calculationResult.hybridTieredBreakdown) {
+      if ((packageType === 'hybrid_tiered' || packageType === 'hybrid_tiered_assetgroups') && calculationResult.hybridTieredBreakdown) {
         assetRate = isHybrid 
           ? calculationResult.hybridTieredBreakdown.hybrid.rate 
           : calculationResult.hybridTieredBreakdown.ongrid.rate;
