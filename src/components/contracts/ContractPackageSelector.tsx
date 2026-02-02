@@ -77,10 +77,11 @@ export function ContractPackageSelector({
       <div>
         <Label>Modules</Label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-          {MODULES.map((module) => {
+        {MODULES.map((module) => {
+            const isHybridTiered = selectedPackage === "hybrid_tiered" || selectedPackage === "hybrid_tiered_assetgroups";
             const isDisabled = 
               (selectedPackage === "starter" && module.id !== "technicalMonitoring") ||
-              (selectedPackage === "hybrid_tiered" && module.id === "technicalMonitoring");
+              (isHybridTiered && module.id === "technicalMonitoring");
             
             const isSelected = selectedModules.includes(module.id);
             
