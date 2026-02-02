@@ -66,7 +66,7 @@ const contractFormSchema = z.object({
   contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "hybrid_tiered_assetgroups", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal"]),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -587,7 +587,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       setShowCustomPricing(false);
     } else if (value === "custom") {
       setShowCustomPricing(true);
-    } else if (value === "hybrid_tiered") {
+    } else if (value === "hybrid_tiered" || value === "hybrid_tiered_assetgroups") {
       // Remove technical monitoring from hybrid_tiered packages
       const currentModules = form.getValues("modules") || [];
       const filteredModules = currentModules.filter(id => id !== "technicalMonitoring");
@@ -1007,6 +1007,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="pro">AMMP OS Pro (Per MW pricing, min €5000/year)</SelectItem>
                       <SelectItem value="custom">Custom/Legacy</SelectItem>
                       <SelectItem value="hybrid_tiered">Hybrid Tiered (Different pricing for on-grid vs hybrid sites)</SelectItem>
+                      <SelectItem value="hybrid_tiered_assetgroups">Hybrid Tiered + Asset Groups (Hybrid pricing with asset group filtering)</SelectItem>
                       <SelectItem value="capped">Capped Package (Fixed annual fee with MW cap)</SelectItem>
                       <SelectItem value="poc">POC/Trial (No billing - expiry tracking only)</SelectItem>
                       <SelectItem value="per_site">Per-Site (Fixed fees per site for onboarding + annual subscription)</SelectItem>
@@ -1023,6 +1024,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "AMMP OS Pro: Pricing per MW based on modules chosen, with a minimum of €5,000 per year." :
                       watchPackage === "hybrid_tiered" ? 
                       "Hybrid Tiered: Set different rates for on-grid and hybrid sites (with battery/genset)." :
+                      watchPackage === "hybrid_tiered_assetgroups" ?
+                      "Hybrid Tiered + Asset Groups: Different rates for on-grid and hybrid sites, plus asset group filtering for scoped contracts." :
                       watchPackage === "capped" ?
                       "Capped Package: Fixed fee (pro-rated for selected billing frequency) with optional MW cap alerts." :
                       watchPackage === "poc" ?
@@ -1851,7 +1854,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             )}
             
             {/* Hybrid Tiered Pricing Section */}
-            {watchPackage === "hybrid_tiered" && (
+            {(watchPackage === "hybrid_tiered" || watchPackage === "hybrid_tiered_assetgroups") && (
               <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
                 <h3 className="font-semibold text-sm">Hybrid Tiered Pricing</h3>
                 <p className="text-xs text-muted-foreground">
@@ -2098,7 +2101,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </div>
 
                 {/* Asset Group Selectors - for Elum-style filtering */}
-                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || watchPackage === "elum_internal" || form.watch('ammpAssetGroupId')) && (
+                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || watchPackage === "elum_internal" || watchPackage === "hybrid_tiered_assetgroups" || form.watch('ammpAssetGroupId')) && (
                   <div className="space-y-4 mt-4 pt-4 border-t">
                     <h4 className="text-sm font-medium">Asset Group Filtering</h4>
                     <AssetGroupSelector

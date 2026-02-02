@@ -717,12 +717,14 @@ const ContractDetails = () => {
                       pro: "AMMP OS Pro",
                       custom: "Custom/Legacy",
                       hybrid_tiered: "Hybrid Tiered",
+                      hybrid_tiered_assetgroups: "Hybrid Tiered (Asset Groups)",
                       capped: "Capped Package",
                       poc: "Proof of Concept",
                       per_site: "Per-Site Billing",
                       elum_epm: "Elum ePM",
                       elum_jubaili: "Elum Jubaili",
-                      elum_portfolio_os: "Elum Portfolio OS"
+                      elum_portfolio_os: "Elum Portfolio OS",
+                      elum_internal: "Elum Internal Assets"
                     } as Record<string, string>)[contract.package] || contract.package}
                   </p>
                 </div>
