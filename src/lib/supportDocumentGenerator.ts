@@ -153,6 +153,7 @@ export interface SupportDocumentData {
     retainerCost: number;
     addonsTotal: number;
     discountedAssetsTotal: number;
+    fixedPackageCost: number; // For starter/capped packages with fixed annual fee
   };
 }
 
@@ -391,13 +392,17 @@ export async function generateSupportDocumentData(
     minimumChargesForBreakdown = calculationResult.minimumCharges;
   }
   
+  // Handle starter/capped packages with fixed annual fee
+  const fixedPackageCost = calculationResult.starterPackageCost || 0;
+  
   const calculatedTotal = assetBreakdownPeriodTotal + 
     minimumChargesForBreakdown + 
     minimumContractAdjustment +
     calculationResult.basePricingCost +
     calculationResult.retainerCost +
     discountedAssetsTotal +
-    totalAddonCosts;
+    totalAddonCosts +
+    fixedPackageCost;
   
   const invoiceTotal = calculationResult.totalPrice;
   const totalsMatch = Math.abs(calculatedTotal - invoiceTotal) < 0.01;
@@ -437,7 +442,8 @@ export async function generateSupportDocumentData(
       baseMonthlyPrice: calculationResult.basePricingCost,
       retainerCost: calculationResult.retainerCost,
       addonsTotal: totalAddonCosts,
-      discountedAssetsTotal
+      discountedAssetsTotal,
+      fixedPackageCost
     }
   };
 }
