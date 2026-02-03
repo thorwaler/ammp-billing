@@ -550,6 +550,12 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <span>{formatCurrency(data.calculationBreakdown.addonsTotal)}</span>
               </div>
             )}
+            {data.calculationBreakdown.fixedPackageCost > 0 && (
+              <div className="flex justify-between" style={{ color: '#0891b2' }}>
+                <span>+ Fixed Package Fee:</span>
+                <span>{formatCurrency(data.calculationBreakdown.fixedPackageCost)}</span>
+              </div>
+            )}
             <div className="border-t border-border pt-1 mt-1 flex justify-between font-bold">
               <span>= Support Document Total:</span>
               <span>{formatCurrency(data.calculatedTotal)}</span>
