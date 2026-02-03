@@ -338,7 +338,24 @@ async function processContractSync(
     // Filter by org ID (for regular contracts or elum_portfolio_os with custom org)
     const orgAssets = allAssets.filter((a: any) => a.org_id === orgId);
     assetsToProcess = orgAssets.map((a: any) => ({ asset_id: a.asset_id, asset_name: a.asset_name }));
-    console.log(`[AMMP Sync Contract] Org ${orgId} filtering: ${assetsToProcess.length} assets`);
+    console.log(`[AMMP Sync Contract] Org ${orgId} initial filtering: ${assetsToProcess.length} assets`);
+    
+    // Apply AND filter if configured (intersection with AND group)
+    if (contract.ammp_asset_group_id_and) {
+      const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
+      const andIds = new Set(andMembers.map(m => m.asset_id));
+      assetsToProcess = assetsToProcess.filter(m => andIds.has(m.asset_id));
+      console.log(`[AMMP Sync Contract] AND filter applied: ${assetsToProcess.length} assets remain`);
+    }
+    
+    // Apply NOT filter if configured (exclude assets in NOT group)
+    if (contract.ammp_asset_group_id_not) {
+      const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
+      const notIds = new Set(notMembers.map(m => m.asset_id));
+      const beforeCount = assetsToProcess.length;
+      assetsToProcess = assetsToProcess.filter(m => !notIds.has(m.asset_id));
+      console.log(`[AMMP Sync Contract] NOT filter applied: excluded ${beforeCount - assetsToProcess.length} assets, ${assetsToProcess.length} remain`);
+    }
   } else {
     console.log(`[AMMP Sync Contract] No org ID or asset group for contract ${contractId}`);
     return {
