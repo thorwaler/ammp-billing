@@ -1,106 +1,146 @@
 
-
-## Fix: Exclusion Asset Group Filter Not Working
+## Fix: Pirano Support Document Totals Mismatch
 
 ### Problem Summary
-The BLS Project Management contract has an exclusion filter (`ammp_asset_group_id_not`) set to exclude assets from the "BLS Asset Management" group, but these assets are still appearing in the contract's asset breakdown.
+The Pirano Energy Ltd contract uses the **capped** package (biannual billing, €10,125 annual fee). The support document shows a "Totals Mismatch" error because:
+- Invoice Total: **€5,062.50** (correctly calculated: €10,125 × 0.5 for biannual)
+- Support Document Calculated Total: **€0**
+- Result: **Mismatch** ❌
 
-**Root Cause**: The sync logic in `ammp-sync-contract` only applies AND and NOT filters when a primary asset group is set. When using org-based filtering (no primary group), exclusion filters are completely ignored.
+### Root Cause
+The support document generator (`src/lib/supportDocumentGenerator.ts`) doesn't include the **capped package fixed fee** (`starterPackageCost`) in its calculation breakdown. The validation logic calculates:
 
-### Current Logic (Broken)
+```text
+calculatedTotal = assetBreakdownPeriodTotal + minimumCharges + minimumContractAdjustment + ...
 ```
-if (contract.ammp_asset_group_id) {
-  // Uses primary group + applies AND + NOT filters
-} else if (orgId) {
-  // Gets all org assets - IGNORES AND/NOT filters!
-}
-```
 
-### BLS Project Management Contract Configuration
-- Package: `hybrid_tiered_assetgroups`
-- Primary Group: `null` (not set)
-- Exclusion Group: `d90d6011-e0dc-471b-9bc2-20684df97d4b`
-- Org ID: `b7a27d6b-2010-4538-a9b6-500f61ebb904`
-- Result: All 167 org assets synced, no exclusion applied
-
----
+For capped packages:
+- `assetBreakdownPeriodTotal = 0` (no asset breakdown)
+- `starterPackageCost` is never added to the calculation breakdown
 
 ### Solution
 
-Modify the `ammp-sync-contract` edge function to apply AND and NOT filters even when using org-based filtering (no primary asset group).
+Update the support document generator to handle capped (and starter) packages by including the fixed fee in the calculation breakdown.
 
 ---
 
-### Technical Details
+### Technical Changes
 
-#### File: `supabase/functions/ammp-sync-contract/index.ts`
+#### File: `src/lib/supportDocumentGenerator.ts`
 
-**Current logic (lines 316-341)**:
+**Problem location (lines 359-403)**: The calculation breakdown logic doesn't account for `starterPackageCost`.
+
+**Current logic flow**:
 ```typescript
-if (contract.ammp_asset_group_id) {
-  // Primary group filtering + AND/NOT filters
-  ...
-} else if (orgId) {
-  // Org filtering - NO asset group filters
-  const orgAssets = allAssets.filter((a: any) => a.org_id === orgId);
-  assetsToProcess = orgAssets.map(...);
+let assetBreakdownPeriodTotal: number;
+
+if (siteMinimumPricingSummary) { ... }
+else if (perSiteBreakdown) { ... }
+else if (elumInternalBreakdown) { ... }
+else if (elumJubailiBreakdown) { ... }
+else if (elumEpmBreakdown) { ... }
+else {
+  // Falls here for capped/starter - but assetBreakdownTotal = 0!
+  assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
+}
+
+const calculatedTotal = assetBreakdownPeriodTotal + ...
+// Missing: starterPackageCost!
+```
+
+**Fix**: Add a new field `cappedPackageCost` (or `fixedPackageCost`) to the calculation breakdown and include it in the total.
+
+**Changes needed**:
+
+1. **Add to `SupportDocumentData.calculationBreakdown` interface**:
+   - New field: `fixedPackageCost: number` (represents starter/capped fixed fee)
+
+2. **Update calculation logic**:
+   - For capped/starter packages, set `fixedPackageCost = calculationResult.starterPackageCost`
+   - Include `fixedPackageCost` in `calculatedTotal`
+
+3. **Update UI display** in `SupportDocument.tsx`:
+   - Show "Fixed Package Fee" line item when `fixedPackageCost > 0`
+
+---
+
+### Detailed Code Changes
+
+#### 1. Update Interface (`src/lib/supportDocumentGenerator.ts`)
+
+Add `fixedPackageCost` to `calculationBreakdown`:
+```typescript
+calculationBreakdown: {
+  assetBreakdownPeriod: number;
+  minimumCharges: number;
+  minimumContractAdjustment: number;
+  baseMonthlyPrice: number;
+  retainerCost: number;
+  addonsTotal: number;
+  discountedAssetsTotal: number;
+  fixedPackageCost: number; // NEW: For starter/capped packages
+};
+```
+
+#### 2. Update Calculation Logic
+
+After line ~391, add handling for capped/starter packages:
+```typescript
+// Handle starter/capped packages with fixed annual fee
+let fixedPackageCost = 0;
+if (calculationResult.starterPackageCost > 0) {
+  fixedPackageCost = calculationResult.starterPackageCost;
 }
 ```
 
-**Fixed logic**:
+Update `calculatedTotal` to include it:
 ```typescript
-if (contract.ammp_asset_group_id) {
-  // Primary group filtering
-  const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
-  assetsToProcess = [...primaryMembers];
-  
-  // Apply AND filter
-  if (contract.ammp_asset_group_id_and) {
-    const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
-    const andIds = new Set(andMembers.map(m => m.asset_id));
-    assetsToProcess = assetsToProcess.filter(m => andIds.has(m.asset_id));
-  }
-  
-  // Apply NOT filter
-  if (contract.ammp_asset_group_id_not) {
-    const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
-    const notIds = new Set(notMembers.map(m => m.asset_id));
-    assetsToProcess = assetsToProcess.filter(m => !notIds.has(m.asset_id));
-  }
-} else if (orgId) {
-  // Org-based filtering
-  const orgAssets = allAssets.filter((a: any) => a.org_id === orgId);
-  assetsToProcess = orgAssets.map((a: any) => ({ asset_id: a.asset_id, asset_name: a.asset_name }));
-  
-  // NEW: Apply AND filter for org-based contracts too
-  if (contract.ammp_asset_group_id_and) {
-    const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
-    const andIds = new Set(andMembers.map(m => m.asset_id));
-    assetsToProcess = assetsToProcess.filter(m => andIds.has(m.asset_id));
-    console.log(`[AMMP Sync Contract] AND filter applied: ${assetsToProcess.length} assets remain`);
-  }
-  
-  // NEW: Apply NOT filter for org-based contracts too
-  if (contract.ammp_asset_group_id_not) {
-    const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
-    const notIds = new Set(notMembers.map(m => m.asset_id));
-    assetsToProcess = assetsToProcess.filter(m => !notIds.has(m.asset_id));
-    console.log(`[AMMP Sync Contract] NOT filter applied: ${assetsToProcess.length} assets remain`);
-  }
-  
-  console.log(`[AMMP Sync Contract] Org ${orgId} filtering: ${assetsToProcess.length} assets`);
+const calculatedTotal = assetBreakdownPeriodTotal + 
+  minimumChargesForBreakdown + 
+  minimumContractAdjustment +
+  calculationResult.basePricingCost +
+  calculationResult.retainerCost +
+  discountedAssetsTotal +
+  totalAddonCosts +
+  fixedPackageCost; // NEW
+```
+
+Add to the returned breakdown:
+```typescript
+calculationBreakdown: {
+  assetBreakdownPeriod: assetBreakdownPeriodTotal,
+  minimumCharges: minimumChargesForBreakdown,
+  minimumContractAdjustment,
+  baseMonthlyPrice: calculationResult.basePricingCost,
+  retainerCost: calculationResult.retainerCost,
+  addonsTotal: totalAddonCosts,
+  discountedAssetsTotal,
+  fixedPackageCost // NEW
 }
+```
+
+#### 3. Update UI (`src/components/invoices/SupportDocument.tsx`)
+
+In the calculation breakdown section (around line 509-516), add:
+```tsx
+{data.calculationBreakdown.fixedPackageCost > 0 && (
+  <div className="flex justify-between">
+    <span>Fixed Package Fee:</span>
+    <span>{formatCurrency(data.calculationBreakdown.fixedPackageCost)}</span>
+  </div>
+)}
 ```
 
 ---
 
 ### Expected Result
 
-After implementation:
-1. Deploy the updated edge function
-2. Re-sync the BLS Project Management contract
-3. Assets in the exclusion group (BLS Asset Management) will be filtered out
-4. Asset count should decrease from 167 to the correct filtered count
+After the fix:
+- Pirano support document will show:
+  - **Fixed Package Fee: €5,062.50**
+  - **Support Document Total: €5,062.50**
+  - **Invoice Total: €5,062.50**
+  - **✓ Totals Match** ✅
 
 ---
 
@@ -108,5 +148,16 @@ After implementation:
 
 | File | Change |
 |------|--------|
-| `supabase/functions/ammp-sync-contract/index.ts` | Add AND/NOT filter logic to the org-based filtering branch |
+| `src/lib/supportDocumentGenerator.ts` | Add `fixedPackageCost` to interface and calculation logic |
+| `src/components/invoices/SupportDocument.tsx` | Display fixed package fee in breakdown section |
 
+---
+
+### Validation Checklist
+
+After implementation:
+1. Create/view an invoice for Pirano (capped package)
+2. Open the support document
+3. Verify the "Fixed Package Fee" line item appears with €5,062.50
+4. Verify "Totals Match" shows green checkmark
+5. Test with a starter package contract to ensure same fix applies
