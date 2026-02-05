@@ -1397,7 +1397,29 @@ export function InvoiceCalculator({
               // STEP 6: Upload to SharePoint (non-blocking)
               if (pdfBase64) {
                 try {
-                  const fileName = `${(selectedCustomer.nickname || selectedCustomer.name).replace(/[^a-zA-Z0-9\s]/g, '')}_SupportDoc_${format(invoiceDate, 'yyyy-MM-dd')}.pdf`;
+                  // Helper function to get period label based on billing frequency
+                  const getPeriodLabel = (date: Date, frequency: string): string => {
+                    const month = date.getMonth();
+                    switch (frequency) {
+                      case 'monthly':
+                        return format(date, 'MMM'); // Jan, Feb, Mar, etc.
+                      case 'quarterly':
+                        return `Q${Math.floor(month / 3) + 1}`; // Q1, Q2, Q3, Q4
+                      case 'biannual':
+                        return month < 6 ? 'H1' : 'H2';
+                      case 'annual':
+                      default:
+                        return 'Annual';
+                    }
+                  };
+
+                  // Use contract name if available, otherwise fall back to nickname/customer name
+                  const documentName = (selectedCustomer.contractName || selectedCustomer.nickname || selectedCustomer.name)
+                    .replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+                  const periodLabel = getPeriodLabel(invoiceDate, billingFrequency);
+                  const year = format(invoiceDate, 'yyyy');
+
+                  const fileName = `${documentName} - ${periodLabel} - ${year}.pdf`;
                   const spResult = await uploadToSharePoint(pdfBase64, fileName, 'support_document');
                   
                   if (spResult.success) {
