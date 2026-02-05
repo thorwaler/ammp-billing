@@ -1,146 +1,61 @@
 
-## Fix: Pirano Support Document Totals Mismatch
 
-### Problem Summary
-The Pirano Energy Ltd contract uses the **capped** package (biannual billing, €10,125 annual fee). The support document shows a "Totals Mismatch" error because:
-- Invoice Total: **€5,062.50** (correctly calculated: €10,125 × 0.5 for biannual)
-- Support Document Calculated Total: **€0**
-- Result: **Mismatch** ❌
+## Implement SharePoint Document Naming Convention (Option A)
 
-### Root Cause
-The support document generator (`src/lib/supportDocumentGenerator.ts`) doesn't include the **capped package fixed fee** (`starterPackageCost`) in its calculation breakdown. The validation logic calculates:
-
-```text
-calculatedTotal = assetBreakdownPeriodTotal + minimumCharges + minimumContractAdjustment + ...
+### Overview
+Update the SharePoint support document filename to use a searchable, consistent naming format:
+```
+{ContractName} - {Period} - {Year}.pdf
 ```
 
-For capped packages:
-- `assetBreakdownPeriodTotal = 0` (no asset breakdown)
-- `starterPackageCost` is never added to the calculation breakdown
+### Naming Format Examples
 
-### Solution
-
-Update the support document generator to handle capped (and starter) packages by including the fixed fee in the calculation breakdown.
+| Billing Frequency | Period Format | Example Filename |
+|-------------------|---------------|------------------|
+| Monthly | `Jan`, `Feb`, `Mar`, etc. | `BLS Project Management - Feb - 2025.pdf` |
+| Quarterly | `Q1`, `Q2`, `Q3`, `Q4` | `BLS Project Management - Q1 - 2025.pdf` |
+| Biannual | `H1`, `H2` | `Pirano Energy Ltd - H1 - 2025.pdf` |
+| Annual | `Annual` | `Solar Africa - Annual - 2025.pdf` |
 
 ---
 
 ### Technical Changes
 
-#### File: `src/lib/supportDocumentGenerator.ts`
+#### File: `src/components/dashboard/InvoiceCalculator.tsx`
 
-**Problem location (lines 359-403)**: The calculation breakdown logic doesn't account for `starterPackageCost`.
+**Location**: Line ~1400 (SharePoint upload section)
 
-**Current logic flow**:
+**Current code:**
 ```typescript
-let assetBreakdownPeriodTotal: number;
-
-if (siteMinimumPricingSummary) { ... }
-else if (perSiteBreakdown) { ... }
-else if (elumInternalBreakdown) { ... }
-else if (elumJubailiBreakdown) { ... }
-else if (elumEpmBreakdown) { ... }
-else {
-  // Falls here for capped/starter - but assetBreakdownTotal = 0!
-  assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
-}
-
-const calculatedTotal = assetBreakdownPeriodTotal + ...
-// Missing: starterPackageCost!
+const fileName = `${(selectedCustomer.nickname || selectedCustomer.name).replace(/[^a-zA-Z0-9\s]/g, '')}_SupportDoc_${format(invoiceDate, 'yyyy-MM-dd')}.pdf`;
 ```
 
-**Fix**: Add a new field `cappedPackageCost` (or `fixedPackageCost`) to the calculation breakdown and include it in the total.
-
-**Changes needed**:
-
-1. **Add to `SupportDocumentData.calculationBreakdown` interface**:
-   - New field: `fixedPackageCost: number` (represents starter/capped fixed fee)
-
-2. **Update calculation logic**:
-   - For capped/starter packages, set `fixedPackageCost = calculationResult.starterPackageCost`
-   - Include `fixedPackageCost` in `calculatedTotal`
-
-3. **Update UI display** in `SupportDocument.tsx`:
-   - Show "Fixed Package Fee" line item when `fixedPackageCost > 0`
-
----
-
-### Detailed Code Changes
-
-#### 1. Update Interface (`src/lib/supportDocumentGenerator.ts`)
-
-Add `fixedPackageCost` to `calculationBreakdown`:
+**New code:**
 ```typescript
-calculationBreakdown: {
-  assetBreakdownPeriod: number;
-  minimumCharges: number;
-  minimumContractAdjustment: number;
-  baseMonthlyPrice: number;
-  retainerCost: number;
-  addonsTotal: number;
-  discountedAssetsTotal: number;
-  fixedPackageCost: number; // NEW: For starter/capped packages
+// Helper function to get period label based on billing frequency
+const getPeriodLabel = (date: Date, frequency: string): string => {
+  const month = date.getMonth();
+  switch (frequency) {
+    case 'monthly':
+      return format(date, 'MMM'); // Jan, Feb, Mar, etc.
+    case 'quarterly':
+      return `Q${Math.floor(month / 3) + 1}`; // Q1, Q2, Q3, Q4
+    case 'biannual':
+      return month < 6 ? 'H1' : 'H2';
+    case 'annual':
+    default:
+      return 'Annual';
+  }
 };
+
+// Use contract name if available, otherwise fall back to nickname/customer name
+const documentName = (selectedCustomer.contractName || selectedCustomer.nickname || selectedCustomer.name)
+  .replace(/[^a-zA-Z0-9\s-]/g, '').trim();
+const periodLabel = getPeriodLabel(invoiceDate, billingFrequency);
+const year = format(invoiceDate, 'yyyy');
+
+const fileName = `${documentName} - ${periodLabel} - ${year}.pdf`;
 ```
-
-#### 2. Update Calculation Logic
-
-After line ~391, add handling for capped/starter packages:
-```typescript
-// Handle starter/capped packages with fixed annual fee
-let fixedPackageCost = 0;
-if (calculationResult.starterPackageCost > 0) {
-  fixedPackageCost = calculationResult.starterPackageCost;
-}
-```
-
-Update `calculatedTotal` to include it:
-```typescript
-const calculatedTotal = assetBreakdownPeriodTotal + 
-  minimumChargesForBreakdown + 
-  minimumContractAdjustment +
-  calculationResult.basePricingCost +
-  calculationResult.retainerCost +
-  discountedAssetsTotal +
-  totalAddonCosts +
-  fixedPackageCost; // NEW
-```
-
-Add to the returned breakdown:
-```typescript
-calculationBreakdown: {
-  assetBreakdownPeriod: assetBreakdownPeriodTotal,
-  minimumCharges: minimumChargesForBreakdown,
-  minimumContractAdjustment,
-  baseMonthlyPrice: calculationResult.basePricingCost,
-  retainerCost: calculationResult.retainerCost,
-  addonsTotal: totalAddonCosts,
-  discountedAssetsTotal,
-  fixedPackageCost // NEW
-}
-```
-
-#### 3. Update UI (`src/components/invoices/SupportDocument.tsx`)
-
-In the calculation breakdown section (around line 509-516), add:
-```tsx
-{data.calculationBreakdown.fixedPackageCost > 0 && (
-  <div className="flex justify-between">
-    <span>Fixed Package Fee:</span>
-    <span>{formatCurrency(data.calculationBreakdown.fixedPackageCost)}</span>
-  </div>
-)}
-```
-
----
-
-### Expected Result
-
-After the fix:
-- Pirano support document will show:
-  - **Fixed Package Fee: €5,062.50**
-  - **Support Document Total: €5,062.50**
-  - **Invoice Total: €5,062.50**
-  - **✓ Totals Match** ✅
 
 ---
 
@@ -148,16 +63,14 @@ After the fix:
 
 | File | Change |
 |------|--------|
-| `src/lib/supportDocumentGenerator.ts` | Add `fixedPackageCost` to interface and calculation logic |
-| `src/components/invoices/SupportDocument.tsx` | Display fixed package fee in breakdown section |
+| `src/components/dashboard/InvoiceCalculator.tsx` | Update filename generation logic for SharePoint uploads |
 
 ---
 
-### Validation Checklist
+### Notes
 
-After implementation:
-1. Create/view an invoice for Pirano (capped package)
-2. Open the support document
-3. Verify the "Fixed Package Fee" line item appears with €5,062.50
-4. Verify "Totals Match" shows green checkmark
-5. Test with a starter package contract to ensure same fix applies
+- Uses `contractName` first (most descriptive), then `nickname`, then `name` as fallbacks
+- Sanitizes special characters to ensure valid filenames
+- Period is determined by the invoice date and billing frequency at time of creation
+- If multiple invoices are created for the same period, SharePoint will handle versioning automatically
+
