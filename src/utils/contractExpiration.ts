@@ -69,16 +69,28 @@ export const checkAllContractExpirations = async (userId: string) => {
     // Only process if expired or expiring soon
     if (!result.isExpired && !result.isExpiringSoon) continue;
     
-    // Check if we've already notified recently (last 7 days)
-    const { data: existingNotification } = await supabase
-      .from('notifications')
-      .select('id')
-      .eq('contract_id', contract.id)
-      .in('type', ['contract_expired', 'contract_expiring_soon'])
-      .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-      .limit(1);
-
-    if (existingNotification && existingNotification.length > 0) continue;
+    if (result.isExpired) {
+      // Never send duplicate "contract_expired" notifications
+      const { data: existingExpiredNotification } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('contract_id', contract.id)
+        .eq('type', 'contract_expired')
+        .limit(1);
+      
+      if (existingExpiredNotification && existingExpiredNotification.length > 0) continue;
+    } else {
+      // For expiring soon: check if we already notified in the 30-day window
+      const { data: existingExpiringNotification } = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('contract_id', contract.id)
+        .eq('type', 'contract_expiring_soon')
+        .gte('created_at', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString())
+        .limit(1);
+      
+      if (existingExpiringNotification && existingExpiringNotification.length > 0) continue;
+    }
 
     await createContractExpirationNotification(
       userId,
