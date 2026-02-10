@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Layout from "@/components/layout/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -284,6 +284,54 @@ const Reports = () => {
   // Calculate contract ARR in display currency
   const contractARRDisplay = convertToDisplayCurrency(contractARR.eur, "EUR") + 
     convertToDisplayCurrency(contractARR.usd, "USD");
+
+  // Aggregate monthly MW data into quarters
+  const quarterlyMWData = useMemo(() => {
+    if (!mwGrowthData.length) return [];
+    const quarterMap = new Map<string, { quarter: string; mw: number; cumulativeMW: number }>();
+    const monthToQuarter = (month: string) => {
+      const parts = month.split(' ');
+      const monthName = parts[0];
+      const year = parts[1];
+      const monthIndex = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(monthName);
+      const q = Math.floor(monthIndex / 3) + 1;
+      return `Q${q} ${year}`;
+    };
+    mwGrowthData.forEach(d => {
+      const qKey = monthToQuarter(d.month);
+      const existing = quarterMap.get(qKey);
+      quarterMap.set(qKey, {
+        quarter: qKey,
+        mw: (existing?.mw || 0) + d.mw,
+        cumulativeMW: d.cumulativeMW, // last month in quarter wins
+      });
+    });
+    return Array.from(quarterMap.values());
+  }, [mwGrowthData]);
+
+  // Aggregate monthly ARR/NRR data into quarters
+  const quarterlyRevenueData = useMemo(() => {
+    if (!arrNrrData.length) return [];
+    const quarterMap = new Map<string, { quarter: string; arr: number; nrr: number }>();
+    const monthToQuarter = (month: string) => {
+      const parts = month.split(' ');
+      const monthName = parts[0];
+      const year = parts[1];
+      const monthIndex = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(monthName);
+      const q = Math.floor(monthIndex / 3) + 1;
+      return `Q${q} ${year}`;
+    };
+    arrNrrData.forEach(d => {
+      const qKey = monthToQuarter(d.month);
+      const existing = quarterMap.get(qKey);
+      quarterMap.set(qKey, {
+        quarter: qKey,
+        arr: (existing?.arr || 0) + d.arr,
+        nrr: (existing?.nrr || 0) + d.nrr,
+      });
+    });
+    return Array.from(quarterMap.values());
+  }, [arrNrrData]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -674,6 +722,65 @@ const Reports = () => {
                   </ResponsiveContainer>
                 </div>
               ) : renderEmptyState("Add contracts to see ARR by customer.")}
+            </CardContent>
+          </Card>
+
+          {/* MW by Quarter */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <BarChartIcon className="h-5 w-5 text-ammp-blue" />
+                MW by Quarter
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : quarterlyMWData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={quarterlyMWData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="quarter" />
+                      <YAxis yAxisId="left" />
+                      <YAxis yAxisId="right" orientation="right" />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar yAxisId="left" dataKey="mw" name="MW Added" fill="#1A7D7D" />
+                      <Line yAxisId="right" type="monotone" dataKey="cumulativeMW" name="Cumulative MW" stroke="#0F4C81" strokeWidth={2} dot={{ r: 4 }} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Sync AMMP data to see quarterly MW growth.")}
+            </CardContent>
+          </Card>
+
+          {/* Revenue by Quarter */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-ammp-teal" />
+                Revenue by Quarter
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {isLoading ? (
+                <Skeleton className="h-[300px] w-full" />
+              ) : quarterlyRevenueData.length > 0 ? (
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={quarterlyRevenueData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="quarter" />
+                      <YAxis tickFormatter={(value) => formatCurrency(value)} />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend />
+                      <Bar dataKey="arr" name="ARR (Platform Fees)" stackId="a" fill="#1A7D7D" />
+                      <Bar dataKey="nrr" name="NRR (Implementation)" stackId="a" fill="#F97316" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : renderEmptyState("Create invoices to see quarterly revenue breakdown.")}
             </CardContent>
           </Card>
         </div>
