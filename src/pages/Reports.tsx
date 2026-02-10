@@ -434,7 +434,7 @@ const Reports = () => {
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-ammp-teal" />
-                ARR vs NRR by Month
+                Invoiced ARR vs NRR by Month
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -578,7 +578,7 @@ const Reports = () => {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-xl flex items-center gap-2">
                 <LineChart className="h-5 w-5 text-ammp-blue" />
-                Actual vs Projected Revenue
+                Actual vs Projected Invoiced Revenue
               </CardTitle>
               <div className="flex items-center space-x-2">
                 <Switch
@@ -667,7 +667,7 @@ const Reports = () => {
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-ammp-teal" />
-                Revenue by Customer
+                Invoiced Revenue by Customer
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -760,7 +760,7 @@ const Reports = () => {
             <CardHeader>
               <CardTitle className="text-xl flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-ammp-teal" />
-                Revenue by Quarter
+                Invoiced Revenue by Quarter
               </CardTitle>
             </CardHeader>
             <CardContent>
