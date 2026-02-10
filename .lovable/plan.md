@@ -1,39 +1,29 @@
 
 
-## Add Quarter-by-Quarter Comparison for MW and Revenue
+## Add "Invoiced" Label to Invoice-Based Report Titles
 
 ### Overview
-Add a new section to the Reports page with two side-by-side charts that show quarter-by-quarter comparisons for MW growth and revenue. Customer filters will be respected.
+Update chart and card titles on the Reports page to clearly indicate which metrics are based on actual invoiced data, distinguishing them from contract-based or forecast metrics.
 
-### Data Aggregation Approach
-Reuse the existing monthly data (`mwGrowthData` and `arrNrrData`) already fetched on the Reports page. Aggregate it into calendar quarters (Q1: Jan-Mar, Q2: Apr-Jun, Q3: Jul-Sep, Q4: Oct-Dec) on the frontend -- no new database queries needed.
+### Changes (single file: `src/pages/Reports.tsx`)
 
-### Quarter Format
-Quarters will be labeled as `Q1 2025`, `Q2 2025`, etc.
+The following titles will be updated:
 
-### Charts
-1. **MW by Quarter** -- Grouped bar chart showing MW added per quarter, with a line overlay for cumulative MW at quarter end.
-2. **Revenue by Quarter** -- Stacked bar chart showing ARR and NRR per quarter (consistent with the existing monthly ARR vs NRR chart).
+| Current Title | New Title |
+|---|---|
+| ARR vs NRR by Month | Invoiced ARR vs NRR by Month |
+| Revenue by Customer | Invoiced Revenue by Customer |
+| Revenue by Quarter | Invoiced Revenue by Quarter |
+| Actual vs Projected Revenue | Actual vs Projected Invoiced Revenue |
 
-### Technical Changes
+### Titles that stay unchanged (not invoice-based)
+- Contract ARR (contract-based)
+- Invoice ARR / Invoice NRR KPI cards (already labelled)
+- ARR by Customer (Contract Values) (contract-based)
+- Revenue Forecast (projection-based)
+- MW Growth Over Time, Customer Growth, MWp by Customer, MW by Quarter (non-revenue)
 
-#### File: `src/pages/Reports.tsx`
-
-1. Add two helper functions to aggregate monthly data into quarters:
-   - `aggregateMWByQuarter(mwGrowthData)` -- groups monthly MW into quarters, sums `mw` per quarter, takes last `cumulativeMW` in each quarter.
-   - `aggregateRevenueByQuarter(arrNrrData)` -- groups monthly ARR/NRR into quarters, sums `arr`, `nrr`, and `total` per quarter.
-
-2. Add two new state variables for the quarterly data (derived via `useMemo` from existing monthly state).
-
-3. Add a new row of two chart cards below the existing "ARR vs NRR by Month" and "MW Growth Over Time" charts:
-   - "MW by Quarter" -- BarChart with bars for MW added and a line for cumulative MW
-   - "Revenue by Quarter" -- Stacked BarChart with ARR and NRR bars
-
-No changes to `dashboardAnalytics.ts` -- all aggregation happens client-side from already-fetched monthly data.
-
-### Files to Modify
-
-| File | Change |
-|------|--------|
-| `src/pages/Reports.tsx` | Add quarterly aggregation helpers and two new chart cards |
+### Technical Details
+- Only string changes to `CardTitle` text in `src/pages/Reports.tsx`
+- No logic or data changes required
 
