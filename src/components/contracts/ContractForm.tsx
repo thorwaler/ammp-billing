@@ -13,11 +13,17 @@ import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
 import { 
   MODULES, 
   ADDONS, 
+  MODULES_2026,
+  ADDONS_2026,
+  TRIAL_2026,
+  MUTUALLY_EXCLUSIVE_2026,
+  isPackage2026,
   type ComplexityLevel, 
   type PricingTier,
   type DiscountTier,
   type MinimumChargeTier,
   type GraduatedMWTier,
+  type DeliverableType,
   DEFAULT_PORTFOLIO_DISCOUNT_TIERS,
   DEFAULT_MINIMUM_CHARGE_TIERS,
   DEFAULT_GRADUATED_MW_TIERS
@@ -66,7 +72,8 @@ const contractFormSchema = z.object({
   contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "hybrid_tiered_assetgroups", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "hybrid_tiered_assetgroups", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal", "ammp_os_2026"]),
+  isTrial: z.boolean().optional(),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
   addons: z.array(z.string()).optional(),
@@ -203,6 +210,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
   const [ocrExtractedFields, setOcrExtractedFields] = useState<Set<string>>(new Set());
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isTrial, setIsTrial] = useState(false);
+  const [addonDeliverableTypes, setAddonDeliverableTypes] = useState<Record<string, DeliverableType>>({});
   const { currency: userCurrency} = useCurrency();
 
   const form = useForm<ContractFormValues>({
@@ -620,6 +629,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       // Elum Internal Assets - graduated MW pricing
       form.setValue("modules", []);
       setShowCustomPricing(false);
+    } else if (value === "ammp_os_2026") {
+      // AMMP OS 2026 - new pricing structure
+      form.setValue("modules", []);
+      form.setValue("minimumAnnualValue", 5000);
+      form.setValue("isTrial", false);
+      setIsTrial(false);
+      setShowCustomPricing(true);
     } else {
       setShowCustomPricing(false);
     }
@@ -716,6 +732,20 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       return;
     }
     
+    // Mutual exclusivity for 2026 package
+    if (checked && isPackage2026(currentPackage)) {
+      for (const [a, b] of MUTUALLY_EXCLUSIVE_2026) {
+        if (moduleId === a && currentModules.includes(b)) {
+          form.setValue("modules", [...currentModules.filter(id => id !== b), moduleId]);
+          return;
+        }
+        if (moduleId === b && currentModules.includes(a)) {
+          form.setValue("modules", [...currentModules.filter(id => id !== a), moduleId]);
+          return;
+        }
+      }
+    }
+    
     if (checked) {
       form.setValue("modules", [...currentModules, moduleId]);
     } else {
@@ -723,7 +753,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         "modules",
         currentModules.filter((id) => id !== moduleId)
       );
-      // Modules and addons are now independent - no coupling!
     }
   };
 
@@ -735,7 +764,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("addons", [...currentAddons, addonId]);
       
       // If the addon has complexity pricing, open a dialog or show fields to select complexity
-      const addon = ADDONS.find(a => a.id === addonId);
+      const currentPackage = form.getValues("package");
+      const addonList = isPackage2026(currentPackage) ? ADDONS_2026 : ADDONS;
+      const addon = addonList.find(a => a.id === addonId);
       if (addon?.complexityPricing) {
         setSelectedComplexityItems({
           ...selectedComplexityItems,
@@ -811,14 +842,18 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       if (customerError) throw customerError;
 
       // 2. Prepare addons with complexity, custom pricing, quantity, and custom tiers
+      const addonList = isPackage2026(data.package) ? ADDONS_2026 : ADDONS;
       const enhancedAddons = (data.addons || []).map(addonId => {
-        const addon = ADDONS.find(a => a.id === addonId);
+        const addon = addonList.find(a => a.id === addonId);
         return {
           id: addonId,
           complexity: addon?.complexityPricing ? selectedComplexityItems[addonId] || 'low' : undefined,
           customPrice: addonCustomPrices[addonId],
           quantity: addonQuantities[addonId] || 1,
-          customTiers: addonCustomTiers[addonId]
+          customTiers: addonCustomTiers[addonId],
+          ...(addonId === 'customDashboardReportAlerts' && addonDeliverableTypes[addonId] 
+            ? { deliverableType: addonDeliverableTypes[addonId] } 
+            : {}),
         };
       });
 
@@ -886,6 +921,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         contract_status: 'active',
         user_id: user.id,
         contract_pdf_url: uploadedPdfUrl || null,
+        // AMMP OS 2026 trial fields
+        is_trial: data.package === 'ammp_os_2026' ? isTrial : false,
+        trial_setup_fee: (data.package === 'ammp_os_2026' && isTrial) ? TRIAL_2026.setupFee : null,
+        vendor_api_onboarding_fee: (data.package === 'ammp_os_2026' && isTrial) ? TRIAL_2026.vendorApiOnboardingFee : null,
       };
 
       if (existingContractId) {
@@ -1026,6 +1065,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="elum_jubaili">Elum Jubaili (Asset group with per-site pricing)</SelectItem>
                       <SelectItem value="elum_portfolio_os">Elum Portfolio OS (Custom org with full pricing flexibility)</SelectItem>
                       <SelectItem value="elum_internal">Elum Internal Assets (Graduated MW pricing)</SelectItem>
+                      <SelectItem value="ammp_os_2026">AMMP OS 2026 (New pricing: 5 modules, trial option)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -1051,6 +1091,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "Elum Portfolio OS: Use a separate AMMP org ID with full pricing flexibility (modules, addons, custom pricing)." :
                       watchPackage === "elum_internal" ?
                       "Elum Internal Assets: Graduated MW pricing with different rates for different MW tiers (e.g., €150/MW for 0-100MW, €75/MW for 100-500MW)." :
+                      watchPackage === "ammp_os_2026" ?
+                      "AMMP OS 2026: 5 modules with per-MWp pricing, optional trial toggle (50% off modules + setup fees), and updated add-ons." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -1077,6 +1119,35 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </FormItem>
               )}
             />
+
+            {/* AMMP OS 2026 Trial Toggle */}
+            {watchPackage === "ammp_os_2026" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="trial-toggle"
+                    checked={isTrial}
+                    onCheckedChange={(checked) => {
+                      setIsTrial(!!checked);
+                      form.setValue("isTrial", !!checked);
+                    }}
+                  />
+                  <label htmlFor="trial-toggle" className="font-medium cursor-pointer">
+                    Trial Contract
+                  </label>
+                </div>
+                {isTrial && (
+                  <div className="text-sm space-y-1 pl-6">
+                    <p className="text-muted-foreground">Trial pricing applied:</p>
+                    <ul className="list-disc pl-4 text-muted-foreground">
+                      <li>Module subscription: <strong>50% off</strong></li>
+                      <li>Setup fee: <strong>€{TRIAL_2026.setupFee.toLocaleString()}</strong> (one-time)</li>
+                      <li>Vendor API Onboarding: <strong>€{TRIAL_2026.vendorApiOnboardingFee}</strong> (one-time)</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Per-site package fields */}
             {watchPackage === "per_site" && (
@@ -1839,28 +1910,38 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   [addonId]: tiers
                 }));
               }}
+              onDeliverableTypeChange={(addonId, type) => {
+                setAddonDeliverableTypes(prev => ({ ...prev, [addonId]: type }));
+              }}
+              addonDeliverableTypes={addonDeliverableTypes}
+              modules={isPackage2026(watchPackage) ? MODULES_2026 : MODULES}
+              addons={isPackage2026(watchPackage) ? ADDONS_2026 : ADDONS}
+              mutuallyExclusiveModules={isPackage2026(watchPackage) ? MUTUALLY_EXCLUSIVE_2026 : undefined}
               currency={form.watch("currency")}
               mode="contract"
-              renderModuleInput={(moduleId) => (
-                <FormField
-                  control={form.control}
-                  name={`customPricing.${moduleId}` as any}
-                  render={({ field }) => (
-                    <Input 
-                      id={`custom-${moduleId}`} 
-                      type="number" 
-                      placeholder={`Default: €${MODULES.find(m => m.id === moduleId)?.price}`}
-                      className="mt-1 h-8"
-                      value={field.value || ''}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        field.onChange(value === '' ? undefined : Number(value));
-                      }}
-                      onBlur={field.onBlur}
-                    />
-                  )}
-                />
-              )}
+              renderModuleInput={(moduleId) => {
+                const moduleList = isPackage2026(watchPackage) ? MODULES_2026 : MODULES;
+                return (
+                  <FormField
+                    control={form.control}
+                    name={`customPricing.${moduleId}` as any}
+                    render={({ field }) => (
+                      <Input 
+                        id={`custom-${moduleId}`} 
+                        type="number" 
+                        placeholder={`Default: €${moduleList.find(m => m.id === moduleId)?.price}`}
+                        className="mt-1 h-8"
+                        value={field.value || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          field.onChange(value === '' ? undefined : Number(value));
+                        }}
+                        onBlur={field.onBlur}
+                      />
+                    )}
+                  />
+                );
+              }}
             />
             )}
             

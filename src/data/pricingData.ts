@@ -173,7 +173,72 @@ export type PackageType =
   | "elum_epm"
   | "elum_jubaili"
   | "elum_portfolio_os"
-  | "elum_internal";
+  | "elum_internal"
+  | "ammp_os_2026";
+
+// === AMMP OS 2026 Pricing ===
+
+export type DeliverableType = "dashboard" | "report" | "10_alerts";
+
+export const MODULES_2026: ModuleDefinition[] = [
+  { id: "smartAlerting", name: "Smart Alerting", price: 400, available: true },
+  { id: "liveMonitoring", name: "Live Monitoring and Alerting", price: 600, available: true },
+  { id: "performanceMonitoring", name: "Performance Monitoring and Reporting", price: 600, available: true },
+  { id: "financialReporting", name: "Financial Reporting", price: 300, available: true },
+  { id: "dataApi", name: "Data API", price: 100, available: true },
+];
+
+export const ADDONS_2026: AddonDefinition[] = [
+  {
+    id: "dataLoggerSetup2026",
+    name: "Data Logger Setup",
+    complexityPricing: true,
+    lowPrice: 1200,
+    mediumPrice: 3000,
+    highPrice: 5000,
+  },
+  {
+    id: "customDashboardReportAlerts",
+    name: "Custom Dashboard / Report / 10 Alerts",
+    price: 1500,
+  },
+  {
+    id: "customKPIs2026",
+    name: "Custom KPI Development",
+    complexityPricing: true,
+    lowPrice: 200,
+    mediumPrice: 1500,
+    highPrice: 10000,
+  },
+  {
+    id: "customAPIDevelopment",
+    name: "Custom API Development",
+    price: 4000,
+  },
+];
+
+export const TRIAL_2026 = {
+  setupFee: 3200,
+  moduleDiscount: 0.5,
+  vendorApiOnboardingFee: 400,
+};
+
+// Mutually exclusive module pairs for 2026
+export const MUTUALLY_EXCLUSIVE_2026: [string, string][] = [
+  ["smartAlerting", "liveMonitoring"],
+];
+
+export const isPackage2026 = (packageType: string): boolean => {
+  return packageType === "ammp_os_2026";
+};
+
+export const getModule2026ById = (id: string): ModuleDefinition | undefined => {
+  return MODULES_2026.find(m => m.id === id);
+};
+
+export const getAddon2026ById = (id: string): AddonDefinition | undefined => {
+  return ADDONS_2026.find(a => a.id === id);
+};
 
 // Per-site pricing defaults (for UNHCR-style contracts)
 export const DEFAULT_PER_SITE_PRICING = {

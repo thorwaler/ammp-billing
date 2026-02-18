@@ -2,6 +2,10 @@
 import { 
   MODULES, 
   ADDONS, 
+  MODULES_2026,
+  ADDONS_2026,
+  TRIAL_2026,
+  isPackage2026,
   getAddonPrice, 
   calculateTieredPrice, 
   type ComplexityLevel, 
@@ -108,6 +112,10 @@ export interface CalculationParams {
   invoiceDate?: Date;
   periodStart?: string;
   periodEnd?: string;
+  // AMMP OS 2026 trial fields
+  isTrial?: boolean;
+  trialSetupFee?: number;
+  vendorApiOnboardingFee?: number;
 }
 
 export interface SiteMinimumPricingResult {
@@ -298,14 +306,22 @@ export function calculateModuleCosts(params: CalculationParams): {
 } {
   const { packageType, totalMW, selectedModules, customPricing, frequencyMultiplier } = params;
   
+  // Use 2026 modules if applicable
+  const moduleList = isPackage2026(packageType) ? MODULES_2026 : MODULES;
+  
   const moduleCosts = selectedModules.map(moduleId => {
-    const module = MODULES.find(m => m.id === moduleId);
+    const module = moduleList.find(m => m.id === moduleId);
     if (!module) return null;
     
     // Use custom pricing if available
     let price = module.price;
     if (customPricing && customPricing[moduleId] !== undefined) {
       price = customPricing[moduleId];
+    }
+    
+    // Apply trial discount for 2026 package
+    if (isPackage2026(packageType) && params.isTrial) {
+      price = price * (1 - TRIAL_2026.moduleDiscount);
     }
     
     return {
@@ -367,7 +383,7 @@ export function calculateAddonCosts(
   periodEnd?: string
 ): CalculationResult['addonCosts'] {
   return selectedAddons.map(addon => {
-    const addonDef = ADDONS.find(a => a.id === addon.id);
+    const addonDef = ADDONS.find(a => a.id === addon.id) || ADDONS_2026.find(a => a.id === addon.id);
     if (!addonDef) return null;
     
     // Handle tiered pricing first
@@ -902,6 +918,11 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       result.elumInternalBreakdown = breakdown;
       result.totalMWCost = breakdown.totalCost;
     }
+  } else if (packageType === 'ammp_os_2026') {
+    // AMMP OS 2026 - module-based pricing like pro/custom
+    const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
+    result.moduleCosts = moduleCosts;
+    result.totalMWCost = totalMWCost;
   } else {
     // Pro or Custom - calculate module costs
     const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
@@ -967,11 +988,10 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   // Calculate base cost (modules + minimum charges, or package cost)
   let baseCost = result.starterPackageCost + result.totalMWCost + result.minimumCharges;
   
-  // Apply minimum annual value to BASE COST only (for Pro, Custom, and Elum packages)
-  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal') && minimumAnnualValue) {
+  // Apply minimum annual value to BASE COST only (for Pro, Custom, 2026, and Elum packages)
+  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal' || packageType === 'ammp_os_2026') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
     if (baseCost < minimumForPeriod) {
-      // Add the difference as a "minimum contract value adjustment"
       const adjustment = minimumForPeriod - baseCost;
       result.minimumContractAdjustment = adjustment;
       baseCost = minimumForPeriod;
@@ -987,9 +1007,13 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   result.retainerMinimumApplied = hasRetainer && calculatedRetainer < retainerMinimum;
   result.retainerCost = hasRetainer ? Math.max(calculatedRetainer, retainerMinimum) : 0;
   
-  // Calculate final total: base cost + addons + base pricing + retainer + discounted assets
+  // Calculate final total: base cost + addons + base pricing + retainer + discounted assets + trial fees
   const addonTotal = result.addonCosts.reduce((sum, item) => sum + item.cost, 0);
-  result.totalPrice = baseCost + addonTotal + result.basePricingCost + result.retainerCost + discountedAssetsTotal;
+  let trialFees = 0;
+  if (isPackage2026(packageType) && params.isTrial) {
+    trialFees = (params.trialSetupFee || TRIAL_2026.setupFee) + (params.vendorApiOnboardingFee || TRIAL_2026.vendorApiOnboardingFee);
+  }
+  result.totalPrice = baseCost + addonTotal + result.basePricingCost + result.retainerCost + discountedAssetsTotal + trialFees;
   
   return result;
 }
