@@ -44,6 +44,10 @@ export interface UpcomingInvoice {
   graduatedMWTiers?: GraduatedMWTier[];
   // Elum Jubaili fields
   annualFeePerSite?: number;
+  // AMMP OS 2026 trial fields
+  isTrial?: boolean;
+  trialSetupFee?: number;
+  vendorApiOnboardingFee?: number;
 }
 
 interface CustomerGroup {
@@ -109,6 +113,9 @@ export function UpcomingInvoicesList({
           cached_capabilities,
           graduated_mw_tiers,
           annual_fee_per_site,
+          is_trial,
+          trial_setup_fee,
+          vendor_api_onboarding_fee,
           customers (
             id,
             name,
@@ -174,6 +181,10 @@ export function UpcomingInvoicesList({
               : undefined,
             // Elum Jubaili fields
             annualFeePerSite: Number((c as any).annual_fee_per_site) || undefined,
+            // AMMP OS 2026 trial fields
+            isTrial: !!(c as any).is_trial,
+            trialSetupFee: Number((c as any).trial_setup_fee) || undefined,
+            vendorApiOnboardingFee: Number((c as any).vendor_api_onboarding_fee) || undefined,
           };
         });
 
@@ -292,6 +303,10 @@ export function UpcomingInvoicesList({
       graduatedMWTiers: invoice.graduatedMWTiers,
       // Elum Jubaili fields
       annualFeePerSite: invoice.annualFeePerSite,
+      // AMMP OS 2026 trial fields
+      isTrial: invoice.isTrial,
+      trialSetupFee: invoice.trialSetupFee,
+      vendorApiOnboardingFee: invoice.vendorApiOnboardingFee,
     });
     
     return result.totalPrice;

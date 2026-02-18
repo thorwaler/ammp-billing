@@ -14,6 +14,7 @@ import { SupportDocumentDownloadDialog } from "./SupportDocumentDownloadDialog";
 import { generateSupportDocumentData, SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
+import { isPackage2026 } from "@/data/pricingData";
 import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
@@ -46,6 +47,10 @@ interface ContractForMerge {
   aboveThresholdPricePerMWp?: number;
   graduatedMWTiers?: GraduatedMWTier[];
   annualFeePerSite?: number;
+  // AMMP OS 2026 trial fields
+  isTrial?: boolean;
+  trialSetupFee?: number;
+  vendorApiOnboardingFee?: number;
 }
 
 interface MergedInvoiceDialogProps {
@@ -163,6 +168,10 @@ export function MergedInvoiceDialog({
       aboveThresholdPricePerMWp: contract.aboveThresholdPricePerMWp,
       graduatedMWTiers: contract.graduatedMWTiers,
       annualFeePerSite: contract.annualFeePerSite,
+      // AMMP OS 2026 trial fields
+      isTrial: contract.isTrial,
+      trialSetupFee: contract.trialSetupFee,
+      vendorApiOnboardingFee: contract.vendorApiOnboardingFee,
     });
   };
 
@@ -390,6 +399,29 @@ export function MergedInvoiceDialog({
       }
     }
     
+    // Add trial fee line items for 2026 trial contracts
+    for (const contract of selectedContractsList) {
+      if (contract.isTrial && isPackage2026(contract.packageType)) {
+        const contractLabel = contract.contractName || contract.packageType;
+        if (contract.trialSetupFee) {
+          lineItems.push({
+            Description: `[${contractLabel}] Trial Setup Fee`,
+            Quantity: 1,
+            UnitAmount: contract.trialSetupFee,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        }
+        if (contract.vendorApiOnboardingFee) {
+          lineItems.push({
+            Description: `[${contractLabel}] Vendor API Onboarding Fee`,
+            Quantity: 1,
+            UnitAmount: contract.vendorApiOnboardingFee,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        }
+      }
+    }
+    
     return lineItems;
   };
 
@@ -439,9 +471,14 @@ export function MergedInvoiceDialog({
           (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
           solcastCost;
         
-        const contractNRR = (result.addonCosts || [])
+        let contractNRR = (result.addonCosts || [])
           .filter(ac => ac.addonId !== 'satelliteDataAPI')
           .reduce((sum, ac) => sum + ac.cost, 0);
+        
+        // Add trial fees to NRR for 2026 trial contracts
+        if (contract.isTrial && isPackage2026(contract.packageType)) {
+          contractNRR += (contract.trialSetupFee || 0) + (contract.vendorApiOnboardingFee || 0);
+        }
         
         totalARR += contractARR;
         totalNRR += contractNRR;

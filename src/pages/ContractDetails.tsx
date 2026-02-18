@@ -24,7 +24,13 @@ const moduleNames: {[key: string]: string} = {
   technicalMonitoring: "Technical Monitoring",
   energySavingsHub: "Energy Savings Hub",
   stakeholderPortal: "Stakeholder Portal",
-  control: "Control"
+  control: "Control",
+  // AMMP OS 2026 modules
+  smartAlerting: "Smart Alerting",
+  liveMonitoring: "Live Monitoring and Alerting",
+  performanceMonitoring: "Performance Monitoring and Reporting",
+  financialReporting: "Financial Reporting",
+  dataApi: "Data API",
 };
 
 // Helper function to map addon IDs to names
@@ -40,7 +46,12 @@ const addonNames: {[key: string]: string} = {
   eshCustomReport: "Custom Report",
   eshCustomKPIs: "Custom KPIs",
   spCustomDashboard: "Custom Dashboard",
-  spCustomReport: "Custom Report"
+  spCustomReport: "Custom Report",
+  // AMMP OS 2026 addons
+  dataLoggerSetup2026: "Data Logger Setup",
+  customDashboardReportAlerts: "Custom Dashboard / Report / 10 Alerts",
+  customKPIs2026: "Custom KPI Development",
+  customAPIDevelopment: "Custom API Development",
 };
 
 // Helper function to format date in CET timezone
@@ -518,7 +529,11 @@ const ContractDetails = () => {
                     belowThresholdPricePerMWp: contract.below_threshold_price_per_mwp,
                     aboveThresholdPricePerMWp: contract.above_threshold_price_per_mwp,
                     onboardingFeePerSite: contract.onboarding_fee_per_site,
-                    annualFeePerSite: contract.annual_fee_per_site
+                    annualFeePerSite: contract.annual_fee_per_site,
+                    // AMMP OS 2026 trial fields
+                    isTrial: contract.is_trial,
+                    trialSetupFee: contract.trial_setup_fee,
+                    vendorApiOnboardingFee: contract.vendor_api_onboarding_fee,
                   }}
                   onComplete={() => {
                     setShowEditDialog(false);
@@ -585,7 +600,11 @@ const ContractDetails = () => {
               ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
               ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
               cachedCapabilities: contract.cached_capabilities,
-              graduatedMWTiers: contract.graduated_mw_tiers
+              graduatedMWTiers: contract.graduated_mw_tiers,
+              // AMMP OS 2026 trial fields
+              isTrial: contract.is_trial,
+              trialSetupFee: contract.trial_setup_fee,
+              vendorApiOnboardingFee: contract.vendor_api_onboarding_fee,
             }}
             isExtending={true}
             onComplete={() => {
@@ -724,7 +743,8 @@ const ContractDetails = () => {
                       elum_epm: "Elum ePM",
                       elum_jubaili: "Elum Jubaili",
                       elum_portfolio_os: "Elum Portfolio OS",
-                      elum_internal: "Elum Internal Assets"
+                      elum_internal: "Elum Internal Assets",
+                      ammp_os_2026: "AMMP OS 2026"
                     } as Record<string, string>)[contract.package] || contract.package}
                   </p>
                 </div>
@@ -735,6 +755,11 @@ const ContractDetails = () => {
                     <Badge variant={contract.contract_status === "active" ? "default" : "secondary"}>
                       {contract.contract_status}
                     </Badge>
+                    {contract.is_trial && (
+                      <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300">
+                        Trial
+                      </Badge>
+                    )}
                     <Badge 
                       variant={expirationStatus().variant as any}
                       className={expirationStatus().variant === "warning" ? "bg-orange-500" : ""}

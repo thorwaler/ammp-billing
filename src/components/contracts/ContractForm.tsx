@@ -185,6 +185,10 @@ interface ContractFormProps {
     cachedCapabilities?: any;
     // Elum Internal Assets fields
     graduatedMWTiers?: any[];
+    // AMMP OS 2026 trial fields
+    isTrial?: boolean;
+    trialSetupFee?: number;
+    vendorApiOnboardingFee?: number;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -295,6 +299,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
     if (existingContract) {
       setSelectedPackage(existingContract.package);
       setSelectedModules(existingContract.modules || []);
+      
+      // Initialize trial state from existing contract
+      if (existingContract.isTrial !== undefined) {
+        setIsTrial(existingContract.isTrial);
+        form.setValue('isTrial', existingContract.isTrial);
+      }
       
       // Initialize portfolio discount tiers
       if ((existingContract as any).portfolioDiscountTiers) {
