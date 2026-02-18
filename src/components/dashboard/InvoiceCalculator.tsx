@@ -32,7 +32,10 @@ import { ContractPackageSelector } from "@/components/contracts/ContractPackageS
 import { cn } from "@/lib/utils";
 import { 
   MODULES, 
-  ADDONS, 
+  ADDONS,
+  MODULES_2026,
+  ADDONS_2026,
+  isPackage2026,
   type ComplexityLevel, 
   type PackageType,
   type PricingTier,
@@ -141,11 +144,17 @@ interface Customer {
   graduatedMWTiers?: any[];
   // Custom asset discount pricing
   customAssetPricing?: any;
+  // AMMP OS 2026 trial fields
+  isTrial?: boolean;
+  trialSetupFee?: number;
+  vendorApiOnboardingFee?: number;
 }
 
 // Default modules and addons from shared data
 const defaultModules: Module[] = MODULES.map(m => ({ ...m, selected: false }));
 const defaultAddons: Addon[] = ADDONS.map(a => ({ ...a, selected: false }));
+const defaultModules2026: Module[] = MODULES_2026.map(m => ({ ...m, selected: false }));
+const defaultAddons2026: Addon[] = ADDONS_2026.map(a => ({ ...a, selected: false }));
 
 interface InvoiceCalculatorProps {
   preselectedCustomerId?: string;
@@ -246,7 +255,10 @@ export function InvoiceCalculator({
             cached_capabilities,
             contract_ammp_org_id,
             graduated_mw_tiers,
-            custom_asset_pricing
+            custom_asset_pricing,
+            is_trial,
+            trial_setup_fee,
+            vendor_api_onboarding_fee
           )
         `)
         .eq('status', 'active');
@@ -322,6 +334,10 @@ export function InvoiceCalculator({
               : undefined,
             // Custom asset pricing
             customAssetPricing: (contract as any).custom_asset_pricing || undefined,
+            // AMMP OS 2026 trial fields
+            isTrial: !!(contract as any).is_trial,
+            trialSetupFee: Number((contract as any).trial_setup_fee) || undefined,
+            vendorApiOnboardingFee: Number((contract as any).vendor_api_onboarding_fee) || undefined,
           };
         });
 
@@ -399,8 +415,12 @@ export function InvoiceCalculator({
         // Pre-fill billing frequency from contract
         setBillingFrequency(customerData.billingFrequency as 'monthly' | 'quarterly' | 'biannual' | 'annual');
         
+        // Use 2026 or legacy module/addon arrays based on package
+        const is2026 = isPackage2026(customerData.package);
+        const baseAddons = is2026 ? defaultAddons2026 : defaultAddons;
+        
         // Auto-activate addons based on AMMP capabilities
-        const updatedAddons = defaultAddons.map(addon => {
+        const updatedAddons = baseAddons.map(addon => {
           // Find matching contract addon (could be string ID or full object)
           const contractAddon = customerData.addons.find((a: any) => 
             typeof a === 'string' ? a === addon.id : a.id === addon.id
@@ -462,7 +482,8 @@ export function InvoiceCalculator({
         setAddons(updatedAddons);
         
         // Apply custom pricing to modules if available
-        const updatedModules = defaultModules.map(module => {
+        const baseModules = is2026 ? defaultModules2026 : defaultModules;
+        const updatedModules = baseModules.map(module => {
           let customPrice = customerData.customPricing?.[module.id];
           
           // For hybrid_tiered/hybrid_tiered_assetgroups pricing, exclude technical monitoring from selection
@@ -480,7 +501,7 @@ export function InvoiceCalculator({
         
         // Update addons based on customer selection (if not already set by Solcast)
         if (!customerData.ammpCapabilities?.sitesWithSolcast) {
-          const updatedAddons = defaultAddons.map(addon => ({
+          const updatedAddons = baseAddons.map(addon => ({
             ...addon,
             selected: customerData.addons.includes(addon.id),
             complexity: customerData.addons.includes(addon.id) && addon.complexityPricing ? 'low' as const : undefined
@@ -492,6 +513,7 @@ export function InvoiceCalculator({
       setSelectedCustomer(null);
       setModules(defaultModules);
       setAddons(defaultAddons);
+
       setMwManaged("");
       setSites("");
     }
@@ -838,6 +860,10 @@ export function InvoiceCalculator({
       graduatedMWTiers: selectedCustomer.graduatedMWTiers,
       // Custom asset discount pricing
       customAssetPricing: selectedCustomer.customAssetPricing,
+      // AMMP OS 2026 trial fields
+      isTrial: selectedCustomer.isTrial,
+      trialSetupFee: selectedCustomer.trialSetupFee,
+      vendorApiOnboardingFee: selectedCustomer.vendorApiOnboardingFee,
       // Pro-rata Solcast calculation fields
       invoiceDate,
       periodStart: selectedCustomer.periodStart,
@@ -1066,6 +1092,26 @@ export function InvoiceCalculator({
         });
       }
       
+      // Add 2026 trial fee line items (NRR)
+      if (selectedCustomer.isTrial && isPackage2026(selectedCustomer.package)) {
+        if (selectedCustomer.trialSetupFee) {
+          lineItems.push({
+            Description: "Trial Setup Fee",
+            Quantity: 1,
+            UnitAmount: selectedCustomer.trialSetupFee,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        }
+        if (selectedCustomer.vendorApiOnboardingFee) {
+          lineItems.push({
+            Description: "Vendor API Onboarding Fee",
+            Quantity: 1,
+            UnitAmount: selectedCustomer.vendorApiOnboardingFee,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        }
+      }
+      
       // Add per-site billing line items (Platform Fee - ARR)
       if (result.perSiteBreakdown) {
         if (result.perSiteBreakdown.onboardingCost > 0) {
@@ -1111,10 +1157,15 @@ export function InvoiceCalculator({
         // Solcast is recurring revenue - ARR
         solcastCost;
 
-      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast)
-      const nrrAmount = result.addonCosts
+      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast + trial fees)
+      let nrrAmount = result.addonCosts
         .filter(ac => ac.addonId !== 'satelliteDataAPI')
         .reduce((sum, ac) => sum + ac.cost, 0);
+      
+      // Add trial fees to NRR
+      if (selectedCustomer.isTrial && isPackage2026(selectedCustomer.package)) {
+        nrrAmount += (selectedCustomer.trialSetupFee || 0) + (selectedCustomer.vendorApiOnboardingFee || 0);
+      }
       
       const xeroInvoice = {
         Type: "ACCREC",
@@ -1219,9 +1270,13 @@ export function InvoiceCalculator({
           (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
           // Solcast is recurring revenue - ARR
           storedSolcastCost;
-        const storedNrrAmount = result.addonCosts
+        let storedNrrAmount = result.addonCosts
           .filter(ac => ac.addonId !== 'satelliteDataAPI')
           .reduce((sum, ac) => sum + ac.cost, 0);
+        // Add trial fees to NRR
+        if (selectedCustomer.isTrial && isPackage2026(selectedCustomer.package)) {
+          storedNrrAmount += (selectedCustomer.trialSetupFee || 0) + (selectedCustomer.vendorApiOnboardingFee || 0);
+        }
 
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')

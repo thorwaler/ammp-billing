@@ -246,6 +246,9 @@ export function calculateSingleContractARR(
     above_threshold_price_per_mwp?: number | null;
     cached_capabilities?: any;
     graduated_mw_tiers?: any;
+    is_trial?: boolean | null;
+    trial_setup_fee?: number | null;
+    vendor_api_onboarding_fee?: number | null;
   }
 ): number {
   // POC contracts have no ARR
@@ -310,6 +313,10 @@ export function calculateSingleContractARR(
         annualFeePerSite: contract.annual_fee_per_site || undefined,
         // Elum Internal Assets graduated MW tiers
         graduatedMWTiers: (contract.graduated_mw_tiers as any[]) || undefined,
+        // AMMP OS 2026 trial fields
+        isTrial: contract.is_trial || false,
+        trialSetupFee: contract.trial_setup_fee || undefined,
+        vendorApiOnboardingFee: contract.vendor_api_onboarding_fee || undefined,
       });
       annualValue = result.totalPrice;
     }
@@ -359,7 +366,10 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       site_size_threshold_kwp,
       below_threshold_price_per_mwp,
       above_threshold_price_per_mwp,
-      graduated_mw_tiers
+      graduated_mw_tiers,
+      is_trial,
+      trial_setup_fee,
+      vendor_api_onboarding_fee
     `)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
