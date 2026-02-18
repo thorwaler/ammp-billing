@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -12,8 +13,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { MODULES, ADDONS, type ComplexityLevel, type PricingTier, calculateTieredPrice } from "@/data/pricingData";
+import { 
+  MODULES, 
+  ADDONS, 
+  type ModuleDefinition, 
+  type AddonDefinition, 
+  type ComplexityLevel, 
+  type PricingTier, 
+  type DeliverableType,
+  calculateTieredPrice 
+} from "@/data/pricingData";
 import { TierPricingEditor } from "./TierPricingEditor";
+import { AlertTriangle } from "lucide-react";
 
 export interface PackageSelectorProps {
   // Package and module selections
@@ -39,6 +50,13 @@ export interface PackageSelectorProps {
   onCustomPriceChange: (addonId: string, price: number | undefined) => void;
   onQuantityChange: (addonId: string, quantity: number) => void;
   onCustomTiersChange?: (addonId: string, tiers: PricingTier[]) => void;
+  onDeliverableTypeChange?: (addonId: string, type: DeliverableType) => void;
+  
+  // 2026 support
+  modules?: ModuleDefinition[];
+  addons?: AddonDefinition[];
+  mutuallyExclusiveModules?: [string, string][];
+  addonDeliverableTypes?: Record<string, DeliverableType>;
   
   // Display options
   currency?: 'USD' | 'EUR';
@@ -65,11 +83,28 @@ export function ContractPackageSelector({
   onCustomPriceChange,
   onQuantityChange,
   onCustomTiersChange,
+  onDeliverableTypeChange,
+  modules: modulesProp,
+  addons: addonsProp,
+  mutuallyExclusiveModules,
+  addonDeliverableTypes,
   currency = 'EUR',
   mode = 'contract',
   renderModuleInput,
 }: PackageSelectorProps) {
   const currencySymbol = currency === 'USD' ? '$' : '€';
+  const activeModules = modulesProp || MODULES;
+  const activeAddons = addonsProp || ADDONS;
+  
+  // Check if a module is disabled due to mutual exclusivity
+  const getMutuallyExclusivePartner = (moduleId: string): string | null => {
+    if (!mutuallyExclusiveModules) return null;
+    for (const [a, b] of mutuallyExclusiveModules) {
+      if (moduleId === a && selectedModules.includes(b)) return b;
+      if (moduleId === b && selectedModules.includes(a)) return a;
+    }
+    return null;
+  };
   
   return (
     <div className="space-y-6">
@@ -77,18 +112,22 @@ export function ContractPackageSelector({
       <div>
         <Label>Modules</Label>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-        {MODULES.map((module) => {
+        {activeModules.map((module) => {
             const isHybridTiered = selectedPackage === "hybrid_tiered" || selectedPackage === "hybrid_tiered_assetgroups";
+            const exclusivePartner = getMutuallyExclusivePartner(module.id);
             const isDisabled = 
               (selectedPackage === "starter" && module.id !== "technicalMonitoring") ||
               (isHybridTiered && module.id === "technicalMonitoring");
             
             const isSelected = selectedModules.includes(module.id);
+            const partnerModule = exclusivePartner 
+              ? activeModules.find(m => m.id === exclusivePartner)
+              : null;
             
             return (
               <div 
                 key={module.id} 
-                className={`border rounded-md p-3 ${isDisabled ? "opacity-50" : ""}`}
+                className={`border rounded-md p-3 ${isDisabled ? "opacity-50" : ""} ${exclusivePartner ? "border-amber-300/50" : ""}`}
               >
                 <div className="flex items-center space-x-2">
                   <Checkbox 
@@ -108,6 +147,14 @@ export function ContractPackageSelector({
                     {module.trial && " (6 months free trial)"}
                   </span>
                 </div>
+                
+                {/* Mutual exclusivity warning */}
+                {exclusivePartner && partnerModule && (
+                  <div className="mt-1 pl-6 flex items-center gap-1 text-xs text-amber-600">
+                    <AlertTriangle className="h-3 w-3" />
+                    <span>Selecting this will deselect {partnerModule.name}</span>
+                  </div>
+                )}
                 
                 {/* Custom pricing input for selected modules */}
                 {isSelected && (showCustomPricing || mode === 'contract') && (
@@ -142,7 +189,7 @@ export function ContractPackageSelector({
       <div>
         <Label>Add-ons</Label>
         <div className="grid grid-cols-1 gap-3 mt-2">
-          {ADDONS
+          {activeAddons
             .filter(addon => !addon.requiresPro || selectedPackage !== "starter")
             .map(addon => {
               const isSelected = selectedAddons.includes(addon.id);
@@ -178,6 +225,31 @@ export function ContractPackageSelector({
                             )}
                           </span>
                   </div>
+                  
+                  {/* Deliverable type sub-selector for customDashboardReportAlerts */}
+                  {isSelected && addon.id === 'customDashboardReportAlerts' && !isAddonDisabled && (
+                    <div className="mt-2 pl-6 space-y-2">
+                      <Label className="text-xs">Deliverable Type</Label>
+                      <RadioGroup
+                        value={addonDeliverableTypes?.[addon.id] || "dashboard"}
+                        onValueChange={(value) => onDeliverableTypeChange?.(addon.id, value as DeliverableType)}
+                        className="flex flex-col space-y-1"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="dashboard" id="deliverable-dashboard" />
+                          <label htmlFor="deliverable-dashboard" className="text-sm cursor-pointer">Custom Dashboard</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="report" id="deliverable-report" />
+                          <label htmlFor="deliverable-report" className="text-sm cursor-pointer">Custom Report</label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="10_alerts" id="deliverable-alerts" />
+                          <label htmlFor="deliverable-alerts" className="text-sm cursor-pointer">10 Custom Alerts</label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  )}
                   
                   {/* Complexity selector for selected addons with complexity pricing */}
                   {isSelected && addon.complexityPricing && !isAddonDisabled && (

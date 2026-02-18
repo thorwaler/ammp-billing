@@ -346,6 +346,7 @@ export type Database = {
           id: string
           initial_mw: number
           invoicing_type: string | null
+          is_trial: boolean
           last_ammp_sync: string | null
           max_mw: number | null
           minimum_annual_value: number | null
@@ -368,8 +369,10 @@ export type Database = {
           signed_date: string | null
           site_charge_frequency: string | null
           site_size_threshold_kwp: number | null
+          trial_setup_fee: number | null
           updated_at: string
           user_id: string
+          vendor_api_onboarding_fee: number | null
           volume_discounts: Json | null
         }
         Insert: {
@@ -404,6 +407,7 @@ export type Database = {
           id?: string
           initial_mw: number
           invoicing_type?: string | null
+          is_trial?: boolean
           last_ammp_sync?: string | null
           max_mw?: number | null
           minimum_annual_value?: number | null
@@ -426,8 +430,10 @@ export type Database = {
           signed_date?: string | null
           site_charge_frequency?: string | null
           site_size_threshold_kwp?: number | null
+          trial_setup_fee?: number | null
           updated_at?: string
           user_id: string
+          vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
         }
         Update: {
@@ -462,6 +468,7 @@ export type Database = {
           id?: string
           initial_mw?: number
           invoicing_type?: string | null
+          is_trial?: boolean
           last_ammp_sync?: string | null
           max_mw?: number | null
           minimum_annual_value?: number | null
@@ -484,8 +491,10 @@ export type Database = {
           signed_date?: string | null
           site_charge_frequency?: string | null
           site_size_threshold_kwp?: number | null
+          trial_setup_fee?: number | null
           updated_at?: string
           user_id?: string
+          vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
         }
         Relationships: [
