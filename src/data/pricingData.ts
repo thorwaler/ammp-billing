@@ -174,7 +174,33 @@ export type PackageType =
   | "elum_jubaili"
   | "elum_portfolio_os"
   | "elum_internal"
-  | "ammp_os_2026";
+  | "ammp_os_2026"
+  | "solar_africa_api";
+
+// === SolarAfrica API Pricing ===
+
+export interface MunicipalityTier {
+  tier: number;
+  maxMunicipalities: number;
+  annualFee: number;
+  label: string;
+}
+
+export const SOLAR_AFRICA_MUNICIPALITY_TIERS: MunicipalityTier[] = [
+  { tier: 1, maxMunicipalities: 25, annualFee: 5000, label: "Up to 25 municipalities" },
+  { tier: 2, maxMunicipalities: 35, annualFee: 7000, label: "Up to 35 municipalities" },
+  { tier: 3, maxMunicipalities: 45, annualFee: 9000, label: "Up to 45 municipalities" },
+  { tier: 4, maxMunicipalities: 55, annualFee: 11000, label: "Up to 55 municipalities" },
+  { tier: 5, maxMunicipalities: 65, annualFee: 13000, label: "Up to 65 municipalities" },
+];
+
+export const SOLAR_AFRICA_SETUP_FEE = 16500;
+export const SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE = 120;
+
+export function getSolarAfricaTier(municipalityCount: number): MunicipalityTier {
+  return SOLAR_AFRICA_MUNICIPALITY_TIERS.find(t => municipalityCount <= t.maxMunicipalities)
+    || SOLAR_AFRICA_MUNICIPALITY_TIERS[SOLAR_AFRICA_MUNICIPALITY_TIERS.length - 1];
+}
 
 // === AMMP OS 2026 Pricing ===
 
@@ -230,6 +256,10 @@ export const MUTUALLY_EXCLUSIVE_2026: [string, string][] = [
 
 export const isPackage2026 = (packageType: string): boolean => {
   return packageType === "ammp_os_2026";
+};
+
+export const isSolarAfricaPackage = (packageType: string): boolean => {
+  return packageType === "solar_africa_api";
 };
 
 export const getModule2026ById = (id: string): ModuleDefinition | undefined => {

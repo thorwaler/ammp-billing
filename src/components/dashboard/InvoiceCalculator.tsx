@@ -36,6 +36,9 @@ import {
   MODULES_2026,
   ADDONS_2026,
   isPackage2026,
+  isSolarAfricaPackage,
+  getSolarAfricaTier,
+  SOLAR_AFRICA_MUNICIPALITY_TIERS,
   type ComplexityLevel, 
   type PackageType,
   type PricingTier,
@@ -148,6 +151,10 @@ interface Customer {
   isTrial?: boolean;
   trialSetupFee?: number;
   vendorApiOnboardingFee?: number;
+  // SolarAfrica API fields
+  municipalityCount?: number;
+  apiSetupFee?: number;
+  hourlyRate?: number;
 }
 
 // Default modules and addons from shared data
@@ -258,7 +265,10 @@ export function InvoiceCalculator({
             custom_asset_pricing,
             is_trial,
             trial_setup_fee,
-            vendor_api_onboarding_fee
+            vendor_api_onboarding_fee,
+            municipality_count,
+            api_setup_fee,
+            hourly_rate
           )
         `)
         .eq('status', 'active');
@@ -338,6 +348,10 @@ export function InvoiceCalculator({
             isTrial: !!(contract as any).is_trial,
             trialSetupFee: Number((contract as any).trial_setup_fee) || undefined,
             vendorApiOnboardingFee: Number((contract as any).vendor_api_onboarding_fee) || undefined,
+            // SolarAfrica API fields
+            municipalityCount: Number((contract as any).municipality_count) || undefined,
+            apiSetupFee: Number((contract as any).api_setup_fee) || undefined,
+            hourlyRate: Number((contract as any).hourly_rate) || undefined,
           };
         });
 
@@ -864,6 +878,10 @@ export function InvoiceCalculator({
       isTrial: selectedCustomer.isTrial,
       trialSetupFee: selectedCustomer.trialSetupFee,
       vendorApiOnboardingFee: selectedCustomer.vendorApiOnboardingFee,
+      // SolarAfrica API fields
+      municipalityCount: selectedCustomer.municipalityCount,
+      apiSetupFee: selectedCustomer.apiSetupFee,
+      hourlyRate: selectedCustomer.hourlyRate,
       // Pro-rata Solcast calculation fields
       invoiceDate,
       periodStart: selectedCustomer.periodStart,

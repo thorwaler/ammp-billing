@@ -327,6 +327,7 @@ export type Database = {
           ammp_org_id: string | null
           ammp_sync_status: string | null
           annual_fee_per_site: number | null
+          api_setup_fee: number | null
           base_monthly_price: number | null
           below_threshold_price_per_mwp: number | null
           billing_frequency: string | null
@@ -343,6 +344,7 @@ export type Database = {
           custom_pricing: Json | null
           customer_id: string
           graduated_mw_tiers: Json | null
+          hourly_rate: number | null
           id: string
           initial_mw: number
           invoicing_type: string | null
@@ -353,6 +355,7 @@ export type Database = {
           minimum_charge: number | null
           minimum_charge_tiers: Json | null
           modules: Json | null
+          municipality_count: number | null
           next_invoice_date: string | null
           notes: string | null
           ocr_data: Json | null
@@ -388,6 +391,7 @@ export type Database = {
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
           annual_fee_per_site?: number | null
+          api_setup_fee?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
@@ -404,6 +408,7 @@ export type Database = {
           custom_pricing?: Json | null
           customer_id: string
           graduated_mw_tiers?: Json | null
+          hourly_rate?: number | null
           id?: string
           initial_mw: number
           invoicing_type?: string | null
@@ -414,6 +419,7 @@ export type Database = {
           minimum_charge?: number | null
           minimum_charge_tiers?: Json | null
           modules?: Json | null
+          municipality_count?: number | null
           next_invoice_date?: string | null
           notes?: string | null
           ocr_data?: Json | null
@@ -449,6 +455,7 @@ export type Database = {
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
           annual_fee_per_site?: number | null
+          api_setup_fee?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
@@ -465,6 +472,7 @@ export type Database = {
           custom_pricing?: Json | null
           customer_id?: string
           graduated_mw_tiers?: Json | null
+          hourly_rate?: number | null
           id?: string
           initial_mw?: number
           invoicing_type?: string | null
@@ -475,6 +483,7 @@ export type Database = {
           minimum_charge?: number | null
           minimum_charge_tiers?: Json | null
           modules?: Json | null
+          municipality_count?: number | null
           next_invoice_date?: string | null
           notes?: string | null
           ocr_data?: Json | null

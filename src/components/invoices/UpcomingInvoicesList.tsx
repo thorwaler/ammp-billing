@@ -48,6 +48,10 @@ export interface UpcomingInvoice {
   isTrial?: boolean;
   trialSetupFee?: number;
   vendorApiOnboardingFee?: number;
+  // SolarAfrica API fields
+  municipalityCount?: number;
+  apiSetupFee?: number;
+  hourlyRate?: number;
 }
 
 interface CustomerGroup {
@@ -116,6 +120,9 @@ export function UpcomingInvoicesList({
           is_trial,
           trial_setup_fee,
           vendor_api_onboarding_fee,
+          municipality_count,
+          api_setup_fee,
+          hourly_rate,
           customers (
             id,
             name,
@@ -185,6 +192,10 @@ export function UpcomingInvoicesList({
             isTrial: !!(c as any).is_trial,
             trialSetupFee: Number((c as any).trial_setup_fee) || undefined,
             vendorApiOnboardingFee: Number((c as any).vendor_api_onboarding_fee) || undefined,
+            // SolarAfrica API fields
+            municipalityCount: Number((c as any).municipality_count) || undefined,
+            apiSetupFee: Number((c as any).api_setup_fee) || undefined,
+            hourlyRate: Number((c as any).hourly_rate) || undefined,
           };
         });
 
@@ -307,6 +318,10 @@ export function UpcomingInvoicesList({
       isTrial: invoice.isTrial,
       trialSetupFee: invoice.trialSetupFee,
       vendorApiOnboardingFee: invoice.vendorApiOnboardingFee,
+      // SolarAfrica API fields
+      municipalityCount: invoice.municipalityCount,
+      apiSetupFee: invoice.apiSetupFee,
+      hourlyRate: invoice.hourlyRate,
     });
     
     return result.totalPrice;

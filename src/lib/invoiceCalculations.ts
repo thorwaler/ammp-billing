@@ -6,6 +6,8 @@ import {
   ADDONS_2026,
   TRIAL_2026,
   isPackage2026,
+  isSolarAfricaPackage,
+  getSolarAfricaTier,
   getAddonPrice, 
   calculateTieredPrice, 
   type ComplexityLevel, 
@@ -116,6 +118,12 @@ export interface CalculationParams {
   isTrial?: boolean;
   trialSetupFee?: number;
   vendorApiOnboardingFee?: number;
+  // SolarAfrica API fields
+  municipalityCount?: number;
+  apiSetupFee?: number;
+  hourlyRate?: number;
+  customizationHours?: number;
+  includeSetupFee?: boolean;
 }
 
 export interface SiteMinimumPricingResult {
@@ -923,6 +931,23 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
+  } else if (packageType === 'solar_africa_api') {
+    // SolarAfrica API - tier-based pricing by municipality count
+    const municipalityCount = params.municipalityCount || 0;
+    const tier = getSolarAfricaTier(municipalityCount);
+    const annualSubscription = tier.annualFee * frequencyMultiplier;
+    result.totalMWCost = annualSubscription;
+    
+    // Setup fee as NRR (one-time, controlled by includeSetupFee flag)
+    if (params.includeSetupFee && params.apiSetupFee) {
+      result.starterPackageCost = params.apiSetupFee;
+    }
+    
+    // Customization hours as NRR
+    if (params.customizationHours && params.hourlyRate) {
+      result.retainerCost = params.customizationHours * params.hourlyRate;
+      result.retainerCalculatedCost = result.retainerCost;
+    }
   } else {
     // Pro or Custom - calculate module costs
     const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
@@ -988,7 +1013,7 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   // Calculate base cost (modules + minimum charges, or package cost)
   let baseCost = result.starterPackageCost + result.totalMWCost + result.minimumCharges;
   
-  // Apply minimum annual value to BASE COST only (for Pro, Custom, 2026, and Elum packages)
+  // Apply minimum annual value to BASE COST only (for Pro, Custom, 2026, and Elum packages - not SolarAfrica)
   if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal' || packageType === 'ammp_os_2026') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
     if (baseCost < minimumForPeriod) {
