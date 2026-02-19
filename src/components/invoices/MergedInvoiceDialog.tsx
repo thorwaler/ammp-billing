@@ -51,6 +51,10 @@ interface ContractForMerge {
   isTrial?: boolean;
   trialSetupFee?: number;
   vendorApiOnboardingFee?: number;
+  // SolarAfrica API fields
+  municipalityCount?: number;
+  apiSetupFee?: number;
+  hourlyRate?: number;
 }
 
 interface MergedInvoiceDialogProps {
@@ -172,6 +176,10 @@ export function MergedInvoiceDialog({
       isTrial: contract.isTrial,
       trialSetupFee: contract.trialSetupFee,
       vendorApiOnboardingFee: contract.vendorApiOnboardingFee,
+      // SolarAfrica API fields
+      municipalityCount: contract.municipalityCount,
+      apiSetupFee: contract.apiSetupFee,
+      hourlyRate: contract.hourlyRate,
     });
   };
 

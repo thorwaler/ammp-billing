@@ -534,6 +534,10 @@ const ContractDetails = () => {
                     isTrial: contract.is_trial,
                     trialSetupFee: contract.trial_setup_fee,
                     vendorApiOnboardingFee: contract.vendor_api_onboarding_fee,
+                    // SolarAfrica API fields
+                    municipalityCount: contract.municipality_count,
+                    apiSetupFee: contract.api_setup_fee,
+                    hourlyRate: contract.hourly_rate,
                   }}
                   onComplete={() => {
                     setShowEditDialog(false);
@@ -605,6 +609,10 @@ const ContractDetails = () => {
               isTrial: contract.is_trial,
               trialSetupFee: contract.trial_setup_fee,
               vendorApiOnboardingFee: contract.vendor_api_onboarding_fee,
+              // SolarAfrica API fields
+              municipalityCount: contract.municipality_count,
+              apiSetupFee: contract.api_setup_fee,
+              hourlyRate: contract.hourly_rate,
             }}
             isExtending={true}
             onComplete={() => {
@@ -744,7 +752,8 @@ const ContractDetails = () => {
                       elum_jubaili: "Elum Jubaili",
                       elum_portfolio_os: "Elum Portfolio OS",
                       elum_internal: "Elum Internal Assets",
-                      ammp_os_2026: "AMMP OS 2026"
+                      ammp_os_2026: "AMMP OS 2026",
+                      solar_africa_api: "SolarAfrica API"
                     } as Record<string, string>)[contract.package] || contract.package}
                   </p>
                 </div>
@@ -828,6 +837,24 @@ const ContractDetails = () => {
                     <p className="text-sm text-muted-foreground">Minimum Charge per Site</p>
                     <p className="font-medium">{contract.currency === 'EUR' ? '€' : '$'}{contract.minimum_charge}</p>
                   </div>
+                )}
+                
+                {/* SolarAfrica API specific fields */}
+                {contract.package === 'solar_africa_api' && (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Municipality Count</p>
+                      <p className="font-medium">{contract.municipality_count || 0}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Setup Fee</p>
+                      <p className="font-medium">€{(contract.api_setup_fee || 0).toLocaleString()}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-sm text-muted-foreground">Customization Hourly Rate</p>
+                      <p className="font-medium">€{contract.hourly_rate || 0}/hr</p>
+                    </div>
+                  </>
                 )}
               </div>
               

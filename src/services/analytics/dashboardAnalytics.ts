@@ -9,6 +9,7 @@
 
 import { supabase } from '@/integrations/supabase/client';
 import { calculateInvoice, getFrequencyMultiplier } from '@/lib/invoiceCalculations';
+import { getSolarAfricaTier } from '@/data/pricingData';
 import { addMonths, format } from 'date-fns';
 
 export interface ARRByCurrency {
@@ -249,11 +250,23 @@ export function calculateSingleContractARR(
     is_trial?: boolean | null;
     trial_setup_fee?: number | null;
     vendor_api_onboarding_fee?: number | null;
+    municipality_count?: number | null;
+    api_setup_fee?: number | null;
+    hourly_rate?: number | null;
   }
 ): number {
   // POC contracts have no ARR
   if (contract.package === 'poc') return 0;
 
+  // SolarAfrica API - tier-based pricing
+  if (contract.package === 'solar_africa_api') {
+    const municipalityCount = contract.municipality_count || 0;
+    if (municipalityCount > 0) {
+      const tier = getSolarAfricaTier(municipalityCount);
+      return tier.annualFee;
+    }
+    return 0;
+  }
   // Use cached_capabilities from contract (single source of truth)
   const cachedCapabilities = contract.cached_capabilities;
   const assetBreakdown = cachedCapabilities?.assetBreakdown || [];
@@ -369,7 +382,10 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       graduated_mw_tiers,
       is_trial,
       trial_setup_fee,
-      vendor_api_onboarding_fee
+      vendor_api_onboarding_fee,
+      municipality_count,
+      api_setup_fee,
+      hourly_rate
     `)
     .eq('contract_status', 'active')
     .neq('package', 'poc');

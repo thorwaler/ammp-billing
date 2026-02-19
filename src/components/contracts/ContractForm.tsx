@@ -18,6 +18,11 @@ import {
   TRIAL_2026,
   MUTUALLY_EXCLUSIVE_2026,
   isPackage2026,
+  isSolarAfricaPackage,
+  SOLAR_AFRICA_SETUP_FEE,
+  SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE,
+  SOLAR_AFRICA_MUNICIPALITY_TIERS,
+  getSolarAfricaTier,
   type ComplexityLevel, 
   type PricingTier,
   type DiscountTier,
@@ -72,7 +77,7 @@ const contractFormSchema = z.object({
   contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "hybrid_tiered_assetgroups", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal", "ammp_os_2026"]),
+  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "hybrid_tiered_assetgroups", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal", "ammp_os_2026", "solar_africa_api"]),
   isTrial: z.boolean().optional(),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
@@ -189,6 +194,10 @@ interface ContractFormProps {
     isTrial?: boolean;
     trialSetupFee?: number;
     vendorApiOnboardingFee?: number;
+    // SolarAfrica API fields
+    municipalityCount?: number;
+    apiSetupFee?: number;
+    hourlyRate?: number;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -216,6 +225,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [isSyncing, setIsSyncing] = useState(false);
   const [isTrial, setIsTrial] = useState(false);
   const [addonDeliverableTypes, setAddonDeliverableTypes] = useState<Record<string, DeliverableType>>({});
+  const [municipalityCount, setMunicipalityCount] = useState<number>(0);
+  const [apiSetupFee, setApiSetupFee] = useState<number>(SOLAR_AFRICA_SETUP_FEE);
+  const [hourlyRate, setHourlyRate] = useState<number>(SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
   const { currency: userCurrency} = useCurrency();
 
   const form = useForm<ContractFormValues>({
@@ -304,6 +316,17 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       if (existingContract.isTrial !== undefined) {
         setIsTrial(existingContract.isTrial);
         form.setValue('isTrial', existingContract.isTrial);
+      }
+      
+      // Initialize SolarAfrica API state from existing contract
+      if (existingContract.municipalityCount !== undefined) {
+        setMunicipalityCount(existingContract.municipalityCount);
+      }
+      if (existingContract.apiSetupFee !== undefined) {
+        setApiSetupFee(existingContract.apiSetupFee);
+      }
+      if (existingContract.hourlyRate !== undefined) {
+        setHourlyRate(existingContract.hourlyRate);
       }
       
       // Initialize portfolio discount tiers
@@ -646,6 +669,14 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("isTrial", false);
       setIsTrial(false);
       setShowCustomPricing(true);
+    } else if (value === "solar_africa_api") {
+      // SolarAfrica API - municipality-based pricing
+      form.setValue("modules", []);
+      form.setValue("initialMW", 0);
+      setMunicipalityCount(existingContract?.municipalityCount || 0);
+      setApiSetupFee(existingContract?.apiSetupFee || SOLAR_AFRICA_SETUP_FEE);
+      setHourlyRate(existingContract?.hourlyRate || SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
+      setShowCustomPricing(false);
     } else {
       setShowCustomPricing(false);
     }
@@ -935,6 +966,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         is_trial: data.package === 'ammp_os_2026' ? isTrial : false,
         trial_setup_fee: (data.package === 'ammp_os_2026' && isTrial) ? TRIAL_2026.setupFee : null,
         vendor_api_onboarding_fee: (data.package === 'ammp_os_2026' && isTrial) ? TRIAL_2026.vendorApiOnboardingFee : null,
+        // SolarAfrica API fields
+        municipality_count: data.package === 'solar_africa_api' ? municipalityCount : null,
+        api_setup_fee: data.package === 'solar_africa_api' ? apiSetupFee : null,
+        hourly_rate: data.package === 'solar_africa_api' ? hourlyRate : null,
       };
 
       if (existingContractId) {
@@ -1076,6 +1111,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="elum_portfolio_os">Elum Portfolio OS (Custom org with full pricing flexibility)</SelectItem>
                       <SelectItem value="elum_internal">Elum Internal Assets (Graduated MW pricing)</SelectItem>
                       <SelectItem value="ammp_os_2026">AMMP OS 2026 (New pricing: 5 modules, trial option)</SelectItem>
+                      <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormDescription>
@@ -1103,6 +1139,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "Elum Internal Assets: Graduated MW pricing with different rates for different MW tiers (e.g., €150/MW for 0-100MW, €75/MW for 100-500MW)." :
                       watchPackage === "ammp_os_2026" ?
                       "AMMP OS 2026: 5 modules with per-MWp pricing, optional trial toggle (50% off modules + setup fees), and updated add-ons." :
+                      watchPackage === "solar_africa_api" ?
+                      "SolarAfrica API: API subscription priced by municipality count with tiered annual pricing. Includes one-time setup fee and optional customization work." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -1159,7 +1197,84 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
 
-            {/* Per-site package fields */}
+            {/* SolarAfrica API Package Fields */}
+            {watchPackage === "solar_africa_api" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-medium">SolarAfrica API Pricing</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="municipality-count">Municipality Count</Label>
+                    <Input
+                      id="municipality-count"
+                      type="number"
+                      min="0"
+                      value={municipalityCount}
+                      onChange={(e) => setMunicipalityCount(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Manually tracked number of municipalities</p>
+                  </div>
+                  
+                  <div>
+                    <Label>Applicable Tier</Label>
+                    <div className="mt-1 p-2 bg-muted rounded-md">
+                      {municipalityCount > 0 ? (
+                        <>
+                          <p className="font-medium">Tier {getSolarAfricaTier(municipalityCount).tier}: {getSolarAfricaTier(municipalityCount).label}</p>
+                          <p className="text-sm text-muted-foreground">Annual fee: €{getSolarAfricaTier(municipalityCount).annualFee.toLocaleString()}</p>
+                        </>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Enter municipality count to see tier</p>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="api-setup-fee">Setup Fee (one-time)</Label>
+                    <Input
+                      id="api-setup-fee"
+                      type="number"
+                      min="0"
+                      value={apiSetupFee}
+                      onChange={(e) => setApiSetupFee(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: €{SOLAR_AFRICA_SETUP_FEE.toLocaleString()}</p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="hourly-rate">Customization Hourly Rate</Label>
+                    <Input
+                      id="hourly-rate"
+                      type="number"
+                      min="0"
+                      value={hourlyRate}
+                      onChange={(e) => setHourlyRate(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: €{SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE}/hr</p>
+                  </div>
+                </div>
+                
+                <div className="text-sm space-y-1">
+                  <p className="font-medium">Tier Summary:</p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {SOLAR_AFRICA_MUNICIPALITY_TIERS.map(tier => (
+                      <div key={tier.tier} className={`p-2 rounded text-center text-xs ${
+                        municipalityCount > 0 && getSolarAfricaTier(municipalityCount).tier === tier.tier 
+                          ? 'bg-primary/10 border border-primary' 
+                          : 'bg-muted'
+                      }`}>
+                        <div className="font-medium">≤{tier.maxMunicipalities}</div>
+                        <div>€{tier.annualFee.toLocaleString()}/yr</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {watchPackage === "per_site" && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
