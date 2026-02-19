@@ -237,7 +237,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       companyName: existingCustomer?.name || "",
       initialMW: existingContract.initialMW,
       currency: existingContract.currency as "USD" | "EUR",
-      billingFrequency: existingContract.billingFrequency as any,
+      billingFrequency: (existingContract.package === 'per_site' ? 'monthly' : existingContract.billingFrequency) as any,
       invoicingType: (existingContract.invoicingType as "standard" | "manual" | "automated") || "standard",
       nextInvoiceDate: existingContract.nextInvoiceDate?.substring(0, 10) || "",
       package: existingContract.package as any,
@@ -455,7 +455,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         form.setValue('companyName', contract.company_name);
         form.setValue('initialMW', contract.initial_mw);
         form.setValue('currency', contract.currency as "USD" | "EUR");
-        form.setValue('billingFrequency', contract.billing_frequency as "monthly" | "quarterly" | "biannual" | "annual");
+        form.setValue('billingFrequency', (contract.package === 'per_site' ? 'monthly' : contract.billing_frequency) as "monthly" | "quarterly" | "biannual" | "annual");
         form.setValue('nextInvoiceDate', contract.next_invoice_date ? contract.next_invoice_date.substring(0, 10) : '');
         form.setValue('signedDate', (contract as any).signed_date ? (contract as any).signed_date.substring(0, 10) : '');
         form.setValue('contractExpiryDate', (contract as any).contract_expiry_date ? (contract as any).contract_expiry_date.substring(0, 10) : '');
@@ -906,7 +906,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         package: data.package,
         initial_mw: data.initialMW,
         currency: data.currency,
-        billing_frequency: data.billingFrequency,
+        billing_frequency: data.package === 'per_site' ? 'monthly' : data.billingFrequency,
         invoicing_type: data.invoicingType || 'standard',
         // POC contracts don't have invoicing
         next_invoice_date: data.package === 'poc' ? null : (data.nextInvoiceDate || null),

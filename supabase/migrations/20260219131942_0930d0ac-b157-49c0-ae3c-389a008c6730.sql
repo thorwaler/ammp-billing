@@ -1,0 +1,2 @@
+ALTER TABLE public.contracts DROP CONSTRAINT contracts_billing_frequency_check;
+ALTER TABLE public.contracts ADD CONSTRAINT contracts_billing_frequency_check CHECK (billing_frequency = ANY (ARRAY['monthly'::text, 'quarterly'::text, 'biannual'::text, 'annual'::text]));
