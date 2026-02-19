@@ -213,6 +213,10 @@ export function InvoiceCalculator({
   const [siteBillingData, setSiteBillingData] = useState<SiteBillingItem[]>([]);
   const [selectedSitesToBill, setSelectedSitesToBill] = useState<SiteBillingItem[]>([]);
   const [loadingSiteBilling, setLoadingSiteBilling] = useState(false);
+  
+  // SolarAfrica API state
+  const [customizationHours, setCustomizationHours] = useState<number>(0);
+  const [includeSetupFee, setIncludeSetupFee] = useState(false);
 
   // Load customers from database on mount
   useEffect(() => {
@@ -622,7 +626,9 @@ export function InvoiceCalculator({
     modules,           // Module selection changes
     addons,            // Addon selection/quantity changes
     invoiceDate,
-    selectedCustomer   // Customer data including period dates
+    selectedCustomer,  // Customer data including period dates
+    customizationHours, // SolarAfrica customization hours
+    includeSetupFee     // SolarAfrica setup fee toggle
   ]);
 
   // Calculation helper - now using shared logic
@@ -732,88 +738,8 @@ export function InvoiceCalculator({
       retainerMinimumApplied: false,
     };
     
-    // Calculate costs based on package
-    if (selectedCustomer.package === 'starter') {
-      // Starter package - use contract's minimum annual value (default: €3000)
-      const minimumValue = selectedCustomer.minimumAnnualValue || 3000;
-      calculationResult.starterPackageCost = minimumValue * frequencyMultiplier;
-      
-      // Only Technical Monitoring included
-      // No module-based charges for Starter package
-    } else if (selectedCustomer.package === 'hybrid_tiered' || selectedCustomer.package === 'hybrid_tiered_assetgroups') {
-      // Hybrid Tiered package - uses fixed per-MWp rates for ongrid vs hybrid
-      const capabilities = selectedCustomer.ammpCapabilities;
-      const ongridPrice = selectedCustomer.customPricing?.ongrid_per_mwp || 0;
-      const hybridPrice = selectedCustomer.customPricing?.hybrid_per_mwp || 0;
-      
-      // Handle both field naming conventions (ongridTotalMW/hybridTotalMW and ongridMW/hybridMW)
-      const ongridMW = capabilities?.ongridTotalMW ?? capabilities?.ongridMW ?? 0;
-      const hybridMW = capabilities?.hybridTotalMW ?? capabilities?.hybridMW ?? 0;
-      
-      if (capabilities && (ongridMW > 0 || hybridMW > 0)) {
-        
-        const ongridCost = ongridMW * ongridPrice * frequencyMultiplier;
-        const hybridCost = hybridMW * hybridPrice * frequencyMultiplier;
-        
-        calculationResult.hybridTieredBreakdown = {
-          ongrid: { mw: ongridMW, cost: ongridCost, rate: ongridPrice },
-          hybrid: { mw: hybridMW, cost: hybridCost, rate: hybridPrice }
-        };
-        
-        // Calculate module costs (exclude Technical Monitoring - already covered by hybrid pricing)
-        const selectedModules = modules.filter(m => 
-          m.selected && m.id !== 'technicalMonitoring'
-        );
-        
-        calculationResult.moduleCosts = selectedModules.map(module => ({
-          moduleId: module.id,
-          moduleName: module.name,
-          cost: module.price * totalMW * frequencyMultiplier,
-          rate: module.price,
-          mw: totalMW
-        }));
-        
-        const moduleTotalCost = calculationResult.moduleCosts.reduce(
-          (sum, item) => sum + item.cost, 
-          0
-        );
-        
-        // Total = hybrid breakdown + modules
-        calculationResult.totalMWCost = ongridCost + hybridCost + moduleTotalCost;
-      } else {
-        // Fallback if no AMMP data
-        calculationResult.totalMWCost = totalMW * ongridPrice * frequencyMultiplier;
-      }
-    } else {
-      // Pro or Custom package - calculate module costs
-      const selectedModules = modules.filter(m => m.selected);
-      
-      calculationResult.moduleCosts = selectedModules.map(module => {
-        let price = module.price;
-        
-        // Use custom pricing if available for this module
-        if (selectedCustomer.package === 'custom' && 
-            selectedCustomer.customPricing && 
-            selectedCustomer.customPricing[module.id]) {
-          price = selectedCustomer.customPricing[module.id];
-        }
-        
-        return {
-          moduleId: module.id,
-          moduleName: module.name,
-          cost: price * totalMW * frequencyMultiplier,
-          rate: price,
-          mw: totalMW
-        };
-      });
-      
-      // Add up module costs
-      const moduleTotalCost = calculationResult.moduleCosts.reduce((sum, item) => sum + item.cost, 0);
-      calculationResult.totalMWCost = moduleTotalCost;
-      
-      // Note: Minimum annual contract value for Pro/Custom packages is now handled
-      // by the shared calculateInvoice() function via minimumContractAdjustment
-    }
+    // Note: All package-specific calculation is handled by the shared calculateInvoice() function below.
+    // No pre-calculation needed here.
     
     // Prepare asset breakdown for site-level pricing
     // Always use cached_capabilities from contract (single source of truth)
@@ -882,6 +808,8 @@ export function InvoiceCalculator({
       municipalityCount: selectedCustomer.municipalityCount,
       apiSetupFee: selectedCustomer.apiSetupFee,
       hourlyRate: selectedCustomer.hourlyRate,
+      customizationHours: isSolarAfricaPackage(selectedCustomer.package) ? customizationHours : undefined,
+      includeSetupFee: isSolarAfricaPackage(selectedCustomer.package) ? includeSetupFee : undefined,
       // Pro-rata Solcast calculation fields
       invoiceDate,
       periodStart: selectedCustomer.periodStart,
@@ -1079,10 +1007,31 @@ export function InvoiceCalculator({
       });
       
       if (result.starterPackageCost > 0) {
-        lineItems.unshift({
-          Description: "AMMP OS Starter Package",
+        // SolarAfrica: setup fee is NRR, not ARR
+        if (isSolarAfricaPackage(selectedCustomer.package)) {
+          lineItems.unshift({
+            Description: "Setup Costs",
+            Quantity: 1,
+            UnitAmount: result.starterPackageCost,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        } else {
+          lineItems.unshift({
+            Description: "AMMP OS Starter Package",
+            Quantity: 1,
+            UnitAmount: result.starterPackageCost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
+      
+      // SolarAfrica: Add tier subscription line item (ARR)
+      if (isSolarAfricaPackage(selectedCustomer.package) && result.totalMWCost > 0) {
+        const tier = getSolarAfricaTier(selectedCustomer.municipalityCount || 0);
+        lineItems.push({
+          Description: `Tariff API - Tier ${tier.tier} (${tier.label})`,
           Quantity: 1,
-          UnitAmount: result.starterPackageCost,
+          UnitAmount: result.totalMWCost,
           AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
@@ -1097,17 +1046,27 @@ export function InvoiceCalculator({
         });
       }
       
-      // Add retainer cost (Platform Fee - ARR)
+      // Add retainer cost
       if (result.retainerCost > 0) {
-        const description = result.retainerMinimumApplied
-          ? `Retainer (Minimum charge applied)`
-          : `Retainer Hours (${selectedCustomer.retainerHours || 0} hours)`;
-        lineItems.push({
-          Description: description,
-          Quantity: 1,
-          UnitAmount: result.retainerCost,
-          AccountCode: ACCOUNT_PLATFORM_FEES
-        });
+        // SolarAfrica: customization work is NRR
+        if (isSolarAfricaPackage(selectedCustomer.package)) {
+          lineItems.push({
+            Description: `Platform Customization Work (${customizationHours} hours)`,
+            Quantity: 1,
+            UnitAmount: result.retainerCost,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        } else {
+          const description = result.retainerMinimumApplied
+            ? `Retainer (Minimum charge applied)`
+            : `Retainer Hours (${selectedCustomer.retainerHours || 0} hours)`;
+          lineItems.push({
+            Description: description,
+            Quantity: 1,
+            UnitAmount: result.retainerCost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
       }
       
       // Add 2026 trial fee line items (NRR)
@@ -1154,8 +1113,10 @@ export function InvoiceCalculator({
       const solcastCost = result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
 
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
+      const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
       const arrAmount = (result.basePricingCost || 0) +
-        (result.starterPackageCost || 0) +
+        // SolarAfrica: starterPackageCost is setup fee (NRR), not ARR
+        (isSolarAfrica ? 0 : (result.starterPackageCost || 0)) +
         result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
         // Hybrid tiered pricing (BLS and similar)
         (result.hybridTieredBreakdown?.ongrid.cost || 0) +
@@ -1166,7 +1127,10 @@ export function InvoiceCalculator({
         (result.elumJubailiBreakdown?.totalCost || 0) +
         (result.minimumContractAdjustment || 0) +
         (result.minimumCharges || 0) +
-        (result.retainerCost || 0) +
+        // SolarAfrica: retainerCost is customization work (NRR), not ARR
+        (isSolarAfrica ? 0 : (result.retainerCost || 0)) +
+        // SolarAfrica: totalMWCost is the tier subscription (ARR)
+        (isSolarAfrica ? (result.totalMWCost || 0) : 0) +
         // Discounted assets are ARR
         (result.discountedAssetsTotal || 0) +
         // Per-site fees are ARR
@@ -1175,7 +1139,7 @@ export function InvoiceCalculator({
         // Solcast is recurring revenue - ARR
         solcastCost;
 
-      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast + trial fees)
+      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast + trial fees + SolarAfrica one-time costs)
       let nrrAmount = result.addonCosts
         .filter(ac => ac.addonId !== 'satelliteDataAPI')
         .reduce((sum, ac) => sum + ac.cost, 0);
@@ -1183,6 +1147,11 @@ export function InvoiceCalculator({
       // Add trial fees to NRR
       if (selectedCustomer.isTrial && isPackage2026(selectedCustomer.package)) {
         nrrAmount += (selectedCustomer.trialSetupFee || 0) + (selectedCustomer.vendorApiOnboardingFee || 0);
+      }
+      
+      // SolarAfrica: setup fee and customization hours are NRR
+      if (isSolarAfrica) {
+        nrrAmount += (result.starterPackageCost || 0) + (result.retainerCost || 0);
       }
       
       const xeroInvoice = {
@@ -1266,35 +1235,9 @@ export function InvoiceCalculator({
       // Save invoice record to database for history tracking
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        // Recalculate ARR/NRR for storage - Solcast is ARR, not NRR
-        const storedSolcastCost = result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
-        const storedArrAmount = (result.basePricingCost || 0) +
-          (result.starterPackageCost || 0) +
-          result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
-          // Hybrid tiered pricing (BLS and similar)
-          (result.hybridTieredBreakdown?.ongrid.cost || 0) +
-          (result.hybridTieredBreakdown?.hybrid.cost || 0) +
-          // Elum package costs are ARR
-          (result.elumInternalBreakdown?.totalCost || 0) +
-          (result.elumEpmBreakdown?.totalCost || 0) +
-          (result.elumJubailiBreakdown?.totalCost || 0) +
-          (result.minimumContractAdjustment || 0) +
-          (result.minimumCharges || 0) +
-          (result.retainerCost || 0) +
-          // Discounted assets are ARR
-          (result.discountedAssetsTotal || 0) +
-          // Per-site fees are ARR
-          (result.perSiteBreakdown?.onboardingCost || 0) +
-          (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
-          // Solcast is recurring revenue - ARR
-          storedSolcastCost;
-        let storedNrrAmount = result.addonCosts
-          .filter(ac => ac.addonId !== 'satelliteDataAPI')
-          .reduce((sum, ac) => sum + ac.cost, 0);
-        // Add trial fees to NRR
-        if (selectedCustomer.isTrial && isPackage2026(selectedCustomer.package)) {
-          storedNrrAmount += (selectedCustomer.trialSetupFee || 0) + (selectedCustomer.vendorApiOnboardingFee || 0);
-        }
+        // Reuse the already-calculated ARR/NRR values from above
+        const storedArrAmount = arrAmount;
+        const storedNrrAmount = nrrAmount;
 
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')
@@ -1547,6 +1490,8 @@ export function InvoiceCalculator({
         setMwChange(0);
         setSiteBillingData([]);
         setSelectedSitesToBill([]);
+        setCustomizationHours(0);
+        setIncludeSetupFee(false);
       }, 2000);
     } catch (error) {
       console.error('Error sending invoice to Xero:', error);
@@ -1833,6 +1778,55 @@ export function InvoiceCalculator({
                 )}
               </div>
               
+              {/* SolarAfrica API section */}
+              {isSolarAfricaPackage(selectedCustomer.package) && (
+                <div className="p-3 border rounded-lg bg-muted/50 space-y-3">
+                  <h4 className="font-semibold text-sm">🌍 SolarAfrica API Details</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Municipalities:</span>
+                      <span className="ml-2 font-medium">{selectedCustomer.municipalityCount || 0}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Tier:</span>
+                      <span className="ml-2 font-medium">
+                        {(() => {
+                          const tier = getSolarAfricaTier(selectedCustomer.municipalityCount || 0);
+                          return `Tier ${tier.tier} - ${tier.label} (€${tier.annualFee.toLocaleString()}/yr)`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="customization-hours" className="text-sm">Customization Hours</Label>
+                      <Input
+                        id="customization-hours"
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={customizationHours || ''}
+                        onChange={(e) => setCustomizationHours(Number(e.target.value) || 0)}
+                        placeholder="0"
+                      />
+                      {selectedCustomer.hourlyRate && (
+                        <p className="text-xs text-muted-foreground">@ €{selectedCustomer.hourlyRate}/hr</p>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2 pt-5">
+                      <Checkbox
+                        id="include-setup-fee"
+                        checked={includeSetupFee}
+                        onCheckedChange={(checked) => setIncludeSetupFee(checked === true)}
+                      />
+                      <Label htmlFor="include-setup-fee" className="text-sm cursor-pointer">
+                        Include Setup Fee (€{(selectedCustomer.apiSetupFee || 16500).toLocaleString()})
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Per-site billing selector for per_site packages */}
               {selectedCustomer.package === 'per_site' && (
                 <div className="space-y-2">
@@ -1879,7 +1873,7 @@ export function InvoiceCalculator({
                 </div>
               )}
               
-              <div className="space-y-2">
+              {!isSolarAfricaPackage(selectedCustomer.package) && (<><div className="space-y-2">
                 <Label>Modules</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
                   {modules.map((module) => (
@@ -2109,6 +2103,7 @@ export function InvoiceCalculator({
                   }
                 </div>
               </div>
+              </>)}
             </>
           )}
           
@@ -2147,7 +2142,36 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {selectedCustomer?.package !== 'starter' && (result.moduleCosts.length > 0 || result.siteMinimumPricingBreakdown) && (
+            {/* SolarAfrica API result breakdown */}
+            {isSolarAfricaPackage(selectedCustomer?.package || '') && (
+              <div className="space-y-1 text-sm mb-3">
+                {result.totalMWCost > 0 && (
+                  <div className="flex justify-between">
+                    <span>
+                      {(() => {
+                        const tier = getSolarAfricaTier(selectedCustomer?.municipalityCount || 0);
+                        return `Tariff API - Tier ${tier.tier} (${tier.label})`;
+                      })()}:
+                    </span>
+                    <span>{formatContractCurrency(result.totalMWCost)}</span>
+                  </div>
+                )}
+                {result.starterPackageCost > 0 && (
+                  <div className="flex justify-between">
+                    <span>Setup Costs:</span>
+                    <span>{formatContractCurrency(result.starterPackageCost)}</span>
+                  </div>
+                )}
+                {result.retainerCost > 0 && (
+                  <div className="flex justify-between">
+                    <span>Platform Customization Work ({customizationHours} hrs × {formatContractCurrency(selectedCustomer?.hourlyRate || 120)}/hr):</span>
+                    <span>{formatContractCurrency(result.retainerCost)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {selectedCustomer?.package !== 'starter' && !isSolarAfricaPackage(selectedCustomer?.package || '') && (result.moduleCosts.length > 0 || result.siteMinimumPricingBreakdown) && (
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Module Costs:</h4>
                 <div className="space-y-1 text-sm pl-2">
@@ -2466,7 +2490,7 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {result.retainerCost > 0 && (
+            {result.retainerCost > 0 && !isSolarAfricaPackage(selectedCustomer?.package || '') && (
               <div className="flex justify-between text-sm mb-3">
                 <span>
                   Retainer Hours
