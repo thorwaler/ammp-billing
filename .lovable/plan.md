@@ -1,105 +1,64 @@
 
 
-## Add SolarAfrica API Subscription Package
+## Fix Database Constraint + Refactor SolarAfrica & 2026 Invoicing Issues
 
 ### Overview
-Create a new `solar_africa_api` package type for API subscription contracts priced by the number of municipalities accessed. The municipality count is manually tracked. The package has a one-time setup fee and tiered annual pricing based on municipality count.
+The database constraint blocking contract saves is the critical fix, but there are several additional issues with how SolarAfrica API contracts flow through the invoicing pipeline -- missing UI inputs, wrong Xero line item descriptions, and ARR/NRR misclassification. There's also dead/duplicate code in the InvoiceCalculator that should be cleaned up.
 
 ---
 
-### Pricing from Contract
+### Issue 1: Database CHECK Constraint (Critical -- Blocks Saving)
 
-**Setup (one-time):**
-- EUR 16,500 (includes first-year API access for up to 25 municipalities)
+The `contracts` table has a `contracts_package_check` constraint that only allows 12 package values. `ammp_os_2026` and `solar_africa_api` are missing.
 
-**Annual Subscription Tiers (by municipality count):**
-
-| Tier | Municipalities | Annual Fee |
-|------|---------------|------------|
-| 1    | Up to 25      | 5,000      |
-| 2    | Up to 35      | 7,000      |
-| 3    | Up to 45      | 9,000      |
-| 4    | Up to 55      | 11,000     |
-| 5    | Up to 65      | 13,000     |
-
-**Optional Add-on:**
-- Platform Customization Work: EUR 120/hr (billed quarterly)
+**Fix**: Database migration to drop and recreate the constraint with all 14 package types.
 
 ---
 
-### Technical Changes
+### Issue 2: InvoiceCalculator Missing SolarAfrica UI Inputs
 
-#### 1. `src/data/pricingData.ts`
+The InvoiceCalculator fetches `municipalityCount`, `apiSetupFee`, and `hourlyRate` from the contract, but:
+- Never passes `customizationHours` to the calculation (the param exists in `CalculationParams` but is never set)
+- Never passes `includeSetupFee` (same -- param exists but never set)
+- Has no UI for entering customization hours for a billing period
+- Has no toggle for "Include Setup Fee" (for first invoice)
+- Shows no municipality count or tier information in the calculator display
 
-- Add `solar_africa_api` to the `PackageType` union type
-- Add a `MunicipalityTier` interface for the tiered pricing structure
-- Add `SOLAR_AFRICA_MUNICIPALITY_TIERS` constant with the 5 tiers
-- Add `SOLAR_AFRICA_SETUP_FEE` constant (16500)
-- Add `SOLAR_AFRICA_ADDONS` array with "Platform Customization Work" (hourly rate, quantity-based)
-- Add helper `isSolarAfricaPackage(packageType)` function
+**Fix**: Add SolarAfrica-specific UI section in InvoiceCalculator:
+- Show municipality count and resolved tier (read from contract)
+- Add "Customization Hours" number input
+- Add "Include Setup Fee" checkbox toggle
+- Pass `customizationHours` and `includeSetupFee` to the calculation params
 
-#### 2. Database: `contracts` table
+---
 
-- Add `municipality_count` column (integer, nullable) -- manually tracked number of municipalities
-- Add `api_setup_fee` column (numeric, nullable) -- one-time setup fee for API contracts
-- Add `hourly_rate` column (numeric, nullable) -- for hourly add-on billing (customization work)
+### Issue 3: Wrong Xero Line Item Descriptions for SolarAfrica
 
-#### 3. `src/components/contracts/ContractForm.tsx`
+The calculation engine puts:
+- Setup fee into `result.starterPackageCost` -- Xero shows it as "AMMP OS Starter Package" with account 1002 (ARR). Should be "Setup Costs" with account 1000 (NRR).
+- Subscription tier into `result.totalMWCost` -- no dedicated Xero line item for this. Should be "Tariff API - Tier X (up to Y municipalities)" with account 1002 (ARR).
+- Customization hours into `result.retainerCost` -- Xero shows as "Retainer Hours" with account 1002 (ARR). Should be "Platform Customization Work" with account 1000 (NRR).
 
-- Add "SolarAfrica API" to the package dropdown with `solar_africa_api` value
-- Add package description: "API subscription priced by municipality count with tiered annual pricing"
-- When `solar_africa_api` is selected:
-  - Show a "Municipality Count" number input (manual entry)
-  - Show the applicable tier and annual fee based on the entered count
-  - Show "Setup Fee" field (defaulting to 16,500)
-  - Show "Hourly Rate" field for customization work add-on (defaulting to 120)
-  - Hide MW-related fields (initialMW, maxMw) since this contract is not MW-based -- or allow them to remain at 0
-  - Hide standard module/addon selectors (use package-specific UI instead)
-- Store `municipality_count`, `api_setup_fee`, `hourly_rate` in the contract record
+**Fix**: Add SolarAfrica-specific Xero line item generation in the `handleSendToXero` function, similar to how trial fees and Elum packages get custom line items. Conditionally use SolarAfrica descriptions when `isSolarAfricaPackage(selectedCustomer.package)`.
 
-#### 4. `src/lib/invoiceCalculations.ts`
+---
 
-- Add a `solar_africa_api` branch in the main calculation switch:
-  - Look up the applicable tier from `SOLAR_AFRICA_MUNICIPALITY_TIERS` based on `municipalityCount`
-  - Calculate annual subscription = tier price
-  - Apply billing frequency multiplier
-  - Add setup fee as NRR if applicable (first invoice only -- controlled by a flag or manual toggle in the calculator)
-  - Add customization hours as NRR if provided
-- Add new fields to `CalculationParams`:
-  - `municipalityCount?: number`
-  - `apiSetupFee?: number`
-  - `hourlyRate?: number`
-  - `customizationHours?: number`
+### Issue 4: ARR/NRR Misclassification for SolarAfrica
 
-#### 5. `src/components/dashboard/InvoiceCalculator.tsx`
+The ARR calculation (lines 1157-1176) counts `result.starterPackageCost` as ARR, but for SolarAfrica this is the one-time setup fee (should be NRR). The actual subscription (in `result.totalMWCost`) is not explicitly captured in the ARR sum for SolarAfrica.
 
-- When a SolarAfrica API contract is selected:
-  - Show municipality count (pre-filled from contract, editable for invoice)
-  - Show the resolved tier and annual fee
-  - Show optional "Customization Hours" input for the billing period
-  - Show toggle for "Include Setup Fee" (for first invoice)
-  - Pass these fields to `calculateInvoice()`
-- Add Xero line items:
-  - "Tariff API - Tier X (up to Y municipalities)" as ARR line item
-  - "Setup Costs" as NRR line item (when included)
-  - "Platform Customization Work" as NRR line item (when hours are entered)
+**Fix**: In the ARR/NRR calculation section:
+- For SolarAfrica: exclude `starterPackageCost` from ARR, include it in NRR
+- For SolarAfrica: add `result.totalMWCost` to ARR (tier subscription)
+- For SolarAfrica: move `retainerCost` from ARR to NRR (customization hours)
 
-#### 6. `src/pages/ContractDetails.tsx`
+---
 
-- Add "SolarAfrica API" to the package label mapping
-- Display municipality count and applicable tier
-- Show setup fee and hourly rate in contract summary
+### Issue 5: Duplicate Calculation Logic (Dead Code)
 
-#### 7. `src/services/analytics/dashboardAnalytics.ts`
+Lines 736-816 in InvoiceCalculator have a pre-calculation path for starter, hybrid_tiered, and pro/custom packages that duplicates what the shared `calculateInvoice()` function does at line 891. The shared function overwrites these results. This dead code adds confusion and maintenance burden.
 
-- Add `solar_africa_api` to package type handling
-- Fetch `municipality_count` for ARR calculation
-- Use tier-based pricing for ARR metrics
-
-#### 8. Other downstream files
-
-- `src/components/invoices/UpcomingInvoicesList.tsx` -- fetch `municipality_count` and pass to calculation
-- `src/components/invoices/MergedInvoiceDialog.tsx` -- include municipality fields in merged invoice calculation
+**Fix**: Remove the duplicate pre-calculation block (lines 736-816). The shared `calculateInvoice()` already handles all package types correctly. Keep only the preparation of `effectiveCapabilities` and `assetBreakdown` (lines 818-830) and the shared call.
 
 ---
 
@@ -107,13 +66,6 @@ Create a new `solar_africa_api` package type for API subscription contracts pric
 
 | File | Change |
 |------|--------|
-| Database migration | Add `municipality_count`, `api_setup_fee`, `hourly_rate` columns to contracts |
-| `src/data/pricingData.ts` | Add SolarAfrica constants, tiers, PackageType update |
-| `src/components/contracts/ContractForm.tsx` | New package option, municipality count input, setup fee, hourly rate fields |
-| `src/lib/invoiceCalculations.ts` | Add `solar_africa_api` calculation branch with tier lookup |
-| `src/components/dashboard/InvoiceCalculator.tsx` | SolarAfrica-specific calculator UI with municipality count, customization hours |
-| `src/pages/ContractDetails.tsx` | Display municipality count, tier, and SolarAfrica-specific fields |
-| `src/services/analytics/dashboardAnalytics.ts` | Include `solar_africa_api` in ARR calculations |
-| `src/components/invoices/UpcomingInvoicesList.tsx` | Fetch and pass municipality fields |
-| `src/components/invoices/MergedInvoiceDialog.tsx` | Include municipality fields |
+| Database migration | Drop and recreate `contracts_package_check` with all 14 package types |
+| `src/components/dashboard/InvoiceCalculator.tsx` | Add SolarAfrica UI inputs (customization hours, setup fee toggle, tier display); fix Xero line items for SolarAfrica; fix ARR/NRR classification; remove duplicate calculation block |
 
