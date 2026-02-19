@@ -1,71 +1,39 @@
 
 
-## Fix Database Constraint + Refactor SolarAfrica & 2026 Invoicing Issues
+## Fix Per-Site Contract Billing Frequency Handling
 
-### Overview
-The database constraint blocking contract saves is the critical fix, but there are several additional issues with how SolarAfrica API contracts flow through the invoicing pipeline -- missing UI inputs, wrong Xero line item descriptions, and ARR/NRR misclassification. There's also dead/duplicate code in the InvoiceCalculator that should be cleaned up.
+### Problem
 
----
+Per-site contracts are designed to always use monthly billing (they appear every month to capture site onboarding fees and annual renewals). However:
 
-### Issue 1: Database CHECK Constraint (Critical -- Blocks Saving)
+1. The billing frequency is only set to "monthly" when you **first select** the per_site package in the dropdown. If the contract is later edited, the form loads whatever value is in the database -- and there's no dropdown to change it back.
+2. The UNHCR contract currently has `billing_frequency = 'annual'` in the database, which needs to be corrected.
 
-The `contracts` table has a `contracts_package_check` constraint that only allows 12 package values. `ammp_os_2026` and `solar_africa_api` are missing.
+### Fix
 
-**Fix**: Database migration to drop and recreate the constraint with all 14 package types.
+#### 1. Force monthly on save for per_site contracts
 
----
+In `src/components/contracts/ContractForm.tsx`, in the `onSubmit` handler, force `billing_frequency` to `'monthly'` whenever the package is `per_site`. This ensures that even if the value somehow drifts, it's always corrected on save.
 
-### Issue 2: InvoiceCalculator Missing SolarAfrica UI Inputs
+#### 2. Force monthly when loading an existing per_site contract
 
-The InvoiceCalculator fetches `municipalityCount`, `apiSetupFee`, and `hourlyRate` from the contract, but:
-- Never passes `customizationHours` to the calculation (the param exists in `CalculationParams` but is never set)
-- Never passes `includeSetupFee` (same -- param exists but never set)
-- Has no UI for entering customization hours for a billing period
-- Has no toggle for "Include Setup Fee" (for first invoice)
-- Shows no municipality count or tier information in the calculator display
+In the `loadContractData` function (around line 456), after setting `billingFrequency` from the database, add a check: if the loaded package is `per_site`, override `billingFrequency` to `'monthly'`.
 
-**Fix**: Add SolarAfrica-specific UI section in InvoiceCalculator:
-- Show municipality count and resolved tier (read from contract)
-- Add "Customization Hours" number input
-- Add "Include Setup Fee" checkbox toggle
-- Pass `customizationHours` and `includeSetupFee` to the calculation params
+#### 3. Fix UNHCR contract data
 
----
+Database update to set the UNHCR contract back to monthly with correct period dates:
 
-### Issue 3: Wrong Xero Line Item Descriptions for SolarAfrica
-
-The calculation engine puts:
-- Setup fee into `result.starterPackageCost` -- Xero shows it as "AMMP OS Starter Package" with account 1002 (ARR). Should be "Setup Costs" with account 1000 (NRR).
-- Subscription tier into `result.totalMWCost` -- no dedicated Xero line item for this. Should be "Tariff API - Tier X (up to Y municipalities)" with account 1002 (ARR).
-- Customization hours into `result.retainerCost` -- Xero shows as "Retainer Hours" with account 1002 (ARR). Should be "Platform Customization Work" with account 1000 (NRR).
-
-**Fix**: Add SolarAfrica-specific Xero line item generation in the `handleSendToXero` function, similar to how trial fees and Elum packages get custom line items. Conditionally use SolarAfrica descriptions when `isSolarAfricaPackage(selectedCustomer.package)`.
-
----
-
-### Issue 4: ARR/NRR Misclassification for SolarAfrica
-
-The ARR calculation (lines 1157-1176) counts `result.starterPackageCost` as ARR, but for SolarAfrica this is the one-time setup fee (should be NRR). The actual subscription (in `result.totalMWCost`) is not explicitly captured in the ARR sum for SolarAfrica.
-
-**Fix**: In the ARR/NRR calculation section:
-- For SolarAfrica: exclude `starterPackageCost` from ARR, include it in NRR
-- For SolarAfrica: add `result.totalMWCost` to ARR (tier subscription)
-- For SolarAfrica: move `retainerCost` from ARR to NRR (customization hours)
-
----
-
-### Issue 5: Duplicate Calculation Logic (Dead Code)
-
-Lines 736-816 in InvoiceCalculator have a pre-calculation path for starter, hybrid_tiered, and pro/custom packages that duplicates what the shared `calculateInvoice()` function does at line 891. The shared function overwrites these results. This dead code adds confusion and maintenance burden.
-
-**Fix**: Remove the duplicate pre-calculation block (lines 736-816). The shared `calculateInvoice()` already handles all package types correctly. Keep only the preparation of `effectiveCapabilities` and `assetBreakdown` (lines 818-830) and the shared call.
-
----
+```text
+Contract: 533f9659-245b-4dd7-9ce1-e09139de78ef
+  billing_frequency: 'annual' -> 'monthly'
+  period_start: '2026-02-01'
+  period_end: '2026-02-28'
+```
 
 ### Files Summary
 
 | File | Change |
 |------|--------|
-| Database migration | Drop and recreate `contracts_package_check` with all 14 package types |
-| `src/components/dashboard/InvoiceCalculator.tsx` | Add SolarAfrica UI inputs (customization hours, setup fee toggle, tier display); fix Xero line items for SolarAfrica; fix ARR/NRR classification; remove duplicate calculation block |
+| `src/components/contracts/ContractForm.tsx` | Force `billing_frequency = 'monthly'` on save and on load for per_site contracts |
+| Database update (data fix) | Set UNHCR contract to monthly with corrected period dates |
 
