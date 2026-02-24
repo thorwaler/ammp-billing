@@ -155,6 +155,8 @@ interface Customer {
   municipalityCount?: number;
   apiSetupFee?: number;
   hourlyRate?: number;
+  // Custom contract type
+  contractTypeId?: string;
 }
 
 // Default modules and addons from shared data
@@ -217,6 +219,7 @@ export function InvoiceCalculator({
   // SolarAfrica API state
   const [customizationHours, setCustomizationHours] = useState<number>(0);
   const [includeSetupFee, setIncludeSetupFee] = useState(false);
+  const [loadedContractType, setLoadedContractType] = useState<any>(null);
 
   // Load customers from database on mount
   useEffect(() => {
@@ -272,7 +275,8 @@ export function InvoiceCalculator({
             vendor_api_onboarding_fee,
             municipality_count,
             api_setup_fee,
-            hourly_rate
+            hourly_rate,
+            contract_type_id
           )
         `)
         .eq('status', 'active');
@@ -356,6 +360,8 @@ export function InvoiceCalculator({
             municipalityCount: Number((contract as any).municipality_count) || undefined,
             apiSetupFee: Number((contract as any).api_setup_fee) || undefined,
             hourlyRate: Number((contract as any).hourly_rate) || undefined,
+            // Custom contract type
+            contractTypeId: (contract as any).contract_type_id || undefined,
           };
         });
 
@@ -536,6 +542,53 @@ export function InvoiceCalculator({
       setSites("");
     }
   }, [customer, customers]);
+
+  // Fetch contract type template when customer has a custom contract type
+  useEffect(() => {
+    const fetchContractType = async () => {
+      if (!selectedCustomer?.contractTypeId) {
+        setLoadedContractType(null);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("contract_types" as any)
+          .select("*")
+          .eq("id", selectedCustomer.contractTypeId)
+          .single();
+        if (error) throw error;
+        setLoadedContractType(data);
+        
+        // If the contract type has custom modules, update the UI modules list
+        const modulesConfig = (data as any)?.modules_config as any[] || [];
+        if (modulesConfig.length > 0) {
+          const customModules = modulesConfig.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            price: m.price,
+            selected: selectedCustomer.modules.includes(m.id),
+          }));
+          setModules(customModules);
+        }
+        
+        // If the contract type has custom addons, update the UI addons list
+        const addonsConfig = (data as any)?.addons_config as any[] || [];
+        if (addonsConfig.length > 0) {
+          const customAddons = addonsConfig.map((a: any) => ({
+            ...a,
+            selected: selectedCustomer.addons.some((ca: any) => 
+              (typeof ca === 'string' ? ca : ca.id) === a.id
+            ),
+          }));
+          setAddons(customAddons);
+        }
+      } catch (error) {
+        console.error("Error fetching contract type:", error);
+        setLoadedContractType(null);
+      }
+    };
+    fetchContractType();
+  }, [selectedCustomer?.contractTypeId]);
 
   // Fetch site billing status for per_site packages
   useEffect(() => {
@@ -814,6 +867,9 @@ export function InvoiceCalculator({
       invoiceDate,
       periodStart: selectedCustomer.periodStart,
       periodEnd: selectedCustomer.periodEnd,
+      // Custom contract type definitions
+      customModuleDefinitions: loadedContractType?.modules_config?.length > 0 ? loadedContractType.modules_config : undefined,
+      customAddonDefinitions: loadedContractType?.addons_config?.length > 0 ? loadedContractType.addons_config : undefined,
     };
     
     calculationResult = calculateInvoice(params);
@@ -857,16 +913,17 @@ export function InvoiceCalculator({
       // Account code constants:
       // 1002 = Platform Fees (ARR - MW-based pricing)
       // 1000 = Implementation Fees (NRR - addons)
-      const ACCOUNT_PLATFORM_FEES = "1002";
-      const ACCOUNT_IMPLEMENTATION_FEES = "1000";
+      const xeroConfig = loadedContractType?.xero_line_items_config as any || {};
+      const ACCOUNT_PLATFORM_FEES = xeroConfig?.modules?.accountCode || xeroConfig?.basePrice?.accountCode || "1002";
+      const ACCOUNT_IMPLEMENTATION_FEES = xeroConfig?.addons?.accountCode || "1000";
 
       // Add base pricing if applicable (Platform Fee - ARR)
       if (result.basePricingCost > 0) {
         lineItems.push({
-          Description: "Base Pricing",
+          Description: xeroConfig?.basePrice?.description || "Base Pricing",
           Quantity: 1,
           UnitAmount: result.basePricingCost,
-          AccountCode: ACCOUNT_PLATFORM_FEES
+          AccountCode: xeroConfig?.basePrice?.accountCode || ACCOUNT_PLATFORM_FEES
         });
       }
 
@@ -896,10 +953,10 @@ export function InvoiceCalculator({
         // Standard module costs (no threshold wording)
         result.moduleCosts.forEach(mc => {
           lineItems.push({
-            Description: mc.moduleName,
+            Description: xeroConfig?.modules?.description || mc.moduleName,
             Quantity: 1,
             UnitAmount: mc.cost,
-            AccountCode: ACCOUNT_PLATFORM_FEES
+            AccountCode: xeroConfig?.modules?.accountCode || ACCOUNT_PLATFORM_FEES
           });
         });
         
@@ -996,10 +1053,10 @@ export function InvoiceCalculator({
         // Solcast (Satellite Data API) is recurring revenue - ARR
         const accountCode = ac.addonId === 'satelliteDataAPI' 
           ? ACCOUNT_PLATFORM_FEES  // 1002 - ARR
-          : ACCOUNT_IMPLEMENTATION_FEES;  // 1000 - NRR
+          : (xeroConfig?.addons?.accountCode || ACCOUNT_IMPLEMENTATION_FEES);  // 1000 - NRR
         
         lineItems.push({
-          Description: ac.addonName,
+          Description: xeroConfig?.addons?.description || ac.addonName,
           Quantity: 1,
           UnitAmount: ac.cost,
           AccountCode: accountCode
