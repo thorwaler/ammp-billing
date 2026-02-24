@@ -1,126 +1,113 @@
 
 
-## Custom Contract Types (Templates) Feature
+## Phase 2-4: Custom Contract Types Integration
 
-### Overview
+### Phase 2: Contract Form Integration
 
-Add a "Contract Types" settings page where users can create reusable contract templates by combining existing pricing structures (per-MW modules, per-site fees, tiered pricing, etc.) with custom names, descriptions, and Xero account mappings. Built-in packages remain unchanged alongside custom ones.
+**Goal**: Custom contract types appear in the package dropdown and auto-populate form fields when selected.
 
-### Concept
+#### `src/components/contracts/ContractForm.tsx`
 
-Each custom contract type is a **template** that defines:
-- A unique name and description (e.g., "Partner X Monitoring", "Reseller Tier 2")
-- Which pricing model it uses (picked from existing patterns)
-- Custom-named modules and add-ons with their prices
-- Xero line item descriptions and account codes
-- Default values for billing frequency, currency, minimum annual value, etc.
+1. **Relax the `package` zod schema** (line 80): Change from `z.enum([...])` to `z.string().min(1)` so custom slugs are accepted.
 
-### Pricing Models Available for Templates
+2. **Fetch custom contract types**: Add a `useQuery` call to load active contract types from the `contract_types` table.
 
-Based on the existing packages, users can pick from these pricing structures:
+3. **Add custom types to package dropdown** (around line 1100): After the existing `<SelectItem>` entries, add a `<Separator>` and dynamically render `<SelectItem>` for each active custom contract type, using the slug as the value and name + description as the label.
 
-| Pricing Model | Description | Based On |
-|---|---|---|
-| Per-MW Modules | Select modules priced per MWp/year | Starter, Pro, Custom, AMMP OS 2026 |
-| Hybrid Tiered | Different rates for on-grid vs hybrid sites | Hybrid Tiered |
-| Capped / Flat Fee | Fixed annual/monthly fee with optional MW cap | Capped |
-| Per-Site | Onboarding fee + annual subscription per site | Per-Site (UNHCR) |
-| Site-Size Threshold | Different per-MWp rates above/below a kWp threshold | Elum ePM |
-| Per-Site Flat | Flat annual fee per site in an asset group | Elum Jubaili |
-| Graduated MW Tiers | Different per-MW rates for MW ranges | Elum Internal |
-| Quantity-Based Tiers | Price tiers based on a count (e.g., municipalities, API calls) | SolarAfrica API |
-| POC / Trial | No billing, expiry tracking only | POC |
+4. **Extend `handlePackageChange`** (line 620): Add an `else` branch that checks if the selected value matches a custom contract type slug. If so:
+   - Load the template's `modules_config` into form modules
+   - Set `billingFrequency` from template defaults (and lock it if `force_billing_frequency` is true)
+   - Set `currency`, `minimumAnnualValue` from template defaults
+   - Set `showCustomPricing` based on pricing model
+   - Store the `contract_type_id` for saving
 
-### Database Schema
+5. **Save `contract_type_id`** in `onSubmit` (line 902): Add `contract_type_id` to the contract data payload when a custom type is selected.
 
-**New table: `contract_types`**
-
-| Column | Type | Description |
-|---|---|---|
-| id | uuid (PK) | |
-| user_id | uuid | Creator |
-| name | text | Display name (e.g., "Reseller Tier 2") |
-| slug | text (unique) | URL-safe identifier, used as package value |
-| description | text | Shown in package selector dropdown |
-| pricing_model | text | One of: per_mw_modules, hybrid_tiered, capped, per_site, site_size_threshold, per_site_flat, graduated_mw_tiers, quantity_tiers, poc |
-| default_currency | text | EUR or USD |
-| default_billing_frequency | text | monthly, quarterly, biannual, annual |
-| force_billing_frequency | boolean | If true, frequency cannot be changed (like per_site forces monthly) |
-| default_minimum_annual_value | numeric | |
-| modules_config | jsonb | Array of custom module definitions: [{id, name, price, available}] |
-| addons_config | jsonb | Array of custom add-on definitions with same structure as AddonDefinition |
-| xero_line_items_config | jsonb | Mapping of cost components to Xero descriptions and account codes |
-| default_values | jsonb | Other default field values (base monthly price, retainer, thresholds, etc.) |
-| is_active | boolean | Soft delete / archive |
-| created_at | timestamptz | |
-| updated_at | timestamptz | |
-
-The `contracts` table needs a small change:
-- Remove the CHECK constraint on `package` (or change it to allow any text value)
-- Add `contract_type_id` (nullable uuid, FK to contract_types) for custom types
-
-### How It Works End-to-End
-
-1. **Creating a template**: User goes to Settings > Contract Types, clicks "New Type", picks a pricing model, then configures custom modules/add-ons with names and prices, sets defaults, and optionally defines Xero line item mappings.
-
-2. **Using a template**: In the Contract Form package dropdown, custom types appear below a separator after the built-in packages. Selecting one pre-populates all fields from the template. The `package` column stores the template slug, and `contract_type_id` stores the reference.
-
-3. **Calculating invoices**: The calculation engine checks if `contract_type_id` is set. If so, it loads the template config and uses the appropriate pricing model function (all existing calculation functions are reused). Custom module/add-on definitions from the template replace the hardcoded `MODULES`/`ADDONS` arrays.
-
-4. **Xero sync**: Custom Xero line item config from the template overrides the default descriptions and account codes.
-
-### UI Design
-
-**Contract Types Settings Page** (`/settings/contract-types`)
-
-The page has a list view showing all custom types with name, pricing model, and status. Each type can be edited or archived.
-
-**Create/Edit Template Form** (dialog or full page)
-
-Sections:
-1. **Basic Info**: Name, description, slug (auto-generated from name)
-2. **Pricing Model**: Dropdown to select one of the 9 models listed above
-3. **Modules** (shown for per_mw_modules, hybrid_tiered models): Add custom modules with name and price per MWp. Users can add/remove rows.
-4. **Add-ons**: Add custom add-ons with name, pricing type (fixed, complexity-based, or tiered), and prices
-5. **Defaults**: Currency, billing frequency, minimum annual value, base monthly price, etc.
-6. **Xero Mapping** (collapsible section): For each cost component (modules, add-ons, base price, setup fees), specify Xero description and account code (1000 for NRR, 1002 for ARR)
-
-### Files to Create/Modify
-
+#### Files changed:
 | File | Change |
-|---|---|
-| **Database migration** | Create `contract_types` table; drop package CHECK constraint; add `contract_type_id` to `contracts` |
-| `src/pages/ContractTypes.tsx` | New page: list, create, edit, archive contract types |
-| `src/components/contract-types/ContractTypeForm.tsx` | New: form for creating/editing a contract type template |
-| `src/components/contract-types/ModuleEditor.tsx` | New: dynamic module list editor (add/remove rows with name + price) |
-| `src/components/contract-types/AddonEditor.tsx` | New: dynamic add-on list editor |
-| `src/components/contract-types/XeroMappingEditor.tsx` | New: Xero line item configuration |
-| `src/components/contract-types/PricingModelSelector.tsx` | New: visual selector for the 9 pricing models |
-| `src/routes.tsx` | Add route for `/settings/contract-types` |
-| `src/components/layout/Sidebar.tsx` | Add navigation link under Settings |
-| `src/components/contracts/ContractForm.tsx` | Load custom types into package dropdown; when selected, apply template defaults and use custom modules/addons |
-| `src/lib/invoiceCalculations.ts` | Accept custom module/addon definitions from template instead of hardcoded arrays |
-| `src/components/dashboard/InvoiceCalculator.tsx` | Load template config for custom contract types; pass custom modules/addons to calculation and Xero sync |
-| `src/data/pricingData.ts` | Export pricing model type; no structural changes to existing data |
+|------|--------|
+| `src/components/contracts/ContractForm.tsx` | Relax package schema, fetch custom types, render in dropdown, handle selection, save contract_type_id |
 
-### Implementation Phases
+---
 
-**Phase 1: Database + Template CRUD**
-- Create `contract_types` table with RLS policies
-- Build the Contract Types settings page with list view
-- Build the template creation form with pricing model selector and module/addon editors
+### Phase 3: Invoice Calculation Integration
 
-**Phase 2: Contract Form Integration**
-- Load custom types into the package dropdown
-- Apply template defaults when a custom type is selected
-- Save `contract_type_id` on the contract record
-- Remove the package CHECK constraint to allow custom slugs
+**Goal**: The calculation engine uses custom module/addon definitions from templates instead of hardcoded arrays.
 
-**Phase 3: Invoice Calculation Integration**
-- Modify calculation engine to accept custom module/addon configs from templates
-- Load template config in InvoiceCalculator when processing custom-type contracts
+#### `src/lib/invoiceCalculations.ts`
 
-**Phase 4: Xero Integration**
-- Apply custom Xero line item descriptions and account codes from template config
-- Fall back to sensible defaults when not configured
+1. **Add optional `customModuleDefinitions` and `customAddonDefinitions` to `CalculationParams`**: These are arrays matching `ModuleDefinition[]` and `AddonDefinition[]` interfaces from pricingData.
+
+2. **Update `calculateModuleCosts`** (line 311): Instead of always using `MODULES` or `MODULES_2026`, check if `customModuleDefinitions` is provided and use that as the module list.
+
+3. **Update `calculateAddonCosts`** (line 384): Instead of always looking up from `ADDONS`/`ADDONS_2026`, check if `customAddonDefinitions` is provided and use that as the lookup source.
+
+4. **Update the `else` branch in `calculateInvoice`** (line 951): For custom contract types using `per_mw_modules` pricing model, the existing pro/custom code path already works -- it just needs to use the custom module list instead of the hardcoded one.
+
+#### `src/components/dashboard/InvoiceCalculator.tsx`
+
+1. **Fetch contract type when loading contract data**: When loading a contract that has `contract_type_id`, fetch the associated contract type template.
+
+2. **Pass custom module/addon definitions to `calculateInvoice`**: Add `customModuleDefinitions` and `customAddonDefinitions` from the loaded template to the calculation params.
+
+3. **Use custom modules/addons for UI display**: When displaying module/addon selectors for a custom-type contract, use the template's definitions instead of the hardcoded `MODULES`/`ADDONS`.
+
+#### `src/components/contracts/ContractPackageSelector.tsx`
+
+Already supports `modules` and `addons` props (lines 56-57), so no changes needed -- just pass the custom definitions from the template.
+
+#### Files changed:
+| File | Change |
+|------|--------|
+| `src/lib/invoiceCalculations.ts` | Add custom module/addon params; use them in calculateModuleCosts and calculateAddonCosts |
+| `src/components/dashboard/InvoiceCalculator.tsx` | Fetch template for custom-type contracts; pass custom definitions to calculation and UI |
+
+---
+
+### Phase 4: Xero Line Item Integration
+
+**Goal**: Custom Xero line item descriptions and account codes from the template override defaults.
+
+#### `src/components/dashboard/InvoiceCalculator.tsx`
+
+1. **Apply custom Xero mapping from template**: When building the `lineItems` array for Xero (around lines 1000-1110), check if the contract has a loaded template with `xero_line_items_config`. If so:
+   - Use custom descriptions for module line items (e.g., "Partner X - Monitoring Fee" instead of generic)
+   - Use custom account codes from the template (defaulting to 1002 for ARR components and 1000 for NRR)
+   - Apply custom descriptions for addon line items
+
+2. **Fallback behavior**: If `xero_line_items_config` is empty or missing, use the existing default descriptions and account codes (no change to current behavior).
+
+#### Structure of `xero_line_items_config`:
+```text
+{
+  "modules": {
+    "description": "Custom description for module line items",
+    "accountCode": "1002"
+  },
+  "addons": {
+    "description": "Custom description for addon line items", 
+    "accountCode": "1000"
+  },
+  "basePrice": {
+    "description": "Custom description for base pricing",
+    "accountCode": "1002"
+  }
+}
+```
+
+#### Files changed:
+| File | Change |
+|------|--------|
+| `src/components/dashboard/InvoiceCalculator.tsx` | Apply custom Xero descriptions and account codes from template config |
+
+---
+
+### Summary of All Changes
+
+| Phase | File | Change |
+|-------|------|--------|
+| 2 | `src/components/contracts/ContractForm.tsx` | Custom types in dropdown, auto-populate defaults, save contract_type_id |
+| 3 | `src/lib/invoiceCalculations.ts` | Accept custom module/addon definitions in calculation params |
+| 3 | `src/components/dashboard/InvoiceCalculator.tsx` | Load template, pass custom definitions to calculator and UI |
+| 4 | `src/components/dashboard/InvoiceCalculator.tsx` | Apply custom Xero line item config from template |
 
