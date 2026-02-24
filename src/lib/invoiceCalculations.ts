@@ -14,7 +14,9 @@ import {
   type PricingTier,
   type DiscountTier,
   type MinimumChargeTier,
-  type GraduatedMWTier
+  type GraduatedMWTier,
+  type ModuleDefinition,
+  type AddonDefinition
 } from "@/data/pricingData";
 
 // Custom asset discount pricing interface
@@ -124,6 +126,9 @@ export interface CalculationParams {
   hourlyRate?: number;
   customizationHours?: number;
   includeSetupFee?: boolean;
+  // Custom contract type fields
+  customModuleDefinitions?: ModuleDefinition[];
+  customAddonDefinitions?: AddonDefinition[];
 }
 
 export interface SiteMinimumPricingResult {
@@ -314,8 +319,8 @@ export function calculateModuleCosts(params: CalculationParams): {
 } {
   const { packageType, totalMW, selectedModules, customPricing, frequencyMultiplier } = params;
   
-  // Use 2026 modules if applicable
-  const moduleList = isPackage2026(packageType) ? MODULES_2026 : MODULES;
+  // Use custom module definitions if provided, otherwise use built-in lists
+  const moduleList = params.customModuleDefinitions || (isPackage2026(packageType) ? MODULES_2026 : MODULES);
   
   const moduleCosts = selectedModules.map(moduleId => {
     const module = moduleList.find(m => m.id === moduleId);
@@ -388,10 +393,14 @@ export function calculateAddonCosts(
   assetBreakdown?: CalculationParams['assetBreakdown'],
   invoiceDate?: Date,
   periodStart?: string,
-  periodEnd?: string
+  periodEnd?: string,
+  customAddonDefinitions?: AddonDefinition[]
 ): CalculationResult['addonCosts'] {
   return selectedAddons.map(addon => {
-    const addonDef = ADDONS.find(a => a.id === addon.id) || ADDONS_2026.find(a => a.id === addon.id);
+    // Check custom addon definitions first, then built-in lists
+    const addonDef = customAddonDefinitions?.find(a => a.id === addon.id) 
+      || ADDONS.find(a => a.id === addon.id) 
+      || ADDONS_2026.find(a => a.id === addon.id);
     if (!addonDef) return null;
     
     // Handle tiered pricing first
@@ -962,7 +971,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       
       // Calculate per-MWp rate from selected modules
       const perMWpRate = params.selectedModules.reduce((sum, moduleId) => {
-        const module = MODULES.find(m => m.id === moduleId);
+        const moduleList = params.customModuleDefinitions || MODULES;
+        const module = moduleList.find(m => m.id === moduleId);
         const price = params.customPricing?.[moduleId] ?? module?.price ?? 0;
         return sum + price;
       }, 0);
@@ -993,7 +1003,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     params.assetBreakdown,
     params.invoiceDate,
     params.periodStart,
-    params.periodEnd
+    params.periodEnd,
+    params.customAddonDefinitions
   );
   
   // Calculate minimum charges (with tier support) - only if not already set by site-level pricing

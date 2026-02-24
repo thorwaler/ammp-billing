@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +11,7 @@ import { DiscountTierEditor } from "@/components/contracts/DiscountTierEditor";
 import { MinimumChargeTierEditor } from "@/components/contracts/MinimumChargeTierEditor";
 import { GraduatedMWTierEditor } from "@/components/contracts/GraduatedMWTierEditor";
 import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
+import { SelectSeparator } from "@/components/ui/select";
 import { 
   MODULES, 
   ADDONS, 
@@ -77,7 +79,7 @@ const contractFormSchema = z.object({
   contractExpiryDate: z.string().optional(),
   periodStart: z.string().optional(),
   periodEnd: z.string().optional(),
-  package: z.enum(["starter", "pro", "custom", "hybrid_tiered", "hybrid_tiered_assetgroups", "capped", "poc", "per_site", "elum_epm", "elum_jubaili", "elum_portfolio_os", "elum_internal", "ammp_os_2026", "solar_africa_api"]),
+  package: z.string().min(1, { message: "Package is required" }),
   isTrial: z.boolean().optional(),
   maxMw: z.coerce.number().optional(),
   modules: z.array(z.string()).optional(),
@@ -228,7 +230,22 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [municipalityCount, setMunicipalityCount] = useState<number>(0);
   const [apiSetupFee, setApiSetupFee] = useState<number>(SOLAR_AFRICA_SETUP_FEE);
   const [hourlyRate, setHourlyRate] = useState<number>(SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
+  const [selectedContractTypeId, setSelectedContractTypeId] = useState<string | null>(null);
   const { currency: userCurrency} = useCurrency();
+
+  // Fetch custom contract types
+  const { data: customContractTypes = [] } = useQuery({
+    queryKey: ["contract_types_active"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("contract_types" as any)
+        .select("*")
+        .eq("is_active", true)
+        .order("name");
+      if (error) throw error;
+      return (data || []) as any[];
+    },
+  });
 
   const form = useForm<ContractFormValues>({
     resolver: zodResolver(contractFormSchema),
@@ -678,7 +695,32 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       setHourlyRate(existingContract?.hourlyRate || SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
       setShowCustomPricing(false);
     } else {
-      setShowCustomPricing(false);
+      // Check if this is a custom contract type
+      const customType = customContractTypes.find((ct: any) => ct.slug === value);
+      if (customType) {
+        setSelectedContractTypeId(customType.id);
+        // Apply template defaults
+        if (customType.default_currency) {
+          form.setValue("currency", customType.default_currency as any);
+        }
+        if (customType.default_billing_frequency) {
+          form.setValue("billingFrequency", customType.default_billing_frequency as any);
+        }
+        if (customType.default_minimum_annual_value) {
+          form.setValue("minimumAnnualValue", customType.default_minimum_annual_value);
+        }
+        // Load modules from template
+        const modulesConfig = customType.modules_config as any[] || [];
+        const moduleIds = modulesConfig.filter((m: any) => m.available).map((m: any) => m.id);
+        form.setValue("modules", moduleIds);
+        
+        // Set custom pricing visibility based on pricing model
+        const needsCustomPricing = ['per_mw_modules'].includes(customType.pricing_model);
+        setShowCustomPricing(needsCustomPricing);
+      } else {
+        setSelectedContractTypeId(null);
+        setShowCustomPricing(false);
+      }
     }
   };
 
@@ -970,6 +1012,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         municipality_count: data.package === 'solar_africa_api' ? municipalityCount : null,
         api_setup_fee: data.package === 'solar_africa_api' ? apiSetupFee : null,
         hourly_rate: data.package === 'solar_africa_api' ? hourlyRate : null,
+        // Custom contract type reference
+        contract_type_id: selectedContractTypeId || null,
       };
 
       if (existingContractId) {
@@ -1112,6 +1156,16 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="elum_internal">Elum Internal Assets (Graduated MW pricing)</SelectItem>
                       <SelectItem value="ammp_os_2026">AMMP OS 2026 (New pricing: 5 modules, trial option)</SelectItem>
                       <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
+                      {customContractTypes.length > 0 && (
+                        <>
+                          <SelectSeparator />
+                          {customContractTypes.map((ct: any) => (
+                            <SelectItem key={ct.slug} value={ct.slug}>
+                              {ct.name}{ct.description ? ` (${ct.description})` : ''}
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                   <FormDescription>
