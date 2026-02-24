@@ -13,6 +13,7 @@ import ContractDetails from "./pages/ContractDetails";
 import Integrations from "./pages/Integrations";
 import Notifications from "./pages/Notifications";
 import Alerts from "./pages/Alerts";
+import ContractTypes from "./pages/ContractTypes";
 
 const AppRoutes = () => (
   <BrowserRouter>
@@ -30,6 +31,7 @@ const AppRoutes = () => (
       <Route path="/users" element={<ProtectedRoute><UserManagement /></ProtectedRoute>} />
       <Route path="/integrations" element={<ProtectedRoute><Integrations /></ProtectedRoute>} />
       <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+      <Route path="/settings/contract-types" element={<ProtectedRoute><ContractTypes /></ProtectedRoute>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   </BrowserRouter>

@@ -313,6 +313,66 @@ export type Database = {
           },
         ]
       }
+      contract_types: {
+        Row: {
+          addons_config: Json | null
+          created_at: string
+          default_billing_frequency: string | null
+          default_currency: string | null
+          default_minimum_annual_value: number | null
+          default_values: Json | null
+          description: string | null
+          force_billing_frequency: boolean | null
+          id: string
+          is_active: boolean | null
+          modules_config: Json | null
+          name: string
+          pricing_model: string
+          slug: string
+          updated_at: string
+          user_id: string
+          xero_line_items_config: Json | null
+        }
+        Insert: {
+          addons_config?: Json | null
+          created_at?: string
+          default_billing_frequency?: string | null
+          default_currency?: string | null
+          default_minimum_annual_value?: number | null
+          default_values?: Json | null
+          description?: string | null
+          force_billing_frequency?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          modules_config?: Json | null
+          name: string
+          pricing_model: string
+          slug: string
+          updated_at?: string
+          user_id: string
+          xero_line_items_config?: Json | null
+        }
+        Update: {
+          addons_config?: Json | null
+          created_at?: string
+          default_billing_frequency?: string | null
+          default_currency?: string | null
+          default_minimum_annual_value?: number | null
+          default_values?: Json | null
+          description?: string | null
+          force_billing_frequency?: boolean | null
+          id?: string
+          is_active?: boolean | null
+          modules_config?: Json | null
+          name?: string
+          pricing_model?: string
+          slug?: string
+          updated_at?: string
+          user_id?: string
+          xero_line_items_config?: Json | null
+        }
+        Relationships: []
+      }
       contracts: {
         Row: {
           above_threshold_price_per_mwp: number | null
@@ -338,6 +398,7 @@ export type Database = {
           contract_name: string | null
           contract_pdf_url: string | null
           contract_status: string | null
+          contract_type_id: string | null
           created_at: string
           currency: string | null
           custom_asset_pricing: Json | null
@@ -402,6 +463,7 @@ export type Database = {
           contract_name?: string | null
           contract_pdf_url?: string | null
           contract_status?: string | null
+          contract_type_id?: string | null
           created_at?: string
           currency?: string | null
           custom_asset_pricing?: Json | null
@@ -466,6 +528,7 @@ export type Database = {
           contract_name?: string | null
           contract_pdf_url?: string | null
           contract_status?: string | null
+          contract_type_id?: string | null
           created_at?: string
           currency?: string | null
           custom_asset_pricing?: Json | null
@@ -507,6 +570,13 @@ export type Database = {
           volume_discounts?: Json | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contracts_contract_type_id_fkey"
+            columns: ["contract_type_id"]
+            isOneToOne: false
+            referencedRelation: "contract_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contracts_customer_id_fkey"
             columns: ["customer_id"]
