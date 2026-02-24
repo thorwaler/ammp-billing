@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { NavLink } from "react-router-dom";
-import { Home, Users, FileText, BarChart, Link2, UserCircle, X, History, ScrollText, AlertTriangle } from "lucide-react";
+import { Home, Users, FileText, BarChart, Link2, UserCircle, X, History, ScrollText, AlertTriangle, Settings } from "lucide-react";
 import { useInvoiceAlerts } from "@/hooks/useInvoiceAlerts";
 
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -157,6 +157,19 @@ export function Sidebar({ className, isOpen, closeSidebar }: SidebarProps) {
           >
             <UserCircle className="h-5 w-5" />
             Users
+          </NavLink>
+          <NavLink 
+            to="/settings/contract-types"
+            className={({ isActive }) => 
+              cn("flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isActive 
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground" 
+                  : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              )
+            }
+          >
+            <Settings className="h-5 w-5" />
+            Contract Types
           </NavLink>
         </nav>
       </ScrollArea>
