@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Building2, Check, X, FolderOpen, RefreshCw } from "lucide-react";
+import { Loader2, Building2, Check, X, FolderOpen, RefreshCw, Pencil } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import SharePointFolderBrowser from "./SharePointFolderBrowser";
@@ -288,12 +288,23 @@ const SharePointIntegration = () => {
                     const setting = getFolderSettingForType(docType.id);
                     return (
                       <div key={docType.id} className="flex items-center justify-between gap-2">
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">{docType.label}</p>
                           {setting ? (
-                            <p className="text-xs text-muted-foreground truncate">
-                              {setting.site_name} / {setting.drive_name}{setting.folder_path ? ` / ${setting.folder_path}` : ''}
-                            </p>
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 group max-w-full"
+                              onClick={() => {
+                                setSelectedDocType(docType.id);
+                                setShowFolderBrowser(true);
+                              }}
+                              title="Click to change folder"
+                            >
+                              <p className="text-xs text-muted-foreground truncate">
+                                {setting.site_name} / {setting.drive_name}{setting.folder_path ? ` / ${setting.folder_path}` : ''}
+                              </p>
+                              <Pencil className="h-3 w-3 flex-shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </button>
                           ) : (
                             <p className="text-xs text-muted-foreground">Not configured</p>
                           )}
