@@ -1,61 +1,50 @@
 
 
-## Fix: SPS Discount Values Not Reaching Invoice Calculator
+## Add Discount Defaults and Asset Group Scoping to Contract Types
 
-### Root Cause (3 layers)
+### What's Changing
 
-1. **Database still has `0`** -- The previous DB update was planned but the contract still stores `upfront_discount_percent = 0` and `commitment_discount_percent = 0`.
+Two enhancements to the contract type template system:
 
-2. **ContractForm loading (lines 358-363)** -- When editing an existing SPS contract, the code checks `if (existingContract.upfrontDiscountPercent !== undefined)` and sets the value. Since `0 !== undefined` is true, it sets the state to `0`. The `|| 5` fix on line 711 only runs when the user **changes** the package dropdown, not when loading an existing contract.
+1. **Default discount fields** -- Each contract type template can specify default `upfront_discount_percent` and `commitment_discount_percent` values. When a contract is created from this template, these defaults pre-fill the contract form.
 
-3. **InvoiceCalculator (lines 374-375)** -- `Number(0) || undefined` evaluates to `undefined` because `0` is falsy. So the discount values are passed as `undefined` to the calculation engine, and no discounts are applied.
+2. **Asset group scoping flag** -- A toggle on any contract type that marks it as "asset group scoped." This means contracts using this template filter their assets to a specific AMMP asset group rather than using the full customer org. This replaces the need for a separate `hybrid_tiered_assetgroups` pricing model -- any base model can be asset-group-scoped.
 
-### Fix
+### Database Changes
 
-**1. Update the existing SPS contract in the database**
+**Table: `contract_types`** -- Add 3 columns:
 
-```sql
-UPDATE contracts 
-SET upfront_discount_percent = 5, commitment_discount_percent = 3
-WHERE package = 'sps_monitoring' 
-  AND (upfront_discount_percent = 0 OR upfront_discount_percent IS NULL);
-```
+| Column | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `default_upfront_discount_percent` | numeric | NULL | Template default for upfront payment discount |
+| `default_commitment_discount_percent` | numeric | NULL | Template default for commitment discount |
+| `asset_group_scoped` | boolean | false | Whether contracts of this type are scoped to an asset group |
 
-**2. Fix ContractForm loading logic (lines 358-363)**
+### UI Changes
 
-When loading an existing SPS contract, treat `0` as "not yet configured" and apply defaults:
+**File: `src/components/contract-types/ContractTypeForm.tsx`**
 
-```typescript
-// Initialize SPS Monitoring discount state
-if (existingContract.package === 'sps_monitoring') {
-  setUpfrontDiscountPercent(existingContract.upfrontDiscountPercent || 5);
-  setCommitmentDiscountPercent(existingContract.commitmentDiscountPercent || 3);
-} else {
-  if (existingContract.upfrontDiscountPercent !== undefined) {
-    setUpfrontDiscountPercent(existingContract.upfrontDiscountPercent);
-  }
-  if (existingContract.commitmentDiscountPercent !== undefined) {
-    setCommitmentDiscountPercent(existingContract.commitmentDiscountPercent);
-  }
-}
-```
+Add to the "Defaults" section:
+- Two numeric inputs for **Default Upfront Discount (%)** and **Default Commitment Discount (%)** in the existing 3-column grid (expanding it to accommodate)
+- A switch/toggle: **"Scope to Asset Group"** with description "Contracts of this type will be filtered to a specific AMMP asset group instead of the full organization"
 
-**3. Fix InvoiceCalculator data mapping (lines 374-375)**
+**File: `src/components/contract-types/ContractTypeForm.tsx` (data interface)**
 
-Use nullish coalescing (`??`) instead of `||` so that `0` is preserved as a valid number rather than falling to `undefined`:
+Add three new fields to `ContractTypeFormData`:
+- `default_upfront_discount_percent: number`
+- `default_commitment_discount_percent: number`
+- `asset_group_scoped: boolean`
 
-```typescript
-upfrontDiscountPercent: (contract as any).upfront_discount_percent ?? undefined,
-commitmentDiscountPercent: (contract as any).commitment_discount_percent ?? undefined,
-```
+**File: `src/pages/ContractTypes.tsx`**
 
-This ensures that if the DB value is `0`, it's passed as `0` (not silently dropped). Combined with the DB fix, SPS contracts will have `5` and `3` in the database, so they'll flow through correctly.
+- Show an "Asset Group" badge on contract type cards when `asset_group_scoped` is true
+- Map the new fields in `toFormData` and the save mutation payload
 
 ### Files Changed
 
 | File | Change |
 |------|--------|
-| Database (contracts table) | Set `upfront_discount_percent=5`, `commitment_discount_percent=3` for existing SPS contracts with `0` |
-| `src/components/contracts/ContractForm.tsx` | Fix loading logic (lines 358-363) to default SPS discounts when `0` |
-| `src/components/dashboard/InvoiceCalculator.tsx` | Fix lines 374-375 to use `??` instead of `\|\|` so `0` is not dropped |
+| Database (`contract_types` table) | Add `default_upfront_discount_percent`, `default_commitment_discount_percent`, `asset_group_scoped` columns |
+| `src/components/contract-types/ContractTypeForm.tsx` | Add discount inputs and asset group toggle to form; update interface and defaults |
+| `src/pages/ContractTypes.tsx` | Map new fields in `toFormData`, save payload, and display asset group badge |
 
