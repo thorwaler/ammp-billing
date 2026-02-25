@@ -708,8 +708,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("minimumAnnualValue", 100000);
       form.setValue("billingFrequency", "quarterly");
       setPortfolioDiscountTiers(SPS_DEFAULT_VOLUME_DISCOUNT_TIERS);
-      setUpfrontDiscountPercent(existingContract?.upfrontDiscountPercent ?? 5);
-      setCommitmentDiscountPercent(existingContract?.commitmentDiscountPercent ?? 3);
+      setUpfrontDiscountPercent(existingContract?.upfrontDiscountPercent || 5);
+      setCommitmentDiscountPercent(existingContract?.commitmentDiscountPercent || 3);
       setShowCustomPricing(true);
     } else if (value === "solar_africa_api") {
       // SolarAfrica API - municipality-based pricing
