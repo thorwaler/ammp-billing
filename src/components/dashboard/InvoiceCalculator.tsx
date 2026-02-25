@@ -371,8 +371,8 @@ export function InvoiceCalculator({
             // Custom contract type
             contractTypeId: (contract as any).contract_type_id || undefined,
             // SPS Monitoring discount fields
-            upfrontDiscountPercent: Number((contract as any).upfront_discount_percent) || undefined,
-            commitmentDiscountPercent: Number((contract as any).commitment_discount_percent) || undefined,
+            upfrontDiscountPercent: (contract as any).upfront_discount_percent != null ? Number((contract as any).upfront_discount_percent) : undefined,
+            commitmentDiscountPercent: (contract as any).commitment_discount_percent != null ? Number((contract as any).commitment_discount_percent) : undefined,
           };
         });
 
