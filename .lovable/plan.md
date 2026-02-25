@@ -1,65 +1,57 @@
 
 
-## Combined SPS Monitoring Cleanup and Fixes
+## Fix: SPS Discount Defaults Not Applied
 
-This plan merges all outstanding SPS issues into a single implementation pass.
+### Root Cause
 
-### 1. Fix Minimum Annual Value Logic (Critical)
+The contract "SPS 2026" was saved to the database with `upfront_discount_percent = 0` and `commitment_discount_percent = 0`. This happened because:
 
-The €100,000 minimum is paid **upfront annually**, so quarterly invoices should only charge the **excess** beyond that prepayment.
+1. The initial state in `ContractForm.tsx` (line 240-241) defaults both values to `0`
+2. When the user selected `sps_monitoring` as package type, the `handlePackageChange` function runs:
+   ```
+   setUpfrontDiscountPercent(existingContract?.upfrontDiscountPercent ?? 5)
+   ```
+3. If there's no existing contract (new contract creation), `existingContract` is undefined, so `?? 5` correctly falls back to 5%
+4. **However**, if the contract was created before these fields existed, or if the user saved the form before switching to `sps_monitoring`, the values were already `0` in state and got saved as `0`
 
-**`src/lib/invoiceCalculations.ts`** (SPS branch):
-- Calculate the full **annual** discounted monitoring fee (not quarterly)
-- Apply the three stacking discounts on the annual figure
-- Compare against `minimumAnnualValue`:
-  - If annual fee ≤ minimum → quarterly monitoring fee = €0 (covered by upfront)
-  - If annual fee > minimum → quarterly monitoring fee = `(annualFee - minimumAnnualValue) / 4`
-- Update `spsDiscountBreakdown` to include `annualDiscountedFee`, `upfrontAnnualPayment`, `excessAnnualAmount`, and `quarterlyExcess`
+The DB confirms: `upfront_discount_percent: 0`, `commitment_discount_percent: 0`.
 
-```text
-annualFee = totalMW × rate × 1.0 → Volume → Upfront → Commitment
-if annualFee ≤ 100,000:
-    quarterlyMonitoring = 0
-else:
-    quarterlyMonitoring = (annualFee - 100,000) / 4
-+ Add-ons + One-time fees = Quarterly Invoice
+### Fix
+
+Two changes are needed:
+
+**1. Update the existing contract in the database**
+
+Run a migration to set the correct defaults for existing SPS contracts that have `0`:
+
+```sql
+UPDATE contracts 
+SET upfront_discount_percent = 5, commitment_discount_percent = 3
+WHERE package = 'sps_monitoring' 
+  AND (upfront_discount_percent = 0 OR upfront_discount_percent IS NULL)
+  AND (commitment_discount_percent = 0 OR commitment_discount_percent IS NULL);
 ```
 
-### 2. Use SPS_ADDONS in InvoiceCalculator
+**2. Fix the default state initialization** in `ContractForm.tsx`
 
-**`src/components/dashboard/InvoiceCalculator.tsx`**:
-- When building the addon selection list, check `isSpsPackage` and use `SPS_ADDONS` instead of the legacy `ADDONS` array
-- Pass `SPS_ADDONS` as `customAddonDefinitions` to `calculateInvoice()` so SPS-specific prices (e.g., Satellite Data at €2.7/site, Custom Dashboard at €900) are used in calculations
-- This also resolves the lint warning for the unused `SPS_ADDONS` import
+Change the initial `useState` defaults from `0` to detect the package context:
 
-### 3. Add SPS Discount Breakdown Display
+- When `handlePackageChange` sets `sps_monitoring` on a **new** contract, always use `5` and `3` as defaults (not conditional on `existingContract`)
+- When editing an existing SPS contract that already has values, use those values
 
-**`src/components/dashboard/InvoiceCalculator.tsx`** (results section):
-- Add a conditional block (like the existing SolarAfrica breakdown) that renders when `result.spsDiscountBreakdown` is present
-- Show the discount waterfall:
+The fix is in `handlePackageChange` (line 711-712): change `?? 5` to a check that also treats `0` as "not yet configured" for new SPS contracts:
 
-```text
-Annual Monitoring Fee (pre-discount):  €X,XXX
-Volume Discount (XX%):                -€X,XXX
-Upfront Discount (X%):                -€XXX
-Commitment Discount (X%):             -€XXX
-Annual Discounted Fee:                 €X,XXX
-Upfront Annual Payment:               €100,000
-Excess Annual Amount:                  €X,XXX (or €0)
-Quarterly Monitoring Fee:              €X,XXX
+```typescript
+setUpfrontDiscountPercent(existingContract?.upfrontDiscountPercent || 5);
+setCommitmentDiscountPercent(existingContract?.commitmentDiscountPercent || 3);
 ```
 
-### 4. Update Support Document Generator
-
-**`src/lib/supportDocumentGenerator.ts`**:
-- Add SPS awareness: when the package is `sps_monitoring`, include the discount waterfall lines in the support document data
-- Show the upfront payment vs. excess breakdown so the client sees how their quarterly invoice was derived
+Using `||` instead of `??` means `0` will also fall back to the default. This is safe because a 0% discount is equivalent to "no discount" and the user can still manually set it to 0 if desired by typing in the field.
 
 ### Files Changed
 
 | File | Change |
 |------|--------|
-| `src/lib/invoiceCalculations.ts` | Rework SPS branch to calculate annual fee first, subtract upfront minimum, pro-rate excess; update spsDiscountBreakdown fields |
-| `src/components/dashboard/InvoiceCalculator.tsx` | Use `SPS_ADDONS` for addon selection and calculation; add discount waterfall display in results |
-| `src/lib/supportDocumentGenerator.ts` | Add SPS discount breakdown to support document output |
+| `supabase/migrations/...` | Update existing SPS contracts to have 5% upfront and 3% commitment |
+| `src/components/contracts/ContractForm.tsx` | Change `??` to `\|\|` for SPS discount defaults on lines 711-712 |
 
