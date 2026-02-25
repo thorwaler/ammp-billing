@@ -37,6 +37,7 @@ import {
   ADDONS_2026,
   isPackage2026,
   isSolarAfricaPackage,
+  isSpsPackage,
   getSolarAfricaTier,
   SOLAR_AFRICA_MUNICIPALITY_TIERS,
   type ComplexityLevel, 
@@ -157,6 +158,9 @@ interface Customer {
   hourlyRate?: number;
   // Custom contract type
   contractTypeId?: string;
+  // SPS Monitoring discount fields
+  upfrontDiscountPercent?: number;
+  commitmentDiscountPercent?: number;
 }
 
 // Default modules and addons from shared data
@@ -276,7 +280,9 @@ export function InvoiceCalculator({
             municipality_count,
             api_setup_fee,
             hourly_rate,
-            contract_type_id
+            contract_type_id,
+            upfront_discount_percent,
+            commitment_discount_percent
           )
         `)
         .eq('status', 'active');
@@ -362,6 +368,9 @@ export function InvoiceCalculator({
             hourlyRate: Number((contract as any).hourly_rate) || undefined,
             // Custom contract type
             contractTypeId: (contract as any).contract_type_id || undefined,
+            // SPS Monitoring discount fields
+            upfrontDiscountPercent: Number((contract as any).upfront_discount_percent) || undefined,
+            commitmentDiscountPercent: Number((contract as any).commitment_discount_percent) || undefined,
           };
         });
 
@@ -870,6 +879,9 @@ export function InvoiceCalculator({
       // Custom contract type definitions
       customModuleDefinitions: loadedContractType?.modules_config?.length > 0 ? loadedContractType.modules_config : undefined,
       customAddonDefinitions: loadedContractType?.addons_config?.length > 0 ? loadedContractType.addons_config : undefined,
+      // SPS Monitoring discount fields
+      upfrontDiscountPercent: selectedCustomer.upfrontDiscountPercent,
+      commitmentDiscountPercent: selectedCustomer.commitmentDiscountPercent,
     };
     
     calculationResult = calculateInvoice(params);

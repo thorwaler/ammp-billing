@@ -392,6 +392,7 @@ export type Database = {
           below_threshold_price_per_mwp: number | null
           billing_frequency: string | null
           cached_capabilities: Json | null
+          commitment_discount_percent: number | null
           company_name: string
           contract_ammp_org_id: string | null
           contract_expiry_date: string | null
@@ -435,6 +436,7 @@ export type Database = {
           site_size_threshold_kwp: number | null
           trial_setup_fee: number | null
           updated_at: string
+          upfront_discount_percent: number | null
           user_id: string
           vendor_api_onboarding_fee: number | null
           volume_discounts: Json | null
@@ -457,6 +459,7 @@ export type Database = {
           below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
           cached_capabilities?: Json | null
+          commitment_discount_percent?: number | null
           company_name: string
           contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
@@ -500,6 +503,7 @@ export type Database = {
           site_size_threshold_kwp?: number | null
           trial_setup_fee?: number | null
           updated_at?: string
+          upfront_discount_percent?: number | null
           user_id: string
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
@@ -522,6 +526,7 @@ export type Database = {
           below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
           cached_capabilities?: Json | null
+          commitment_discount_percent?: number | null
           company_name?: string
           contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
@@ -565,6 +570,7 @@ export type Database = {
           site_size_threshold_kwp?: number | null
           trial_setup_fee?: number | null
           updated_at?: string
+          upfront_discount_percent?: number | null
           user_id?: string
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null

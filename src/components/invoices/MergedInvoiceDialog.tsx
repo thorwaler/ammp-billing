@@ -55,6 +55,9 @@ interface ContractForMerge {
   municipalityCount?: number;
   apiSetupFee?: number;
   hourlyRate?: number;
+  // SPS Monitoring discount fields
+  upfrontDiscountPercent?: number;
+  commitmentDiscountPercent?: number;
 }
 
 interface MergedInvoiceDialogProps {
@@ -180,6 +183,9 @@ export function MergedInvoiceDialog({
       municipalityCount: contract.municipalityCount,
       apiSetupFee: contract.apiSetupFee,
       hourlyRate: contract.hourlyRate,
+      // SPS Monitoring discount fields
+      upfrontDiscountPercent: contract.upfrontDiscountPercent,
+      commitmentDiscountPercent: contract.commitmentDiscountPercent,
     });
   };
 

@@ -17,10 +17,13 @@ import {
   ADDONS, 
   MODULES_2026,
   ADDONS_2026,
+  SPS_ADDONS,
+  SPS_DEFAULT_VOLUME_DISCOUNT_TIERS,
   TRIAL_2026,
   MUTUALLY_EXCLUSIVE_2026,
   isPackage2026,
   isSolarAfricaPackage,
+  isSpsPackage,
   SOLAR_AFRICA_SETUP_FEE,
   SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE,
   SOLAR_AFRICA_MUNICIPALITY_TIERS,
@@ -200,6 +203,9 @@ interface ContractFormProps {
     municipalityCount?: number;
     apiSetupFee?: number;
     hourlyRate?: number;
+    // SPS Monitoring discount fields
+    upfrontDiscountPercent?: number;
+    commitmentDiscountPercent?: number;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -231,6 +237,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [apiSetupFee, setApiSetupFee] = useState<number>(SOLAR_AFRICA_SETUP_FEE);
   const [hourlyRate, setHourlyRate] = useState<number>(SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
   const [selectedContractTypeId, setSelectedContractTypeId] = useState<string | null>(null);
+  const [upfrontDiscountPercent, setUpfrontDiscountPercent] = useState<number>(0);
+  const [commitmentDiscountPercent, setCommitmentDiscountPercent] = useState<number>(0);
   const { currency: userCurrency} = useCurrency();
 
   // Fetch custom contract types
@@ -344,6 +352,14 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       }
       if (existingContract.hourlyRate !== undefined) {
         setHourlyRate(existingContract.hourlyRate);
+      }
+      
+      // Initialize SPS Monitoring discount state
+      if (existingContract.upfrontDiscountPercent !== undefined) {
+        setUpfrontDiscountPercent(existingContract.upfrontDiscountPercent);
+      }
+      if (existingContract.commitmentDiscountPercent !== undefined) {
+        setCommitmentDiscountPercent(existingContract.commitmentDiscountPercent);
       }
       
       // Initialize portfolio discount tiers
@@ -686,6 +702,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("isTrial", false);
       setIsTrial(false);
       setShowCustomPricing(true);
+    } else if (value === "sps_monitoring") {
+      // SPS Monitoring - module-based with 3 stacking discounts
+      form.setValue("modules", ["technicalMonitoring"]);
+      form.setValue("minimumAnnualValue", 100000);
+      form.setValue("billingFrequency", "quarterly");
+      setPortfolioDiscountTiers(SPS_DEFAULT_VOLUME_DISCOUNT_TIERS);
+      setUpfrontDiscountPercent(existingContract?.upfrontDiscountPercent ?? 5);
+      setCommitmentDiscountPercent(existingContract?.commitmentDiscountPercent ?? 3);
+      setShowCustomPricing(true);
     } else if (value === "solar_africa_api") {
       // SolarAfrica API - municipality-based pricing
       form.setValue("modules", []);
@@ -1014,6 +1039,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         hourly_rate: data.package === 'solar_africa_api' ? hourlyRate : null,
         // Custom contract type reference
         contract_type_id: selectedContractTypeId || null,
+        // SPS Monitoring discount fields
+        upfront_discount_percent: data.package === 'sps_monitoring' ? upfrontDiscountPercent : null,
+        commitment_discount_percent: data.package === 'sps_monitoring' ? commitmentDiscountPercent : null,
       };
 
       if (existingContractId) {
@@ -1155,6 +1183,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="elum_portfolio_os">Elum Portfolio OS (Custom org with full pricing flexibility)</SelectItem>
                       <SelectItem value="elum_internal">Elum Internal Assets (Graduated MW pricing)</SelectItem>
                       <SelectItem value="ammp_os_2026">AMMP OS 2026 (New pricing: 5 modules, trial option)</SelectItem>
+                      <SelectItem value="sps_monitoring">SPS Monitoring (3 stacking discounts, quarterly billing, €100k min)</SelectItem>
                       <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
                       {customContractTypes.length > 0 && (
                         <>
@@ -1195,6 +1224,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "AMMP OS 2026: 5 modules with per-MWp pricing, optional trial toggle (50% off modules + setup fees), and updated add-ons." :
                       watchPackage === "solar_africa_api" ?
                       "SolarAfrica API: API subscription priced by municipality count with tiered annual pricing. Includes one-time setup fee and optional customization work." :
+                      watchPackage === "sps_monitoring" ?
+                      "SPS Monitoring: Module-based pricing with 3 stacking discounts (Volume, Upfront 5%, Commitment 3%). Quarterly billing with €100,000 minimum annual value." :
                       "Custom/Legacy: Use custom pricing for this customer."}
                   </FormDescription>
                   <FormMessage />
@@ -1221,6 +1252,55 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </FormItem>
               )}
             />
+
+            {/* SPS Monitoring Discount Fields */}
+            {watchPackage === "sps_monitoring" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-medium">SPS Monitoring Discounts</h3>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="upfront-discount">Upfront Discount (%)</Label>
+                    <Input
+                      id="upfront-discount"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={upfrontDiscountPercent}
+                      onChange={(e) => setUpfrontDiscountPercent(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: 5% for paying annual fee upfront</p>
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="commitment-discount">Commitment Discount (%)</Label>
+                    <Input
+                      id="commitment-discount"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={commitmentDiscountPercent}
+                      onChange={(e) => setCommitmentDiscountPercent(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: 3% for 3-year commitment</p>
+                  </div>
+                </div>
+
+                <div className="text-sm space-y-1 text-muted-foreground">
+                  <p className="font-medium text-foreground">Discount Stacking Order:</p>
+                  <ol className="list-decimal pl-4 space-y-0.5">
+                    <li>Volume Discount (from portfolio discount tiers below)</li>
+                    <li>Upfront Discount ({upfrontDiscountPercent}%)</li>
+                    <li>Commitment Discount ({commitmentDiscountPercent}%)</li>
+                  </ol>
+                  <p className="mt-2">Discounted fee is then compared against the Minimum Annual Value (pro-rated for billing period).</p>
+                </div>
+              </div>
+            )}
 
             {/* AMMP OS 2026 Trial Toggle */}
             {watchPackage === "ammp_os_2026" && (

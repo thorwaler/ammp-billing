@@ -253,6 +253,8 @@ export function calculateSingleContractARR(
     municipality_count?: number | null;
     api_setup_fee?: number | null;
     hourly_rate?: number | null;
+    upfront_discount_percent?: number | null;
+    commitment_discount_percent?: number | null;
   }
 ): number {
   // POC contracts have no ARR
@@ -330,6 +332,9 @@ export function calculateSingleContractARR(
         isTrial: contract.is_trial || false,
         trialSetupFee: contract.trial_setup_fee || undefined,
         vendorApiOnboardingFee: contract.vendor_api_onboarding_fee || undefined,
+        // SPS Monitoring discount fields
+        upfrontDiscountPercent: contract.upfront_discount_percent || undefined,
+        commitmentDiscountPercent: contract.commitment_discount_percent || undefined,
       });
       annualValue = result.totalPrice;
     }
@@ -385,7 +390,9 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       vendor_api_onboarding_fee,
       municipality_count,
       api_setup_fee,
-      hourly_rate
+      hourly_rate,
+      upfront_discount_percent,
+      commitment_discount_percent
     `)
     .eq('contract_status', 'active')
     .neq('package', 'poc');

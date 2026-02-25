@@ -1,0 +1,2 @@
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS upfront_discount_percent numeric DEFAULT NULL;
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS commitment_discount_percent numeric DEFAULT NULL;

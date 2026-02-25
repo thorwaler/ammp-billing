@@ -175,7 +175,8 @@ export type PackageType =
   | "elum_portfolio_os"
   | "elum_internal"
   | "ammp_os_2026"
-  | "solar_africa_api";
+  | "solar_africa_api"
+  | "sps_monitoring";
 
 // === SolarAfrica API Pricing ===
 
@@ -261,6 +262,68 @@ export const isPackage2026 = (packageType: string): boolean => {
 export const isSolarAfricaPackage = (packageType: string): boolean => {
   return packageType === "solar_africa_api";
 };
+
+export const isSpsPackage = (packageType: string): boolean => {
+  return packageType === "sps_monitoring";
+};
+
+// SPS Monitoring volume discount tiers (5% per 50 MW, max 30%)
+export const SPS_DEFAULT_VOLUME_DISCOUNT_TIERS: DiscountTier[] = [
+  { minMW: 0, maxMW: 49.99, discountPercent: 0, label: "0-49 MW" },
+  { minMW: 50, maxMW: 99.99, discountPercent: 5, label: "50-99 MW" },
+  { minMW: 100, maxMW: 149.99, discountPercent: 10, label: "100-149 MW" },
+  { minMW: 150, maxMW: 199.99, discountPercent: 15, label: "150-199 MW" },
+  { minMW: 200, maxMW: 249.99, discountPercent: 20, label: "200-249 MW" },
+  { minMW: 250, maxMW: 299.99, discountPercent: 25, label: "250-299 MW" },
+  { minMW: 300, maxMW: null, discountPercent: 30, label: "300+ MW" },
+];
+
+// SPS-specific addon definitions (adjusted prices from standard)
+export const SPS_ADDONS: AddonDefinition[] = [
+  {
+    id: "sps_platformCustomization",
+    name: "Platform Customization Work",
+    price: 110, // per hour
+  },
+  {
+    id: "sps_customDashboard",
+    name: "Custom Dashboard",
+    price: 900,
+  },
+  {
+    id: "sps_customReport",
+    name: "Custom Report",
+    price: 1350,
+  },
+  {
+    id: "sps_customAlerts",
+    name: "Custom Alerts",
+    price: 135,
+  },
+  {
+    id: "satelliteDataAPI",
+    name: "Satellite Data API Access",
+    tieredPricing: true,
+    autoActivateFromAMMP: true,
+    ammpSourceField: "sitesWithSolcast",
+    pricingTiers: [
+      { minQuantity: 0, maxQuantity: 99, pricePerUnit: 2.7, label: "0-99 sites" },
+      { minQuantity: 100, maxQuantity: 499, pricePerUnit: 2, label: "100-499 sites" },
+      { minQuantity: 500, maxQuantity: 999, pricePerUnit: 1.5, label: "500-999 sites" },
+      { minQuantity: 1000, maxQuantity: null, pricePerUnit: 1, label: "1000+ sites" },
+    ],
+  },
+  {
+    id: "sps_vendorApiOnboarding",
+    name: "Vendor API Onboarding",
+    price: 350,
+  },
+  {
+    id: "sps_customApiIntegration",
+    name: "Custom API Integration",
+    price: 3150,
+  },
+];
 
 export const getModule2026ById = (id: string): ModuleDefinition | undefined => {
   return MODULES_2026.find(m => m.id === id);
