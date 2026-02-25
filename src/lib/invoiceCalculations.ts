@@ -4,9 +4,11 @@ import {
   ADDONS, 
   MODULES_2026,
   ADDONS_2026,
+  SPS_ADDONS,
   TRIAL_2026,
   isPackage2026,
   isSolarAfricaPackage,
+  isSpsPackage,
   getSolarAfricaTier,
   getAddonPrice, 
   calculateTieredPrice, 
@@ -129,6 +131,9 @@ export interface CalculationParams {
   // Custom contract type fields
   customModuleDefinitions?: ModuleDefinition[];
   customAddonDefinitions?: AddonDefinition[];
+  // SPS Monitoring discount fields
+  upfrontDiscountPercent?: number;
+  commitmentDiscountPercent?: number;
 }
 
 export interface SiteMinimumPricingResult {
@@ -239,6 +244,21 @@ export interface CalculationResult {
   // Discounted assets results
   discountedAssets?: DiscountedAssetResult[];
   discountedAssetsTotal?: number;
+  // SPS Monitoring discount breakdown
+  spsDiscountBreakdown?: {
+    preDiscountMonitoringFee: number;
+    volumeDiscountPercent: number;
+    volumeDiscountAmount: number;
+    afterVolumeDiscount: number;
+    upfrontDiscountPercent: number;
+    upfrontDiscountAmount: number;
+    afterUpfrontDiscount: number;
+    commitmentDiscountPercent: number;
+    commitmentDiscountAmount: number;
+    finalMonitoringFee: number;
+    minimumApplied: boolean;
+    minimumQuarterlyValue: number;
+  };
 }
 
 /**
@@ -397,10 +417,11 @@ export function calculateAddonCosts(
   customAddonDefinitions?: AddonDefinition[]
 ): CalculationResult['addonCosts'] {
   return selectedAddons.map(addon => {
-    // Check custom addon definitions first, then built-in lists
+    // Check custom addon definitions first, then built-in lists (including SPS addons)
     const addonDef = customAddonDefinitions?.find(a => a.id === addon.id) 
       || ADDONS.find(a => a.id === addon.id) 
-      || ADDONS_2026.find(a => a.id === addon.id);
+      || ADDONS_2026.find(a => a.id === addon.id)
+      || SPS_ADDONS.find(a => a.id === addon.id);
     if (!addonDef) return null;
     
     // Handle tiered pricing first
@@ -940,6 +961,50 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
+  } else if (packageType === 'sps_monitoring') {
+    // SPS Monitoring - module-based pricing with 3 stacking discounts
+    const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
+    result.moduleCosts = moduleCosts;
+    
+    // Pre-discount monitoring fee (module costs only)
+    const preDiscountFee = totalMWCost;
+    
+    // 1. Apply volume discount from portfolio discount tiers
+    const volumeDiscountPercent = getApplicableDiscount(adjustedTotalMW, params.portfolioDiscountTiers);
+    const volumeDiscountAmount = preDiscountFee * (volumeDiscountPercent / 100);
+    const afterVolumeDiscount = preDiscountFee - volumeDiscountAmount;
+    
+    // 2. Apply upfront discount
+    const upfrontDiscountPercent = params.upfrontDiscountPercent || 0;
+    const upfrontDiscountAmount = afterVolumeDiscount * (upfrontDiscountPercent / 100);
+    const afterUpfrontDiscount = afterVolumeDiscount - upfrontDiscountAmount;
+    
+    // 3. Apply commitment discount
+    const commitmentDiscountPercent = params.commitmentDiscountPercent || 0;
+    const commitmentDiscountAmount = afterUpfrontDiscount * (commitmentDiscountPercent / 100);
+    const finalMonitoringFee = afterUpfrontDiscount - commitmentDiscountAmount;
+    
+    // Compare against minimum annual value (pro-rated for billing period)
+    const minimumForPeriod = (minimumAnnualValue || 0) * frequencyMultiplier;
+    const minimumApplied = finalMonitoringFee < minimumForPeriod;
+    
+    result.totalMWCost = minimumApplied ? minimumForPeriod : finalMonitoringFee;
+    
+    // Store discount breakdown for display
+    result.spsDiscountBreakdown = {
+      preDiscountMonitoringFee: preDiscountFee,
+      volumeDiscountPercent,
+      volumeDiscountAmount,
+      afterVolumeDiscount,
+      upfrontDiscountPercent,
+      upfrontDiscountAmount,
+      afterUpfrontDiscount,
+      commitmentDiscountPercent,
+      commitmentDiscountAmount,
+      finalMonitoringFee,
+      minimumApplied,
+      minimumQuarterlyValue: minimumForPeriod,
+    };
   } else if (packageType === 'solar_africa_api') {
     // SolarAfrica API - tier-based pricing by municipality count
     const municipalityCount = params.municipalityCount || 0;

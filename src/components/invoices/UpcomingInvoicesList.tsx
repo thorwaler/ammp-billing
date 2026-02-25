@@ -52,6 +52,9 @@ export interface UpcomingInvoice {
   municipalityCount?: number;
   apiSetupFee?: number;
   hourlyRate?: number;
+  // SPS Monitoring discount fields
+  upfrontDiscountPercent?: number;
+  commitmentDiscountPercent?: number;
 }
 
 interface CustomerGroup {
@@ -123,6 +126,8 @@ export function UpcomingInvoicesList({
           municipality_count,
           api_setup_fee,
           hourly_rate,
+          upfront_discount_percent,
+          commitment_discount_percent,
           customers (
             id,
             name,
@@ -196,6 +201,9 @@ export function UpcomingInvoicesList({
             municipalityCount: Number((c as any).municipality_count) || undefined,
             apiSetupFee: Number((c as any).api_setup_fee) || undefined,
             hourlyRate: Number((c as any).hourly_rate) || undefined,
+            // SPS Monitoring discount fields
+            upfrontDiscountPercent: Number((c as any).upfront_discount_percent) || undefined,
+            commitmentDiscountPercent: Number((c as any).commitment_discount_percent) || undefined,
           };
         });
 
@@ -322,6 +330,9 @@ export function UpcomingInvoicesList({
       municipalityCount: invoice.municipalityCount,
       apiSetupFee: invoice.apiSetupFee,
       hourlyRate: invoice.hourlyRate,
+      // SPS Monitoring discount fields
+      upfrontDiscountPercent: invoice.upfrontDiscountPercent,
+      commitmentDiscountPercent: invoice.commitmentDiscountPercent,
     });
     
     return result.totalPrice;
