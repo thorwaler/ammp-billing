@@ -355,11 +355,16 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       }
       
       // Initialize SPS Monitoring discount state
-      if (existingContract.upfrontDiscountPercent !== undefined) {
-        setUpfrontDiscountPercent(existingContract.upfrontDiscountPercent);
-      }
-      if (existingContract.commitmentDiscountPercent !== undefined) {
-        setCommitmentDiscountPercent(existingContract.commitmentDiscountPercent);
+      if (existingContract.package === 'sps_monitoring') {
+        setUpfrontDiscountPercent(existingContract.upfrontDiscountPercent || 5);
+        setCommitmentDiscountPercent(existingContract.commitmentDiscountPercent || 3);
+      } else {
+        if (existingContract.upfrontDiscountPercent !== undefined) {
+          setUpfrontDiscountPercent(existingContract.upfrontDiscountPercent);
+        }
+        if (existingContract.commitmentDiscountPercent !== undefined) {
+          setCommitmentDiscountPercent(existingContract.commitmentDiscountPercent);
+        }
       }
       
       // Initialize portfolio discount tiers
