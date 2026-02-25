@@ -35,6 +35,7 @@ import {
   ADDONS,
   MODULES_2026,
   ADDONS_2026,
+  SPS_ADDONS,
   isPackage2026,
   isSolarAfricaPackage,
   isSpsPackage,
@@ -168,6 +169,7 @@ const defaultModules: Module[] = MODULES.map(m => ({ ...m, selected: false }));
 const defaultAddons: Addon[] = ADDONS.map(a => ({ ...a, selected: false }));
 const defaultModules2026: Module[] = MODULES_2026.map(m => ({ ...m, selected: false }));
 const defaultAddons2026: Addon[] = ADDONS_2026.map(a => ({ ...a, selected: false }));
+const defaultSpsAddons: Addon[] = SPS_ADDONS.map(a => ({ ...a, selected: false }));
 
 interface InvoiceCalculatorProps {
   preselectedCustomerId?: string;
@@ -448,9 +450,10 @@ export function InvoiceCalculator({
         // Pre-fill billing frequency from contract
         setBillingFrequency(customerData.billingFrequency as 'monthly' | 'quarterly' | 'biannual' | 'annual');
         
-        // Use 2026 or legacy module/addon arrays based on package
+        // Use 2026, SPS, or legacy module/addon arrays based on package
         const is2026 = isPackage2026(customerData.package);
-        const baseAddons = is2026 ? defaultAddons2026 : defaultAddons;
+        const isSps = isSpsPackage(customerData.package);
+        const baseAddons = is2026 ? defaultAddons2026 : isSps ? defaultSpsAddons : defaultAddons;
         
         // Auto-activate addons based on AMMP capabilities
         const updatedAddons = baseAddons.map(addon => {
@@ -878,7 +881,9 @@ export function InvoiceCalculator({
       periodEnd: selectedCustomer.periodEnd,
       // Custom contract type definitions
       customModuleDefinitions: loadedContractType?.modules_config?.length > 0 ? loadedContractType.modules_config : undefined,
-      customAddonDefinitions: loadedContractType?.addons_config?.length > 0 ? loadedContractType.addons_config : undefined,
+      customAddonDefinitions: isSpsPackage(selectedCustomer.package)
+        ? SPS_ADDONS
+        : loadedContractType?.addons_config?.length > 0 ? loadedContractType.addons_config : undefined,
       // SPS Monitoring discount fields
       upfrontDiscountPercent: selectedCustomer.upfrontDiscountPercent,
       commitmentDiscountPercent: selectedCustomer.commitmentDiscountPercent,
@@ -2390,6 +2395,62 @@ export function InvoiceCalculator({
                       Site Fees ({result.elumJubailiBreakdown.siteCount} sites × {formatContractCurrency(result.elumJubailiBreakdown.perSiteFee)}/site):
                     </span>
                     <span>{formatContractCurrency(result.elumJubailiBreakdown.totalCost)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* SPS Monitoring discount breakdown */}
+            {result.spsDiscountBreakdown && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm">SPS Monitoring Discount Waterfall:</h4>
+                <div className="space-y-1 text-sm pl-2">
+                  <div className="flex justify-between">
+                    <span>Annual Monitoring Fee (pre-discount):</span>
+                    <span>{formatContractCurrency(result.spsDiscountBreakdown.preDiscountMonitoringFee)}</span>
+                  </div>
+                  {result.spsDiscountBreakdown.volumeDiscountPercent > 0 && (
+                    <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                      <span>Volume Discount ({result.spsDiscountBreakdown.volumeDiscountPercent}%):</span>
+                      <span>-{formatContractCurrency(result.spsDiscountBreakdown.volumeDiscountAmount)}</span>
+                    </div>
+                  )}
+                  {result.spsDiscountBreakdown.upfrontDiscountPercent > 0 && (
+                    <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                      <span>Upfront Discount ({result.spsDiscountBreakdown.upfrontDiscountPercent}%):</span>
+                      <span>-{formatContractCurrency(result.spsDiscountBreakdown.upfrontDiscountAmount)}</span>
+                    </div>
+                  )}
+                  {result.spsDiscountBreakdown.commitmentDiscountPercent > 0 && (
+                    <div className="flex justify-between text-orange-600 dark:text-orange-400">
+                      <span>Commitment Discount ({result.spsDiscountBreakdown.commitmentDiscountPercent}%):</span>
+                      <span>-{formatContractCurrency(result.spsDiscountBreakdown.commitmentDiscountAmount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
+                    <span>Annual Discounted Fee:</span>
+                    <span>{formatContractCurrency(result.spsDiscountBreakdown.finalMonitoringFee)}</span>
+                  </div>
+                  {(result.spsDiscountBreakdown.upfrontAnnualPayment || 0) > 0 && (
+                    <>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Upfront Annual Payment (prepaid):</span>
+                        <span>-{formatContractCurrency(result.spsDiscountBreakdown.upfrontAnnualPayment || 0)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Excess Annual Amount:</span>
+                        <span>{formatContractCurrency(result.spsDiscountBreakdown.excessAnnualAmount || 0)}</span>
+                      </div>
+                    </>
+                  )}
+                  {result.spsDiscountBreakdown.minimumApplied && (
+                    <div className="text-xs text-muted-foreground italic mt-1">
+                      Monitoring fee fully covered by upfront annual payment — quarterly monitoring charge is €0.
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
+                    <span>Quarterly Monitoring Fee:</span>
+                    <span>{formatContractCurrency(result.spsDiscountBreakdown.minimumQuarterlyValue)}</span>
                   </div>
                 </div>
               </div>
