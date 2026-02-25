@@ -2294,64 +2294,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 currentMW={form.watch("initialMW")}
               />
               
-              <div className="border rounded-md p-4">
-                <h3 className="font-semibold mb-4">Other Discounts</h3>
-                <div className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="volumeDiscounts.annualUpfrontDiscount"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Annual Upfront Payment Discount (%)</FormLabel>
-                        <FormControl>
-                          <Input type="number" step="0.1" min="0" max="100" {...field} />
-                        </FormControl>
-                        <FormDescription>
-                          Discount applied when customer pays annually upfront (default: 5%)
-                        </FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="volumeDiscounts.siteSizeThreshold"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Site Size Threshold (MW)</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.1" min="0" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            Minimum site size for discount (default: 3MW)
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    
-                    <FormField
-                      control={form.control}
-                      name="volumeDiscounts.siteSizeDiscount"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Site Size Discount (%)</FormLabel>
-                          <FormControl>
-                            <Input type="number" step="0.1" min="0" max="100" {...field} />
-                          </FormControl>
-                          <FormDescription>
-                            Discount for sites above threshold
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </div>
-              </div>
-              
               <FormField
                 control={form.control}
                 name="siteChargeFrequency"
