@@ -10,7 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { checkAllContractExpirations } from "@/utils/contractExpiration";
-import { getDashboardStats, DashboardStats } from "@/services/analytics/dashboardAnalytics";
+import { getDashboardStats, DashboardStats, getMWGrowthByMonth } from "@/services/analytics/dashboardAnalytics";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 
 // Current quarter calculation
 const getCurrentQuarter = () => {
@@ -18,30 +22,29 @@ const getCurrentQuarter = () => {
   return Math.floor(month / 3) + 1;
 };
 
-const getCurrentQuarterRange = () => {
+const getQuarterDates = () => {
   const now = new Date();
-  const currentQuarter = getCurrentQuarter();
+  const currentQuarter = Math.floor(now.getMonth() / 3);
   const year = now.getFullYear();
-  
-  const startMonth = (currentQuarter - 1) * 3;
+  const startMonth = currentQuarter * 3;
   const endMonth = startMonth + 2;
-  
-  const startDate = new Date(year, startMonth, 1);
-  const endDate = new Date(year, endMonth + 1, 0);
-  
   return {
-    start: startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-    end: endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    start: new Date(year, startMonth, 1),
+    end: new Date(year, endMonth + 1, 0),
+    startLabel: new Date(year, startMonth, 1).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    endLabel: new Date(year, endMonth + 1, 0).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
   };
 };
 
 const Index = () => {
   const navigate = useNavigate();
-  const quarterRange = getCurrentQuarterRange();
+  const quarterDates = getQuarterDates();
   const { user } = useAuth();
   const { currency, convertToDisplayCurrency } = useCurrency();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mwGrowthData, setMwGrowthData] = useState<{ month: string; mw: number }[]>([]);
+  const [revenueData, setRevenueData] = useState<{ month: string; revenue: number }[]>([]);
   
   // Calculate total ARR in display currency
   const displayARR = (() => {
@@ -59,8 +62,29 @@ const Index = () => {
     const fetchStats = async () => {
       try {
         setIsLoading(true);
-        const dashboardStats = await getDashboardStats();
+        const [dashboardStats, mwData] = await Promise.all([
+          getDashboardStats(),
+          getMWGrowthByMonth({ startDate: quarterDates.start, endDate: quarterDates.end }),
+        ]);
         setStats(dashboardStats);
+        setMwGrowthData(mwData.map(d => ({ month: d.month, mw: d.mw })));
+
+        // Fetch invoiced revenue for the quarter
+        const { data: invoices } = await supabase
+          .from('invoices')
+          .select('invoice_date, invoice_amount_eur, invoice_amount')
+          .gte('invoice_date', quarterDates.start.toISOString())
+          .lte('invoice_date', quarterDates.end.toISOString());
+
+        if (invoices && invoices.length > 0) {
+          const monthlyRevenue = new Map<string, number>();
+          invoices.forEach(inv => {
+            const monthKey = format(new Date(inv.invoice_date), 'MMM yy');
+            const amount = inv.invoice_amount_eur ?? inv.invoice_amount ?? 0;
+            monthlyRevenue.set(monthKey, (monthlyRevenue.get(monthKey) || 0) + Number(amount));
+          });
+          setRevenueData(Array.from(monthlyRevenue.entries()).map(([month, revenue]) => ({ month, revenue: parseFloat(revenue.toFixed(2)) })));
+        }
       } catch (error) {
         console.error('Error fetching dashboard stats:', error);
       } finally {
@@ -172,14 +196,60 @@ const Index = () => {
         <div>
           <h2 className="text-xl font-semibold mb-2">Quarterly Overview</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Q{getCurrentQuarter()} ({quarterRange.start} - {quarterRange.end})
+            Q{getCurrentQuarter()} ({quarterDates.startLabel} - {quarterDates.endLabel})
           </p>
         </div>
 
-        {/* Invoice Calculator */}
+        {/* Quarterly Charts + Invoice Calculator */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2">
-            {/* Placeholder for future content */}
+          <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* MW Added Chart */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">MW Added This Quarter</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {mwGrowthData.length > 0 ? (
+                  <ChartContainer config={{ mw: { label: "MW Added", color: "hsl(var(--primary))" } }} className="h-[200px] w-full">
+                    <BarChart data={mwGrowthData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="month" className="text-xs" />
+                      <YAxis className="text-xs" />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="mw" fill="var(--color-mw)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+                    No MW growth data this quarter
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Invoiced Revenue Chart */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Invoiced Revenue (Q{getCurrentQuarter()})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {revenueData.length > 0 ? (
+                  <ChartContainer config={{ revenue: { label: "Revenue (€)", color: "hsl(var(--accent))" } }} className="h-[200px] w-full">
+                    <BarChart data={revenueData}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis dataKey="month" className="text-xs" />
+                      <YAxis className="text-xs" />
+                      <ChartTooltip content={<ChartTooltipContent />} />
+                      <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ChartContainer>
+                ) : (
+                  <div className="flex items-center justify-center h-[200px] text-sm text-muted-foreground">
+                    No invoiced revenue this quarter
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
           <div>
             <InvoiceCalculator />
