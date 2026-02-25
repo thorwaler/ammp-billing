@@ -316,10 +316,13 @@ export type Database = {
       contract_types: {
         Row: {
           addons_config: Json | null
+          asset_group_scoped: boolean | null
           created_at: string
           default_billing_frequency: string | null
+          default_commitment_discount_percent: number | null
           default_currency: string | null
           default_minimum_annual_value: number | null
+          default_upfront_discount_percent: number | null
           default_values: Json | null
           description: string | null
           force_billing_frequency: boolean | null
@@ -335,10 +338,13 @@ export type Database = {
         }
         Insert: {
           addons_config?: Json | null
+          asset_group_scoped?: boolean | null
           created_at?: string
           default_billing_frequency?: string | null
+          default_commitment_discount_percent?: number | null
           default_currency?: string | null
           default_minimum_annual_value?: number | null
+          default_upfront_discount_percent?: number | null
           default_values?: Json | null
           description?: string | null
           force_billing_frequency?: boolean | null
@@ -354,10 +360,13 @@ export type Database = {
         }
         Update: {
           addons_config?: Json | null
+          asset_group_scoped?: boolean | null
           created_at?: string
           default_billing_frequency?: string | null
+          default_commitment_discount_percent?: number | null
           default_currency?: string | null
           default_minimum_annual_value?: number | null
+          default_upfront_discount_percent?: number | null
           default_values?: Json | null
           description?: string | null
           force_billing_frequency?: boolean | null

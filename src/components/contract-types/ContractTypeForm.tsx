@@ -20,6 +20,9 @@ export interface ContractTypeFormData {
   default_billing_frequency: string;
   force_billing_frequency: boolean;
   default_minimum_annual_value: number;
+  default_upfront_discount_percent: number;
+  default_commitment_discount_percent: number;
+  asset_group_scoped: boolean;
   modules_config: ModuleConfig[];
   addons_config: AddonConfig[];
   xero_line_items_config: XeroLineItemConfig;
@@ -42,6 +45,9 @@ const emptyFormData: ContractTypeFormData = {
   default_billing_frequency: "annual",
   force_billing_frequency: false,
   default_minimum_annual_value: 0,
+  default_upfront_discount_percent: 0,
+  default_commitment_discount_percent: 0,
+  asset_group_scoped: false,
   modules_config: [],
   addons_config: [],
   xero_line_items_config: {},
@@ -173,12 +179,48 @@ export function ContractTypeForm({ initialData, onSubmit, onCancel, isLoading }:
             />
           </div>
         </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Default Upfront Discount (%)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={form.default_upfront_discount_percent || ""}
+              onChange={(e) => update("default_upfront_discount_percent", parseFloat(e.target.value) || 0)}
+              placeholder="e.g. 5"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Default Commitment Discount (%)</Label>
+            <Input
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={form.default_commitment_discount_percent || ""}
+              onChange={(e) => update("default_commitment_discount_percent", parseFloat(e.target.value) || 0)}
+              placeholder="e.g. 3"
+            />
+          </div>
+        </div>
         <div className="flex items-center gap-3">
           <Switch
             checked={form.force_billing_frequency}
             onCheckedChange={(v) => update("force_billing_frequency", v)}
           />
           <Label>Lock billing frequency (cannot be changed on contract)</Label>
+        </div>
+        <div className="flex items-center gap-3">
+          <Switch
+            checked={form.asset_group_scoped}
+            onCheckedChange={(v) => update("asset_group_scoped", v)}
+          />
+          <div>
+            <Label>Scope to Asset Group</Label>
+            <p className="text-xs text-muted-foreground">Contracts of this type will be filtered to a specific AMMP asset group instead of the full organization</p>
+          </div>
         </div>
       </div>
 

@@ -22,6 +22,9 @@ interface ContractTypeRow {
   default_billing_frequency: string | null;
   force_billing_frequency: boolean | null;
   default_minimum_annual_value: number | null;
+  default_upfront_discount_percent: number | null;
+  default_commitment_discount_percent: number | null;
+  asset_group_scoped: boolean | null;
   modules_config: unknown;
   addons_config: unknown;
   xero_line_items_config: unknown;
@@ -60,6 +63,9 @@ export default function ContractTypes() {
         default_billing_frequency: formData.default_billing_frequency,
         force_billing_frequency: formData.force_billing_frequency,
         default_minimum_annual_value: formData.default_minimum_annual_value,
+        default_upfront_discount_percent: formData.default_upfront_discount_percent || null,
+        default_commitment_discount_percent: formData.default_commitment_discount_percent || null,
+        asset_group_scoped: formData.asset_group_scoped,
         modules_config: formData.modules_config,
         addons_config: formData.addons_config,
         xero_line_items_config: formData.xero_line_items_config,
@@ -131,6 +137,9 @@ export default function ContractTypes() {
     default_billing_frequency: ct.default_billing_frequency || "annual",
     force_billing_frequency: ct.force_billing_frequency || false,
     default_minimum_annual_value: ct.default_minimum_annual_value || 0,
+    default_upfront_discount_percent: ct.default_upfront_discount_percent || 0,
+    default_commitment_discount_percent: ct.default_commitment_discount_percent || 0,
+    asset_group_scoped: ct.asset_group_scoped || false,
     modules_config: (ct.modules_config as any) || [],
     addons_config: (ct.addons_config as any) || [],
     xero_line_items_config: (ct.xero_line_items_config as any) || {},
@@ -170,6 +179,7 @@ export default function ContractTypes() {
                         {ct.is_active !== false ? "Active" : "Archived"}
                       </Badge>
                       <Badge variant="outline">{getModelLabel(ct.pricing_model)}</Badge>
+                      {ct.asset_group_scoped && <Badge variant="outline" className="border-primary/50 text-primary">Asset Group</Badge>}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm" onClick={() => openEdit(ct)}>
