@@ -138,6 +138,24 @@ export interface SupportDocumentData {
   }[];
   discountedAssetsTotal?: number;
   
+  // SPS Monitoring discount breakdown
+  spsDiscountBreakdown?: {
+    preDiscountMonitoringFee: number;
+    volumeDiscountPercent: number;
+    volumeDiscountAmount: number;
+    afterVolumeDiscount: number;
+    upfrontDiscountPercent: number;
+    upfrontDiscountAmount: number;
+    afterUpfrontDiscount: number;
+    commitmentDiscountPercent: number;
+    commitmentDiscountAmount: number;
+    finalMonitoringFee: number;
+    minimumApplied: boolean;
+    minimumQuarterlyValue: number;
+    upfrontAnnualPayment?: number;
+    excessAnnualAmount?: number;
+  };
+  
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
@@ -430,6 +448,23 @@ export async function generateSupportDocumentData(
     perSiteBreakdown,
     discountedAssetsBreakdown,
     discountedAssetsTotal,
+    // SPS Monitoring discount breakdown
+    spsDiscountBreakdown: calculationResult.spsDiscountBreakdown ? {
+      preDiscountMonitoringFee: calculationResult.spsDiscountBreakdown.preDiscountMonitoringFee,
+      volumeDiscountPercent: calculationResult.spsDiscountBreakdown.volumeDiscountPercent,
+      volumeDiscountAmount: calculationResult.spsDiscountBreakdown.volumeDiscountAmount,
+      afterVolumeDiscount: calculationResult.spsDiscountBreakdown.afterVolumeDiscount,
+      upfrontDiscountPercent: calculationResult.spsDiscountBreakdown.upfrontDiscountPercent,
+      upfrontDiscountAmount: calculationResult.spsDiscountBreakdown.upfrontDiscountAmount,
+      afterUpfrontDiscount: calculationResult.spsDiscountBreakdown.afterUpfrontDiscount,
+      commitmentDiscountPercent: calculationResult.spsDiscountBreakdown.commitmentDiscountPercent,
+      commitmentDiscountAmount: calculationResult.spsDiscountBreakdown.commitmentDiscountAmount,
+      finalMonitoringFee: calculationResult.spsDiscountBreakdown.finalMonitoringFee,
+      minimumApplied: calculationResult.spsDiscountBreakdown.minimumApplied,
+      minimumQuarterlyValue: calculationResult.spsDiscountBreakdown.minimumQuarterlyValue,
+      upfrontAnnualPayment: calculationResult.spsDiscountBreakdown.upfrontAnnualPayment,
+      excessAnnualAmount: calculationResult.spsDiscountBreakdown.excessAnnualAmount,
+    } : undefined,
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,

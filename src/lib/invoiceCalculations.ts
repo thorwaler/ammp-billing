@@ -258,6 +258,8 @@ export interface CalculationResult {
     finalMonitoringFee: number;
     minimumApplied: boolean;
     minimumQuarterlyValue: number;
+    upfrontAnnualPayment?: number;
+    excessAnnualAmount?: number;
   };
 }
 
@@ -963,16 +965,18 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     result.totalMWCost = totalMWCost;
   } else if (packageType === 'sps_monitoring') {
     // SPS Monitoring - module-based pricing with 3 stacking discounts
-    const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
+    // Calculate at ANNUAL rate first, regardless of billing frequency
+    const annualParams = { ...adjustedParams, frequencyMultiplier: 1 };
+    const { moduleCosts, totalMWCost: annualModuleCost } = calculateModuleCosts(annualParams);
     result.moduleCosts = moduleCosts;
     
-    // Pre-discount monitoring fee (module costs only)
-    const preDiscountFee = totalMWCost;
+    // Pre-discount ANNUAL monitoring fee
+    const preDiscountAnnualFee = annualModuleCost;
     
     // 1. Apply volume discount from portfolio discount tiers
     const volumeDiscountPercent = getApplicableDiscount(adjustedTotalMW, params.portfolioDiscountTiers);
-    const volumeDiscountAmount = preDiscountFee * (volumeDiscountPercent / 100);
-    const afterVolumeDiscount = preDiscountFee - volumeDiscountAmount;
+    const volumeDiscountAmount = preDiscountAnnualFee * (volumeDiscountPercent / 100);
+    const afterVolumeDiscount = preDiscountAnnualFee - volumeDiscountAmount;
     
     // 2. Apply upfront discount
     const upfrontDiscountPercent = params.upfrontDiscountPercent || 0;
@@ -982,17 +986,22 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     // 3. Apply commitment discount
     const commitmentDiscountPercent = params.commitmentDiscountPercent || 0;
     const commitmentDiscountAmount = afterUpfrontDiscount * (commitmentDiscountPercent / 100);
-    const finalMonitoringFee = afterUpfrontDiscount - commitmentDiscountAmount;
+    const annualDiscountedFee = afterUpfrontDiscount - commitmentDiscountAmount;
     
-    // Compare against minimum annual value (pro-rated for billing period)
-    const minimumForPeriod = (minimumAnnualValue || 0) * frequencyMultiplier;
-    const minimumApplied = finalMonitoringFee < minimumForPeriod;
+    // The minimum annual value is paid UPFRONT annually.
+    // Quarterly invoices only charge the EXCESS beyond that prepayment.
+    const upfrontAnnualPayment = minimumAnnualValue || 0;
+    const excessAnnualAmount = Math.max(0, annualDiscountedFee - upfrontAnnualPayment);
     
-    result.totalMWCost = minimumApplied ? minimumForPeriod : finalMonitoringFee;
+    // Pro-rate the excess to the billing period
+    const periodMonitoringFee = excessAnnualAmount * frequencyMultiplier;
+    const minimumApplied = upfrontAnnualPayment > 0 && annualDiscountedFee <= upfrontAnnualPayment;
+    
+    result.totalMWCost = periodMonitoringFee;
     
     // Store discount breakdown for display
     result.spsDiscountBreakdown = {
-      preDiscountMonitoringFee: preDiscountFee,
+      preDiscountMonitoringFee: preDiscountAnnualFee,
       volumeDiscountPercent,
       volumeDiscountAmount,
       afterVolumeDiscount,
@@ -1001,9 +1010,11 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       afterUpfrontDiscount,
       commitmentDiscountPercent,
       commitmentDiscountAmount,
-      finalMonitoringFee,
+      finalMonitoringFee: annualDiscountedFee,
       minimumApplied,
-      minimumQuarterlyValue: minimumForPeriod,
+      minimumQuarterlyValue: periodMonitoringFee,
+      upfrontAnnualPayment,
+      excessAnnualAmount,
     };
   } else if (packageType === 'solar_africa_api') {
     // SolarAfrica API - tier-based pricing by municipality count
