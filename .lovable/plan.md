@@ -1,50 +1,42 @@
 
 
-## Add Discount Defaults and Asset Group Scoping to Contract Types
+## Bug: AMMP Sync Overwrites Onboarding Dates with NULL
 
-### What's Changing
+### Root Cause
 
-Two enhancements to the contract type template system:
+In `supabase/functions/ammp-sync-contract/index.ts` line 748, the `populateSiteBillingStatus` function updates existing site records and sets `onboarding_date: asset.onboardingDate || null`. When the AMMP API returns no `created` date for an asset, this overwrites previously valid onboarding dates with NULL.
 
-1. **Default discount fields** -- Each contract type template can specify default `upfront_discount_percent` and `commitment_discount_percent` values. When a contract is created from this template, these defaults pre-fill the contract form.
+Three UNHCR sites are affected: Beirut, Farchana, Hadjer_Hadid -- all have `onboarding_date = NULL` in `site_billing_status`.
 
-2. **Asset group scoping flag** -- A toggle on any contract type that marks it as "asset group scoped." This means contracts using this template filter their assets to a specific AMMP asset group rather than using the full customer org. This replaces the need for a separate `hybrid_tiered_assetgroups` pricing model -- any base model can be asset-group-scoped.
+### Fix
 
-### Database Changes
+**1. Edge Function Fix** (`supabase/functions/ammp-sync-contract/index.ts`, line 748)
 
-**Table: `contract_types`** -- Add 3 columns:
+Only update `onboarding_date` when the AMMP API actually returns a value. Never overwrite a non-null date with null:
 
-| Column | Type | Default | Purpose |
-|--------|------|---------|---------|
-| `default_upfront_discount_percent` | numeric | NULL | Template default for upfront payment discount |
-| `default_commitment_discount_percent` | numeric | NULL | Template default for commitment discount |
-| `asset_group_scoped` | boolean | false | Whether contracts of this type are scoped to an asset group |
+```typescript
+// Before (line 748):
+onboarding_date: asset.onboardingDate || null,
 
-### UI Changes
+// After:
+...(asset.onboardingDate ? { onboarding_date: asset.onboardingDate } : {}),
+```
 
-**File: `src/components/contract-types/ContractTypeForm.tsx`**
+**2. Data Repair** (migration)
 
-Add to the "Defaults" section:
-- Two numeric inputs for **Default Upfront Discount (%)** and **Default Commitment Discount (%)** in the existing 3-column grid (expanding it to accommodate)
-- A switch/toggle: **"Scope to Asset Group"** with description "Contracts of this type will be filtered to a specific AMMP asset group instead of the full organization"
+Set missing onboarding dates to the record's `created_at` timestamp as a reasonable fallback:
 
-**File: `src/components/contract-types/ContractTypeForm.tsx` (data interface)**
-
-Add three new fields to `ContractTypeFormData`:
-- `default_upfront_discount_percent: number`
-- `default_commitment_discount_percent: number`
-- `asset_group_scoped: boolean`
-
-**File: `src/pages/ContractTypes.tsx`**
-
-- Show an "Asset Group" badge on contract type cards when `asset_group_scoped` is true
-- Map the new fields in `toFormData` and the save mutation payload
+```sql
+UPDATE site_billing_status
+SET onboarding_date = created_at
+WHERE onboarding_date IS NULL;
+```
 
 ### Files Changed
 
 | File | Change |
 |------|--------|
-| Database (`contract_types` table) | Add `default_upfront_discount_percent`, `default_commitment_discount_percent`, `asset_group_scoped` columns |
-| `src/components/contract-types/ContractTypeForm.tsx` | Add discount inputs and asset group toggle to form; update interface and defaults |
-| `src/pages/ContractTypes.tsx` | Map new fields in `toFormData`, save payload, and display asset group badge |
+| `supabase/functions/ammp-sync-contract/index.ts` | Don't overwrite onboarding_date with null on existing records |
+| `src/services/ammp/ammpService.ts` | Same fix in the client-side `populateSiteBillingStatus` function (line ~218) |
+| Database migration | Backfill NULL onboarding dates with `created_at` |
 
