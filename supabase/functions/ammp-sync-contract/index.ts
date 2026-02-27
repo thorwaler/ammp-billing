@@ -745,7 +745,7 @@ async function populateSiteBillingStatus(
         .update({
           asset_name: asset.assetName,
           asset_capacity_kwp: asset.totalMW * 1000,
-          onboarding_date: asset.onboardingDate || null,
+          ...(asset.onboardingDate ? { onboarding_date: asset.onboardingDate } : {}),
         })
         .eq('id', existing.id);
     } else {
