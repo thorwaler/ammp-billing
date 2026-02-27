@@ -1,25 +1,30 @@
 
 
-## Restore Deleted Elum Invoice
+## Update Elum Dates + Reset UNHCR Sites
 
-The invoice `36939cef-075f-4136-8381-eb0bfe38499b` was deleted from the database via a DELETE request. I can see the full invoice data from the network logs captured just before the deletion.
+Two data operations using the database insert tool:
 
-### What was deleted
-- **Customer**: Elum (merged invoice for 7 contracts)
-- **Invoice date**: March 31, 2026
-- **Amount**: €36,855.77
-- **Xero ID**: `bacb1202-3800-4d0e-b62e-72ac25853365`
-- **Billing frequency**: quarterly
+### 1. Advance Elum contract dates to next quarter
 
-### Recovery plan
+Update all 7 Elum contracts (customer `a47378ad-d2a5-4c91-8426-ce87a188bdc4`):
+- `next_invoice_date` → `2026-06-30`
+- `period_start` → `2026-03-31`
+- `period_end` → `2026-06-29`
 
-**Database migration**: Re-insert the invoice record with all its original data (id, customer_id, contract_id, xero_invoice_id, support_document_data, amounts, etc.) using the data captured in the network logs.
+### 2. Reset 3 UNHCR sites
 
-**Contract dates**: The contracts were also patched to reset `next_invoice_date` back to `2026-03-31` and period dates were updated. These may need to be reverted to their pre-skip state as well -- I'll check the current state and restore if needed.
+For site IDs `d593fb12-5395-4b97-ba48-bdaeb20ef660`, `cd08511b-5c53-4ed2-bb9a-b121673fc1db`, `63322962-d188-4d2b-8e48-904eec39b825`:
+- `onboarding_fee_paid` → false
+- `onboarding_fee_paid_date` → NULL
+- `onboarding_invoice_id` → NULL
+- `next_annual_due_date` → NULL
+- `last_annual_payment_date` → NULL
+- `last_annual_invoice_id` → NULL
 
 ### Files changed
 
 | File | Change |
 |------|--------|
-| Database migration | INSERT the deleted invoice record back with all original field values; revert contract date fields if needed |
+| Database (contracts) | Update 7 Elum contracts to next quarter dates |
+| Database (site_billing_status) | Reset billing flags on 3 UNHCR sites |
 
