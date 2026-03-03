@@ -1263,7 +1263,10 @@ export async function getTotalContractARR(
     query = query.or(`contract_expiry_date.is.null,contract_expiry_date.gte.${filters.startDate.toISOString()}`);
   }
   if (filters?.endDate) {
-    query = query.lte('signed_date', filters.endDate.toISOString());
+    // Include contracts with no signed_date (treat as always existing)
+    query = query.or(
+      `signed_date.is.null,signed_date.lte.${filters.endDate.toISOString()}`
+    );
   }
 
   const { data: contracts } = await query;
