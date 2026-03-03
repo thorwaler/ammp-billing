@@ -1,46 +1,36 @@
 
 
-## Fix SPS ARR Calculation
+## Filter Contract ARR by Active Date Range
 
 ### Problem
 
-For SPS Monitoring, `calculateInvoice()` with `frequencyMultiplier=1` returns the **excess** above the upfront annual payment: `max(0, €27,632 - €100,000) = €0`. This means `calculateSingleContractARR()` reports €0 for the SPS contract.
-
-The actual annual recurring revenue is `max(annualDiscountedFee, minimumAnnualValue)` — i.e., the higher of the calculated monitoring fee or the guaranteed minimum. In this case, €100,000.
+`getTotalContractARR()` ignores the date range filter entirely — it always returns ARR for all currently active contracts. When a custom date range is selected, the Contract ARR should only include contracts that were active during that period.
 
 ### Fix
 
-**File: `src/services/analytics/dashboardAnalytics.ts`** (~line 339)
+**File: `src/services/analytics/dashboardAnalytics.ts`** (lines 1211-1259)
 
-After `annualValue = result.totalPrice`, add SPS-specific logic:
+Add `signed_date` and `contract_expiry_date` to the select query, then apply date range filtering:
 
+- A contract is "active during a range" if:
+  - `signed_date <= endDate` (contract existed by the end of the range)
+  - AND (`contract_expiry_date IS NULL` OR `contract_expiry_date >= startDate`) (contract hadn't expired before the range started)
+
+Using Supabase query filters:
 ```typescript
-annualValue = result.totalPrice;
-
-// For SPS Monitoring, the invoice engine returns only the EXCESS above
-// the upfront annual payment. For ARR, the actual annual revenue is
-// whichever is higher: the full discounted monitoring fee or the minimum.
-if (contract.package === 'sps_monitoring' && contract.minimum_annual_value) {
-  annualValue = Math.max(
-    annualValue + contract.minimum_annual_value,
-    contract.minimum_annual_value
-  );
+if (filters?.startDate) {
+  query = query.or(`contract_expiry_date.is.null,contract_expiry_date.gte.${filters.startDate.toISOString()}`);
+}
+if (filters?.endDate) {
+  query = query.lte('signed_date', filters.endDate.toISOString());
 }
 ```
 
-Since `annualValue` (excess) + `minimum_annual_value` equals the full discounted fee when the fee exceeds the minimum, and equals just the minimum when excess is 0, this correctly represents `max(discountedFee, minimum)`.
-
-**Also fix `getTotalContractARR()` query** (lines 1210-1233): Add the 8 missing fields so the Reports page produces the same result as the Dashboard.
-
-### Expected Impact
-
-- SPS ARR: €0 → €100,000
-- Reports page gap (missing fields): additional ~€5k correction
-- New total ARR: ~€1,081k
+This ensures that only contracts overlapping the selected date range contribute to the Contract ARR total.
 
 ### Files changed
 
 | File | Change |
 |------|--------|
-| `src/services/analytics/dashboardAnalytics.ts` | Add SPS minimum_annual_value to ARR; add 8 missing fields to Reports query |
+| `src/services/analytics/dashboardAnalytics.ts` | Add date range filtering to `getTotalContractARR()` using `signed_date` and `contract_expiry_date` |
 
