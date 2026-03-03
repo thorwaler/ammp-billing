@@ -1258,6 +1258,14 @@ export async function getTotalContractARR(
     query = query.in('customer_id', filters.customerIds);
   }
 
+  // Filter by date range: only include contracts active during the selected period
+  if (filters?.startDate) {
+    query = query.or(`contract_expiry_date.is.null,contract_expiry_date.gte.${filters.startDate.toISOString()}`);
+  }
+  if (filters?.endDate) {
+    query = query.lte('signed_date', filters.endDate.toISOString());
+  }
+
   const { data: contracts } = await query;
   if (!contracts || contracts.length === 0) return { eurTotal: 0, usdTotal: 0 };
 
