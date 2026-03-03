@@ -93,7 +93,7 @@ async function getAssetBreakdownFromContracts(
 ): Promise<AssetOnboardingData[]> {
   let query = supabase
     .from('contracts')
-    .select('cached_capabilities, customer_id')
+    .select('cached_capabilities, customer_id, signed_date, created_at')
     .eq('contract_status', 'active')
     .neq('package', 'poc');
 
@@ -109,11 +109,14 @@ async function getAssetBreakdownFromContracts(
     const capabilities = contract.cached_capabilities as any;
     if (capabilities?.assetBreakdown) {
       capabilities.assetBreakdown.forEach((asset: any) => {
-        if (asset.onboardingDate && asset.totalMW) {
+        if (asset.totalMW) {
+          const onboardingDate = asset.onboardingDate 
+            || contract.signed_date 
+            || contract.created_at;
           assetData.push({
             assetName: asset.assetName,
             totalMW: asset.totalMW,
-            onboardingDate: asset.onboardingDate,
+            onboardingDate: onboardingDate,
           });
         }
       });

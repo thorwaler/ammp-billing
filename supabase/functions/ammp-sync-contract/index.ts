@@ -501,6 +501,35 @@ async function processContractSync(
   for (const asset of allCapabilities) {
     uniqueAssets.set(asset.assetId, asset);
   }
+  
+  // Post-process: fetch onboarding dates for assets missing them
+  const assetsMissingDate = Array.from(uniqueAssets.values()).filter(a => !a.onboardingDate && a.assetId);
+  if (assetsMissingDate.length > 0) {
+    console.log(`[AMMP Sync Contract] Fetching onboarding dates for ${assetsMissingDate.length} assets missing dates`);
+    const DATE_BATCH = 50;
+    for (let i = 0; i < assetsMissingDate.length; i += DATE_BATCH) {
+      if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS) {
+        console.log(`[AMMP Sync Contract] Timeout during date fetching, ${assetsMissingDate.length - i} assets still missing dates`);
+        break;
+      }
+      const batch = assetsMissingDate.slice(i, i + DATE_BATCH);
+      await Promise.all(batch.map(async (asset) => {
+        try {
+          const metadata = await fetchAMMPData(token, `/assets/${asset.assetId}`);
+          if (metadata?.created) {
+            asset.onboardingDate = metadata.created;
+            // Update in the map too
+            uniqueAssets.set(asset.assetId, asset);
+          }
+        } catch {
+          // Skip - asset date will remain null
+        }
+      }));
+    }
+    const stillMissing = Array.from(uniqueAssets.values()).filter(a => !a.onboardingDate && a.assetId).length;
+    console.log(`[AMMP Sync Contract] After date fetching: ${stillMissing} assets still missing onboarding dates`);
+  }
+  
   const finalCapabilities = Array.from(uniqueAssets.values());
   
   // Aggregate data
