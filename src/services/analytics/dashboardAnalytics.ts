@@ -337,6 +337,16 @@ export function calculateSingleContractARR(
         commitmentDiscountPercent: contract.commitment_discount_percent || undefined,
       });
       annualValue = result.totalPrice;
+
+      // For SPS Monitoring, the invoice engine returns only the EXCESS above
+      // the upfront annual payment. For ARR, the actual annual revenue is
+      // whichever is higher: the full discounted monitoring fee or the minimum.
+      if (contract.package === 'sps_monitoring' && contract.minimum_annual_value) {
+        annualValue = Math.max(
+          annualValue + contract.minimum_annual_value,
+          contract.minimum_annual_value
+        );
+      }
     }
 
     // Add retainer value for starter/capped/per_site if applicable
@@ -1230,7 +1240,15 @@ export async function getTotalContractARR(
       site_size_threshold_kwp,
       below_threshold_price_per_mwp,
       above_threshold_price_per_mwp,
-      graduated_mw_tiers
+      graduated_mw_tiers,
+      is_trial,
+      trial_setup_fee,
+      vendor_api_onboarding_fee,
+      municipality_count,
+      api_setup_fee,
+      hourly_rate,
+      upfront_discount_percent,
+      commitment_discount_percent
     `)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
