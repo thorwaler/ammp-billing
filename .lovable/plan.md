@@ -1,30 +1,46 @@
 
 
-## Update Elum Dates + Reset UNHCR Sites
+## Fix SPS ARR Calculation
 
-Two data operations using the database insert tool:
+### Problem
 
-### 1. Advance Elum contract dates to next quarter
+For SPS Monitoring, `calculateInvoice()` with `frequencyMultiplier=1` returns the **excess** above the upfront annual payment: `max(0, €27,632 - €100,000) = €0`. This means `calculateSingleContractARR()` reports €0 for the SPS contract.
 
-Update all 7 Elum contracts (customer `a47378ad-d2a5-4c91-8426-ce87a188bdc4`):
-- `next_invoice_date` → `2026-06-30`
-- `period_start` → `2026-03-31`
-- `period_end` → `2026-06-29`
+The actual annual recurring revenue is `max(annualDiscountedFee, minimumAnnualValue)` — i.e., the higher of the calculated monitoring fee or the guaranteed minimum. In this case, €100,000.
 
-### 2. Reset 3 UNHCR sites
+### Fix
 
-For site IDs `d593fb12-5395-4b97-ba48-bdaeb20ef660`, `cd08511b-5c53-4ed2-bb9a-b121673fc1db`, `63322962-d188-4d2b-8e48-904eec39b825`:
-- `onboarding_fee_paid` → false
-- `onboarding_fee_paid_date` → NULL
-- `onboarding_invoice_id` → NULL
-- `next_annual_due_date` → NULL
-- `last_annual_payment_date` → NULL
-- `last_annual_invoice_id` → NULL
+**File: `src/services/analytics/dashboardAnalytics.ts`** (~line 339)
+
+After `annualValue = result.totalPrice`, add SPS-specific logic:
+
+```typescript
+annualValue = result.totalPrice;
+
+// For SPS Monitoring, the invoice engine returns only the EXCESS above
+// the upfront annual payment. For ARR, the actual annual revenue is
+// whichever is higher: the full discounted monitoring fee or the minimum.
+if (contract.package === 'sps_monitoring' && contract.minimum_annual_value) {
+  annualValue = Math.max(
+    annualValue + contract.minimum_annual_value,
+    contract.minimum_annual_value
+  );
+}
+```
+
+Since `annualValue` (excess) + `minimum_annual_value` equals the full discounted fee when the fee exceeds the minimum, and equals just the minimum when excess is 0, this correctly represents `max(discountedFee, minimum)`.
+
+**Also fix `getTotalContractARR()` query** (lines 1210-1233): Add the 8 missing fields so the Reports page produces the same result as the Dashboard.
+
+### Expected Impact
+
+- SPS ARR: €0 → €100,000
+- Reports page gap (missing fields): additional ~€5k correction
+- New total ARR: ~€1,081k
 
 ### Files changed
 
 | File | Change |
 |------|--------|
-| Database (contracts) | Update 7 Elum contracts to next quarter dates |
-| Database (site_billing_status) | Reset billing flags on 3 UNHCR sites |
+| `src/services/analytics/dashboardAnalytics.ts` | Add SPS minimum_annual_value to ARR; add 8 missing fields to Reports query |
 
