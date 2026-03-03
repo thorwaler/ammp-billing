@@ -454,27 +454,38 @@ export async function getMWGrowthByMonth(filters?: ReportFilters): Promise<MWGro
   // Get asset data from contracts
   const assetData = await getAssetBreakdownFromContracts(user.id, customerIds);
 
-  // Filter by date range
-  const filteredAssets = assetData.filter(asset => {
+  // Split assets: those before range contribute to baseline, those in range show as growth
+  let baselineMW = 0;
+  const filteredAssets: typeof assetData = [];
+
+  assetData.forEach(asset => {
     const onboardingDate = new Date(asset.onboardingDate);
-    if (filters?.startDate && onboardingDate < filters.startDate) return false;
-    if (filters?.endDate && onboardingDate > filters.endDate) return false;
-    return true;
+    if (filters?.endDate && onboardingDate > filters.endDate) return; // exclude future
+    if (filters?.startDate && onboardingDate < filters.startDate) {
+      baselineMW += asset.totalMW; // accumulate as baseline
+    } else {
+      filteredAssets.push(asset);
+    }
   });
 
-  // Group by month and calculate cumulative MW
+  // Group in-range assets by month
   const monthlyMap = new Map<string, number>();
-  
   filteredAssets.forEach(asset => {
     const date = new Date(asset.onboardingDate);
     const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
     monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + asset.totalMW);
   });
 
-  // Sort by month and calculate cumulative
+  // If no in-range months but we have baseline, create a single entry for the start month
+  if (monthlyMap.size === 0 && baselineMW > 0 && filters?.startDate) {
+    const sk = `${filters.startDate.getFullYear()}-${String(filters.startDate.getMonth() + 1).padStart(2, '0')}`;
+    monthlyMap.set(sk, 0);
+  }
+
+  // Sort by month and calculate cumulative starting from baseline
   const sortedMonths = Array.from(monthlyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   
-  let cumulativeMW = 0;
+  let cumulativeMW = baselineMW;
   const result: MWGrowthData[] = sortedMonths.map(([month, mw]) => {
     cumulativeMW += mw;
     const [year, monthNum] = month.split('-');
