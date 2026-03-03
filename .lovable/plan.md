@@ -1,41 +1,66 @@
 
 
-## Fix: Contract ARR Too Low With Date Filters
+## Fix: MW Growth Not Showing for BLS/Brightlight With Date Filters
 
 ### Problem
 
-The new date range filter on `getTotalContractARR()` is over-filtering contracts, dropping ARR from ~€1,081k to ~€450k. The likely cause is:
+In `getMWGrowthByMonth()` (line 458-463), the date filter **excludes** any asset whose `onboardingDate` is before the selected start date:
 
-1. **Null `signed_date`**: The contracts table has `signed_date` as nullable. The filter `.lte('signed_date', endDate)` excludes any contract where `signed_date` is NULL — effectively dropping contracts that never had a signing date recorded.
+```typescript
+if (filters?.startDate && onboardingDate < filters.startDate) return false;
+```
 
-2. **Null `contract_expiry_date` handling may also interact**: Some contracts may have neither field set.
+This means if BLS and Brightlight assets were all onboarded before the selected range, they get dropped entirely — no data appears on the chart. For a cumulative MW growth chart, assets onboarded before the range should still count as the baseline.
 
 ### Fix
 
-**File: `src/services/analytics/dashboardAnalytics.ts`** (lines 1261-1267)
+**File: `src/services/analytics/dashboardAnalytics.ts`** (lines 457-493)
 
-Update the date range filters to handle null values:
+Change the filtering logic so that:
+1. Assets onboarded **before** `startDate` are included but bucketed into the first month of the range (as baseline cumulative MW)
+2. Assets onboarded **after** `endDate` are excluded
+3. Assets onboarded **within** the range appear in their actual month
 
 ```typescript
-// Filter by date range: only include contracts active during the selected period
-if (filters?.startDate) {
-  query = query.or(
-    `contract_expiry_date.is.null,contract_expiry_date.gte.${filters.startDate.toISOString()}`
-  );
+// Split assets: those before range contribute to baseline, those in range show as growth
+let baselineMW = 0;
+const filteredAssets: typeof assetData = [];
+
+assetData.forEach(asset => {
+  const onboardingDate = new Date(asset.onboardingDate);
+  if (filters?.endDate && onboardingDate > filters.endDate) return; // exclude future
+  if (filters?.startDate && onboardingDate < filters.startDate) {
+    baselineMW += asset.totalMW; // accumulate as baseline
+  } else {
+    filteredAssets.push(asset);
+  }
+});
+
+// Group in-range assets by month
+const monthlyMap = new Map<string, number>();
+filteredAssets.forEach(asset => {
+  const date = new Date(asset.onboardingDate);
+  const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+  monthlyMap.set(monthKey, (monthlyMap.get(monthKey) || 0) + asset.totalMW);
+});
+
+// If no in-range months but we have baseline, create a single entry for the start month
+if (monthlyMap.size === 0 && baselineMW > 0 && filters?.startDate) {
+  const sk = `${filters.startDate.getFullYear()}-${String(filters.startDate.getMonth() + 1).padStart(2, '0')}`;
+  monthlyMap.set(sk, 0);
 }
-if (filters?.endDate) {
-  // Include contracts with no signed_date (treat as always existing)
-  query = query.or(
-    `signed_date.is.null,signed_date.lte.${filters.endDate.toISOString()}`
-  );
-}
+
+// Sort and build cumulative starting from baseline
+const sortedMonths = Array.from(monthlyMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+let cumulativeMW = baselineMW;
+// ... rest builds result array with cumulativeMW starting from baseline
 ```
 
-This ensures contracts with a missing `signed_date` are still included (they're active, so they should count), while still filtering out contracts signed after the selected end date.
+This way BLS/Brightlight assets onboarded before the selected range still appear as the baseline on the chart, and any new assets within the range show as growth.
 
 ### Files changed
 
 | File | Change |
 |------|--------|
-| `src/services/analytics/dashboardAnalytics.ts` | Handle null `signed_date` in date range filter |
+| `src/services/analytics/dashboardAnalytics.ts` | Rework date filtering in `getMWGrowthByMonth` to preserve pre-range assets as baseline cumulative MW |
 
