@@ -344,6 +344,9 @@ export function calculateSingleContractARR(
         // SPS Monitoring discount fields
         upfrontDiscountPercent: contract.upfront_discount_percent || undefined,
         commitmentDiscountPercent: contract.commitment_discount_percent || undefined,
+        // Matriarch API fields
+        irradiancePerSiteTiers: (contract as any).irradiance_per_site_tiers || undefined,
+        performancePerMwpTiers: (contract as any).performance_per_mwp_tiers || undefined,
       });
       annualValue = result.totalPrice;
 
