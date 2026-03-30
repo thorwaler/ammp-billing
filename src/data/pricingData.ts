@@ -176,7 +176,8 @@ export type PackageType =
   | "elum_internal"
   | "ammp_os_2026"
   | "solar_africa_api"
-  | "sps_monitoring";
+  | "sps_monitoring"
+  | "matriarch_api";
 
 // === SolarAfrica API Pricing ===
 
