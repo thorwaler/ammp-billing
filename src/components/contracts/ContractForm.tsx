@@ -1220,6 +1220,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="ammp_os_2026">AMMP OS 2026 (New pricing: 5 modules, trial option)</SelectItem>
                       <SelectItem value="sps_monitoring">SPS Monitoring (3 stacking discounts, quarterly billing, €100k min)</SelectItem>
                       <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
+                      <SelectItem value="matriarch_api">Matriarch API (Irradiance + Performance dual pricing)</SelectItem>
                       {customContractTypes.length > 0 && (
                         <>
                           <SelectSeparator />
