@@ -131,6 +131,8 @@ export function UpcomingInvoicesList({
           hourly_rate,
           upfront_discount_percent,
           commitment_discount_percent,
+          irradiance_per_site_tiers,
+          performance_per_mwp_tiers,
           customers (
             id,
             name,
