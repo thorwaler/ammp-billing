@@ -212,6 +212,18 @@ export interface ElumInternalBreakdown {
   totalCost: number;
 }
 
+export interface MatriarchApiBreakdown {
+  irradianceOnlySites: number;
+  irradiancePerSiteRate: number;
+  irradianceMonthlyTotal: number;
+  irradianceAnnualTotal: number;
+  performanceSites: number;
+  performanceTotalMWp: number;
+  performanceAnnualTotal: number;
+  performanceTierBreakdown: Array<{ label: string; mwInTier: number; pricePerMWp: number; cost: number }>;
+  totalAnnualCost: number;
+}
+
 export interface CalculationResult {
   moduleCosts: {
     moduleId: string;
@@ -249,6 +261,8 @@ export interface CalculationResult {
   elumEpmBreakdown?: ElumEpmBreakdown;
   elumJubailiBreakdown?: ElumJubailiBreakdown;
   elumInternalBreakdown?: ElumInternalBreakdown;
+  // Matriarch API breakdown
+  matriarchApiBreakdown?: MatriarchApiBreakdown;
   // Discounted assets results
   discountedAssets?: DiscountedAssetResult[];
   discountedAssetsTotal?: number;
