@@ -6,7 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { calculateInvoice } from "@/lib/invoiceCalculations";
 import { addMonths, addYears } from "date-fns";
 import { parseDateCET } from "@/lib/dateUtils";
-import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
+import type { MinimumChargeTier, DiscountTier, GraduatedMWTier, IrradianceSiteTier, PerformanceMWpTier } from "@/data/pricingData";
 
 export interface UpcomingInvoice {
   contractId: string;

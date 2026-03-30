@@ -414,7 +414,9 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       api_setup_fee,
       hourly_rate,
       upfront_discount_percent,
-      commitment_discount_percent
+      commitment_discount_percent,
+      irradiance_per_site_tiers,
+      performance_per_mwp_tiers
     `)
     .eq('contract_status', 'active')
     .neq('package', 'poc');
