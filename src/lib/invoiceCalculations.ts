@@ -1055,6 +1055,54 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       result.retainerCost = params.customizationHours * params.hourlyRate;
       result.retainerCalculatedCost = result.retainerCost;
     }
+  } else if (packageType === 'matriarch_api') {
+    // Matriarch API - dual subscription: irradiance-only (per site/month) + performance (per MWp/year)
+    const assets = normalAssets;
+    
+    // Classify sites: irradiance-only vs performance
+    // Irradiance-only: hasSolcast && (deviceCount <= 1 or no non-satellite devices)
+    const irradianceOnlySites: typeof assets = [];
+    const performanceSites: typeof assets = [];
+    
+    for (const asset of assets) {
+      const a = asset as any;
+      const hasDevicesBeyondSolcast = (a.deviceCount || 0) > 1 || 
+        (a.devices && a.devices.some((d: any) => 
+          d.deviceType && !['solcast', 'satellite', 'irradiance'].includes(d.deviceType.toLowerCase())
+        ));
+      
+      if (a.hasSolcast && !hasDevicesBeyondSolcast) {
+        irradianceOnlySites.push(asset);
+      } else {
+        performanceSites.push(asset);
+      }
+    }
+    
+    // Calculate irradiance component (monthly per-site, annualized)
+    const irradianceCount = irradianceOnlySites.length;
+    const irradianceRate = getIrradianceSiteTierRate(irradianceCount, params.irradiancePerSiteTiers);
+    const irradianceMonthly = irradianceCount * irradianceRate;
+    const irradianceAnnual = irradianceMonthly * 12;
+    
+    // Calculate performance component (annual per-MWp graduated)
+    const perfTotalMWp = performanceSites.reduce((sum, a) => sum + a.totalMW, 0);
+    const perfResult = calculatePerformanceMWpCost(perfTotalMWp, params.performancePerMwpTiers);
+    
+    const totalAnnual = irradianceAnnual + perfResult.totalCost;
+    
+    result.matriarchApiBreakdown = {
+      irradianceOnlySites: irradianceCount,
+      irradiancePerSiteRate: irradianceRate,
+      irradianceMonthlyTotal: irradianceMonthly,
+      irradianceAnnualTotal: irradianceAnnual,
+      performanceSites: performanceSites.length,
+      performanceTotalMWp: perfTotalMWp,
+      performanceAnnualTotal: perfResult.totalCost,
+      performanceTierBreakdown: perfResult.tierBreakdown,
+      totalAnnualCost: totalAnnual,
+    };
+    
+    result.totalMWCost = totalAnnual * frequencyMultiplier;
   } else {
     // Pro or Custom - calculate module costs
     const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);

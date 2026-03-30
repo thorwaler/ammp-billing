@@ -753,7 +753,8 @@ const ContractDetails = () => {
                       elum_portfolio_os: "Elum Portfolio OS",
                       elum_internal: "Elum Internal Assets",
                       ammp_os_2026: "AMMP OS 2026",
-                      solar_africa_api: "SolarAfrica API"
+                      solar_africa_api: "SolarAfrica API",
+                      matriarch_api: "Matriarch API"
                     } as Record<string, string>)[contract.package] || contract.package}
                   </p>
                 </div>
