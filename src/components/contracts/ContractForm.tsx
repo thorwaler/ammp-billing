@@ -1450,7 +1450,95 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
 
-            {watchPackage === "per_site" && (
+            {/* Matriarch API Package Fields */}
+            {watchPackage === "matriarch_api" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-medium">Matriarch API Dual Pricing</h3>
+                <p className="text-xs text-muted-foreground">
+                  Sites are auto-classified from AMMP sync: irradiance-only (solcast only) vs performance (with inverters/devices).
+                </p>
+                
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Irradiance-Only Sites (Monthly per-site)</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    {irradianceSiteTiers.map((tier, idx) => (
+                      <div key={idx} className="p-2 bg-muted rounded text-xs space-y-1">
+                        <div className="font-medium">{tier.label}</div>
+                        <div className="flex items-center gap-1">
+                          <span>€</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="h-6 text-xs"
+                            value={tier.pricePerSite}
+                            onChange={(e) => {
+                              const newTiers = [...irradianceSiteTiers];
+                              newTiers[idx] = { ...tier, pricePerSite: Number(e.target.value) || 0 };
+                              setIrradianceSiteTiers(newTiers);
+                            }}
+                          />
+                          <span>/site/mo</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Performance Sites (Annual per-MWp, graduated)</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {performanceMwpTiers.map((tier, idx) => (
+                      <div key={idx} className="p-2 bg-muted rounded text-xs space-y-1">
+                        <div className="font-medium">{tier.label}</div>
+                        <div className="flex items-center gap-1">
+                          <span>€</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="h-6 text-xs"
+                            value={tier.pricePerMWp}
+                            onChange={(e) => {
+                              const newTiers = [...performanceMwpTiers];
+                              newTiers[idx] = { ...tier, pricePerMWp: Number(e.target.value) || 0 };
+                              setPerformanceMwpTiers(newTiers);
+                            }}
+                          />
+                          <span>/MWp/yr</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="onboarding-setup-fee">Onboarding Fee (one-time)</Label>
+                    <Input
+                      id="onboarding-setup-fee"
+                      type="number"
+                      min="0"
+                      value={onboardingSetupFee}
+                      onChange={(e) => setOnboardingSetupFee(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: €{MATRIARCH_ONBOARDING_FEE.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="vendor-api-fee">Vendor API Fee (per vendor)</Label>
+                    <Input
+                      id="vendor-api-fee"
+                      type="number"
+                      min="0"
+                      value={vendorApiFee}
+                      onChange={(e) => setVendorApiFee(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: €{MATRIARCH_VENDOR_API_FEE}/vendor</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
