@@ -272,6 +272,12 @@ export function calculateSingleContractARR(
     }
     return 0;
   }
+
+  // Matriarch API - dual subscription pricing
+  if (contract.package === 'matriarch_api') {
+    // Use calculateInvoice with frequencyMultiplier=1 for annual value
+    // This will be handled by the else branch below since it needs cached_capabilities
+  }
   // Use cached_capabilities from contract (single source of truth)
   const cachedCapabilities = contract.cached_capabilities;
   const assetBreakdown = cachedCapabilities?.assetBreakdown || [];
@@ -338,6 +344,9 @@ export function calculateSingleContractARR(
         // SPS Monitoring discount fields
         upfrontDiscountPercent: contract.upfront_discount_percent || undefined,
         commitmentDiscountPercent: contract.commitment_discount_percent || undefined,
+        // Matriarch API fields
+        irradiancePerSiteTiers: (contract as any).irradiance_per_site_tiers || undefined,
+        performancePerMwpTiers: (contract as any).performance_per_mwp_tiers || undefined,
       });
       annualValue = result.totalPrice;
 
@@ -405,7 +414,9 @@ async function calculateTotalARR(userId: string): Promise<ARRByCurrency> {
       api_setup_fee,
       hourly_rate,
       upfront_discount_percent,
-      commitment_discount_percent
+      commitment_discount_percent,
+      irradiance_per_site_tiers,
+      performance_per_mwp_tiers
     `)
     .eq('contract_status', 'active')
     .neq('package', 'poc');

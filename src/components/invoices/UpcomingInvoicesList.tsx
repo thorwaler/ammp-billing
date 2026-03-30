@@ -6,7 +6,7 @@ import { toast } from "@/hooks/use-toast";
 import { calculateInvoice } from "@/lib/invoiceCalculations";
 import { addMonths, addYears } from "date-fns";
 import { parseDateCET } from "@/lib/dateUtils";
-import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
+import type { MinimumChargeTier, DiscountTier, GraduatedMWTier, IrradianceSiteTier, PerformanceMWpTier } from "@/data/pricingData";
 
 export interface UpcomingInvoice {
   contractId: string;
@@ -55,6 +55,9 @@ export interface UpcomingInvoice {
   // SPS Monitoring discount fields
   upfrontDiscountPercent?: number;
   commitmentDiscountPercent?: number;
+  // Matriarch API fields
+  irradiancePerSiteTiers?: IrradianceSiteTier[];
+  performancePerMwpTiers?: PerformanceMWpTier[];
 }
 
 interface CustomerGroup {
@@ -128,6 +131,8 @@ export function UpcomingInvoicesList({
           hourly_rate,
           upfront_discount_percent,
           commitment_discount_percent,
+          irradiance_per_site_tiers,
+          performance_per_mwp_tiers,
           customers (
             id,
             name,
@@ -204,6 +209,13 @@ export function UpcomingInvoicesList({
             // SPS Monitoring discount fields
             upfrontDiscountPercent: Number((c as any).upfront_discount_percent) || undefined,
             commitmentDiscountPercent: Number((c as any).commitment_discount_percent) || undefined,
+            // Matriarch API fields
+            irradiancePerSiteTiers: Array.isArray((c as any).irradiance_per_site_tiers) 
+              ? (c as any).irradiance_per_site_tiers as IrradianceSiteTier[]
+              : undefined,
+            performancePerMwpTiers: Array.isArray((c as any).performance_per_mwp_tiers)
+              ? (c as any).performance_per_mwp_tiers as PerformanceMWpTier[]
+              : undefined,
           };
         });
 

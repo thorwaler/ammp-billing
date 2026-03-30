@@ -24,16 +24,23 @@ import {
   isPackage2026,
   isSolarAfricaPackage,
   isSpsPackage,
+  isMatriarchApiPackage,
   SOLAR_AFRICA_SETUP_FEE,
   SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE,
   SOLAR_AFRICA_MUNICIPALITY_TIERS,
   getSolarAfricaTier,
+  MATRIARCH_IRRADIANCE_SITE_TIERS,
+  MATRIARCH_PERFORMANCE_MWP_TIERS,
+  MATRIARCH_ONBOARDING_FEE,
+  MATRIARCH_VENDOR_API_FEE,
   type ComplexityLevel, 
   type PricingTier,
   type DiscountTier,
   type MinimumChargeTier,
   type GraduatedMWTier,
   type DeliverableType,
+  type IrradianceSiteTier,
+  type PerformanceMWpTier,
   DEFAULT_PORTFOLIO_DISCOUNT_TIERS,
   DEFAULT_MINIMUM_CHARGE_TIERS,
   DEFAULT_GRADUATED_MW_TIERS
@@ -131,6 +138,11 @@ const contractFormSchema = z.object({
   aboveThresholdPricePerMWp: z.coerce.number().optional(),
   // Elum Internal Assets fields
   graduatedMWTiers: z.array(z.any()).optional(),
+  // Matriarch API fields
+  irradiancePerSiteTiers: z.array(z.any()).optional(),
+  performancePerMwpTiers: z.array(z.any()).optional(),
+  onboardingSetupFee: z.coerce.number().optional(),
+  vendorApiFee: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -206,6 +218,11 @@ interface ContractFormProps {
     // SPS Monitoring discount fields
     upfrontDiscountPercent?: number;
     commitmentDiscountPercent?: number;
+    // Matriarch API fields
+    irradiancePerSiteTiers?: any[];
+    performancePerMwpTiers?: any[];
+    onboardingSetupFee?: number;
+    vendorApiFee?: number;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -226,6 +243,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [portfolioDiscountTiers, setPortfolioDiscountTiers] = useState<DiscountTier[]>(DEFAULT_PORTFOLIO_DISCOUNT_TIERS);
   const [minimumChargeTiers, setMinimumChargeTiers] = useState<MinimumChargeTier[]>(DEFAULT_MINIMUM_CHARGE_TIERS);
   const [graduatedMWTiers, setGraduatedMWTiers] = useState<GraduatedMWTier[]>(DEFAULT_GRADUATED_MW_TIERS);
+  const [irradianceSiteTiers, setIrradianceSiteTiers] = useState<IrradianceSiteTier[]>(MATRIARCH_IRRADIANCE_SITE_TIERS);
+  const [performanceMwpTiers, setPerformanceMwpTiers] = useState<PerformanceMWpTier[]>(MATRIARCH_PERFORMANCE_MWP_TIERS);
+  const [onboardingSetupFee, setOnboardingSetupFee] = useState<number>(MATRIARCH_ONBOARDING_FEE);
+  const [vendorApiFee, setVendorApiFee] = useState<number>(MATRIARCH_VENDOR_API_FEE);
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
@@ -724,6 +745,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       setApiSetupFee(existingContract?.apiSetupFee || SOLAR_AFRICA_SETUP_FEE);
       setHourlyRate(existingContract?.hourlyRate || SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
       setShowCustomPricing(false);
+    } else if (value === "matriarch_api") {
+      // Matriarch API - dual subscription pricing
+      form.setValue("modules", []);
+      form.setValue("billingFrequency", "monthly");
+      setIrradianceSiteTiers(existingContract?.irradiancePerSiteTiers || MATRIARCH_IRRADIANCE_SITE_TIERS);
+      setPerformanceMwpTiers(existingContract?.performancePerMwpTiers || MATRIARCH_PERFORMANCE_MWP_TIERS);
+      setOnboardingSetupFee(existingContract?.onboardingSetupFee || MATRIARCH_ONBOARDING_FEE);
+      setVendorApiFee(existingContract?.vendorApiFee || MATRIARCH_VENDOR_API_FEE);
+      setShowCustomPricing(false);
     } else {
       // Check if this is a custom contract type
       const customType = customContractTypes.find((ct: any) => ct.slug === value);
@@ -1042,6 +1072,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         municipality_count: data.package === 'solar_africa_api' ? municipalityCount : null,
         api_setup_fee: data.package === 'solar_africa_api' ? apiSetupFee : null,
         hourly_rate: data.package === 'solar_africa_api' ? hourlyRate : null,
+        // Matriarch API fields
+        irradiance_per_site_tiers: data.package === 'matriarch_api' ? irradianceSiteTiers : [],
+        performance_per_mwp_tiers: data.package === 'matriarch_api' ? performanceMwpTiers : [],
+        onboarding_setup_fee: data.package === 'matriarch_api' ? onboardingSetupFee : null,
+        vendor_api_fee: data.package === 'matriarch_api' ? vendorApiFee : null,
         // Custom contract type reference
         contract_type_id: selectedContractTypeId || null,
         // SPS Monitoring discount fields
@@ -1100,7 +1135,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Debug Panel - Development Only */}
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded text-xs font-mono">
                 <div className="font-bold mb-2">🐛 Debug Info:</div>
                 <div>Form Valid: {form.formState.isValid ? '✅ Yes' : '❌ No'}</div>
@@ -1190,6 +1225,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="ammp_os_2026">AMMP OS 2026 (New pricing: 5 modules, trial option)</SelectItem>
                       <SelectItem value="sps_monitoring">SPS Monitoring (3 stacking discounts, quarterly billing, €100k min)</SelectItem>
                       <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
+                      <SelectItem value="matriarch_api">Matriarch API (Irradiance + Performance dual pricing)</SelectItem>
                       {customContractTypes.length > 0 && (
                         <>
                           <SelectSeparator />
@@ -1409,6 +1445,95 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         <div>€{tier.annualFee.toLocaleString()}/yr</div>
                       </div>
                     ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Matriarch API Package Fields */}
+            {watchPackage === "matriarch_api" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-medium">Matriarch API Dual Pricing</h3>
+                <p className="text-xs text-muted-foreground">
+                  Sites are auto-classified from AMMP sync: irradiance-only (solcast only) vs performance (with inverters/devices).
+                </p>
+                
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Irradiance-Only Sites (Monthly per-site)</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    {irradianceSiteTiers.map((tier, idx) => (
+                      <div key={idx} className="p-2 bg-muted rounded text-xs space-y-1">
+                        <div className="font-medium">{tier.label}</div>
+                        <div className="flex items-center gap-1">
+                          <span>€</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="h-6 text-xs"
+                            value={tier.pricePerSite}
+                            onChange={(e) => {
+                              const newTiers = [...irradianceSiteTiers];
+                              newTiers[idx] = { ...tier, pricePerSite: Number(e.target.value) || 0 };
+                              setIrradianceSiteTiers(newTiers);
+                            }}
+                          />
+                          <span>/site/mo</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h4 className="text-sm font-medium">Performance Sites (Annual per-MWp, graduated)</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {performanceMwpTiers.map((tier, idx) => (
+                      <div key={idx} className="p-2 bg-muted rounded text-xs space-y-1">
+                        <div className="font-medium">{tier.label}</div>
+                        <div className="flex items-center gap-1">
+                          <span>€</span>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            className="h-6 text-xs"
+                            value={tier.pricePerMWp}
+                            onChange={(e) => {
+                              const newTiers = [...performanceMwpTiers];
+                              newTiers[idx] = { ...tier, pricePerMWp: Number(e.target.value) || 0 };
+                              setPerformanceMwpTiers(newTiers);
+                            }}
+                          />
+                          <span>/MWp/yr</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="onboarding-setup-fee">Onboarding Fee (one-time)</Label>
+                    <Input
+                      id="onboarding-setup-fee"
+                      type="number"
+                      min="0"
+                      value={onboardingSetupFee}
+                      onChange={(e) => setOnboardingSetupFee(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: €{MATRIARCH_ONBOARDING_FEE.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="vendor-api-fee">Vendor API Fee (per vendor)</Label>
+                    <Input
+                      id="vendor-api-fee"
+                      type="number"
+                      min="0"
+                      value={vendorApiFee}
+                      onChange={(e) => setVendorApiFee(Number(e.target.value) || 0)}
+                      className="mt-1"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Default: €{MATRIARCH_VENDOR_API_FEE}/vendor</p>
                   </div>
                 </div>
               </div>
