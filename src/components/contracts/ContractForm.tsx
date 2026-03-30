@@ -745,6 +745,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       setApiSetupFee(existingContract?.apiSetupFee || SOLAR_AFRICA_SETUP_FEE);
       setHourlyRate(existingContract?.hourlyRate || SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
       setShowCustomPricing(false);
+    } else if (value === "matriarch_api") {
+      // Matriarch API - dual subscription pricing
+      form.setValue("modules", []);
+      form.setValue("billingFrequency", "monthly");
+      setIrradianceSiteTiers(existingContract?.irradiancePerSiteTiers || MATRIARCH_IRRADIANCE_SITE_TIERS);
+      setPerformanceMwpTiers(existingContract?.performancePerMwpTiers || MATRIARCH_PERFORMANCE_MWP_TIERS);
+      setOnboardingSetupFee(existingContract?.onboardingSetupFee || MATRIARCH_ONBOARDING_FEE);
+      setVendorApiFee(existingContract?.vendorApiFee || MATRIARCH_VENDOR_API_FEE);
+      setShowCustomPricing(false);
     } else {
       // Check if this is a custom contract type
       const customType = customContractTypes.find((ct: any) => ct.slug === value);
