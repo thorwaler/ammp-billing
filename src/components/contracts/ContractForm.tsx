@@ -218,6 +218,11 @@ interface ContractFormProps {
     // SPS Monitoring discount fields
     upfrontDiscountPercent?: number;
     commitmentDiscountPercent?: number;
+    // Matriarch API fields
+    irradiancePerSiteTiers?: any[];
+    performancePerMwpTiers?: any[];
+    onboardingSetupFee?: number;
+    vendorApiFee?: number;
   };
   onComplete?: () => void;
   onCancel?: () => void;
