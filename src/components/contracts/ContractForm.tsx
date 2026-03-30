@@ -1539,6 +1539,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
 
+            {watchPackage === "per_site" && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
