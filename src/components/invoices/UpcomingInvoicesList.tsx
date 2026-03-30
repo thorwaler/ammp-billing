@@ -209,6 +209,13 @@ export function UpcomingInvoicesList({
             // SPS Monitoring discount fields
             upfrontDiscountPercent: Number((c as any).upfront_discount_percent) || undefined,
             commitmentDiscountPercent: Number((c as any).commitment_discount_percent) || undefined,
+            // Matriarch API fields
+            irradiancePerSiteTiers: Array.isArray((c as any).irradiance_per_site_tiers) 
+              ? (c as any).irradiance_per_site_tiers as IrradianceSiteTier[]
+              : undefined,
+            performancePerMwpTiers: Array.isArray((c as any).performance_per_mwp_tiers)
+              ? (c as any).performance_per_mwp_tiers as PerformanceMWpTier[]
+              : undefined,
           };
         });
 
