@@ -138,6 +138,11 @@ const contractFormSchema = z.object({
   aboveThresholdPricePerMWp: z.coerce.number().optional(),
   // Elum Internal Assets fields
   graduatedMWTiers: z.array(z.any()).optional(),
+  // Matriarch API fields
+  irradiancePerSiteTiers: z.array(z.any()).optional(),
+  performancePerMwpTiers: z.array(z.any()).optional(),
+  onboardingSetupFee: z.coerce.number().optional(),
+  vendorApiFee: z.coerce.number().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
