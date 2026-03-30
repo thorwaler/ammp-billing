@@ -1100,7 +1100,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Debug Panel - Development Only */}
-            {process.env.NODE_ENV === 'development' && (
+            {import.meta.env.DEV && (
               <div className="mb-4 p-4 bg-yellow-100 border border-yellow-400 rounded text-xs font-mono">
                 <div className="font-bold mb-2">🐛 Debug Info:</div>
                 <div>Form Valid: {form.formState.isValid ? '✅ Yes' : '❌ No'}</div>

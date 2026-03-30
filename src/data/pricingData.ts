@@ -268,6 +268,83 @@ export const isSpsPackage = (packageType: string): boolean => {
   return packageType === "sps_monitoring";
 };
 
+export const isMatriarchApiPackage = (packageType: string): boolean => {
+  return packageType === "matriarch_api";
+};
+
+// === Matriarch API Pricing ===
+
+export interface IrradianceSiteTier {
+  minQuantity: number;
+  maxQuantity: number | null;
+  pricePerSite: number;
+  label: string;
+}
+
+export interface PerformanceMWpTier {
+  minMW: number;
+  maxMW: number | null;
+  pricePerMWp: number;
+  label: string;
+}
+
+export const MATRIARCH_IRRADIANCE_SITE_TIERS: IrradianceSiteTier[] = [
+  { minQuantity: 1, maxQuantity: 99, pricePerSite: 5, label: "1-99 sites" },
+  { minQuantity: 100, maxQuantity: 499, pricePerSite: 4.5, label: "100-499 sites" },
+  { minQuantity: 500, maxQuantity: 999, pricePerSite: 4, label: "500-999 sites" },
+];
+
+export const MATRIARCH_PERFORMANCE_MWP_TIERS: PerformanceMWpTier[] = [
+  { minMW: 0, maxMW: 25, pricePerMWp: 316, label: "0-25 MWp" },
+  { minMW: 25, maxMW: 75, pricePerMWp: 300, label: "25-75 MWp" },
+  { minMW: 75, maxMW: 150, pricePerMWp: 284, label: "75-150 MWp" },
+  { minMW: 150, maxMW: 300, pricePerMWp: 266, label: "150-300 MWp" },
+];
+
+export const MATRIARCH_ONBOARDING_FEE = 2650;
+export const MATRIARCH_VENDOR_API_FEE = 350;
+
+/**
+ * Get applicable irradiance site tier rate
+ */
+export function getIrradianceSiteTierRate(
+  siteCount: number,
+  tiers?: IrradianceSiteTier[]
+): number {
+  const activeTiers = tiers || MATRIARCH_IRRADIANCE_SITE_TIERS;
+  const tier = activeTiers.find(t => 
+    siteCount >= t.minQuantity && 
+    (t.maxQuantity === null || siteCount <= t.maxQuantity)
+  );
+  return tier?.pricePerSite || activeTiers[activeTiers.length - 1].pricePerSite;
+}
+
+/**
+ * Calculate graduated performance MWp pricing (like elum_internal but for performance sites)
+ */
+export function calculatePerformanceMWpCost(
+  totalMWp: number,
+  tiers?: PerformanceMWpTier[]
+): { totalCost: number; tierBreakdown: Array<{ label: string; mwInTier: number; pricePerMWp: number; cost: number }> } {
+  const activeTiers = tiers || MATRIARCH_PERFORMANCE_MWP_TIERS;
+  const tierBreakdown: Array<{ label: string; mwInTier: number; pricePerMWp: number; cost: number }> = [];
+  let remainingMW = totalMWp;
+
+  for (const tier of activeTiers) {
+    if (remainingMW <= 0) break;
+    const tierCapacity = tier.maxMW !== null ? tier.maxMW - tier.minMW : remainingMW;
+    const mwInTier = Math.min(remainingMW, tierCapacity);
+    const cost = mwInTier * tier.pricePerMWp;
+    tierBreakdown.push({ label: tier.label, mwInTier, pricePerMWp: tier.pricePerMWp, cost });
+    remainingMW -= mwInTier;
+  }
+
+  return {
+    totalCost: tierBreakdown.reduce((s, t) => s + t.cost, 0),
+    tierBreakdown,
+  };
+}
+
 // SPS Monitoring volume discount tiers (5% per 50 MW, max 30%)
 export const SPS_DEFAULT_VOLUME_DISCOUNT_TIERS: DiscountTier[] = [
   { minMW: 0, maxMW: 49.99, discountPercent: 0, label: "0-49 MW" },
