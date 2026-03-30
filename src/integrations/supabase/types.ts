@@ -419,6 +419,7 @@ export type Database = {
           id: string
           initial_mw: number
           invoicing_type: string | null
+          irradiance_per_site_tiers: Json | null
           is_trial: boolean
           last_ammp_sync: string | null
           max_mw: number | null
@@ -433,7 +434,9 @@ export type Database = {
           ocr_processed_at: string | null
           ocr_status: string | null
           onboarding_fee_per_site: number | null
+          onboarding_setup_fee: number | null
           package: string
+          performance_per_mwp_tiers: Json | null
           period_end: string | null
           period_start: string | null
           portfolio_discount_tiers: Json | null
@@ -447,6 +450,7 @@ export type Database = {
           updated_at: string
           upfront_discount_percent: number | null
           user_id: string
+          vendor_api_fee: number | null
           vendor_api_onboarding_fee: number | null
           volume_discounts: Json | null
         }
@@ -486,6 +490,7 @@ export type Database = {
           id?: string
           initial_mw: number
           invoicing_type?: string | null
+          irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
           last_ammp_sync?: string | null
           max_mw?: number | null
@@ -500,7 +505,9 @@ export type Database = {
           ocr_processed_at?: string | null
           ocr_status?: string | null
           onboarding_fee_per_site?: number | null
+          onboarding_setup_fee?: number | null
           package: string
+          performance_per_mwp_tiers?: Json | null
           period_end?: string | null
           period_start?: string | null
           portfolio_discount_tiers?: Json | null
@@ -514,6 +521,7 @@ export type Database = {
           updated_at?: string
           upfront_discount_percent?: number | null
           user_id: string
+          vendor_api_fee?: number | null
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
         }
@@ -553,6 +561,7 @@ export type Database = {
           id?: string
           initial_mw?: number
           invoicing_type?: string | null
+          irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
           last_ammp_sync?: string | null
           max_mw?: number | null
@@ -567,7 +576,9 @@ export type Database = {
           ocr_processed_at?: string | null
           ocr_status?: string | null
           onboarding_fee_per_site?: number | null
+          onboarding_setup_fee?: number | null
           package?: string
+          performance_per_mwp_tiers?: Json | null
           period_end?: string | null
           period_start?: string | null
           portfolio_discount_tiers?: Json | null
@@ -581,6 +592,7 @@ export type Database = {
           updated_at?: string
           upfront_discount_percent?: number | null
           user_id?: string
+          vendor_api_fee?: number | null
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
         }
