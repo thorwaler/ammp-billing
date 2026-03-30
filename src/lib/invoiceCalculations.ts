@@ -139,6 +139,9 @@ export interface CalculationParams {
   // SPS Monitoring discount fields
   upfrontDiscountPercent?: number;
   commitmentDiscountPercent?: number;
+  // Matriarch API fields
+  irradiancePerSiteTiers?: IrradianceSiteTier[];
+  performancePerMwpTiers?: PerformanceMWpTier[];
 }
 
 export interface SiteMinimumPricingResult {
