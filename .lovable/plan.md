@@ -1,74 +1,92 @@
 
 
-## Fix: Fetch Missing Onboarding Dates During AMMP Sync
-
-### Problem
-
-The bulk `/assets` endpoint doesn't consistently return the `created` field. For large syncs (>200 assets), device detail fetching is skipped, so there's no secondary source for this date. Result: many assets in `cached_capabilities.assetBreakdown` have `onboardingDate: null`, making them invisible on the MW growth chart.
-
-### Solution
-
-Add a targeted date-fetching pass in the edge function for assets that still have no `onboardingDate` after the main sync. The individual `/assets/{id}` endpoint (metadata only, no devices) reliably returns the `created` field.
-
-### Changes
-
-**File: `supabase/functions/ammp-sync-contract/index.ts`**
-
-After the main sync loop completes and capabilities are merged (around line 497-500), add a post-processing step:
-
-1. Identify assets in `allCapabilities` where `onboardingDate` is null
-2. Batch-fetch their metadata via `/assets/{id}` (not `/assets/{id}/devices` — lighter call)
-3. Update `onboardingDate` with the returned `created` field
-4. Use the same batch size and timeout guards as the main loop
-
-```typescript
-// Post-process: fetch onboarding dates for assets missing them
-const assetsMissingDate = allCapabilities.filter(a => !a.onboardingDate && a.assetId);
-if (assetsMissingDate.length > 0) {
-  console.log(`[AMMP Sync Contract] Fetching onboarding dates for ${assetsMissingDate.length} assets`);
-  const DATE_BATCH = 50;
-  for (let i = 0; i < assetsMissingDate.length; i += DATE_BATCH) {
-    if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS) break;
-    const batch = assetsMissingDate.slice(i, i + DATE_BATCH);
-    await Promise.all(batch.map(async (asset) => {
-      try {
-        const metadata = await fetchAMMPData(token, `/assets/${asset.assetId}`);
-        if (metadata?.created) {
-          asset.onboardingDate = metadata.created;
-        }
-      } catch { /* skip */ }
-    }));
-  }
-}
-```
-
-**Also in `src/services/analytics/dashboardAnalytics.ts`** (lines 111-118):
-
-As a safety net, also add the contract-level fallback so assets that still have no date after sync aren't dropped from analytics:
-
-```typescript
-// Change query to include signed_date, created_at
-.select('cached_capabilities, customer_id, signed_date, created_at')
-
-// Change filter from requiring onboardingDate to fallback
-if (asset.totalMW) {
-  const onboardingDate = asset.onboardingDate 
-    || contract.signed_date 
-    || contract.created_at;
-  assetData.push({
-    assetName: asset.assetName,
-    totalMW: asset.totalMW,
-    onboardingDate: onboardingDate,
-  });
-}
-```
+## New Package: `matriarch_api` — Dual Subscription Pricing
 
 ### Summary
 
+Create a new pricing package for the Matriarch API contract with two simultaneous subscription components:
+1. **Irradiance-only sites** — monthly per-site fee with tiered discounts
+2. **Irradiance + Asset Performance sites** — annual per-MWp fee with graduated MW tiers
+
+Site classification is derived automatically from AMMP sync data: sites with only solcast/satellite devices = irradiance-only; sites with inverters or other equipment = full performance sites.
+
+### Pricing from Contract
+
+**Irradiance-only (monthly, per site):**
+| Sites | Rate |
+|-------|------|
+| 1–99 | €5.00/site/month |
+| 100–499 | €4.50/site/month |
+| 500–999 | €4.00/site/month |
+
+**Irradiance + Asset Performance (annual, per MWp):**
+| MWp | Rate |
+|-----|------|
+| 0–25 | €316/MWp/year |
+| 25–75 | €300/MWp/year |
+| 75–150 | €284/MWp/year |
+| 150–300 | €266/MWp/year |
+
+**One-time fees:**
+- Standard onboarding: €2,650
+- Vendor API integration: €350 per vendor
+
+### Technical Plan
+
+#### 1. Database Migration
+Add new columns to `contracts` table:
+- `irradiance_per_site_tiers` (jsonb, default `[]`) — tiered per-site monthly pricing
+- `performance_per_mwp_tiers` (jsonb, default `[]`) — graduated MWp annual pricing  
+- `vendor_api_fee` (numeric, nullable) — per-vendor integration fee
+- `onboarding_setup_fee` (numeric, nullable) — one-time onboarding fee
+
+#### 2. Pricing Data (`src/data/pricingData.ts`)
+- Add `"matriarch_api"` to `PackageType` union
+- Add `isMatriarchApiPackage()` helper
+- Define default tier constants:
+  - `MATRIARCH_IRRADIANCE_SITE_TIERS` (per-site monthly tiers)
+  - `MATRIARCH_PERFORMANCE_MWP_TIERS` (per-MWp annual graduated tiers)
+  - `MATRIARCH_ONBOARDING_FEE = 2650`
+  - `MATRIARCH_VENDOR_API_FEE = 350`
+
+#### 3. Contract Form (`src/components/contracts/ContractForm.tsx`)
+- Fix existing `process.env` build error (replace with `import.meta.env.DEV`)
+- Add `matriarch_api` package option in selector
+- Add package-specific form section showing:
+  - Editable irradiance site tiers (reuse `PricingTier` editor pattern)
+  - Editable performance MWp tiers (reuse `GraduatedMWTier` editor pattern)
+  - Onboarding fee and vendor API fee inputs
+- Auto-detect from AMMP sync: sites where `devices` only contain solcast/satellite = irradiance-only; sites with inverters etc. = performance sites
+- Save tiers to `irradiance_per_site_tiers` and `performance_per_mwp_tiers` columns
+
+#### 4. Invoice Calculation (`src/lib/invoiceCalculations.ts`)
+Add `matriarch_api` branch:
+- From `assetBreakdown`, classify each site:
+  - **Irradiance-only**: site has `hasSolcast === true` and `deviceCount <= 1` (or only satellite devices)
+  - **Performance**: site has inverters/other devices beyond solcast
+- Calculate irradiance component: count irradiance-only sites → apply tiered per-site rate → annualize (×12) → apply frequency multiplier
+- Calculate performance component: sum MWp of performance sites → apply graduated tier pricing → apply frequency multiplier
+- Sum both as `totalMWCost`
+
+#### 5. Dashboard Analytics (`src/services/analytics/dashboardAnalytics.ts`)
+- Add `matriarch_api` ARR calculation branch using same dual-component logic
+
+#### 6. Contract Details Page (`src/pages/ContractDetails.tsx`)
+- Add display label for `matriarch_api`
+- Show irradiance site count and performance MWp breakdown
+
+#### 7. Upcoming Invoices & Revenue Forecasting
+- Ensure `matriarch_api` contracts propagate `irradiance_per_site_tiers`, `performance_per_mwp_tiers`, and fee fields through invoice estimation
+
+### Files Changed
+
 | File | Change |
 |------|--------|
-| `supabase/functions/ammp-sync-contract/index.ts` | Add post-sync pass to fetch `created` date from `/assets/{id}` for assets missing `onboardingDate` |
-| `src/services/analytics/dashboardAnalytics.ts` | Add `signed_date`/`created_at` fallback in `getAssetBreakdownFromContracts` as safety net |
-
-The edge function fix ensures future syncs populate the date properly. The analytics fallback ensures existing data without dates still appears on the chart immediately (before a re-sync).
+| DB migration | Add 4 new columns to `contracts` table |
+| `src/data/pricingData.ts` | Add package type, tier constants, helpers |
+| `src/components/contracts/ContractForm.tsx` | Fix `process.env` error; add package option + form section |
+| `src/lib/invoiceCalculations.ts` | Add dual-component calculation for `matriarch_api` |
+| `src/services/analytics/dashboardAnalytics.ts` | Add ARR calculation branch |
+| `src/pages/ContractDetails.tsx` | Add display label and field rendering |
+| `src/components/invoices/UpcomingInvoicesList.tsx` | Propagate new fields |
 
