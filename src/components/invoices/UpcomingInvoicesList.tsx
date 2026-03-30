@@ -55,6 +55,9 @@ export interface UpcomingInvoice {
   // SPS Monitoring discount fields
   upfrontDiscountPercent?: number;
   commitmentDiscountPercent?: number;
+  // Matriarch API fields
+  irradiancePerSiteTiers?: IrradianceSiteTier[];
+  performancePerMwpTiers?: PerformanceMWpTier[];
 }
 
 interface CustomerGroup {
