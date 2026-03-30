@@ -1072,6 +1072,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         municipality_count: data.package === 'solar_africa_api' ? municipalityCount : null,
         api_setup_fee: data.package === 'solar_africa_api' ? apiSetupFee : null,
         hourly_rate: data.package === 'solar_africa_api' ? hourlyRate : null,
+        // Matriarch API fields
+        irradiance_per_site_tiers: data.package === 'matriarch_api' ? irradianceSiteTiers : [],
+        performance_per_mwp_tiers: data.package === 'matriarch_api' ? performanceMwpTiers : [],
+        onboarding_setup_fee: data.package === 'matriarch_api' ? onboardingSetupFee : null,
+        vendor_api_fee: data.package === 'matriarch_api' ? vendorApiFee : null,
         // Custom contract type reference
         contract_type_id: selectedContractTypeId || null,
         // SPS Monitoring discount fields

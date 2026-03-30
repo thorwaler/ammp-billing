@@ -9,16 +9,21 @@ import {
   isPackage2026,
   isSolarAfricaPackage,
   isSpsPackage,
+  isMatriarchApiPackage,
   getSolarAfricaTier,
   getAddonPrice, 
-  calculateTieredPrice, 
+  calculateTieredPrice,
+  getIrradianceSiteTierRate,
+  calculatePerformanceMWpCost,
   type ComplexityLevel, 
   type PricingTier,
   type DiscountTier,
   type MinimumChargeTier,
   type GraduatedMWTier,
   type ModuleDefinition,
-  type AddonDefinition
+  type AddonDefinition,
+  type IrradianceSiteTier,
+  type PerformanceMWpTier
 } from "@/data/pricingData";
 
 // Custom asset discount pricing interface
