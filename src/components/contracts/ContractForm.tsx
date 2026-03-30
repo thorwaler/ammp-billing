@@ -243,6 +243,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [portfolioDiscountTiers, setPortfolioDiscountTiers] = useState<DiscountTier[]>(DEFAULT_PORTFOLIO_DISCOUNT_TIERS);
   const [minimumChargeTiers, setMinimumChargeTiers] = useState<MinimumChargeTier[]>(DEFAULT_MINIMUM_CHARGE_TIERS);
   const [graduatedMWTiers, setGraduatedMWTiers] = useState<GraduatedMWTier[]>(DEFAULT_GRADUATED_MW_TIERS);
+  const [irradianceSiteTiers, setIrradianceSiteTiers] = useState<IrradianceSiteTier[]>(MATRIARCH_IRRADIANCE_SITE_TIERS);
+  const [performanceMwpTiers, setPerformanceMwpTiers] = useState<PerformanceMWpTier[]>(MATRIARCH_PERFORMANCE_MWP_TIERS);
+  const [onboardingSetupFee, setOnboardingSetupFee] = useState<number>(MATRIARCH_ONBOARDING_FEE);
+  const [vendorApiFee, setVendorApiFee] = useState<number>(MATRIARCH_VENDOR_API_FEE);
   const [loadingContract, setLoadingContract] = useState(false);
   const [existingContractId, setExistingContractId] = useState<string | null>(null);
   const [uploadedPdfUrl, setUploadedPdfUrl] = useState<string | null>(null);
