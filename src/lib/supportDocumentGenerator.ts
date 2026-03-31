@@ -156,6 +156,24 @@ export interface SupportDocumentData {
     excessAnnualAmount?: number;
   };
   
+  // Matriarch API breakdown
+  matriarchApiBreakdown?: {
+    irradianceOnlySites: number;
+    irradiancePerSiteRate: number;
+    irradianceMonthlyTotal: number;
+    irradianceAnnualTotal: number;
+    performanceSites: number;
+    performanceTotalMWp: number;
+    performanceAnnualTotal: number;
+    performanceTierBreakdown: Array<{
+      label: string;
+      mwInTier: number;
+      pricePerMW: number;
+      cost: number;
+    }>;
+    totalAnnualCost: number;
+  };
+  
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
