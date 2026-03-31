@@ -901,6 +901,9 @@ export function InvoiceCalculator({
       // SPS Monitoring discount fields
       upfrontDiscountPercent: selectedCustomer.upfrontDiscountPercent,
       commitmentDiscountPercent: selectedCustomer.commitmentDiscountPercent,
+      // Matriarch API fields
+      irradiancePerSiteTiers: selectedCustomer.irradiancePerSiteTiers,
+      performancePerMwpTiers: selectedCustomer.performancePerMwpTiers,
     };
     
     calculationResult = calculateInvoice(params);
