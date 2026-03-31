@@ -422,6 +422,10 @@ export async function generateSupportDocumentData(
     assetBreakdownPeriodTotal = calculationResult.elumEpmBreakdown.smallSitesTotal + 
                                  calculationResult.elumEpmBreakdown.largeSitesTotal;
     minimumChargesForBreakdown = 0;
+  } else if (calculationResult.matriarchApiBreakdown) {
+    // For Matriarch API, use the total annual cost adjusted by frequency
+    assetBreakdownPeriodTotal = calculationResult.totalMWCost;
+    minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
     assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
