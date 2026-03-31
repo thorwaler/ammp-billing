@@ -96,10 +96,20 @@ export interface CalculationParams {
     assetId: string;
     assetName: string;
     totalMW: number;
+    capacityKWp?: number;
     isHybrid?: boolean;
     hasSolcast?: boolean;
     solcastOnboardingDate?: string;
     onboardingDate?: string;
+    deviceCount?: number;
+    devices?: Array<{
+      deviceId: string;
+      deviceName: string;
+      deviceType: string;
+      manufacturer?: string;
+      model?: string;
+      dataProvider?: string;
+    }>;
   }>;
   enableSiteMinimumPricing?: boolean;
   baseMonthlyPrice?: number;

@@ -273,11 +273,7 @@ export function calculateSingleContractARR(
     return 0;
   }
 
-  // Matriarch API - dual subscription pricing
-  if (contract.package === 'matriarch_api') {
-    // Use calculateInvoice with frequencyMultiplier=1 for annual value
-    // This will be handled by the else branch below since it needs cached_capabilities
-  }
+
   // Use cached_capabilities from contract (single source of truth)
   const cachedCapabilities = contract.cached_capabilities;
   const assetBreakdown = cachedCapabilities?.assetBreakdown || [];
