@@ -168,7 +168,7 @@ export interface SupportDocumentData {
     performanceTierBreakdown: Array<{
       label: string;
       mwInTier: number;
-      pricePerMW: number;
+      pricePerMWp: number;
       cost: number;
     }>;
     totalAnnualCost: number;
