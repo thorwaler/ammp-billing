@@ -135,6 +135,76 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* Matriarch API Dual-Stream Breakdown */}
+      {data.matriarchApiBreakdown && (
+        <section className="mb-6">
+          <h2 className="text-base font-bold mb-3">Matriarch API — Dual Subscription Breakdown</h2>
+          
+          {/* Irradiance-only sites */}
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold mb-1">1. Irradiance-Only Sites (Monthly Per-Site)</h3>
+            <table className="w-full border-collapse border border-border text-xs mb-2">
+              <tbody>
+                <tr>
+                  <td className="border border-border p-1">Number of irradiance-only sites</td>
+                  <td className="border border-border p-1 text-right">{data.matriarchApiBreakdown.irradianceOnlySites}</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-1">Rate per site per month</td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(data.matriarchApiBreakdown.irradiancePerSiteRate)}</td>
+                </tr>
+                <tr>
+                  <td className="border border-border p-1">Monthly total</td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(data.matriarchApiBreakdown.irradianceMonthlyTotal)}</td>
+                </tr>
+                <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
+                  <td className="border border-border p-1">Annual total</td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(data.matriarchApiBreakdown.irradianceAnnualTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Performance sites */}
+          <div className="mb-3">
+            <h3 className="text-sm font-semibold mb-1">2. Asset Performance Sites (Annual Per-MWp, Graduated)</h3>
+            <table className="w-full border-collapse border border-border text-xs mb-2">
+              <thead>
+                <tr style={{ backgroundColor: '#f4f4f5' }}>
+                  <th className="border border-border p-1 text-left">Tier</th>
+                  <th className="border border-border p-1 text-right">MWp in Tier</th>
+                  <th className="border border-border p-1 text-right">Rate/MWp/yr</th>
+                  <th className="border border-border p-1 text-right">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.matriarchApiBreakdown.performanceTierBreakdown.map((tier, idx) => (
+                  <tr key={idx}>
+                    <td className="border border-border p-1">{tier.label}</td>
+                    <td className="border border-border p-1 text-right">{tier.mwInTier.toFixed(2)}</td>
+                    <td className="border border-border p-1 text-right">{formatCurrency(tier.pricePerMWp)}</td>
+                    <td className="border border-border p-1 text-right">{formatCurrency(tier.cost)}</td>
+                  </tr>
+                ))}
+                <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
+                  <td className="border border-border p-1">Total ({data.matriarchApiBreakdown.performanceSites} sites, {data.matriarchApiBreakdown.performanceTotalMWp.toFixed(2)} MWp)</td>
+                  <td className="border border-border p-1" colSpan={2}></td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(data.matriarchApiBreakdown.performanceAnnualTotal)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          
+          {/* Combined total */}
+          <div className="p-2 rounded font-bold text-sm" style={{ backgroundColor: 'rgba(244, 244, 245, 0.5)' }}>
+            <div className="flex justify-between">
+              <span>Combined Annual Total:</span>
+              <span>{formatCurrency(data.matriarchApiBreakdown.totalAnnualCost)}</span>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Per-Site Billing Breakdown (UNHCR-style) */}
       {data.perSiteBreakdown && (data.perSiteBreakdown.onboardingCost > 0 || data.perSiteBreakdown.annualSubscriptionCost > 0) && (
         <section className="mb-6">
