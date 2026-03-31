@@ -382,6 +382,11 @@ export function InvoiceCalculator({
             // SPS Monitoring discount fields
             upfrontDiscountPercent: (contract as any).upfront_discount_percent != null ? Number((contract as any).upfront_discount_percent) : undefined,
             commitmentDiscountPercent: (contract as any).commitment_discount_percent != null ? Number((contract as any).commitment_discount_percent) : undefined,
+            // Matriarch API fields
+            irradiancePerSiteTiers: Array.isArray((contract as any).irradiance_per_site_tiers) ? (contract as any).irradiance_per_site_tiers : undefined,
+            performancePerMwpTiers: Array.isArray((contract as any).performance_per_mwp_tiers) ? (contract as any).performance_per_mwp_tiers : undefined,
+            vendorApiFee: Number((contract as any).vendor_api_fee) || undefined,
+            onboardingSetupFee: Number((contract as any).onboarding_setup_fee) || undefined,
           };
         });
 
