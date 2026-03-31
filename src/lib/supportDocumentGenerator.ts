@@ -487,6 +487,18 @@ export async function generateSupportDocumentData(
       upfrontAnnualPayment: calculationResult.spsDiscountBreakdown.upfrontAnnualPayment,
       excessAnnualAmount: calculationResult.spsDiscountBreakdown.excessAnnualAmount,
     } : undefined,
+    // Matriarch API breakdown
+    matriarchApiBreakdown: calculationResult.matriarchApiBreakdown ? {
+      irradianceOnlySites: calculationResult.matriarchApiBreakdown.irradianceOnlySites,
+      irradiancePerSiteRate: calculationResult.matriarchApiBreakdown.irradiancePerSiteRate,
+      irradianceMonthlyTotal: calculationResult.matriarchApiBreakdown.irradianceMonthlyTotal,
+      irradianceAnnualTotal: calculationResult.matriarchApiBreakdown.irradianceAnnualTotal,
+      performanceSites: calculationResult.matriarchApiBreakdown.performanceSites,
+      performanceTotalMWp: calculationResult.matriarchApiBreakdown.performanceTotalMWp,
+      performanceAnnualTotal: calculationResult.matriarchApiBreakdown.performanceAnnualTotal,
+      performanceTierBreakdown: calculationResult.matriarchApiBreakdown.performanceTierBreakdown,
+      totalAnnualCost: calculationResult.matriarchApiBreakdown.totalAnnualCost,
+    } : undefined,
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
