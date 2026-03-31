@@ -318,37 +318,46 @@ const ContractDetails = () => {
     
     setIsEnrichingDevices(true);
     try {
-      const { data, error } = await supabase.functions.invoke('ammp-device-enrichment', {
-        body: { contractId: contract.id, batchSize: 50, forceRecalculate, forceRefetch }
-      });
+      let complete = false;
+      let totalEnriched = 0;
       
-      if (error) throw error;
-      
-      if (data.success) {
+      while (!complete) {
+        const { data, error } = await supabase.functions.invoke('ammp-device-enrichment', {
+          body: { contractId: contract.id, batchSize: 50, forceRecalculate, forceRefetch }
+        });
+        
+        if (error) throw error;
+        if (!data.success) throw new Error(data.error || 'Enrichment failed');
+        
+        // forceRecalculate is a single-pass operation
         if (forceRecalculate) {
           toast({
             title: "Hybrid status recalculated",
             description: `Found ${data.hybridSites} hybrid sites (${data.hybridMW?.toFixed(2)} MW), ${data.ongridSites} ongrid sites (${data.ongridMW?.toFixed(2)} MW).`,
           });
-        } else if (forceRefetch) {
-          toast({
-            title: "Device data refetched",
-            description: data.complete 
-              ? `Refetched all assets. Found ${data.sitesWithSolcast} Solcast sites, ${data.hybridSites} hybrid sites.`
-              : `Refetched ${data.enriched} assets. ${data.remaining} remaining - click again to continue.`,
-          });
-        } else {
-          toast({
-            title: "Device data enriched",
-            description: data.complete 
-              ? `All assets now have device data. Found ${data.sitesWithSolcast} Solcast sites, ${data.hybridSites} hybrid sites.`
-              : `Enriched ${data.enriched} assets. ${data.remaining} remaining - click again to continue.`,
-          });
+          complete = true;
+          break;
         }
-        loadContractData();
-      } else {
-        throw new Error(data.error || 'Enrichment failed');
+        
+        totalEnriched += data.enriched || 0;
+        complete = data.complete;
+        
+        if (!complete) {
+          toast({
+            title: "Enriching device data...",
+            description: `Processed ${totalEnriched} assets so far. ${data.remaining || 0} remaining...`,
+          });
+          await new Promise(r => setTimeout(r, 1000));
+        }
       }
+      
+      if (!forceRecalculate) {
+        toast({
+          title: "Device enrichment complete",
+          description: `All ${totalEnriched} assets enriched successfully.`,
+        });
+      }
+      loadContractData();
     } catch (error: any) {
       toast({
         title: forceRecalculate ? "Recalculation failed" : forceRefetch ? "Refetch failed" : "Enrichment failed",
