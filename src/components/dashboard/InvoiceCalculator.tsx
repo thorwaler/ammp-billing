@@ -162,6 +162,11 @@ interface Customer {
   // SPS Monitoring discount fields
   upfrontDiscountPercent?: number;
   commitmentDiscountPercent?: number;
+  // Matriarch API fields
+  irradiancePerSiteTiers?: any[];
+  performancePerMwpTiers?: any[];
+  vendorApiFee?: number;
+  onboardingSetupFee?: number;
 }
 
 // Default modules and addons from shared data
