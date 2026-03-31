@@ -543,22 +543,27 @@ async function processContractSync(
     totalSites: finalCapabilities.length,
     ongridSites: ongridSites.length,
     hybridSites: hybridSites.length,
-    sitesWithSolcast: finalCapabilities.filter(c => c.hasSolcast).length,
+    sitesWithSolcast: 0, // recalculated below after preserving enriched data
     assetBreakdown: finalCapabilities.map(c => {
-      // Preserve deviceEnrichmentAttempted flag from existing cached data
+      // Preserve enriched device data from existing cache when sync skipped devices (large portfolio)
       const existingAsset = existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId);
+      const hasExistingEnrichment = existingAsset?.deviceEnrichmentAttempted && 
+        existingAsset?.devices && existingAsset.devices.length > 0;
+      const useExisting = c.deviceCount === 0 && hasExistingEnrichment;
+      
       return {
         assetId: c.assetId,
         assetName: c.assetName,
         totalMW: c.totalMW,
         capacityKWp: c.capacityKWp,
-        isHybrid: c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter,
-        hasSolcast: c.hasSolcast,
-        deviceCount: c.deviceCount,
+        isHybrid: useExisting ? existingAsset.isHybrid : (c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter),
+        hasSolcast: useExisting ? existingAsset.hasSolcast : c.hasSolcast,
+        deviceCount: useExisting ? existingAsset.deviceCount : c.deviceCount,
         onboardingDate: c.onboardingDate,
-        solcastOnboardingDate: c.solcastOnboardingDate,
-        devices: c.devices,
+        solcastOnboardingDate: useExisting ? (existingAsset.solcastOnboardingDate || c.solcastOnboardingDate) : c.solcastOnboardingDate,
+        devices: useExisting ? existingAsset.devices : c.devices,
         deviceEnrichmentAttempted: existingAsset?.deviceEnrichmentAttempted || false,
+        deviceEnrichmentConfirmedEmpty: useExisting ? existingAsset.deviceEnrichmentConfirmedEmpty : undefined,
       };
     }),
     lastSynced: new Date().toISOString(),
@@ -569,6 +574,9 @@ async function processContractSync(
       finalCapabilities.some(c => c.deviceCount === 0 && !existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId)?.deviceEnrichmentAttempted),
   };
   
+  // Recalculate sitesWithSolcast from the final breakdown (which may include preserved enriched data)
+  cachedCapabilities.sitesWithSolcast = cachedCapabilities.assetBreakdown.filter(a => a.hasSolcast).length;
+
   // Determine if sync is complete
   const isComplete = finalCapabilities.length >= totalExpected;
   const syncStatus = isComplete ? 'synced' : 'partial';
