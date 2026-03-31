@@ -574,6 +574,9 @@ async function processContractSync(
       finalCapabilities.some(c => c.deviceCount === 0 && !existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId)?.deviceEnrichmentAttempted),
   };
   
+  // Recalculate sitesWithSolcast from the final breakdown (which may include preserved enriched data)
+  cachedCapabilities.sitesWithSolcast = cachedCapabilities.assetBreakdown.filter(a => a.hasSolcast).length;
+
   // Determine if sync is complete
   const isComplete = finalCapabilities.length >= totalExpected;
   const syncStatus = isComplete ? 'synced' : 'partial';
