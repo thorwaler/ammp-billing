@@ -156,6 +156,24 @@ export interface SupportDocumentData {
     excessAnnualAmount?: number;
   };
   
+  // Matriarch API breakdown
+  matriarchApiBreakdown?: {
+    irradianceOnlySites: number;
+    irradiancePerSiteRate: number;
+    irradianceMonthlyTotal: number;
+    irradianceAnnualTotal: number;
+    performanceSites: number;
+    performanceTotalMWp: number;
+    performanceAnnualTotal: number;
+    performanceTierBreakdown: Array<{
+      label: string;
+      mwInTier: number;
+      pricePerMWp: number;
+      cost: number;
+    }>;
+    totalAnnualCost: number;
+  };
+  
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
@@ -404,6 +422,10 @@ export async function generateSupportDocumentData(
     assetBreakdownPeriodTotal = calculationResult.elumEpmBreakdown.smallSitesTotal + 
                                  calculationResult.elumEpmBreakdown.largeSitesTotal;
     minimumChargesForBreakdown = 0;
+  } else if (calculationResult.matriarchApiBreakdown) {
+    // For Matriarch API, use the total annual cost adjusted by frequency
+    assetBreakdownPeriodTotal = calculationResult.totalMWCost;
+    minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
     assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
@@ -464,6 +486,18 @@ export async function generateSupportDocumentData(
       minimumQuarterlyValue: calculationResult.spsDiscountBreakdown.minimumQuarterlyValue,
       upfrontAnnualPayment: calculationResult.spsDiscountBreakdown.upfrontAnnualPayment,
       excessAnnualAmount: calculationResult.spsDiscountBreakdown.excessAnnualAmount,
+    } : undefined,
+    // Matriarch API breakdown
+    matriarchApiBreakdown: calculationResult.matriarchApiBreakdown ? {
+      irradianceOnlySites: calculationResult.matriarchApiBreakdown.irradianceOnlySites,
+      irradiancePerSiteRate: calculationResult.matriarchApiBreakdown.irradiancePerSiteRate,
+      irradianceMonthlyTotal: calculationResult.matriarchApiBreakdown.irradianceMonthlyTotal,
+      irradianceAnnualTotal: calculationResult.matriarchApiBreakdown.irradianceAnnualTotal,
+      performanceSites: calculationResult.matriarchApiBreakdown.performanceSites,
+      performanceTotalMWp: calculationResult.matriarchApiBreakdown.performanceTotalMWp,
+      performanceAnnualTotal: calculationResult.matriarchApiBreakdown.performanceAnnualTotal,
+      performanceTierBreakdown: calculationResult.matriarchApiBreakdown.performanceTierBreakdown,
+      totalAnnualCost: calculationResult.matriarchApiBreakdown.totalAnnualCost,
     } : undefined,
     calculatedTotal,
     invoiceTotal,

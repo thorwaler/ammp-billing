@@ -162,6 +162,11 @@ interface Customer {
   // SPS Monitoring discount fields
   upfrontDiscountPercent?: number;
   commitmentDiscountPercent?: number;
+  // Matriarch API fields
+  irradiancePerSiteTiers?: any[];
+  performancePerMwpTiers?: any[];
+  vendorApiFee?: number;
+  onboardingSetupFee?: number;
 }
 
 // Default modules and addons from shared data
@@ -284,7 +289,11 @@ export function InvoiceCalculator({
             hourly_rate,
             contract_type_id,
             upfront_discount_percent,
-            commitment_discount_percent
+            commitment_discount_percent,
+            irradiance_per_site_tiers,
+            performance_per_mwp_tiers,
+            vendor_api_fee,
+            onboarding_setup_fee
           )
         `)
         .eq('status', 'active');
@@ -373,6 +382,11 @@ export function InvoiceCalculator({
             // SPS Monitoring discount fields
             upfrontDiscountPercent: (contract as any).upfront_discount_percent != null ? Number((contract as any).upfront_discount_percent) : undefined,
             commitmentDiscountPercent: (contract as any).commitment_discount_percent != null ? Number((contract as any).commitment_discount_percent) : undefined,
+            // Matriarch API fields
+            irradiancePerSiteTiers: Array.isArray((contract as any).irradiance_per_site_tiers) ? (contract as any).irradiance_per_site_tiers : undefined,
+            performancePerMwpTiers: Array.isArray((contract as any).performance_per_mwp_tiers) ? (contract as any).performance_per_mwp_tiers : undefined,
+            vendorApiFee: Number((contract as any).vendor_api_fee) || undefined,
+            onboardingSetupFee: Number((contract as any).onboarding_setup_fee) || undefined,
           };
         });
 
@@ -887,6 +901,9 @@ export function InvoiceCalculator({
       // SPS Monitoring discount fields
       upfrontDiscountPercent: selectedCustomer.upfrontDiscountPercent,
       commitmentDiscountPercent: selectedCustomer.commitmentDiscountPercent,
+      // Matriarch API fields
+      irradiancePerSiteTiers: selectedCustomer.irradiancePerSiteTiers,
+      performancePerMwpTiers: selectedCustomer.performancePerMwpTiers,
     };
     
     calculationResult = calculateInvoice(params);

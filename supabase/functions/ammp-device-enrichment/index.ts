@@ -114,8 +114,10 @@ function calculateCapabilitiesFromDevices(
   
   // Determine capabilities from devices
   const hasSolcast = devices.some((d: any) => 
-    d.device_type === 'weather_station' && 
-    (d.device_metadata?.data_provider === 'solcast' || d.device_metadata?.driver === 'solcast')
+    d.data_provider === 'solcast' || 
+    d.device_type === 'satellite' ||
+    (d.device_type === 'weather_station' && 
+      (d.device_metadata?.data_provider === 'solcast' || d.device_metadata?.driver === 'solcast'))
   );
   
   const hasBattery = devices.some((d: any) => 

@@ -96,10 +96,20 @@ export interface CalculationParams {
     assetId: string;
     assetName: string;
     totalMW: number;
+    capacityKWp?: number;
     isHybrid?: boolean;
     hasSolcast?: boolean;
     solcastOnboardingDate?: string;
     onboardingDate?: string;
+    deviceCount?: number;
+    devices?: Array<{
+      deviceId: string;
+      deviceName: string;
+      deviceType: string;
+      manufacturer?: string;
+      model?: string;
+      dataProvider?: string;
+    }>;
   }>;
   enableSiteMinimumPricing?: boolean;
   baseMonthlyPrice?: number;
@@ -786,9 +796,9 @@ function calculateDiscountedAssets(
  * Filter out discounted assets from asset breakdown
  */
 function filterNonDiscountedAssets(
-  assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number; isHybrid?: boolean }> | undefined,
+  assetBreakdown: CalculationParams['assetBreakdown'],
   customAssetPricing: CustomAssetPricing | undefined
-): Array<{ assetId: string; assetName: string; totalMW: number; isHybrid?: boolean }> {
+): NonNullable<CalculationParams['assetBreakdown']> {
   if (!assetBreakdown) return [];
   if (!customAssetPricing) return assetBreakdown;
   
@@ -1065,13 +1075,12 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const performanceSites: typeof assets = [];
     
     for (const asset of assets) {
-      const a = asset as any;
-      const hasDevicesBeyondSolcast = (a.deviceCount || 0) > 1 || 
-        (a.devices && a.devices.some((d: any) => 
+      const hasDevicesBeyondSolcast = (asset.deviceCount || 0) > 1 || 
+        (asset.devices && asset.devices.some((d) => 
           d.deviceType && !['solcast', 'satellite', 'irradiance'].includes(d.deviceType.toLowerCase())
         ));
       
-      if (a.hasSolcast && !hasDevicesBeyondSolcast) {
+      if (asset.hasSolcast && !hasDevicesBeyondSolcast) {
         irradianceOnlySites.push(asset);
       } else {
         performanceSites.push(asset);
