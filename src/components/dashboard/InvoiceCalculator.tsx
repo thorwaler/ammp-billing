@@ -289,7 +289,11 @@ export function InvoiceCalculator({
             hourly_rate,
             contract_type_id,
             upfront_discount_percent,
-            commitment_discount_percent
+            commitment_discount_percent,
+            irradiance_per_site_tiers,
+            performance_per_mwp_tiers,
+            vendor_api_fee,
+            onboarding_setup_fee
           )
         `)
         .eq('status', 'active');
