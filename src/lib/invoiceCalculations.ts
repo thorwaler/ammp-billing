@@ -796,9 +796,9 @@ function calculateDiscountedAssets(
  * Filter out discounted assets from asset breakdown
  */
 function filterNonDiscountedAssets(
-  assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number; isHybrid?: boolean }> | undefined,
+  assetBreakdown: CalculationParams['assetBreakdown'],
   customAssetPricing: CustomAssetPricing | undefined
-): Array<{ assetId: string; assetName: string; totalMW: number; isHybrid?: boolean }> {
+): NonNullable<CalculationParams['assetBreakdown']> {
   if (!assetBreakdown) return [];
   if (!customAssetPricing) return assetBreakdown;
   
