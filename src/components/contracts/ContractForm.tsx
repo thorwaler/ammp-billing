@@ -499,7 +499,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           .from('contracts')
           .select('*')
           .eq('customer_id', existingCustomer.id)
-          .eq('user_id', user.id)
           .eq('contract_status', 'active')
           .maybeSingle();
 
@@ -1062,7 +1061,6 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         max_mw: data.maxMw || null,
         notes: data.notes || '',
         contract_status: 'active',
-        user_id: user.id,
         contract_pdf_url: uploadedPdfUrl || null,
         // AMMP OS 2026 trial fields
         is_trial: data.package === 'ammp_os_2026' ? isTrial : false,
@@ -1084,13 +1082,19 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         commitment_discount_percent: data.package === 'sps_monitoring' ? commitmentDiscountPercent : null,
       };
 
-      if (existingContractId) {
-        contractData.id = existingContractId;
-      }
+      const contractMutation = existingContractId
+        ? supabase
+            .from('contracts')
+            .update(contractData)
+            .eq('id', existingContractId)
+        : supabase
+            .from('contracts')
+            .insert({
+              ...contractData,
+              user_id: user.id,
+            });
 
-      const { error: contractError } = await supabase
-        .from('contracts')
-        .upsert(contractData);
+      const { error: contractError } = await contractMutation;
 
       if (contractError) throw contractError;
 
