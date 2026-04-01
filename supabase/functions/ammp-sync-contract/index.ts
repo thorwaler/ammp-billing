@@ -122,6 +122,92 @@ async function getToken(apiKey: string): Promise<string> {
 }
 
 /**
+ * Validate caller and resolve the effective team member running the sync.
+ * Browser calls must provide a valid user JWT. Internal continuations may use
+ * the service role key, but must still pass the original userId.
+ */
+async function resolveAuthorizedUser(
+  req: Request,
+  supabase: any,
+  serviceKey: string,
+  requestedUserId?: string,
+): Promise<{ effectiveUserId: string; isServiceRoleRequest: boolean }> {
+  const authHeader = req.headers.get('Authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ')
+    ? authHeader.replace('Bearer ', '')
+    : null;
+  const isServiceRoleRequest = bearerToken === serviceKey;
+
+  let effectiveUserId = requestedUserId;
+
+  if (!isServiceRoleRequest) {
+    if (!bearerToken) {
+      throw new Error('User authentication required');
+    }
+
+    const { data, error } = await supabase.auth.getUser(bearerToken);
+    if (error || !data?.user?.id) {
+      throw new Error('Unauthorized');
+    }
+
+    effectiveUserId = data.user.id;
+  }
+
+  if (!effectiveUserId) {
+    throw new Error('User authentication required');
+  }
+
+  const { data: canWrite, error: canWriteError } = await supabase.rpc('can_write', {
+    _user_id: effectiveUserId,
+  });
+
+  if (canWriteError) {
+    throw new Error(`Failed to verify permissions: ${canWriteError.message}`);
+  }
+
+  if (!canWrite) {
+    throw new Error('Forbidden');
+  }
+
+  return { effectiveUserId, isServiceRoleRequest };
+}
+
+async function getSharedAmmpApiKey(supabase: any): Promise<string> {
+  const { data: enabledConnection, error: enabledError } = await supabase
+    .from('ammp_connections')
+    .select('api_key')
+    .eq('is_enabled', true)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (enabledError) {
+    throw new Error(`Failed to load AMMP connection: ${enabledError.message}`);
+  }
+
+  if (enabledConnection?.api_key) {
+    return enabledConnection.api_key;
+  }
+
+  const { data: fallbackConnection, error: fallbackError } = await supabase
+    .from('ammp_connections')
+    .select('api_key')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (fallbackError) {
+    throw new Error(`Failed to load fallback AMMP connection: ${fallbackError.message}`);
+  }
+
+  if (!fallbackConnection?.api_key) {
+    throw new Error('No shared AMMP API key found');
+  }
+
+  return fallbackConnection.api_key;
+}
+
+/**
  * Call existing ammp-data-proxy Edge Function internally
  */
 async function fetchAMMPData(token: string, path: string, method: string = 'GET'): Promise<any> {
@@ -826,23 +912,7 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
 
-    // Determine userId - from param, or from JWT if browser call
-    let effectiveUserId = userId;
-    if (!effectiveUserId) {
-      const authHeader = req.headers.get('Authorization');
-      if (authHeader) {
-        const token = authHeader.replace('Bearer ', '');
-        const { data: { user } } = await supabase.auth.getUser(token);
-        effectiveUserId = user?.id;
-      }
-    }
-    
-    if (!effectiveUserId) {
-      return new Response(
-        JSON.stringify({ error: 'User authentication required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const { effectiveUserId } = await resolveAuthorizedUser(req, supabase, serviceKey, userId);
 
     console.log(`[AMMP Sync Contract] Starting sync for contract ${contractId}`);
 
@@ -865,7 +935,6 @@ Deno.serve(async (req) => {
         )
       `)
       .eq('id', contractId)
-      .eq('user_id', effectiveUserId)
       .single();
 
     if (contractError || !contract) {
@@ -903,16 +972,8 @@ Deno.serve(async (req) => {
     if (apiKey) {
       token = await getToken(apiKey);
     } else {
-      const { data: connection } = await supabase
-        .from('ammp_connections')
-        .select('api_key')
-        .eq('user_id', effectiveUserId)
-        .single();
-      
-      if (!connection?.api_key) {
-        throw new Error('No AMMP API key found');
-      }
-      token = await getToken(connection.api_key);
+      const sharedApiKey = await getSharedAmmpApiKey(supabase);
+      token = await getToken(sharedApiKey);
     }
 
     // Fetch all assets (we'll filter by group/org in processContractSync)
