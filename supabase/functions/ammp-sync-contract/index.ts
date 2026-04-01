@@ -173,38 +173,22 @@ async function resolveAuthorizedUser(
 }
 
 async function getSharedAmmpApiKey(supabase: any): Promise<string> {
-  const { data: enabledConnection, error: enabledError } = await supabase
-    .from('ammp_connections')
-    .select('api_key')
-    .eq('is_enabled', true)
-    .order('updated_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (enabledError) {
-    throw new Error(`Failed to load AMMP connection: ${enabledError.message}`);
-  }
-
-  if (enabledConnection?.api_key) {
-    return enabledConnection.api_key;
-  }
-
-  const { data: fallbackConnection, error: fallbackError } = await supabase
+  const { data: latestConnection, error: latestError } = await supabase
     .from('ammp_connections')
     .select('api_key')
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle();
 
-  if (fallbackError) {
-    throw new Error(`Failed to load fallback AMMP connection: ${fallbackError.message}`);
+  if (latestError) {
+    throw new Error(`Failed to load AMMP connection: ${latestError.message}`);
   }
 
-  if (!fallbackConnection?.api_key) {
+  if (!latestConnection?.api_key) {
     throw new Error('No shared AMMP API key found');
   }
 
-  return fallbackConnection.api_key;
+  return latestConnection.api_key;
 }
 
 /**
