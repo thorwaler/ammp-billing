@@ -1,80 +1,99 @@
 
 Goal:
-Confirm whether AMMP contract refresh can still fail for shared/preview users because of ownership-based access, and identify the exact blocker.
+Do a follow-up pass so the new shared/team-edit model is applied consistently, and remove remaining owner-scoped assumptions that can still break preview-mode workflows.
 
-Answer:
-Yes — AMMP refresh can still be affected, but the main blocker is not the relaxed `contracts/customers/invoices` UPDATE policies anymore. The bigger issue is the AMMP sync backend function still treating the sync as owner-scoped.
+What should also be updated
 
-What I found:
-1. The contract refresh button calls the backend function directly
-- In `src/pages/ContractDetails.tsx`, `handleRefreshAssets()` invokes:
-  - `supabase.functions.invoke('ammp-sync-contract', { body: { contractId: contract.id } })`
-- So any “Refresh failed” error here depends on the backend function path, not just the page query.
+1. Fix remaining UI mutations that still require row ownership
+These still use `.eq('user_id', user.id)` on updates and will fail for non-owner managers/admins even though RLS now allows shared writes:
+- `src/components/customers/CustomerCard.tsx`
+  - customer activate/inactivate
+  - cascade contract expiry update
+- `src/pages/ContractDetails.tsx`
+  - contract status change
+These should update by row identity/business key only, not current owner.
 
-2. The AMMP sync function still fetches the contract as if only the owner can run it
-- In `supabase/functions/ammp-sync-contract/index.ts`, it loads the contract with:
-  - `.eq('id', contractId)`
-  - `.eq('user_id', effectiveUserId)`
-- That means if another manager/admin tries to sync a contract owned by someone else, the function won’t find the contract and will fail before sync even starts.
+2. Fix remaining shared reads that are still artificially owner-filtered
+These can make shared users see empty state or miss data even when SELECT RLS is already team-wide:
+- `src/components/dashboard/InvoiceCalculator.tsx`
+  - site billing fetch still filters `site_billing_status` by `user_id`
+- `src/hooks/useNotifications.ts`
+  - fetches only notifications where `user_id = current user`
+  - `markAllAsRead` also only affects current-user notifications
+If notifications are intended to be team-shared, remove the owner filter. If they are intended to remain personal, keep as-is and document that explicitly.
 
-3. The AMMP sync function also fetches the AMMP connection by owner user id
-- Same function queries `ammp_connections` with:
-  - `.eq('user_id', effectiveUserId)`
-- But your app architecture says AMMP is a shared team integration, so this can also fail for non-owner managers even if they should be allowed to use the shared connection.
+3. Refactor AMMP backend follow-ons to match the new shared integration model
+Two backend functions still assume “connection owner = sync owner”:
+- `supabase/functions/ammp-device-enrichment/index.ts`
+  - fetches AMMP connection with `.eq('user_id', contract.user_id)`
+- `supabase/functions/ammp-scheduled-sync/index.ts`
+  - fetches contracts with `.eq('user_id', user_id)` based on connection owner
+This is the biggest remaining architectural inconsistency. They should use the same shared-connection/team-authorization approach now used in `ammp-sync-contract`.
 
-4. Some downstream writes are likely still owner-based too
-- The sync function writes to:
-  - `asset_status_history`
-  - `site_billing_status`
-  - `invoice_alerts`
-  - `notifications`
-  - `customers`
-  - `contracts`
-- `contracts` and `customers` are already relaxed for updates.
-- But `site_billing_status`, `asset_status_history`, `invoice_alerts`, and `notifications` still have owner-based insert/update rules in your current RLS snapshot.
-- Because this function uses the service-role client, those table policies may not block the function itself, but they would still block any browser-side AMMP-related follow-up logic elsewhere.
-- The immediate preview-mode contract refresh failure is most likely the owner-filtered contract/connection lookup inside the function.
+4. Review old client-side AMMP helper paths
+`src/services/ammp/ammpService.ts` still queries active contracts with:
+- `.eq('customer_id', customerId)`
+- `.eq('user_id', userId)`
+That helper is marked as legacy/backwards compatibility, but if it is still used anywhere later, it will reintroduce owner-scoped behavior. Best cleanup:
+- either remove dead shared-access-incompatible helpers
+- or refactor them to shared/team semantics before reuse becomes a bug
 
-Plan:
-1. Fix `ammp-sync-contract` ownership assumptions
-- Remove owner-only lookup on the contract:
-  - stop requiring `.eq('user_id', effectiveUserId)` when fetching the contract
-- Load the contract by `id` only, then do an explicit authorization check:
-  - user must be authenticated
-  - user must have manager/admin write access via the same team-write logic already used elsewhere
+5. Decide which “settings” are team-shared vs user-personal, then align code + RLS
+Current behavior is mixed:
+- Shared already: `xero_connections`, `ammp_connections`, `notification_settings`, `sharepoint_*`
+- Still owner-personal by policy/design: `alert_settings`, `currency_settings`
+Before refactoring further, confirm intended scope for:
+- `notifications`
+- `alert_settings`
+- `currency_settings`
+- `contract expiration notifications`
+If any of these should become team-shared, both frontend queries and RLS should be updated together.
 
-2. Make AMMP connection lookup team-shared
-- Change the function so it does not require the current acting user to own the `ammp_connections` row.
-- Fetch the active/shared AMMP connection using team-wide access semantics instead of `user_id = effectiveUserId`.
+Recommended refactor themes
 
-3. Review downstream AMMP-related tables for consistency
-- Re-check whether these should also support shared team writes from the browser or other functions:
-  - `site_billing_status`
-  - `asset_status_history`
-  - `invoice_alerts`
-  - `notifications`
-  - `ammp_sync_jobs`
-- If browser-based manager actions need to mutate them, align their RLS with the shared-edit model while preventing owner reassignment where relevant.
+A. Introduce a clear convention
+Use these rules consistently:
+- shared team resources: query by `id`, `limit(1)`, or business key only
+- personal resources: query by `auth user id`
+- updates to shared rows: never send or filter on `user_id` unless creating a new audit owner
+This avoids repeating one-off fixes.
 
-4. Re-test the affected flow specifically
-- Re-test AMMP refresh on the failing contracts (Bidvest and Daisy) using a non-owner manager/admin.
-- Confirm:
-  - contract loads in the function
-  - AMMP connection resolves
-  - cached capabilities update
-  - customer MW aggregate updates
-  - no downstream insert/update fails
+B. Centralize shared integration lookups
+Create/reuse small helpers for:
+- “get shared AMMP connection”
+- “get shared Xero connection”
+- “authorize manager/admin team write”
+Then use those helpers across edge functions so future fixes happen in one place.
 
-Expected result:
-- Any manager/admin in preview mode can refresh AMMP data on a contract, even if they are not the original owner.
-- Shared AMMP connection usage works consistently across the team.
-- Contract asset refresh should stop failing for shared users on Bidvest and Daisy, unless there is a separate AMMP/API data issue.
+C. Separate audit ownership from authorization
+Right now `user_id` serves two meanings:
+- who created/configured the row
+- who is allowed to mutate it
+The recent bugs came from conflating those. Keep `user_id` for audit, but never use it as the auth gate for team-shared data.
 
-Technical details:
-- Current likely failure point in `ammp-sync-contract`:
-  - contract fetch is filtered by `user_id = effectiveUserId`
-  - AMMP connection fetch is filtered by `user_id = effectiveUserId`
-- Since the function already uses a backend-level client, the correct fix is:
-  - authorize by role/team membership
-  - stop scoping shared resources by owner id
-- This is separate from the earlier `contracts/customers/invoices` UPDATE-policy fix.
+Priority order
+1. `ammp-device-enrichment`
+2. `ammp-scheduled-sync`
+3. `CustomerCard` + `ContractDetails` owner-filtered updates
+4. `InvoiceCalculator` site billing owner-filtered read
+5. optional cleanup of legacy AMMP helper/service code
+6. explicit product decision on notifications/settings scope
+
+Expected result
+- Shared users won’t hit hidden owner-based failures in adjacent AMMP flows.
+- Team-editing behaves consistently across contract/customer status changes.
+- Shared integrations follow one architecture instead of mixing owner-based and team-based access.
+- Future bugs become less likely because shared-vs-personal data rules are explicit.
+
+Technical details
+Remaining concrete owner-scoped blockers found:
+- `src/components/customers/CustomerCard.tsx`
+- `src/pages/ContractDetails.tsx`
+- `src/components/dashboard/InvoiceCalculator.tsx`
+- `supabase/functions/ammp-device-enrichment/index.ts`
+- `supabase/functions/ammp-scheduled-sync/index.ts`
+Potentially intentional/personal scope, but should be reviewed:
+- `src/hooks/useNotifications.ts`
+- `src/utils/contractExpiration.ts`
+- `src/contexts/CurrencyContext.tsx`
+- `src/hooks/useAlertSettings.ts`
