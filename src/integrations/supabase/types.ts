@@ -1322,7 +1322,19 @@ export type Database = {
         }
         Returns: boolean
       }
+      invoice_alert_user_unchanged: {
+        Args: { _id: string; _user_id: string }
+        Returns: boolean
+      }
       invoice_user_unchanged: {
+        Args: { _id: string; _user_id: string }
+        Returns: boolean
+      }
+      notification_user_unchanged: {
+        Args: { _id: string; _user_id: string }
+        Returns: boolean
+      }
+      site_billing_user_unchanged: {
         Args: { _id: string; _user_id: string }
         Returns: boolean
       }
