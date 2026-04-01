@@ -1307,11 +1307,23 @@ export type Database = {
     }
     Functions: {
       can_write: { Args: { _user_id: string }; Returns: boolean }
+      contract_user_unchanged: {
+        Args: { _id: string; _user_id: string }
+        Returns: boolean
+      }
+      customer_user_unchanged: {
+        Args: { _id: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      invoice_user_unchanged: {
+        Args: { _id: string; _user_id: string }
         Returns: boolean
       }
     }
