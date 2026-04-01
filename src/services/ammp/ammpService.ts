@@ -241,7 +241,6 @@ export async function populateSiteBillingStatus(
     .from('contracts')
     .select('id, onboarding_fee_per_site, annual_fee_per_site')
     .eq('customer_id', customerId)
-    .eq('user_id', userId)
     .eq('package', 'per_site')
     .eq('contract_status', 'active');
   

@@ -140,15 +140,11 @@ export function CustomerCard({
 
   const handleMarkInactive = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       // Update customer status
       const { error: customerError } = await supabase
         .from('customers')
         .update({ status: 'inactive' })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('id', id);
 
       if (customerError) throw customerError;
 
@@ -157,7 +153,6 @@ export function CustomerCard({
         .from('contracts')
         .update({ contract_status: 'expired' })
         .eq('customer_id', id)
-        .eq('user_id', user.id)
         .eq('contract_status', 'active');
 
       if (contractError) throw contractError;
@@ -180,14 +175,10 @@ export function CustomerCard({
 
   const handleReactivate = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
       const { error } = await supabase
         .from('customers')
         .update({ status: 'active' })
-        .eq('id', id)
-        .eq('user_id', user.id);
+        .eq('id', id);
 
       if (error) throw error;
 

@@ -633,8 +633,7 @@ export function InvoiceCalculator({
         const { data: sites, error } = await supabase
           .from('site_billing_status')
           .select('*')
-          .eq('contract_id', selectedCustomer.contractId)
-          .eq('user_id', user.id);
+          .eq('contract_id', selectedCustomer.contractId);
         
         if (error) {
           console.error('Error fetching site billing status:', error);

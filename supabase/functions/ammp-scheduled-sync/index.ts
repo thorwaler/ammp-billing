@@ -12,6 +12,52 @@ const corsHeaders = {
 
 const BATCH_SIZE = 5; // Process 5 contracts in parallel
 
+async function resolveAuthorizedUser(
+  req: Request,
+  supabase: any,
+  serviceKey: string,
+  requestedUserId?: string,
+): Promise<{ effectiveUserId: string; isServiceRoleRequest: boolean }> {
+  const authHeader = req.headers.get('Authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ')
+    ? authHeader.replace('Bearer ', '')
+    : null;
+  const isServiceRoleRequest = bearerToken === serviceKey;
+
+  let effectiveUserId = requestedUserId;
+
+  if (!isServiceRoleRequest) {
+    if (!bearerToken) {
+      throw new Error('User authentication required');
+    }
+
+    const { data, error } = await supabase.auth.getUser(bearerToken);
+    if (error || !data?.user?.id) {
+      throw new Error('Unauthorized');
+    }
+
+    effectiveUserId = data.user.id;
+  }
+
+  if (!effectiveUserId) {
+    throw new Error('User authentication required');
+  }
+
+  const { data: canWrite, error: canWriteError } = await supabase.rpc('can_write', {
+    _user_id: effectiveUserId,
+  });
+
+  if (canWriteError) {
+    throw new Error(`Failed to verify permissions: ${canWriteError.message}`);
+  }
+
+  if (!canWrite) {
+    throw new Error('Forbidden');
+  }
+
+  return { effectiveUserId, isServiceRoleRequest };
+}
+
 // Check if today matches the configured schedule
 function shouldRunToday(schedule: string): boolean {
   const now = new Date();
@@ -124,6 +170,62 @@ interface SyncableContract {
   ammp_org_id: string | null;
   ammp_asset_group_id: string | null;
   ammp_sync_status?: string;
+}
+
+async function getSharedAmmpConnection(supabase: any) {
+  const { data: connection, error } = await supabase
+    .from('ammp_connections')
+    .select('id, user_id, api_key, sync_schedule')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load AMMP connection: ${error.message}`);
+  }
+
+  if (!connection?.api_key) {
+    throw new Error('No AMMP connections to sync');
+  }
+
+  return connection;
+}
+
+async function getSyncableContracts(supabase: any) {
+  const { data: contracts, error } = await supabase
+    .from('contracts')
+    .select(`
+      id,
+      package,
+      company_name,
+      ammp_org_id,
+      ammp_asset_group_id,
+      ammp_sync_status,
+      customers!inner (
+        id,
+        ammp_org_id
+      )
+    `)
+    .eq('contract_status', 'active')
+    .neq('package', 'poc');
+
+  if (error) throw error;
+
+  return ((contracts || []) as any[])
+    .filter((c) => c.ammp_org_id || c.ammp_asset_group_id || c.customers?.[0]?.ammp_org_id)
+    .map((c) => ({
+      id: c.id,
+      package: c.package,
+      company_name: c.company_name,
+      ammp_org_id: c.ammp_org_id || c.customers?.[0]?.ammp_org_id || null,
+      ammp_asset_group_id: c.ammp_asset_group_id,
+      ammp_sync_status: c.ammp_sync_status,
+    }))
+    .sort((a, b) => {
+      const aPartial = a.ammp_sync_status === 'partial' ? 0 : 1;
+      const bPartial = b.ammp_sync_status === 'partial' ? 0 : 1;
+      return aPartial - bPartial;
+    });
 }
 
 /**
@@ -316,31 +418,28 @@ Deno.serve(async (req) => {
     let targetUserId: string | null = null;
     
     try {
-      const body = await req.json();
-      isManual = body.manual === true;
-      targetUserId = body.user_id || null;
+     const body = await req.json();
+     isManual = body.manual === true;
+     targetUserId = body.user_id || null;
     } catch {
       // No body - scheduled trigger
     }
 
     console.log(`[AMMP Scheduled Sync] Started. Manual: ${isManual}, Target: ${targetUserId || 'all'}`);
 
-    // Get AMMP connections - shared across team
-    let query = supabase
-      .from('ammp_connections')
-      .select('id, user_id, api_key, sync_schedule');
-    
-    if (isManual || targetUserId) {
-      query = query.limit(1);
-    }
+    const { effectiveUserId, isServiceRoleRequest } = await resolveAuthorizedUser(
+      req,
+      supabase,
+      serviceKey,
+      targetUserId ?? undefined,
+    );
 
-    const { data: connections, error: connError } = await query;
+    const sharedConnection = await getSharedAmmpConnection(supabase);
+    const connections = [sharedConnection];
 
-    if (connError) throw connError;
+    console.log(`[AMMP Scheduled Sync] Found ${connections.length} shared AMMP connection(s)`);
 
-    console.log(`[AMMP Scheduled Sync] Found ${connections?.length || 0} AMMP connection(s)`);
-
-    if (!connections || connections.length === 0) {
+    if (connections.length === 0) {
       return new Response(
         JSON.stringify({ success: true, message: 'No AMMP connections to sync' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -350,7 +449,7 @@ Deno.serve(async (req) => {
     // For manual syncs, use background processing
     if (isManual && connections.length > 0) {
       const connection = connections[0];
-      const { id: connectionId, user_id } = connection;
+      const { id: connectionId } = connection;
 
       // Update last_sync_at IMMEDIATELY at the start to show sync was attempted
       await supabase
@@ -359,44 +458,7 @@ Deno.serve(async (req) => {
         .eq('id', connectionId);
 
       // Get all active non-POC contracts with AMMP config
-      const { data: contracts, error: contractError } = await supabase
-        .from('contracts')
-        .select(`
-          id, 
-          package, 
-          company_name, 
-          ammp_org_id,
-          ammp_asset_group_id,
-          ammp_sync_status,
-          customers!inner (
-            id,
-            ammp_org_id
-          )
-        `)
-        .eq('user_id', user_id)
-        .eq('contract_status', 'active')
-        .neq('package', 'poc');
-
-      if (contractError) throw contractError;
-
-      // Filter to contracts that have AMMP config and map to simplified structure
-      const syncableContracts: SyncableContract[] = (contracts || [])
-        .filter((c: any) => c.ammp_org_id || c.ammp_asset_group_id || c.customers?.[0]?.ammp_org_id)
-        .map((c: any) => ({
-          id: c.id,
-          package: c.package,
-          company_name: c.company_name,
-          ammp_org_id: c.ammp_org_id || c.customers?.[0]?.ammp_org_id || null,
-          ammp_asset_group_id: c.ammp_asset_group_id,
-          ammp_sync_status: c.ammp_sync_status,
-        }));
-
-      // Sort contracts to prioritize partial syncs first
-      const sortedContracts = [...syncableContracts].sort((a, b) => {
-        const aPartial = a.ammp_sync_status === 'partial' ? 0 : 1;
-        const bPartial = b.ammp_sync_status === 'partial' ? 0 : 1;
-        return aPartial - bPartial;
-      });
+      const sortedContracts = await getSyncableContracts(supabase);
 
       const partialCount = sortedContracts.filter(c => c.ammp_sync_status === 'partial').length;
       console.log(`[AMMP Scheduled Sync] Found ${sortedContracts.length} syncable contracts (${partialCount} partial syncs prioritized)`);
@@ -415,7 +477,7 @@ Deno.serve(async (req) => {
 
       // Start background processing with prioritized contracts
       EdgeRuntime.waitUntil(
-        processContractsInBackground(supabase, connection, sortedContracts, isManual)
+        processContractsInBackground(supabase, { ...connection, user_id: effectiveUserId }, sortedContracts, isManual)
       );
 
       // Return immediately with background processing acknowledgment
@@ -440,8 +502,15 @@ Deno.serve(async (req) => {
       error?: string;
     }> = [];
 
+    if (!isServiceRoleRequest) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Scheduled sync requires a backend invocation' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     for (const connection of connections) {
-      const { id: connectionId, user_id, api_key, sync_schedule } = connection;
+      const { id: connectionId, user_id, sync_schedule } = connection;
 
       // Skip if schedule doesn't match
       if (!shouldRunToday(sync_schedule || 'disabled')) {
@@ -452,44 +521,7 @@ Deno.serve(async (req) => {
       console.log(`[AMMP Scheduled Sync] Processing connection ${connectionId} (user ${user_id})`);
 
       try {
-        const { data: contracts, error: contractError } = await supabase
-          .from('contracts')
-          .select(`
-            id, 
-            package, 
-            company_name, 
-            ammp_org_id,
-            ammp_asset_group_id,
-            ammp_sync_status,
-            customers!inner (
-              id,
-              ammp_org_id
-            )
-          `)
-          .eq('user_id', user_id)
-          .eq('contract_status', 'active')
-          .neq('package', 'poc');
-
-        if (contractError) throw contractError;
-
-        // Filter and map contracts
-        const syncableContracts: SyncableContract[] = (contracts || [])
-          .filter((c: any) => c.ammp_org_id || c.ammp_asset_group_id || c.customers?.[0]?.ammp_org_id)
-          .map((c: any) => ({
-            id: c.id,
-            package: c.package,
-            company_name: c.company_name,
-            ammp_org_id: c.ammp_org_id || c.customers?.[0]?.ammp_org_id || null,
-            ammp_asset_group_id: c.ammp_asset_group_id,
-            ammp_sync_status: c.ammp_sync_status,
-          }));
-
-        // Sort contracts to prioritize partial syncs first
-        const sortedContracts = [...syncableContracts].sort((a, b) => {
-          const aPartial = a.ammp_sync_status === 'partial' ? 0 : 1;
-          const bPartial = b.ammp_sync_status === 'partial' ? 0 : 1;
-          return aPartial - bPartial;
-        });
+        const sortedContracts = await getSyncableContracts(supabase);
 
         const partialCount = sortedContracts.filter(c => c.ammp_sync_status === 'partial').length;
         console.log(`[AMMP Scheduled Sync] Found ${sortedContracts.length} syncable contracts (${partialCount} partial syncs prioritized)`);

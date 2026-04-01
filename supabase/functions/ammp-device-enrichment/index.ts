@@ -47,6 +47,71 @@ interface CachedCapabilities {
   };
 }
 
+async function resolveAuthorizedUser(
+  req: Request,
+  supabase: any,
+  serviceKey: string,
+  requestedUserId?: string,
+): Promise<string> {
+  const authHeader = req.headers.get('Authorization');
+  const bearerToken = authHeader?.startsWith('Bearer ')
+    ? authHeader.replace('Bearer ', '')
+    : null;
+  const isServiceRoleRequest = bearerToken === serviceKey;
+
+  let effectiveUserId = requestedUserId;
+
+  if (!isServiceRoleRequest) {
+    if (!bearerToken) {
+      throw new Error('User authentication required');
+    }
+
+    const { data, error } = await supabase.auth.getUser(bearerToken);
+    if (error || !data?.user?.id) {
+      throw new Error('Unauthorized');
+    }
+
+    effectiveUserId = data.user.id;
+  }
+
+  if (!effectiveUserId) {
+    throw new Error('User authentication required');
+  }
+
+  const { data: canWrite, error: canWriteError } = await supabase.rpc('can_write', {
+    _user_id: effectiveUserId,
+  });
+
+  if (canWriteError) {
+    throw new Error(`Failed to verify permissions: ${canWriteError.message}`);
+  }
+
+  if (!canWrite) {
+    throw new Error('Forbidden');
+  }
+
+  return effectiveUserId;
+}
+
+async function getSharedAmmpApiKey(supabase: any): Promise<string> {
+  const { data: connection, error } = await supabase
+    .from('ammp_connections')
+    .select('api_key')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load AMMP connection: ${error.message}`);
+  }
+
+  if (!connection?.api_key) {
+    throw new Error('AMMP connection not found');
+  }
+
+  return connection.api_key;
+}
+
 /**
  * Get access token from API key via token exchange
  */
@@ -186,7 +251,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceKey);
     
-    const { contractId, batchSize = 50, forceRecalculate = false, forceRefetch = false } = await req.json();
+    const { contractId, batchSize = 50, forceRecalculate = false, forceRefetch = false, userId } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -194,6 +259,8 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    await resolveAuthorizedUser(req, supabase, serviceKey, userId);
     
     console.log(`[AMMP Device Enrichment] Starting for contract: ${contractId}, batchSize: ${batchSize}, forceRecalculate: ${forceRecalculate}, forceRefetch: ${forceRefetch}`);
     
@@ -331,18 +398,8 @@ Deno.serve(async (req) => {
     console.log(`[AMMP Device Enrichment] ${assetsNeedingEnrichment.length} assets need enrichment`);
     
     // Get AMMP API key
-    const { data: connection, error: connError } = await supabase
-      .from('ammp_connections')
-      .select('api_key')
-      .eq('user_id', contract.user_id)
-      .single();
-    
-    if (connError || !connection) {
-      throw new Error('AMMP connection not found');
-    }
-    
     // Get access token
-    const token = await getToken(connection.api_key);
+    const token = await getToken(await getSharedAmmpApiKey(supabase));
     console.log('[AMMP Device Enrichment] Token obtained');
     
     // Process a batch of assets
