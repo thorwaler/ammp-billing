@@ -56,7 +56,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       // Check if status was manually changed
       const statusChanged = existingCustomer && formData.status !== originalStatus;
       
-      const customerData = {
+      const baseCustomerData = {
         name: formData.name,
         nickname: formData.nickname || null,
         location: formData.location,
@@ -64,18 +64,22 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
         status: formData.status,
         // Set manual_status_override to true if status was manually changed
         manual_status_override: statusChanged ? true : (existingCustomer?.manual_status_override || false),
-        user_id: user.id,
       };
 
       if (existingCustomer) {
         const { error } = await supabase
           .from('customers')
-          .update(customerData)
+          .update(baseCustomerData)
           .eq('id', existingCustomer.id)
-          .eq('user_id', user.id);
+          ;
 
         if (error) throw error;
       } else {
+        const customerData = {
+          ...baseCustomerData,
+          user_id: user.id,
+        };
+
         const { error } = await supabase
           .from('customers')
           .insert([customerData]);
