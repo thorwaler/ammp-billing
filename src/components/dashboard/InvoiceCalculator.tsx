@@ -212,9 +212,10 @@ export function InvoiceCalculator({
   const { formatCurrency } = useCurrency();
   
   // Format currency using the contract's currency, not user display preference
-  const formatContractCurrency = (amount: number): string => {
+  const formatContractCurrency = (amount: number | undefined | null): string => {
     const symbol = selectedCustomer?.currency === 'USD' ? '$' : '€';
-    return `${symbol}${amount.toLocaleString('en-US', { 
+    const safeAmount = amount ?? 0;
+    return `${symbol}${safeAmount.toLocaleString('en-US', { 
       minimumFractionDigits: 0, 
       maximumFractionDigits: 2 
     })}`;
@@ -2381,10 +2382,10 @@ export function InvoiceCalculator({
                   {result.matriarchApiBreakdown.performanceTotalMWp > 0 && (
                     <div>
                       <p className="text-muted-foreground mb-1 font-medium">Performance Monitoring</p>
-                      {result.matriarchApiBreakdown.performanceTierBreakdown.map((tier: any, idx: number) => (
+                      {(result.matriarchApiBreakdown.performanceTierBreakdown || []).map((tier: any, idx: number) => (
                         <div key={idx} className="flex justify-between">
-                          <span>{tier.label} ({tier.mwInTier.toFixed(2)} MWp × {formatContractCurrency(tier.pricePerMW)}/MWp):</span>
-                          <span>{formatContractCurrency(tier.cost)}</span>
+                          <span>{tier.label} ({(tier.mwInTier ?? 0).toFixed(2)} MWp × {formatContractCurrency(tier.pricePerMWp ?? tier.pricePerMW ?? 0)}/MWp):</span>
+                          <span>{formatContractCurrency(tier.cost ?? 0)}</span>
                         </div>
                       ))}
                       <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
