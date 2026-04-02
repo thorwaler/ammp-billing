@@ -2000,7 +2000,7 @@ export function InvoiceCalculator({
                         onCheckedChange={(checked) => setIncludeOnboardingFee(checked === true)}
                       />
                       <Label htmlFor="include-onboarding-fee" className="text-sm cursor-pointer">
-                        Include Onboarding Fee (€{(selectedCustomer.onboardingSetupFee || 2650).toLocaleString()})
+                        Include Onboarding Fee ({currencySymbol}{(selectedCustomer.onboardingSetupFee || 2650).toLocaleString()})
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
