@@ -1073,7 +1073,51 @@ export function InvoiceCalculator({
         });
       }
       
-      // Add discounted assets line items (Platform Fees - ARR)
+      // Matriarch API: Add irradiance + performance line items (ARR)
+      if (result.matriarchApiBreakdown) {
+        const mb = result.matriarchApiBreakdown;
+        if (mb.irradianceOnlySites > 0 && mb.irradianceAnnualTotal > 0) {
+          const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
+          const irradiancePeriodCost = mb.irradianceAnnualTotal * (periodMonths / 12);
+          lineItems.push({
+            Description: `Irradiance Monitoring (${mb.irradianceOnlySites} sites × €${mb.irradiancePerSiteRate}/site/month × ${periodMonths} months)`,
+            Quantity: 1,
+            UnitAmount: irradiancePeriodCost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+        if (mb.performanceTotalMWp > 0 && mb.performanceAnnualTotal > 0) {
+          const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
+          const perfPeriodCost = mb.performanceAnnualTotal * (periodMonths / 12);
+          lineItems.push({
+            Description: `Performance Monitoring (${mb.performanceTotalMWp.toFixed(2)} MWp across ${mb.performanceSites} sites)`,
+            Quantity: 1,
+            UnitAmount: perfPeriodCost,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
+      
+      // Matriarch API: NRR one-time fees
+      if (isMatriarchApiPackage(selectedCustomer.package)) {
+        if (includeOnboardingFee && selectedCustomer.onboardingSetupFee) {
+          lineItems.push({
+            Description: "Onboarding Setup Fee",
+            Quantity: 1,
+            UnitAmount: selectedCustomer.onboardingSetupFee,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        }
+        if (includeVendorApiFee && selectedCustomer.vendorApiFee) {
+          lineItems.push({
+            Description: "Vendor API Integration Fee",
+            Quantity: 1,
+            UnitAmount: selectedCustomer.vendorApiFee,
+            AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+          });
+        }
+      }
+      
       if (result.discountedAssets && result.discountedAssets.length > 0) {
         result.discountedAssets.forEach(asset => {
           const mwDisplay = asset.mw ? ` (${asset.mw.toFixed(2)} MW)` : '';
