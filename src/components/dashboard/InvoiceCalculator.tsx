@@ -478,7 +478,13 @@ export function InvoiceCalculator({
         const baseAddons = is2026 ? defaultAddons2026 : isSps ? defaultSpsAddons : defaultAddons;
         
         // Auto-activate addons based on AMMP capabilities
+        // For Matriarch API packages, skip satelliteDataAPI — it's already included in irradiance monitoring
+        const isMatriarchContract = isMatriarchApiPackage(customerData.package);
         const updatedAddons = baseAddons.map(addon => {
+          // Skip satelliteDataAPI for Matriarch contracts
+          if (isMatriarchContract && addon.id === 'satelliteDataAPI') {
+            return { ...addon, selected: false, quantity: 0 };
+          }
           // Find matching contract addon (could be string ID or full object)
           const contractAddon = customerData.addons.find((a: any) => 
             typeof a === 'string' ? a === addon.id : a.id === addon.id
@@ -1134,7 +1140,11 @@ export function InvoiceCalculator({
       }
       
       // Add addon costs - Solcast is ARR (recurring), other addons are NRR
-      result.addonCosts.forEach(ac => {
+      // For Matriarch, skip satelliteDataAPI as it's already in irradiance monitoring
+      const xeroAddonCosts = isMatriarchApiPackage(selectedCustomer.package)
+        ? result.addonCosts.filter(ac => ac.addonId !== 'satelliteDataAPI')
+        : result.addonCosts;
+      xeroAddonCosts.forEach(ac => {
         // Solcast (Satellite Data API) is recurring revenue - ARR
         const accountCode = ac.addonId === 'satelliteDataAPI' 
           ? ACCOUNT_PLATFORM_FEES  // 1002 - ARR
@@ -1252,7 +1262,10 @@ export function InvoiceCalculator({
       }
       
       // Get Solcast addon cost separately (it's ARR, not NRR)
-      const solcastCost = result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
+      // For Matriarch, solcast is already included in irradiance monitoring — don't double-count
+      const solcastCost = isMatriarchApiPackage(selectedCustomer.package)
+        ? 0
+        : (result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0);
 
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
@@ -2362,43 +2375,50 @@ export function InvoiceCalculator({
             )}
             
             {/* Matriarch API result breakdown */}
-            {isMatriarchApiPackage(selectedCustomer?.package || '') && result.matriarchApiBreakdown && (
+            {isMatriarchApiPackage(selectedCustomer?.package || '') && result.matriarchApiBreakdown && (() => {
+              const mb = result.matriarchApiBreakdown;
+              const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
+              const periodLabel = billingFrequency === 'quarterly' ? 'Quarter' : billingFrequency === 'monthly' ? 'Month' : billingFrequency === 'biannual' ? 'Half-Year' : 'Year';
+              const irradiancePeriodCost = mb.irradianceOnlySites * mb.irradiancePerSiteRate * periodMonths;
+              const performancePeriodCost = mb.performanceAnnualTotal * (periodMonths / 12);
+              const periodTotal = irradiancePeriodCost + performancePeriodCost;
+              return (
               <div className="space-y-3 mb-4">
-                <h4 className="font-medium text-sm">Matriarch API — Dual Subscription Breakdown:</h4>
+                <h4 className="font-medium text-sm">Matriarch API — {periodLabel} Breakdown:</h4>
                 <div className="space-y-2 text-sm pl-2">
                   {/* Irradiance stream */}
-                  {result.matriarchApiBreakdown.irradianceOnlySites > 0 && (
+                  {mb.irradianceOnlySites > 0 && (
                     <div>
                       <p className="text-muted-foreground mb-1 font-medium">Irradiance Monitoring</p>
                       <div className="flex justify-between">
-                        <span>{result.matriarchApiBreakdown.irradianceOnlySites} sites × {formatContractCurrency(result.matriarchApiBreakdown.irradiancePerSiteRate)}/site/month:</span>
-                        <span>{formatContractCurrency(result.matriarchApiBreakdown.irradianceMonthlyTotal)}/month</span>
-                      </div>
-                      <div className="flex justify-between font-medium">
-                        <span>Annual Total:</span>
-                        <span>{formatContractCurrency(result.matriarchApiBreakdown.irradianceAnnualTotal)}</span>
+                        <span>{mb.irradianceOnlySites} sites × {formatContractCurrency(mb.irradiancePerSiteRate)}/site/month × {periodMonths} months:</span>
+                        <span>{formatContractCurrency(irradiancePeriodCost)}</span>
                       </div>
                     </div>
                   )}
                   {/* Performance stream */}
-                  {result.matriarchApiBreakdown.performanceTotalMWp > 0 && (
+                  {mb.performanceTotalMWp > 0 && (
                     <div>
                       <p className="text-muted-foreground mb-1 font-medium">Performance Monitoring</p>
-                      {(result.matriarchApiBreakdown.performanceTierBreakdown || []).map((tier: any, idx: number) => (
+                      {(mb.performanceTierBreakdown || []).map((tier: any, idx: number) => (
                         <div key={idx} className="flex justify-between">
-                          <span>{tier.label} ({(tier.mwInTier ?? 0).toFixed(2)} MWp × {formatContractCurrency(tier.pricePerMWp ?? tier.pricePerMW ?? 0)}/MWp):</span>
-                          <span>{formatContractCurrency(tier.cost ?? 0)}</span>
+                          <span>{tier.label} ({(tier.mwInTier ?? 0).toFixed(2)} MWp × {formatContractCurrency(tier.pricePerMWp ?? tier.pricePerMW ?? 0)}/MWp/yr):</span>
+                          <span>{formatContractCurrency((tier.cost ?? 0) * (periodMonths / 12))}</span>
                         </div>
                       ))}
                       <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
-                        <span>Performance Annual Total ({result.matriarchApiBreakdown.performanceSites} sites, {result.matriarchApiBreakdown.performanceTotalMWp.toFixed(2)} MWp):</span>
-                        <span>{formatContractCurrency(result.matriarchApiBreakdown.performanceAnnualTotal)}</span>
+                        <span>Performance {periodLabel} Total ({mb.performanceSites} sites, {mb.performanceTotalMWp.toFixed(2)} MWp):</span>
+                        <span>{formatContractCurrency(performancePeriodCost)}</span>
                       </div>
                     </div>
                   )}
                   <div className="flex justify-between font-semibold border-t border-border pt-2 mt-2">
-                    <span>Combined Annual Total:</span>
-                    <span>{formatContractCurrency(result.matriarchApiBreakdown.totalAnnualCost)}</span>
+                    <span>{periodLabel} Total:</span>
+                    <span>{formatContractCurrency(periodTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Annual Reference:</span>
+                    <span>{formatContractCurrency(mb.totalAnnualCost)}</span>
                   </div>
                 </div>
                 {/* NRR fees display */}
@@ -2420,7 +2440,8 @@ export function InvoiceCalculator({
                   </div>
                 )}
               </div>
-            )}
+            );
+            })()}
             
             {selectedCustomer?.package !== 'starter' && !isSolarAfricaPackage(selectedCustomer?.package || '') && !isMatriarchApiPackage(selectedCustomer?.package || '') && (result.moduleCosts.length > 0 || result.siteMinimumPricingBreakdown) && (
               <div className="space-y-3 mb-4">
@@ -2682,11 +2703,17 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {result.addonCosts.length > 0 && (
+            {result.addonCosts.length > 0 && (() => {
+              // For Matriarch, filter out satelliteDataAPI — already included in irradiance monitoring
+              const displayAddonCosts = isMatriarchApiPackage(selectedCustomer?.package || '')
+                ? result.addonCosts.filter((item: any) => item.addonId !== 'satelliteDataAPI')
+                : result.addonCosts;
+              if (displayAddonCosts.length === 0) return null;
+              return (
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Add-on Costs:</h4>
                 <div className="space-y-2 text-sm pl-2">
-                  {result.addonCosts.map((item: any) => {
+                  {displayAddonCosts.map((item: any) => {
                     const addon = addons.find(a => a.id === item.addonId);
                     const quantity = item.quantity || addon?.quantity || 1;
                     return (
@@ -2718,7 +2745,9 @@ export function InvoiceCalculator({
                   })}
                 </div>
               </div>
-            )}
+              );
+            })()}
+            
             
             {/* Only show minimum charges section if NOT using site minimum pricing (since it's included above) */}
             {result.minimumCharges > 0 && !result.siteMinimumPricingBreakdown && (
