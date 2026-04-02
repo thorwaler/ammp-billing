@@ -211,11 +211,13 @@ export function InvoiceCalculator({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { formatCurrency } = useCurrency();
   
+  // Currency symbol helper for inline usage
+  const currencySymbol = selectedCustomer?.currency === 'USD' ? '$' : '€';
+
   // Format currency using the contract's currency, not user display preference
   const formatContractCurrency = (amount: number | undefined | null): string => {
-    const symbol = selectedCustomer?.currency === 'USD' ? '$' : '€';
     const safeAmount = amount ?? 0;
-    return `${symbol}${safeAmount.toLocaleString('en-US', { 
+    return `${currencySymbol}${safeAmount.toLocaleString('en-US', { 
       minimumFractionDigits: 0, 
       maximumFractionDigits: 2 
     })}`;
@@ -1035,7 +1037,7 @@ export function InvoiceCalculator({
         result.elumInternalBreakdown.tiers.forEach((tier: any) => {
           if (tier.cost > 0) {
             lineItems.push({
-              Description: `${tier.label || `${tier.minMW}-${tier.maxMW === Infinity ? '∞' : tier.maxMW} MW`} (${tier.mwInTier.toFixed(2)} MW × €${tier.pricePerMW}/MW)`,
+              Description: `${tier.label || `${tier.minMW}-${tier.maxMW === Infinity ? '∞' : tier.maxMW} MW`} (${tier.mwInTier.toFixed(2)} MW × ${currencySymbol}${tier.pricePerMW}/MW)`,
               Quantity: 1,
               UnitAmount: tier.cost,
               AccountCode: ACCOUNT_PLATFORM_FEES
@@ -1067,7 +1069,7 @@ export function InvoiceCalculator({
       // Add Elum Jubaili per-site fee line item
       if (result.elumJubailiBreakdown) {
         lineItems.push({
-          Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × €${result.elumJubailiBreakdown.perSiteFee}/site)`,
+          Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × ${currencySymbol}${result.elumJubailiBreakdown.perSiteFee}/site)`,
           Quantity: 1,
           UnitAmount: result.elumJubailiBreakdown.totalCost,
           AccountCode: ACCOUNT_PLATFORM_FEES
@@ -1081,7 +1083,7 @@ export function InvoiceCalculator({
           const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
           const irradiancePeriodCost = mb.irradianceAnnualTotal * (periodMonths / 12);
           lineItems.push({
-            Description: `Irradiance Monitoring (${mb.irradianceOnlySites} sites × €${mb.irradiancePerSiteRate}/site/month × ${periodMonths} months)`,
+            Description: `Irradiance Monitoring (${mb.irradianceOnlySites} sites × ${currencySymbol}${mb.irradiancePerSiteRate}/site/month × ${periodMonths} months)`,
             Quantity: 1,
             UnitAmount: irradiancePeriodCost,
             AccountCode: ACCOUNT_PLATFORM_FEES
@@ -1941,7 +1943,7 @@ export function InvoiceCalculator({
                       <span className="ml-2 font-medium">
                         {(() => {
                           const tier = getSolarAfricaTier(selectedCustomer.municipalityCount || 0);
-                          return `Tier ${tier.tier} - ${tier.label} (€${tier.annualFee.toLocaleString()}/yr)`;
+                          return `Tier ${tier.tier} - ${tier.label} (${currencySymbol}${tier.annualFee.toLocaleString()}/yr)`;
                         })()}
                       </span>
                     </div>
@@ -1959,7 +1961,7 @@ export function InvoiceCalculator({
                         placeholder="0"
                       />
                       {selectedCustomer.hourlyRate && (
-                        <p className="text-xs text-muted-foreground">@ €{selectedCustomer.hourlyRate}/hr</p>
+                        <p className="text-xs text-muted-foreground">@ {currencySymbol}{selectedCustomer.hourlyRate}/hr</p>
                       )}
                     </div>
                     <div className="flex items-center space-x-2 pt-5">
@@ -1969,7 +1971,7 @@ export function InvoiceCalculator({
                         onCheckedChange={(checked) => setIncludeSetupFee(checked === true)}
                       />
                       <Label htmlFor="include-setup-fee" className="text-sm cursor-pointer">
-                        Include Setup Fee (€{(selectedCustomer.apiSetupFee || 16500).toLocaleString()})
+                        Include Setup Fee ({currencySymbol}{(selectedCustomer.apiSetupFee || 16500).toLocaleString()})
                       </Label>
                     </div>
                   </div>
@@ -1998,7 +2000,7 @@ export function InvoiceCalculator({
                         onCheckedChange={(checked) => setIncludeOnboardingFee(checked === true)}
                       />
                       <Label htmlFor="include-onboarding-fee" className="text-sm cursor-pointer">
-                        Include Onboarding Fee (€{(selectedCustomer.onboardingSetupFee || 2650).toLocaleString()})
+                        Include Onboarding Fee ({currencySymbol}{(selectedCustomer.onboardingSetupFee || 2650).toLocaleString()})
                       </Label>
                     </div>
                     <div className="flex items-center space-x-2">
@@ -2008,7 +2010,7 @@ export function InvoiceCalculator({
                         onCheckedChange={(checked) => setIncludeVendorApiFee(checked === true)}
                       />
                       <Label htmlFor="include-vendor-api-fee" className="text-sm cursor-pointer">
-                        Include Vendor API Fee (€{(selectedCustomer.vendorApiFee || 350).toLocaleString()})
+                        Include Vendor API Fee ({currencySymbol}{(selectedCustomer.vendorApiFee || 350).toLocaleString()})
                       </Label>
                     </div>
                   </div>
@@ -2090,7 +2092,7 @@ export function InvoiceCalculator({
                           {module.name}
                         </Label>
                          <span className="text-sm">
-                          €{selectedCustomer.customPricing?.[module.id] || module.price}/MWp
+                          {currencySymbol}{selectedCustomer.customPricing?.[module.id] || module.price}/MWp
                         </span>
                       </div>
                     </div>
@@ -2119,12 +2121,12 @@ export function InvoiceCalculator({
                           <span className="text-sm">
                             {addon.tieredPricing && addon.pricingTiers ? (
                               <span className="text-xs">
-                                €{addon.pricingTiers[0].pricePerUnit}-€{addon.pricingTiers[addon.pricingTiers.length - 1].pricePerUnit}/site
+                                {currencySymbol}{addon.pricingTiers[0].pricePerUnit}-{currencySymbol}{addon.pricingTiers[addon.pricingTiers.length - 1].pricePerUnit}/site
                               </span>
                             ) : addon.complexityPricing ? (
-                              `€${addon.lowPrice}-€${addon.highPrice}`
+                              `${currencySymbol}${addon.lowPrice}-${currencySymbol}${addon.highPrice}`
                             ) : (
-                              `€${addon.price}`
+                              `${currencySymbol}${addon.price}`
                             )}
                           </span>
                         </div>
@@ -2140,9 +2142,9 @@ export function InvoiceCalculator({
                                 <SelectValue placeholder="Select complexity" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="low">Low (€{addon.lowPrice})</SelectItem>
-                                <SelectItem value="medium">Medium (€{addon.mediumPrice})</SelectItem>
-                                <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
+                                <SelectItem value="low">Low ({currencySymbol}{addon.lowPrice})</SelectItem>
+                                <SelectItem value="medium">Medium ({currencySymbol}{addon.mediumPrice})</SelectItem>
+                                <SelectItem value="high">High ({currencySymbol}{addon.highPrice})</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -2162,7 +2164,7 @@ export function InvoiceCalculator({
                                 </div>
                                 <div className="flex justify-between font-medium">
                                   <span>Tier: {addon.calculatedTieredPrice.appliedTier?.label}</span>
-                                  <span>€{addon.calculatedTieredPrice.pricePerUnit.toFixed(2)}/site/month</span>
+                                  <span>{currencySymbol}{addon.calculatedTieredPrice.pricePerUnit.toFixed(2)}/site/month</span>
                                 </div>
                                 <div className="flex justify-between text-xs text-muted-foreground">
                                   <span>Invoice period:</span>
@@ -2175,7 +2177,7 @@ export function InvoiceCalculator({
                                 </div>
                                 <div className="flex justify-between text-primary font-semibold">
                                   <span>Total:</span>
-                                  <span>€{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
+                                   <span>{currencySymbol}{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
                                 </div>
                               </div>
                             )}
@@ -2201,7 +2203,7 @@ export function InvoiceCalculator({
                                 }));
                               }}
                               currentQuantity={addon.quantity}
-                              currencySymbol="€"
+                              currencySymbol={currencySymbol}
                             />
                           </div>
                         )}
@@ -2215,11 +2217,11 @@ export function InvoiceCalculator({
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Tier: {addon.calculatedTieredPrice.appliedTier?.label}</span>
-                                <span>€{addon.calculatedTieredPrice.pricePerUnit}/site</span>
+                                <span>{currencySymbol}{addon.calculatedTieredPrice.pricePerUnit}/site</span>
                               </div>
                               <div className="flex justify-between text-primary font-semibold">
                                 <span>Total:</span>
-                                <span>€{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
+                                <span>{currencySymbol}{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
                               </div>
                             </div>
                           </div>
