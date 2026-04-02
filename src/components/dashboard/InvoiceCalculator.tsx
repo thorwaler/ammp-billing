@@ -2217,7 +2217,7 @@ export function InvoiceCalculator({
                               </div>
                               <div className="flex justify-between font-medium">
                                 <span>Tier: {addon.calculatedTieredPrice.appliedTier?.label}</span>
-                                <span>€{addon.calculatedTieredPrice.pricePerUnit}/site</span>
+                                <span>{currencySymbol}{addon.calculatedTieredPrice.pricePerUnit}/site</span>
                               </div>
                               <div className="flex justify-between text-primary font-semibold">
                                 <span>Total:</span>
