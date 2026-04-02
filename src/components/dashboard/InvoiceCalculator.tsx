@@ -2177,7 +2177,7 @@ export function InvoiceCalculator({
                                 </div>
                                 <div className="flex justify-between text-primary font-semibold">
                                   <span>Total:</span>
-                                  <span>€{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
+                                   <span>{currencySymbol}{addon.calculatedTieredPrice.totalPrice.toFixed(2)}</span>
                                 </div>
                               </div>
                             )}
