@@ -2142,9 +2142,9 @@ export function InvoiceCalculator({
                                 <SelectValue placeholder="Select complexity" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="low">Low (€{addon.lowPrice})</SelectItem>
-                                <SelectItem value="medium">Medium (€{addon.mediumPrice})</SelectItem>
-                                <SelectItem value="high">High (€{addon.highPrice})</SelectItem>
+                                <SelectItem value="low">Low ({currencySymbol}{addon.lowPrice})</SelectItem>
+                                <SelectItem value="medium">Medium ({currencySymbol}{addon.mediumPrice})</SelectItem>
+                                <SelectItem value="high">High ({currencySymbol}{addon.highPrice})</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
