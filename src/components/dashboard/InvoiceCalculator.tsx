@@ -1037,7 +1037,7 @@ export function InvoiceCalculator({
         result.elumInternalBreakdown.tiers.forEach((tier: any) => {
           if (tier.cost > 0) {
             lineItems.push({
-              Description: `${tier.label || `${tier.minMW}-${tier.maxMW === Infinity ? '∞' : tier.maxMW} MW`} (${tier.mwInTier.toFixed(2)} MW × €${tier.pricePerMW}/MW)`,
+              Description: `${tier.label || `${tier.minMW}-${tier.maxMW === Infinity ? '∞' : tier.maxMW} MW`} (${tier.mwInTier.toFixed(2)} MW × ${currencySymbol}${tier.pricePerMW}/MW)`,
               Quantity: 1,
               UnitAmount: tier.cost,
               AccountCode: ACCOUNT_PLATFORM_FEES
