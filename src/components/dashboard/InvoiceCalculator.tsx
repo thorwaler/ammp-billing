@@ -478,7 +478,13 @@ export function InvoiceCalculator({
         const baseAddons = is2026 ? defaultAddons2026 : isSps ? defaultSpsAddons : defaultAddons;
         
         // Auto-activate addons based on AMMP capabilities
+        // For Matriarch API packages, skip satelliteDataAPI — it's already included in irradiance monitoring
+        const isMatriarchContract = isMatriarchApiPackage(customerData.package);
         const updatedAddons = baseAddons.map(addon => {
+          // Skip satelliteDataAPI for Matriarch contracts
+          if (isMatriarchContract && addon.id === 'satelliteDataAPI') {
+            return { ...addon, selected: false, quantity: 0 };
+          }
           // Find matching contract addon (could be string ID or full object)
           const contractAddon = customerData.addons.find((a: any) => 
             typeof a === 'string' ? a === addon.id : a.id === addon.id
