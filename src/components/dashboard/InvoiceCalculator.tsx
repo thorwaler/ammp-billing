@@ -1140,7 +1140,11 @@ export function InvoiceCalculator({
       }
       
       // Add addon costs - Solcast is ARR (recurring), other addons are NRR
-      result.addonCosts.forEach(ac => {
+      // For Matriarch, skip satelliteDataAPI as it's already in irradiance monitoring
+      const xeroAddonCosts = isMatriarchApiPackage(selectedCustomer.package)
+        ? result.addonCosts.filter(ac => ac.addonId !== 'satelliteDataAPI')
+        : result.addonCosts;
+      xeroAddonCosts.forEach(ac => {
         // Solcast (Satellite Data API) is recurring revenue - ARR
         const accountCode = ac.addonId === 'satelliteDataAPI' 
           ? ACCOUNT_PLATFORM_FEES  // 1002 - ARR
