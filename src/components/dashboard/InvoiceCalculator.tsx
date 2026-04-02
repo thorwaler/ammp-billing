@@ -2060,7 +2060,7 @@ export function InvoiceCalculator({
                 </div>
               )}
               
-              {!isSolarAfricaPackage(selectedCustomer.package) && (<><div className="space-y-2">
+              {!isSolarAfricaPackage(selectedCustomer.package) && !isMatriarchApiPackage(selectedCustomer.package) && (<><div className="space-y-2">
                 <Label>Modules</Label>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-1">
                   {modules.map((module) => (
