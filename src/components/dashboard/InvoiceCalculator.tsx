@@ -1961,7 +1961,7 @@ export function InvoiceCalculator({
                         placeholder="0"
                       />
                       {selectedCustomer.hourlyRate && (
-                        <p className="text-xs text-muted-foreground">@ €{selectedCustomer.hourlyRate}/hr</p>
+                        <p className="text-xs text-muted-foreground">@ {currencySymbol}{selectedCustomer.hourlyRate}/hr</p>
                       )}
                     </div>
                     <div className="flex items-center space-x-2 pt-5">
