@@ -2121,12 +2121,12 @@ export function InvoiceCalculator({
                           <span className="text-sm">
                             {addon.tieredPricing && addon.pricingTiers ? (
                               <span className="text-xs">
-                                €{addon.pricingTiers[0].pricePerUnit}-€{addon.pricingTiers[addon.pricingTiers.length - 1].pricePerUnit}/site
+                                {currencySymbol}{addon.pricingTiers[0].pricePerUnit}-{currencySymbol}{addon.pricingTiers[addon.pricingTiers.length - 1].pricePerUnit}/site
                               </span>
                             ) : addon.complexityPricing ? (
-                              `€${addon.lowPrice}-€${addon.highPrice}`
+                              `${currencySymbol}${addon.lowPrice}-${currencySymbol}${addon.highPrice}`
                             ) : (
-                              `€${addon.price}`
+                              `${currencySymbol}${addon.price}`
                             )}
                           </span>
                         </div>
