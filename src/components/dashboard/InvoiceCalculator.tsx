@@ -1975,6 +1975,45 @@ export function InvoiceCalculator({
                 </div>
               )}
               
+              {/* Matriarch API section */}
+              {isMatriarchApiPackage(selectedCustomer.package) && (
+                <div className="p-3 border rounded-lg bg-muted/50 space-y-3">
+                  <h4 className="font-semibold text-sm">🔌 Matriarch API Details</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Irradiance Tiers:</span>
+                      <span className="ml-2 font-medium">{selectedCustomer.irradiancePerSiteTiers?.length || 0} configured</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Performance Tiers:</span>
+                      <span className="ml-2 font-medium">{selectedCustomer.performancePerMwpTiers?.length || 0} configured</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="include-onboarding-fee"
+                        checked={includeOnboardingFee}
+                        onCheckedChange={(checked) => setIncludeOnboardingFee(checked === true)}
+                      />
+                      <Label htmlFor="include-onboarding-fee" className="text-sm cursor-pointer">
+                        Include Onboarding Fee (€{(selectedCustomer.onboardingSetupFee || 2650).toLocaleString()})
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="include-vendor-api-fee"
+                        checked={includeVendorApiFee}
+                        onCheckedChange={(checked) => setIncludeVendorApiFee(checked === true)}
+                      />
+                      <Label htmlFor="include-vendor-api-fee" className="text-sm cursor-pointer">
+                        Include Vendor API Fee (€{(selectedCustomer.vendorApiFee || 350).toLocaleString()})
+                      </Label>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Per-site billing selector for per_site packages */}
               {selectedCustomer.package === 'per_site' && (
                 <div className="space-y-2">
