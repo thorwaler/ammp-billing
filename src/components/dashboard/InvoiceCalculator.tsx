@@ -39,6 +39,7 @@ import {
   isPackage2026,
   isSolarAfricaPackage,
   isSpsPackage,
+  isMatriarchApiPackage,
   getSolarAfricaTier,
   SOLAR_AFRICA_MUNICIPALITY_TIERS,
   type ComplexityLevel, 
