@@ -2703,11 +2703,17 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {result.addonCosts.length > 0 && (
+            {result.addonCosts.length > 0 && (() => {
+              // For Matriarch, filter out satelliteDataAPI — already included in irradiance monitoring
+              const displayAddonCosts = isMatriarchApiPackage(selectedCustomer?.package || '')
+                ? result.addonCosts.filter((item: any) => item.addonId !== 'satelliteDataAPI')
+                : result.addonCosts;
+              if (displayAddonCosts.length === 0) return null;
+              return (
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Add-on Costs:</h4>
                 <div className="space-y-2 text-sm pl-2">
-                  {result.addonCosts.map((item: any) => {
+                  {displayAddonCosts.map((item: any) => {
                     const addon = addons.find(a => a.id === item.addonId);
                     const quantity = item.quantity || addon?.quantity || 1;
                     return (
