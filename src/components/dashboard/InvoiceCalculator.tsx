@@ -2358,7 +2358,68 @@ export function InvoiceCalculator({
               </div>
             )}
             
-            {selectedCustomer?.package !== 'starter' && !isSolarAfricaPackage(selectedCustomer?.package || '') && (result.moduleCosts.length > 0 || result.siteMinimumPricingBreakdown) && (
+            {/* Matriarch API result breakdown */}
+            {isMatriarchApiPackage(selectedCustomer?.package || '') && result.matriarchApiBreakdown && (
+              <div className="space-y-3 mb-4">
+                <h4 className="font-medium text-sm">Matriarch API — Dual Subscription Breakdown:</h4>
+                <div className="space-y-2 text-sm pl-2">
+                  {/* Irradiance stream */}
+                  {result.matriarchApiBreakdown.irradianceOnlySites > 0 && (
+                    <div>
+                      <p className="text-muted-foreground mb-1 font-medium">Irradiance Monitoring</p>
+                      <div className="flex justify-between">
+                        <span>{result.matriarchApiBreakdown.irradianceOnlySites} sites × {formatContractCurrency(result.matriarchApiBreakdown.irradiancePerSiteRate)}/site/month:</span>
+                        <span>{formatContractCurrency(result.matriarchApiBreakdown.irradianceMonthlyTotal)}/month</span>
+                      </div>
+                      <div className="flex justify-between font-medium">
+                        <span>Annual Total:</span>
+                        <span>{formatContractCurrency(result.matriarchApiBreakdown.irradianceAnnualTotal)}</span>
+                      </div>
+                    </div>
+                  )}
+                  {/* Performance stream */}
+                  {result.matriarchApiBreakdown.performanceTotalMWp > 0 && (
+                    <div>
+                      <p className="text-muted-foreground mb-1 font-medium">Performance Monitoring</p>
+                      {result.matriarchApiBreakdown.performanceTierBreakdown.map((tier: any, idx: number) => (
+                        <div key={idx} className="flex justify-between">
+                          <span>{tier.label} ({tier.mwInTier.toFixed(2)} MWp × {formatContractCurrency(tier.pricePerMW)}/MWp):</span>
+                          <span>{formatContractCurrency(tier.cost)}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
+                        <span>Performance Annual Total ({result.matriarchApiBreakdown.performanceSites} sites, {result.matriarchApiBreakdown.performanceTotalMWp.toFixed(2)} MWp):</span>
+                        <span>{formatContractCurrency(result.matriarchApiBreakdown.performanceAnnualTotal)}</span>
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-semibold border-t border-border pt-2 mt-2">
+                    <span>Combined Annual Total:</span>
+                    <span>{formatContractCurrency(result.matriarchApiBreakdown.totalAnnualCost)}</span>
+                  </div>
+                </div>
+                {/* NRR fees display */}
+                {(includeOnboardingFee || includeVendorApiFee) && (
+                  <div className="space-y-1 text-sm pl-2 mt-2">
+                    <p className="text-muted-foreground font-medium">One-Time Fees (NRR):</p>
+                    {includeOnboardingFee && selectedCustomer?.onboardingSetupFee && (
+                      <div className="flex justify-between">
+                        <span>Onboarding Setup Fee:</span>
+                        <span>{formatContractCurrency(selectedCustomer.onboardingSetupFee)}</span>
+                      </div>
+                    )}
+                    {includeVendorApiFee && selectedCustomer?.vendorApiFee && (
+                      <div className="flex justify-between">
+                        <span>Vendor API Integration Fee:</span>
+                        <span>{formatContractCurrency(selectedCustomer.vendorApiFee)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {selectedCustomer?.package !== 'starter' && !isSolarAfricaPackage(selectedCustomer?.package || '') && !isMatriarchApiPackage(selectedCustomer?.package || '') && (result.moduleCosts.length > 0 || result.siteMinimumPricingBreakdown) && (
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">Module Costs:</h4>
                 <div className="space-y-1 text-sm pl-2">
