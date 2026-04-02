@@ -1253,6 +1253,7 @@ export function InvoiceCalculator({
 
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
+      const isMatriarch = isMatriarchApiPackage(selectedCustomer.package);
       const arrAmount = (result.basePricingCost || 0) +
         // SolarAfrica: starterPackageCost is setup fee (NRR), not ARR
         (isSolarAfrica ? 0 : (result.starterPackageCost || 0)) +
@@ -1270,6 +1271,8 @@ export function InvoiceCalculator({
         (isSolarAfrica ? 0 : (result.retainerCost || 0)) +
         // SolarAfrica: totalMWCost is the tier subscription (ARR)
         (isSolarAfrica ? (result.totalMWCost || 0) : 0) +
+        // Matriarch API: totalMWCost is the combined subscription (ARR)
+        (isMatriarch ? (result.totalMWCost || 0) : 0) +
         // Discounted assets are ARR
         (result.discountedAssetsTotal || 0) +
         // Per-site fees are ARR
@@ -1291,6 +1294,12 @@ export function InvoiceCalculator({
       // SolarAfrica: setup fee and customization hours are NRR
       if (isSolarAfrica) {
         nrrAmount += (result.starterPackageCost || 0) + (result.retainerCost || 0);
+      }
+      
+      // Matriarch API: one-time fees are NRR
+      if (isMatriarch) {
+        if (includeOnboardingFee) nrrAmount += (selectedCustomer.onboardingSetupFee || 0);
+        if (includeVendorApiFee) nrrAmount += (selectedCustomer.vendorApiFee || 0);
       }
       
       const xeroInvoice = {
