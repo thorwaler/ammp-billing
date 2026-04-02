@@ -2745,7 +2745,9 @@ export function InvoiceCalculator({
                   })}
                 </div>
               </div>
-            )}
+              );
+            })()}
+            
             
             {/* Only show minimum charges section if NOT using site minimum pricing (since it's included above) */}
             {result.minimumCharges > 0 && !result.siteMinimumPricingBreakdown && (
