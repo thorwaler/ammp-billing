@@ -1083,7 +1083,7 @@ export function InvoiceCalculator({
           const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
           const irradiancePeriodCost = mb.irradianceAnnualTotal * (periodMonths / 12);
           lineItems.push({
-            Description: `Irradiance Monitoring (${mb.irradianceOnlySites} sites × €${mb.irradiancePerSiteRate}/site/month × ${periodMonths} months)`,
+            Description: `Irradiance Monitoring (${mb.irradianceOnlySites} sites × ${currencySymbol}${mb.irradiancePerSiteRate}/site/month × ${periodMonths} months)`,
             Quantity: 1,
             UnitAmount: irradiancePeriodCost,
             AccountCode: ACCOUNT_PLATFORM_FEES
