@@ -2440,7 +2440,8 @@ export function InvoiceCalculator({
                   </div>
                 )}
               </div>
-            )}
+            );
+            })()}
             
             {selectedCustomer?.package !== 'starter' && !isSolarAfricaPackage(selectedCustomer?.package || '') && !isMatriarchApiPackage(selectedCustomer?.package || '') && (result.moduleCosts.length > 0 || result.siteMinimumPricingBreakdown) && (
               <div className="space-y-3 mb-4">
