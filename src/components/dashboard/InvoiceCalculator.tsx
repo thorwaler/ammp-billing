@@ -1262,7 +1262,10 @@ export function InvoiceCalculator({
       }
       
       // Get Solcast addon cost separately (it's ARR, not NRR)
-      const solcastCost = result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
+      // For Matriarch, solcast is already included in irradiance monitoring — don't double-count
+      const solcastCost = isMatriarchApiPackage(selectedCustomer.package)
+        ? 0
+        : (result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0);
 
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
