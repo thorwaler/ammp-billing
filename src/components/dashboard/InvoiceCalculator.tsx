@@ -2010,7 +2010,7 @@ export function InvoiceCalculator({
                         onCheckedChange={(checked) => setIncludeVendorApiFee(checked === true)}
                       />
                       <Label htmlFor="include-vendor-api-fee" className="text-sm cursor-pointer">
-                        Include Vendor API Fee (€{(selectedCustomer.vendorApiFee || 350).toLocaleString()})
+                        Include Vendor API Fee ({currencySymbol}{(selectedCustomer.vendorApiFee || 350).toLocaleString()})
                       </Label>
                     </div>
                   </div>
