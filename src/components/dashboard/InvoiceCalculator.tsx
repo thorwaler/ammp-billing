@@ -1971,7 +1971,7 @@ export function InvoiceCalculator({
                         onCheckedChange={(checked) => setIncludeSetupFee(checked === true)}
                       />
                       <Label htmlFor="include-setup-fee" className="text-sm cursor-pointer">
-                        Include Setup Fee (€{(selectedCustomer.apiSetupFee || 16500).toLocaleString()})
+                        Include Setup Fee ({currencySymbol}{(selectedCustomer.apiSetupFee || 16500).toLocaleString()})
                       </Label>
                     </div>
                   </div>
