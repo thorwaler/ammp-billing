@@ -2092,7 +2092,7 @@ export function InvoiceCalculator({
                           {module.name}
                         </Label>
                          <span className="text-sm">
-                          €{selectedCustomer.customPricing?.[module.id] || module.price}/MWp
+                          {currencySymbol}{selectedCustomer.customPricing?.[module.id] || module.price}/MWp
                         </span>
                       </div>
                     </div>
