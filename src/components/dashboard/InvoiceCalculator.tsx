@@ -211,11 +211,13 @@ export function InvoiceCalculator({
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const { formatCurrency } = useCurrency();
   
+  // Currency symbol helper for inline usage
+  const currencySymbol = selectedCustomer?.currency === 'USD' ? '$' : '€';
+
   // Format currency using the contract's currency, not user display preference
   const formatContractCurrency = (amount: number | undefined | null): string => {
-    const symbol = selectedCustomer?.currency === 'USD' ? '$' : '€';
     const safeAmount = amount ?? 0;
-    return `${symbol}${safeAmount.toLocaleString('en-US', { 
+    return `${currencySymbol}${safeAmount.toLocaleString('en-US', { 
       minimumFractionDigits: 0, 
       maximumFractionDigits: 2 
     })}`;
