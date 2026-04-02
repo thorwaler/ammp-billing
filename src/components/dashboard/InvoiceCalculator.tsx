@@ -2375,43 +2375,50 @@ export function InvoiceCalculator({
             )}
             
             {/* Matriarch API result breakdown */}
-            {isMatriarchApiPackage(selectedCustomer?.package || '') && result.matriarchApiBreakdown && (
+            {isMatriarchApiPackage(selectedCustomer?.package || '') && result.matriarchApiBreakdown && (() => {
+              const mb = result.matriarchApiBreakdown;
+              const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
+              const periodLabel = billingFrequency === 'quarterly' ? 'Quarter' : billingFrequency === 'monthly' ? 'Month' : billingFrequency === 'semi-annual' ? 'Half-Year' : 'Year';
+              const irradiancePeriodCost = mb.irradianceOnlySites * mb.irradiancePerSiteRate * periodMonths;
+              const performancePeriodCost = mb.performanceAnnualTotal * (periodMonths / 12);
+              const periodTotal = irradiancePeriodCost + performancePeriodCost;
+              return (
               <div className="space-y-3 mb-4">
-                <h4 className="font-medium text-sm">Matriarch API — Dual Subscription Breakdown:</h4>
+                <h4 className="font-medium text-sm">Matriarch API — {periodLabel} Breakdown:</h4>
                 <div className="space-y-2 text-sm pl-2">
                   {/* Irradiance stream */}
-                  {result.matriarchApiBreakdown.irradianceOnlySites > 0 && (
+                  {mb.irradianceOnlySites > 0 && (
                     <div>
                       <p className="text-muted-foreground mb-1 font-medium">Irradiance Monitoring</p>
                       <div className="flex justify-between">
-                        <span>{result.matriarchApiBreakdown.irradianceOnlySites} sites × {formatContractCurrency(result.matriarchApiBreakdown.irradiancePerSiteRate)}/site/month:</span>
-                        <span>{formatContractCurrency(result.matriarchApiBreakdown.irradianceMonthlyTotal)}/month</span>
-                      </div>
-                      <div className="flex justify-between font-medium">
-                        <span>Annual Total:</span>
-                        <span>{formatContractCurrency(result.matriarchApiBreakdown.irradianceAnnualTotal)}</span>
+                        <span>{mb.irradianceOnlySites} sites × {formatContractCurrency(mb.irradiancePerSiteRate)}/site/month × {periodMonths} months:</span>
+                        <span>{formatContractCurrency(irradiancePeriodCost)}</span>
                       </div>
                     </div>
                   )}
                   {/* Performance stream */}
-                  {result.matriarchApiBreakdown.performanceTotalMWp > 0 && (
+                  {mb.performanceTotalMWp > 0 && (
                     <div>
                       <p className="text-muted-foreground mb-1 font-medium">Performance Monitoring</p>
-                      {(result.matriarchApiBreakdown.performanceTierBreakdown || []).map((tier: any, idx: number) => (
+                      {(mb.performanceTierBreakdown || []).map((tier: any, idx: number) => (
                         <div key={idx} className="flex justify-between">
-                          <span>{tier.label} ({(tier.mwInTier ?? 0).toFixed(2)} MWp × {formatContractCurrency(tier.pricePerMWp ?? tier.pricePerMW ?? 0)}/MWp):</span>
-                          <span>{formatContractCurrency(tier.cost ?? 0)}</span>
+                          <span>{tier.label} ({(tier.mwInTier ?? 0).toFixed(2)} MWp × {formatContractCurrency(tier.pricePerMWp ?? tier.pricePerMW ?? 0)}/MWp/yr):</span>
+                          <span>{formatContractCurrency((tier.cost ?? 0) * (periodMonths / 12))}</span>
                         </div>
                       ))}
                       <div className="flex justify-between font-medium border-t border-border pt-1 mt-1">
-                        <span>Performance Annual Total ({result.matriarchApiBreakdown.performanceSites} sites, {result.matriarchApiBreakdown.performanceTotalMWp.toFixed(2)} MWp):</span>
-                        <span>{formatContractCurrency(result.matriarchApiBreakdown.performanceAnnualTotal)}</span>
+                        <span>Performance {periodLabel} Total ({mb.performanceSites} sites, {mb.performanceTotalMWp.toFixed(2)} MWp):</span>
+                        <span>{formatContractCurrency(performancePeriodCost)}</span>
                       </div>
                     </div>
                   )}
                   <div className="flex justify-between font-semibold border-t border-border pt-2 mt-2">
-                    <span>Combined Annual Total:</span>
-                    <span>{formatContractCurrency(result.matriarchApiBreakdown.totalAnnualCost)}</span>
+                    <span>{periodLabel} Total:</span>
+                    <span>{formatContractCurrency(periodTotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Annual Reference:</span>
+                    <span>{formatContractCurrency(mb.totalAnnualCost)}</span>
                   </div>
                 </div>
                 {/* NRR fees display */}
