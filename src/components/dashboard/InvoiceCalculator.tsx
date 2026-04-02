@@ -2203,7 +2203,7 @@ export function InvoiceCalculator({
                                 }));
                               }}
                               currentQuantity={addon.quantity}
-                              currencySymbol="€"
+                              currencySymbol={currencySymbol}
                             />
                           </div>
                         )}
