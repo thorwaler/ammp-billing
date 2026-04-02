@@ -2378,7 +2378,7 @@ export function InvoiceCalculator({
             {isMatriarchApiPackage(selectedCustomer?.package || '') && result.matriarchApiBreakdown && (() => {
               const mb = result.matriarchApiBreakdown;
               const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
-              const periodLabel = billingFrequency === 'quarterly' ? 'Quarter' : billingFrequency === 'monthly' ? 'Month' : billingFrequency === 'semi-annual' ? 'Half-Year' : 'Year';
+              const periodLabel = billingFrequency === 'quarterly' ? 'Quarter' : billingFrequency === 'monthly' ? 'Month' : billingFrequency === 'biannual' ? 'Half-Year' : 'Year';
               const irradiancePeriodCost = mb.irradianceOnlySites * mb.irradiancePerSiteRate * periodMonths;
               const performancePeriodCost = mb.performanceAnnualTotal * (periodMonths / 12);
               const periodTotal = irradiancePeriodCost + performancePeriodCost;
