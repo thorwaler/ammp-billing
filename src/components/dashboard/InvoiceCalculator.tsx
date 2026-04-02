@@ -1069,7 +1069,7 @@ export function InvoiceCalculator({
       // Add Elum Jubaili per-site fee line item
       if (result.elumJubailiBreakdown) {
         lineItems.push({
-          Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × €${result.elumJubailiBreakdown.perSiteFee}/site)`,
+          Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × ${currencySymbol}${result.elumJubailiBreakdown.perSiteFee}/site)`,
           Quantity: 1,
           UnitAmount: result.elumJubailiBreakdown.totalCost,
           AccountCode: ACCOUNT_PLATFORM_FEES
