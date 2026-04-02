@@ -212,9 +212,10 @@ export function InvoiceCalculator({
   const { formatCurrency } = useCurrency();
   
   // Format currency using the contract's currency, not user display preference
-  const formatContractCurrency = (amount: number): string => {
+  const formatContractCurrency = (amount: number | undefined | null): string => {
     const symbol = selectedCustomer?.currency === 'USD' ? '$' : '€';
-    return `${symbol}${amount.toLocaleString('en-US', { 
+    const safeAmount = amount ?? 0;
+    return `${symbol}${safeAmount.toLocaleString('en-US', { 
       minimumFractionDigits: 0, 
       maximumFractionDigits: 2 
     })}`;
