@@ -233,6 +233,10 @@ export function InvoiceCalculator({
   const [includeSetupFee, setIncludeSetupFee] = useState(false);
   const [loadedContractType, setLoadedContractType] = useState<any>(null);
 
+  // Matriarch API state
+  const [includeOnboardingFee, setIncludeOnboardingFee] = useState(false);
+  const [includeVendorApiFee, setIncludeVendorApiFee] = useState(false);
+
   // Load customers from database on mount
   useEffect(() => {
     const loadCustomers = async () => {
