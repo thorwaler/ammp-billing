@@ -2164,7 +2164,7 @@ export function InvoiceCalculator({
                                 </div>
                                 <div className="flex justify-between font-medium">
                                   <span>Tier: {addon.calculatedTieredPrice.appliedTier?.label}</span>
-                                  <span>€{addon.calculatedTieredPrice.pricePerUnit.toFixed(2)}/site/month</span>
+                                  <span>{currencySymbol}{addon.calculatedTieredPrice.pricePerUnit.toFixed(2)}/site/month</span>
                                 </div>
                                 <div className="flex justify-between text-xs text-muted-foreground">
                                   <span>Invoice period:</span>
