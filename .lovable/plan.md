@@ -1,36 +1,30 @@
 
 
-# Fix Matriarch API Invoice Creator Display & Xero Line Items
+# Fix Hardcoded Currency Symbols in Matriarch Invoice Display
 
 ## Problem
-The calculation engine correctly computes Matriarch API dual-stream pricing (irradiance per-site + performance per-MWp), but the InvoiceCalculator UI and Xero sync are missing Matriarch-specific handling:
+The Matriarch contract can be in EUR or USD, but several places in the InvoiceCalculator have hardcoded `€` symbols instead of using the contract's currency. This affects:
 
-1. **No result breakdown display** — after calculating, the matriarchApiBreakdown is computed but never rendered (unlike Elum, SPS, Jubaili which all have dedicated display sections)
-2. **No Xero line items** — the `handleSendToXero` function doesn't create irradiance/performance line items from the matriarchApiBreakdown
-3. **Modules/addons UI still shown** — the modules and addons selection panels are displayed for matriarch_api, but this package doesn't use them (similar to how SolarAfrica hides them)
+1. **Matriarch NRR checkbox labels** (lines 2001, 2011) — "Include Onboarding Fee (€2,650)" always shows €
+2. **Xero line item description** (line 1084) — "Irradiance Monitoring (X sites × €Y/site/month)" always uses €
+3. **Other non-Matriarch sections** also hardcode € (addon pricing, module pricing, SolarAfrica setup fee) — these are a broader issue but may also affect Matriarch if contracts share UI paths
 
 ## Plan
 
-### 1. Add Matriarch API result breakdown display
-In `src/components/dashboard/InvoiceCalculator.tsx`, add a new display section (after the SPS discount breakdown block ~line 2473) that renders `result.matriarchApiBreakdown`:
-- Irradiance-only sites: count, rate/site/month, monthly total, annual total
-- Performance sites: graduated tier breakdown table with MWp, rate, cost per tier
-- Combined annual total
+### 1. Use `formatContractCurrency` or a currency symbol helper in Matriarch-specific UI
+Replace hardcoded `€` with a dynamic symbol derived from `selectedCustomer?.currency`:
+- Line 2001: `Include Onboarding Fee (€{...})` → use contract currency symbol
+- Line 2011: `Include Vendor API Fee (€{...})` → use contract currency symbol
 
-### 2. Add Matriarch API Xero line items
-In the `handleSendToXero` function (~line 1069), add a block to create Xero line items from `matriarchApiBreakdown`:
-- "Irradiance Monitoring (X sites × €Y/site/month × Z months)" → ARR account
-- "Performance Monitoring (X.XX MWp)" → ARR account
-- Both use `ACCOUNT_PLATFORM_FEES` since they are recurring revenue
+### 2. Fix Xero line item description for Matriarch
+- Line 1084: Replace `€${mb.irradiancePerSiteRate}` with the correct symbol based on `selectedCustomer.currency`
 
-### 3. Hide modules/addons UI for Matriarch API
-Update the condition at ~line 1966 that currently only hides modules for SolarAfrica:
-- Add `isMatriarchApiPackage(selectedCustomer.package)` to the hide condition
-- Matriarch doesn't use standard modules/addons — its pricing is fully tier-driven
+### 3. Add a small currency symbol helper
+Extract a simple `currencySymbol` variable (e.g. `const currencySymbol = selectedCustomer?.currency === 'USD' ? '$' : '€'`) so all display strings can reference it consistently. The `formatContractCurrency` function already exists for formatted amounts — this is just for inline symbol usage in description strings.
 
-### 4. Add NRR handling for onboarding/vendor API fees
-The matriarch contract stores `onboarding_setup_fee` and `vendor_api_fee` as one-time NRR. Add optional checkboxes (like SolarAfrica's "Include Setup Fee") so the user can include these on an invoice, and create corresponding Xero NRR line items.
+### 4. Broader hardcoded € cleanup (optional but recommended)
+The same issue exists in the addon/module pricing display (lines 2093, 2122, 2143-2145, 2165, 2178, 2218, 2222). These should also use the contract currency. This is a pre-existing issue not specific to Matriarch but worth fixing in the same pass.
 
 ## Files to modify
-- `src/components/dashboard/InvoiceCalculator.tsx` — all four changes above
+- `src/components/dashboard/InvoiceCalculator.tsx` — replace all hardcoded `€` with dynamic currency symbol
 
