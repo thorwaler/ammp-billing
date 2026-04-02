@@ -1943,7 +1943,7 @@ export function InvoiceCalculator({
                       <span className="ml-2 font-medium">
                         {(() => {
                           const tier = getSolarAfricaTier(selectedCustomer.municipalityCount || 0);
-                          return `Tier ${tier.tier} - ${tier.label} (€${tier.annualFee.toLocaleString()}/yr)`;
+                          return `Tier ${tier.tier} - ${tier.label} (${currencySymbol}${tier.annualFee.toLocaleString()}/yr)`;
                         })()}
                       </span>
                     </div>
