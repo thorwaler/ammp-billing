@@ -93,12 +93,18 @@ const Reports = () => {
   const fetchCustomers = useCallback(async () => {
     if (!user) return;
     
-    const { data } = await supabase
-      .from('customers')
-      .select('id, name, nickname, status')
-      .order('name');
+    const [{ data: customerData }, { data: contractData }] = await Promise.all([
+      supabase.from('customers').select('id, name, nickname, status').order('name'),
+      supabase.from('contracts').select('customer_id').eq('contract_status', 'active'),
+    ]);
     
-    setCustomers(data || []);
+    const activeCustomerIds = new Set(
+      (contractData || []).map(c => c.customer_id)
+    );
+    
+    setCustomers(
+      (customerData || []).filter(c => activeCustomerIds.has(c.id))
+    );
   }, [user]);
 
   const fetchData = useCallback(async () => {
