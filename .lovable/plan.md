@@ -1,51 +1,43 @@
 
 
-# Fix Duplicate Invoices from Xero Sync
+# Hide Inactive Customers from Reports Filter Dropdown
 
-## Root Cause
-The Xero sync function (`xero-sync-invoices`) filters existing invoices by `user_id` for non-service (manual) calls (line 210-212). When user B manually syncs, they don't see invoices originally synced by user A, so the same Xero invoices get re-inserted. This created ~160 duplicate rows across 3 sync sessions (2025-12-04, 2026-04-01, 2026-04-07).
+## What changes
+In `src/pages/Reports.tsx`, the `fetchCustomers` function (line 93-102) currently fetches all customers. We'll update it to only include customers that have at least one active contract.
 
-**Data impact**: 329 total invoices, 166 unique Xero invoice IDs, ~158 duplicates to remove.
+## How
+Two approaches — the simplest is to fetch contracts alongside customers and filter client-side:
 
-## Plan
+1. **Fetch active contract customer IDs** — query the `contracts` table for `contract_status = 'active'`, select distinct `customer_id`
+2. **Filter the customers list** — only include customers whose ID appears in that active-contracts set
 
-### 1. Remove existing duplicates via migration
-Delete duplicate invoice rows, keeping only the **most recent** version for each `xero_invoice_id` (since later syncs may have updated status/amounts):
+This avoids any database changes and keeps it purely in the existing fetch logic.
 
-```sql
-DELETE FROM invoices
-WHERE id IN (
-  SELECT id FROM (
-    SELECT id,
-      ROW_NUMBER() OVER(
-        PARTITION BY xero_invoice_id 
-        ORDER BY updated_at DESC NULLS LAST, created_at DESC
-      ) as rn
-    FROM invoices
-    WHERE xero_invoice_id IS NOT NULL
-  ) t
-  WHERE t.rn > 1
-);
+### File: `src/pages/Reports.tsx` (lines 93-102)
+
+Update `fetchCustomers` to:
+1. Fetch customers as before
+2. Also fetch distinct `customer_id` values from `contracts` where `contract_status = 'active'`
+3. Filter customers to only those with an active contract ID match
+
+```typescript
+const fetchCustomers = useCallback(async () => {
+  if (!user) return;
+  
+  const [{ data: customerData }, { data: contractData }] = await Promise.all([
+    supabase.from('customers').select('id, name, nickname, status').order('name'),
+    supabase.from('contracts').select('customer_id').eq('contract_status', 'active'),
+  ]);
+  
+  const activeCustomerIds = new Set(
+    (contractData || []).map(c => c.customer_id)
+  );
+  
+  setCustomers(
+    (customerData || []).filter(c => activeCustomerIds.has(c.id))
+  );
+}, [user]);
 ```
 
-### 2. Add unique constraint to prevent future duplicates
-```sql
-CREATE UNIQUE INDEX invoices_xero_invoice_id_unique 
-ON invoices(xero_invoice_id) 
-WHERE xero_invoice_id IS NOT NULL;
-```
-
-### 3. Fix the dedup query in xero-sync-invoices edge function
-Remove the `user_id` filter from the existing-invoices dedup query. Since `xero_invoice_id` is globally unique (it comes from Xero), there's no reason to scope the dedup check to a single user. The function already uses the service role key, so RLS isn't a factor.
-
-**Change** (line 210-212 of `xero-sync-invoices/index.ts`):
-- Remove the `if (!isServiceCall && userId)` block that adds `.eq('user_id', userId)`
-- Always query all invoices with a `xero_invoice_id` for dedup, regardless of caller
-
-### 4. Use upsert for the insert path as a safety net
-Change the insert on line 422 to use `upsert` with `onConflict: 'xero_invoice_id'` and `ignoreDuplicates: true`, so even if the application-level dedup somehow misses one, the database constraint catches it.
-
-## Files to modify
-- `supabase/functions/xero-sync-invoices/index.ts` — remove user_id filter from dedup query, use upsert
-- Database migration — delete duplicates + add unique index
+No other files need changes — the `ReportsFilters` component receives the already-filtered list.
 
