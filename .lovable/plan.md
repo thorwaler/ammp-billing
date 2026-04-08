@@ -1,36 +1,51 @@
 
 
-# Fix Matriarch API Invoice: Remove Satellite Data API & Show Period-Adjusted Costs
+# Fix Duplicate Invoices from Xero Sync
 
-## Problem
-For Matriarch contracts, the invoice currently:
-1. **Shows Satellite Data API as a separate addon** — this is wrong because irradiance monitoring already covers satellite data for Matriarch; it's baked into the per-site irradiance rate
-2. **Shows annual totals** in the breakdown instead of period-adjusted amounts (e.g. quarterly = 3 months of the monthly rates)
+## Root Cause
+The Xero sync function (`xero-sync-invoices`) filters existing invoices by `user_id` for non-service (manual) calls (line 210-212). When user B manually syncs, they don't see invoices originally synced by user A, so the same Xero invoices get re-inserted. This created ~160 duplicate rows across 3 sync sessions (2025-12-04, 2026-04-01, 2026-04-07).
 
-## Changes (single file: `InvoiceCalculator.tsx`)
+**Data impact**: 329 total invoices, 166 unique Xero invoice IDs, ~158 duplicates to remove.
 
-### 1. Exclude Satellite Data API addon for Matriarch contracts
-In the addon initialization logic (~line 490), skip auto-activating `satelliteDataAPI` when the contract is a `matriarch_api` package. The irradiance monitoring stream already includes this cost.
+## Plan
 
-Also in the addon costs section of the results display (~line 2685), filter out `satelliteDataAPI` for Matriarch contracts so it doesn't appear as a separate line item.
+### 1. Remove existing duplicates via migration
+Delete duplicate invoice rows, keeping only the **most recent** version for each `xero_invoice_id` (since later syncs may have updated status/amounts):
 
-In the ARR/NRR calculation (~line 1254-1285), exclude the solcast addon cost for Matriarch since it's already captured in the irradiance stream.
+```sql
+DELETE FROM invoices
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id,
+      ROW_NUMBER() OVER(
+        PARTITION BY xero_invoice_id 
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC
+      ) as rn
+    FROM invoices
+    WHERE xero_invoice_id IS NOT NULL
+  ) t
+  WHERE t.rn > 1
+);
+```
 
-In Xero line items (~line 1137), skip sending satelliteDataAPI as a separate line item for Matriarch.
+### 2. Add unique constraint to prevent future duplicates
+```sql
+CREATE UNIQUE INDEX invoices_xero_invoice_id_unique 
+ON invoices(xero_invoice_id) 
+WHERE xero_invoice_id IS NOT NULL;
+```
 
-### 2. Show period-adjusted amounts in the breakdown display
-The breakdown section (~line 2364-2422) currently shows annual totals. Update it to:
-- Calculate period months from billing frequency using `getPeriodMonthsMultiplier(billingFrequency)`
-- Show irradiance as: `X sites × rate/site/month × N months = period total`
-- Show performance as: `annual cost × (N months / 12) = period total`
-- Show "Quarter Total" (or "Period Total") instead of "Combined Annual Total"
-- Keep the annual figure as a reference line beneath
+### 3. Fix the dedup query in xero-sync-invoices edge function
+Remove the `user_id` filter from the existing-invoices dedup query. Since `xero_invoice_id` is globally unique (it comes from Xero), there's no reason to scope the dedup check to a single user. The function already uses the service role key, so RLS isn't a factor.
 
-### 3. Xero line items already correct
-The Xero line items for Matriarch (~line 1079-1102) already pro-rate by billing period — no changes needed there.
+**Change** (line 210-212 of `xero-sync-invoices/index.ts`):
+- Remove the `if (!isServiceCall && userId)` block that adds `.eq('user_id', userId)`
+- Always query all invoices with a `xero_invoice_id` for dedup, regardless of caller
 
-## Technical details
-- Files modified: `src/components/dashboard/InvoiceCalculator.tsx`
-- Key condition: `isMatriarchApiPackage(selectedCustomer.package)` used to gate satelliteDataAPI exclusion
-- Period multiplier: reuse existing `getPeriodMonthsMultiplier(billingFrequency)` helper
+### 4. Use upsert for the insert path as a safety net
+Change the insert on line 422 to use `upsert` with `onConflict: 'xero_invoice_id'` and `ignoreDuplicates: true`, so even if the application-level dedup somehow misses one, the database constraint catches it.
+
+## Files to modify
+- `supabase/functions/xero-sync-invoices/index.ts` — remove user_id filter from dedup query, use upsert
+- Database migration — delete duplicates + add unique index
 
