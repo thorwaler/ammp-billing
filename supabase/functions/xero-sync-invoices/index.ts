@@ -200,16 +200,12 @@ Deno.serve(async (req) => {
       accountMappings[mapping.account_code] = mapping.revenue_type;
     });
 
-    // Get existing invoices with xero_invoice_id to check for duplicates and updates
-    // For service calls, get all invoices; for user calls, filter by user
-    let existingInvoicesQuery = supabase
+    // Get ALL existing invoices with xero_invoice_id to check for duplicates and updates
+    // Always query globally since xero_invoice_id is unique across all users
+    const existingInvoicesQuery = supabase
       .from('invoices')
       .select('id, xero_invoice_id, source, user_id, xero_status, xero_amount_credited, invoice_amount')
       .not('xero_invoice_id', 'is', null);
-    
-    if (!isServiceCall && userId) {
-      existingInvoicesQuery = existingInvoicesQuery.eq('user_id', userId);
-    }
     
     const { data: existingInvoices } = await existingInvoicesQuery;
 
@@ -421,7 +417,7 @@ Deno.serve(async (req) => {
       // Insert new invoice from Xero
       const { error: insertError } = await supabase
         .from('invoices')
-        .insert({
+        .upsert({
           user_id: invoiceUserId,
           customer_id: customerMatch?.id || null,
           invoice_date: parseXeroDate(xeroInv.Date) || new Date().toISOString().split('T')[0],
@@ -444,7 +440,7 @@ Deno.serve(async (req) => {
           nrr_amount_eur: nrrAmountEur,
           xero_amount_credited: amountCredited,
           xero_amount_credited_eur: amountCreditedEur,
-        });
+        }, { onConflict: 'xero_invoice_id', ignoreDuplicates: true });
 
       if (insertError) {
         console.error('Error inserting invoice:', xeroInvoiceId, insertError);
