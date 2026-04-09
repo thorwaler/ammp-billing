@@ -261,6 +261,47 @@ const ContractDetails = () => {
     }
   };
 
+  const handleOpenMoveDialog = async () => {
+    setShowMoveDialog(true);
+    setMoveTargetCustomerId("");
+    const { data } = await supabase
+      .from('customers')
+      .select('id, name, nickname')
+      .order('name');
+    setAllCustomers((data || []).filter(c => c.id !== contract.customer_id));
+  };
+
+  const handleMoveContract = async () => {
+    if (!moveTargetCustomerId || !contract) return;
+    setIsMoving(true);
+    try {
+      const targetCustomer = allCustomers.find(c => c.id === moveTargetCustomerId);
+      if (!targetCustomer) throw new Error("Customer not found");
+
+      const { error } = await supabase
+        .from('contracts')
+        .update({ customer_id: moveTargetCustomerId, company_name: targetCustomer.name })
+        .eq('id', contract.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Contract moved",
+        description: `Contract moved to ${targetCustomer.name}.`,
+      });
+      setShowMoveDialog(false);
+      loadContractData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to move contract",
+        variant: "destructive",
+      });
+    } finally {
+      setIsMoving(false);
+    }
+  };
+
   const handleSaveAssetDiscount = async (
     assetId: string, 
     discount: { pricingType: 'annual' | 'per_mw'; price: number; note?: string } | null
