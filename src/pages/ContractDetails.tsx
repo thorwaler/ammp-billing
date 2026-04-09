@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle, ArrowRightLeft } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
@@ -79,6 +80,10 @@ const ContractDetails = () => {
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [discountEditAsset, setDiscountEditAsset] = useState<any | null>(null);
   const [isEnrichingDevices, setIsEnrichingDevices] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [moveTargetCustomerId, setMoveTargetCustomerId] = useState("");
+  const [allCustomers, setAllCustomers] = useState<any[]>([]);
+  const [isMoving, setIsMoving] = useState(false);
 
   // All contracts now use contract-level sync via cached_capabilities
   const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
