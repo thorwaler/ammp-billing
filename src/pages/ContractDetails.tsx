@@ -775,6 +775,10 @@ const ContractDetails = () => {
                     </AlertDialogContent>
                   </AlertDialog>
                 )}
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenMoveDialog(); }}>
+                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                  Move to Customer
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
