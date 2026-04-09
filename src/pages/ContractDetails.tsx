@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle, ArrowRightLeft } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
@@ -79,6 +80,10 @@ const ContractDetails = () => {
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [discountEditAsset, setDiscountEditAsset] = useState<any | null>(null);
   const [isEnrichingDevices, setIsEnrichingDevices] = useState(false);
+  const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [moveTargetCustomerId, setMoveTargetCustomerId] = useState("");
+  const [allCustomers, setAllCustomers] = useState<any[]>([]);
+  const [isMoving, setIsMoving] = useState(false);
 
   // All contracts now use contract-level sync via cached_capabilities
   const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
@@ -253,6 +258,47 @@ const ContractDetails = () => {
         description: "Failed to clear AMMP data",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleOpenMoveDialog = async () => {
+    setShowMoveDialog(true);
+    setMoveTargetCustomerId("");
+    const { data } = await supabase
+      .from('customers')
+      .select('id, name, nickname')
+      .order('name');
+    setAllCustomers((data || []).filter(c => c.id !== contract.customer_id));
+  };
+
+  const handleMoveContract = async () => {
+    if (!moveTargetCustomerId || !contract) return;
+    setIsMoving(true);
+    try {
+      const targetCustomer = allCustomers.find(c => c.id === moveTargetCustomerId);
+      if (!targetCustomer) throw new Error("Customer not found");
+
+      const { error } = await supabase
+        .from('contracts')
+        .update({ customer_id: moveTargetCustomerId, company_name: targetCustomer.name })
+        .eq('id', contract.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Contract moved",
+        description: `Contract moved to ${targetCustomer.name}.`,
+      });
+      setShowMoveDialog(false);
+      loadContractData();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to move contract",
+        variant: "destructive",
+      });
+    } finally {
+      setIsMoving(false);
     }
   };
 
@@ -729,8 +775,43 @@ const ContractDetails = () => {
                     </AlertDialogContent>
                   </AlertDialog>
                 )}
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleOpenMoveDialog(); }}>
+                  <ArrowRightLeft className="mr-2 h-4 w-4" />
+                  Move to Customer
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Dialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Move Contract to Another Customer</DialogTitle>
+                  <DialogDescription>
+                    Select the customer you want to move this contract to. The contract's customer and company name will be updated.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <Select value={moveTargetCustomerId} onValueChange={setMoveTargetCustomerId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allCustomers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}{c.nickname ? ` (${c.nickname})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setShowMoveDialog(false)}>Cancel</Button>
+                  <Button onClick={handleMoveContract} disabled={!moveTargetCustomerId || isMoving}>
+                    {isMoving ? 'Moving...' : 'Move Contract'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
