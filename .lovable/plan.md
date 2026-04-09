@@ -1,43 +1,27 @@
 
 
-# Hide Inactive Customers from Reports Filter Dropdown
+# Move Contract to Another Customer
 
-## What changes
-In `src/pages/Reports.tsx`, the `fetchCustomers` function (line 93-102) currently fetches all customers. We'll update it to only include customers that have at least one active contract.
+## What it does
+Adds a "Move to Customer" option in the contract details dropdown menu (the `...` menu). When clicked, it opens a dialog where the user selects a target customer from a dropdown list, confirms the move, and the contract's `customer_id` and `company_name` are updated accordingly.
 
-## How
-Two approaches — the simplest is to fetch contracts alongside customers and filter client-side:
+## Implementation
 
-1. **Fetch active contract customer IDs** — query the `contracts` table for `contract_status = 'active'`, select distinct `customer_id`
-2. **Filter the customers list** — only include customers whose ID appears in that active-contracts set
+### File: `src/pages/ContractDetails.tsx`
 
-This avoids any database changes and keeps it purely in the existing fetch logic.
+1. **Add state** for the move dialog: `showMoveDialog` (boolean) and `moveTargetCustomerId` (string).
 
-### File: `src/pages/Reports.tsx` (lines 93-102)
+2. **Add a `handleMoveContract` function** that:
+   - Fetches the target customer's name from the customers table
+   - Updates the contract's `customer_id` and `company_name` to match the target customer
+   - Shows a success toast and reloads contract data
 
-Update `fetchCustomers` to:
-1. Fetch customers as before
-2. Also fetch distinct `customer_id` values from `contracts` where `contract_status = 'active'`
-3. Filter customers to only those with an active contract ID match
+3. **Add a "Move to Customer" `DropdownMenuItem`** in the existing dropdown menu (after the status change options, before Clear AMMP Data). It opens a confirmation dialog with:
+   - A `Select` dropdown listing all customers (fetched on dialog open), excluding the current customer
+   - A confirmation button that calls `handleMoveContract`
 
-```typescript
-const fetchCustomers = useCallback(async () => {
-  if (!user) return;
-  
-  const [{ data: customerData }, { data: contractData }] = await Promise.all([
-    supabase.from('customers').select('id, name, nickname, status').order('name'),
-    supabase.from('contracts').select('customer_id').eq('contract_status', 'active'),
-  ]);
-  
-  const activeCustomerIds = new Set(
-    (contractData || []).map(c => c.customer_id)
-  );
-  
-  setCustomers(
-    (customerData || []).filter(c => activeCustomerIds.has(c.id))
-  );
-}, [user]);
-```
+4. **Import** `Select, SelectContent, SelectItem, SelectTrigger, SelectValue` from the UI components, and add the `ArrowRightLeft` icon from lucide-react.
 
-No other files need changes — the `ReportsFilters` component receives the already-filtered list.
+### No database changes needed
+The `contracts` table already has `customer_id` and `company_name` columns. The update just changes which customer the contract belongs to.
 
