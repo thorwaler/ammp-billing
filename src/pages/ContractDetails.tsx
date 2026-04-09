@@ -781,6 +781,37 @@ const ContractDetails = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            <Dialog open={showMoveDialog} onOpenChange={setShowMoveDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Move Contract to Another Customer</DialogTitle>
+                  <DialogDescription>
+                    Select the customer you want to move this contract to. The contract's customer and company name will be updated.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                  <Select value={moveTargetCustomerId} onValueChange={setMoveTargetCustomerId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a customer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allCustomers.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}{c.nickname ? ` (${c.nickname})` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setShowMoveDialog(false)}>Cancel</Button>
+                  <Button onClick={handleMoveContract} disabled={!moveTargetCustomerId || isMoving}>
+                    {isMoving ? 'Moving...' : 'Move Contract'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
