@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Download, FileSpreadsheet, FileText, Files, Loader2 } from "lucide-react";
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { exportToExcel, exportToPDF, generateFilename, ExportFormat } from "@/lib/supportDocumentExport";
-import { SupportDocument } from "./SupportDocument";
 import { toast } from "sonner";
 
 interface SupportDocumentDownloadDialogProps {
@@ -41,7 +40,7 @@ export function SupportDocumentDownloadDialog({
           await new Promise(resolve => setTimeout(resolve, 300));
         }
         const pdfFilename = generateFilename(customerName, period, 'pdf');
-        exportToPDF('support-document-preview', pdfFilename);
+        exportToPDF(documentData, pdfFilename);
       }
       
       toast.success(
@@ -111,12 +110,6 @@ export function SupportDocumentDownloadDialog({
           </Button>
         </DialogFooter>
         
-        {/* Hidden SupportDocument for PDF rendering */}
-        <div className="hidden">
-          <div id="support-document-preview">
-            <SupportDocument data={documentData} />
-          </div>
-        </div>
       </DialogContent>
     </Dialog>
   );

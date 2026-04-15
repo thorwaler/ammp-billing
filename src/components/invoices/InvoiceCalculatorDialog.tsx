@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/dialog";
 import { InvoiceCalculator } from "@/components/dashboard/InvoiceCalculator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SupportDocument } from "@/components/invoices/SupportDocument";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
 
 interface InvoiceCalculatorDialogProps {
@@ -61,14 +60,6 @@ export function InvoiceCalculatorDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Hidden support document for PDF export */}
-      {supportDocumentData && (
-        <div className="hidden">
-          <div id="support-document-preview">
-            <SupportDocument data={supportDocumentData} />
-          </div>
-        </div>
-      )}
 
       {/* Support Document Download Dialog - rendered outside main dialog */}
       {supportDocumentData && (
