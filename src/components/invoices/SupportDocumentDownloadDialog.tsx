@@ -111,12 +111,6 @@ export function SupportDocumentDownloadDialog({
           </Button>
         </DialogFooter>
         
-        {/* Hidden SupportDocument for PDF rendering */}
-        <div className="hidden">
-          <div id="support-document-preview">
-            <SupportDocument data={documentData} />
-          </div>
-        </div>
       </DialogContent>
     </Dialog>
   );

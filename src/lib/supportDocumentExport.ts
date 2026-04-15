@@ -110,72 +110,13 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
 }
 
 /**
- * Export support document as PDF using browser print
+ * Export support document as PDF with searchable text (direct download, no print dialog)
  */
-export function exportToPDF(elementId: string, filename: string) {
-  const element = document.getElementById(elementId);
-  if (!element) {
-    console.error('Element not found for PDF export');
-    return;
-  }
-
-  // Create a new window for printing
-  const printWindow = window.open('', '_blank');
-  if (!printWindow) {
-    console.error('Failed to open print window');
-    return;
-  }
-
-  // Get all styles from the current document
-  const styles = Array.from(document.styleSheets)
-    .map(styleSheet => {
-      try {
-        return Array.from(styleSheet.cssRules)
-          .map(rule => rule.cssText)
-          .join('\n');
-      } catch (e) {
-        // Handle cross-origin stylesheets
-        return '';
-      }
-    })
-    .join('\n');
-
-  // Write content to print window with print-friendly styles
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>${filename}</title>
-        <style>
-          ${styles}
-          
-          /* Force exact color printing */
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-            color-adjust: exact !important;
-          }
-          
-          @media print {
-            body { margin: 0; padding: 20px; }
-            .no-print { display: none !important; }
-          }
-        </style>
-      </head>
-      <body>
-        ${element.innerHTML}
-      </body>
-    </html>
-  `);
-
-  printWindow.document.close();
-  
-  // Wait for content to load, then print
-  printWindow.onload = () => {
-    printWindow.focus();
-    printWindow.print();
-    setTimeout(() => printWindow.close(), 500);
-  };
+export function exportToPDF(documentData: SupportDocumentData, filename: string) {
+  // Dynamic import to avoid circular dependencies
+  import('@/components/invoices/PdfRenderer').then(({ downloadSupportDocumentPdfDirect }) => {
+    downloadSupportDocumentPdfDirect(documentData, filename);
+  });
 }
 
 /**

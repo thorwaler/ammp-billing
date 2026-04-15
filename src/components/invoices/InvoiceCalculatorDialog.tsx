@@ -61,14 +61,6 @@ export function InvoiceCalculatorDialog({
         </DialogContent>
       </Dialog>
 
-      {/* Hidden support document for PDF export */}
-      {supportDocumentData && (
-        <div className="hidden">
-          <div id="support-document-preview">
-            <SupportDocument data={supportDocumentData} />
-          </div>
-        </div>
-      )}
 
       {/* Support Document Download Dialog - rendered outside main dialog */}
       {supportDocumentData && (
