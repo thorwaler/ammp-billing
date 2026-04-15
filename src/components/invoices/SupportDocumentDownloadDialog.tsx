@@ -41,7 +41,7 @@ export function SupportDocumentDownloadDialog({
           await new Promise(resolve => setTimeout(resolve, 300));
         }
         const pdfFilename = generateFilename(customerName, period, 'pdf');
-        exportToPDF('support-document-preview', pdfFilename);
+        exportToPDF(documentData, pdfFilename);
       }
       
       toast.success(
