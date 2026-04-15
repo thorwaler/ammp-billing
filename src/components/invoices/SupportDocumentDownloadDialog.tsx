@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Download, FileSpreadsheet, FileText, Files, Loader2 } from "lucide-react";
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { exportToExcel, exportToPDF, generateFilename, ExportFormat } from "@/lib/supportDocumentExport";
-import { SupportDocument } from "./SupportDocument";
 import { toast } from "sonner";
 
 interface SupportDocumentDownloadDialogProps {

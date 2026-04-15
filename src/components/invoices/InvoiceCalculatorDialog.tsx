@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/dialog";
 import { InvoiceCalculator } from "@/components/dashboard/InvoiceCalculator";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { SupportDocument } from "@/components/invoices/SupportDocument";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
 
 interface InvoiceCalculatorDialogProps {
