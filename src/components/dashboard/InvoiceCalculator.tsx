@@ -937,7 +937,7 @@ export function InvoiceCalculator({
       toast({ title: "Cannot send", description: "Missing calculation inputs.", variant: "destructive" });
       return;
     }
-    const freshResult = calculateInvoice(built.params) as typeof result;
+    const freshResult = calculateInvoice(built.params);
     (freshResult as any).invoicePeriod = built.invoicePeriod;
     // Update React state so the UI reflects the recalculated values
     setResult(freshResult as any);
@@ -945,6 +945,8 @@ export function InvoiceCalculator({
     setIsSending(true);
 
     try {
+      // Shadow outer `result` so the rest of this function uses the fresh values
+      const result = freshResult as typeof freshResult & { invoicePeriod: string };
       // Format invoice data for Xero API
       const lineItems = [];
 
