@@ -909,13 +909,44 @@ export function InvoiceCalculator({
 
   const handleSendToXero = async () => {
     if (!result || !selectedCustomer || !invoiceDate) return;
-    
+
+    // Block sending while site billing data is still loading (per_site only)
+    if (selectedCustomer.package === 'per_site' && loadingSiteBilling) {
+      toast({
+        title: "Still loading sites",
+        description: "Please wait for site billing data to finish loading.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Block empty per_site invoices
+    if (selectedCustomer.package === 'per_site' && selectedSitesToBill.length === 0) {
+      toast({
+        title: "No sites to bill",
+        description: "No sites are due for billing this period.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Recompute fresh from current state to avoid stale `result` (e.g. when
+    // sitesToBill loaded after the user clicked Calculate).
+    const built = buildCalculationParams();
+    if (!built) {
+      toast({ title: "Cannot send", description: "Missing calculation inputs.", variant: "destructive" });
+      return;
+    }
+    const freshResult = calculateInvoice(built.params);
+    // Shadow `result` for the rest of this function so existing code uses fresh values
+    const result = { ...freshResult, invoicePeriod: built.invoicePeriod } as typeof freshResult & { invoicePeriod: string };
+
     setIsSending(true);
-    
+
     try {
       // Format invoice data for Xero API
       const lineItems = [];
-      
+
       // Account code constants:
       // 1002 = Platform Fees (ARR - MW-based pricing)
       // 1000 = Implementation Fees (NRR - addons)
