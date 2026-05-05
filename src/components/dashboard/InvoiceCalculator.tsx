@@ -2863,7 +2863,12 @@ export function InvoiceCalculator({
                 <Button 
                   className="w-full" 
                   onClick={handleSendToXero}
-                  disabled={isSending || generatingSupportDoc}
+                  disabled={
+                    isSending ||
+                    generatingSupportDoc ||
+                    (selectedCustomer?.package === 'per_site' && loadingSiteBilling) ||
+                    (selectedCustomer?.package === 'per_site' && selectedSitesToBill.length === 0)
+                  }
                 >
                   {isSending || generatingSupportDoc ? (
                     <>
