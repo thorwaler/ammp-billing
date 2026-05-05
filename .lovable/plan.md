@@ -1,54 +1,30 @@
+# Fix empty per_site invoice + cleanup
 
+## 1. Recompute on Send (no stale `result`)
+In `src/components/dashboard/InvoiceCalculator.tsx`, extract the `CalculationParams` build from `handleCalculate` into a shared helper `buildCalculationParams()`. Call `calculateInvoice(buildCalculationParams())` at the **start of `handleSendToXero`** and use that fresh `result` for:
+- line items
+- `invoice_amount`, `arr_amount`, `nrr_amount`, `modules_data`, `addons_data` on insert
+- `generateSupportDocumentData(...)`
 
-# Make PDF Support Documents Searchable
+## 2. Block empty per_site sends
+At the top of `handleSendToXero`, if `package === 'per_site'` and `selectedSitesToBill.length === 0`, show a destructive toast ("No sites are due for billing this period.") and abort.
 
-## Problem
-The PDF support documents are generated using `html2canvas` + `jsPDF`, which renders the entire document as a raster image embedded in a PDF. This means text cannot be selected, searched, or copied — the "Find" function (Ctrl+F) doesn't work.
+## 3. Disable Send while site billing is loading
+The `loadingSiteBilling` state already exists. Add `loadingSiteBilling` to the disabled condition on the Send-to-Xero button (line ~2873) and on the Calculate button. Show a small "Loading sites…" hint when relevant.
 
-This affects both paths:
-- **Download dialog** (`exportToPDF` in `supportDocumentExport.ts`) — uses `window.print()` which does produce searchable text, but opens a print dialog instead of directly downloading
-- **Xero attachment** (`renderSupportDocumentToPdf` in `PdfRenderer.tsx`) — uses `html2canvas` → image-only PDF, completely non-searchable
+## 4. Clean up the broken invoice + site rows
+Run a one-off SQL cleanup via the data tool:
+- Delete invoice `f2ca26b5-a605-404c-8972-e19f79170a5d` from `invoices`
+- Reset the 3 affected `site_billing_status` rows (UNHCR FO Iriba, UNHCR GH Iriba, and the third one linked to that invoice):
+  - `onboarding_fee_paid = false`
+  - `onboarding_fee_paid_date = null`
+  - `onboarding_invoice_id = null`
+  - `last_annual_invoice_id = null`
+  - `last_annual_payment_date = null`
+  - `next_annual_due_date = null`
 
-## Solution
-Replace `html2canvas` + `jsPDF` with `jsPDF` text-based rendering that writes actual text, lines, and rectangles directly to the PDF. This produces real, searchable PDF text.
+User will delete the invoice in Xero manually.
 
-### Approach: Rewrite `PdfRenderer.tsx` to use jsPDF's text API
-
-Instead of capturing a screenshot, we'll build the PDF programmatically using `jsPDF` methods (`text()`, `line()`, `rect()`, `autoTable` plugin) to lay out the same content from the `SupportDocumentData` object.
-
-### Files to modify
-
-1. **`src/components/invoices/PdfRenderer.tsx`** — Complete rewrite:
-   - Remove `html2canvas` dependency and React rendering approach
-   - Use `jsPDF` with `jspdf-autotable` plugin to render tables natively
-   - Build each section (header, year overview, asset breakdown, solcast, addons, retainer, totals) as native PDF text and tables
-   - Keep the same function signature (`renderSupportDocumentToPdf(data) → base64`)
-
-2. **`src/lib/supportDocumentExport.ts`** — Update `exportToPDF`:
-   - Replace the `window.print()` approach with a direct call to the new jsPDF-based renderer
-   - This gives a direct download (no print dialog) with searchable text
-
-3. **`src/lib/pdfGenerator.ts`** — Remove or simplify:
-   - Remove `html2canvas` usage since it's no longer needed
-   - Redirect to the new renderer or mark as deprecated
-
-4. **`src/components/invoices/SupportDocumentDownloadDialog.tsx`** — Minor update:
-   - Remove the hidden `<SupportDocument>` div (no longer needed for PDF rendering since we build from data directly)
-
-5. **`src/components/invoices/InvoiceCalculatorDialog.tsx`** — Minor update:
-   - Remove the hidden `<SupportDocument>` div used for PDF rendering
-
-### New dependency
-- `jspdf-autotable` — jsPDF plugin for rendering tables with headers, borders, and pagination. Already works with the existing `jspdf` package.
-
-### What stays the same
-- `SupportDocument.tsx` React component — still used for on-screen preview
-- `SupportDocumentData` interface — the data source for PDF generation
-- All function signatures and call sites in `InvoiceCalculator.tsx` and `MergedInvoiceDialog.tsx`
-
-## Technical details
-- The new renderer reads from `SupportDocumentData` directly (no DOM needed)
-- Tables use `autoTable` for proper pagination, borders, and alignment
-- Text is real PDF text — fully searchable with Ctrl+F in any PDF viewer
-- The Xero attachment flow continues to receive a base64 string as before
-
+## Files touched
+- `src/components/dashboard/InvoiceCalculator.tsx` (refactor + guards + button states)
+- One database migration/insert to perform the cleanup

@@ -772,71 +772,28 @@ export function InvoiceCalculator({
     return `${format(startDate, 'PPP')} - ${format(endDate, 'PPP')}`;
   };
 
-  const handleCalculate = async () => {
-    if (calculating) return; // Prevent multiple rapid clicks
-    
-    setCalculating(true);
-    
-    try {
-      if (!customer || mwManaged === "") {
-        toast({
-          title: "Missing information",
-          description: "Please fill in all required fields.",
-          variant: "destructive",
-        });
-        return;
-      }
+  // Build CalculationParams from current state. Returns null if required inputs are missing.
+  // Used by both handleCalculate and handleSendToXero so Send always uses the latest values.
+  const buildCalculationParams = (): { params: CalculationParams; invoicePeriod: string } | null => {
+    if (!customer || mwManaged === "" || !selectedCustomer) return null;
 
-      if (!selectedCustomer) return;
-
-    // Check if this is the first invoice
-    const isFirstInvoice = selectedCustomer.signedDate && 
+    const isFirstInvoice = selectedCustomer.signedDate &&
                            !selectedCustomer.lastInvoiced &&
                            selectedCustomer.periodStart &&
                            invoiceDate;
-    
+
     let frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
     let invoicePeriodDisplay = getInvoicePeriodText();
-    
-    // For first invoice, calculate based on initial period (signed to first invoice)
+
     if (isFirstInvoice) {
       const signedDate = new Date(selectedCustomer.signedDate);
       const firstInvoiceDate = new Date(invoiceDate);
-      frequencyMultiplier = calculateProrationMultiplier(
-        signedDate, 
-        firstInvoiceDate, 
-        billingFrequency
-      );
+      frequencyMultiplier = calculateProrationMultiplier(signedDate, firstInvoiceDate, billingFrequency);
       invoicePeriodDisplay = `${new Date(selectedCustomer.signedDate).toLocaleDateString()} - ${firstInvoiceDate.toLocaleDateString()}`;
     }
 
-    // Update calculation logic based on new pricing structure
     const totalMW = Number(mwManaged);
-    
-    // Store invoice period separately since it's not in the standard CalculationResult
-    const invoicePeriod = invoicePeriodDisplay;
-    
-    let calculationResult: CalculationResult = {
-      moduleCosts: [],
-      addonCosts: [],
-      starterPackageCost: 0,
-      minimumCharges: 0,
-      totalMWCost: 0,
-      totalPrice: 0,
-      minimumContractAdjustment: 0,
-      basePricingCost: 0,
-      retainerCost: 0,
-      retainerCalculatedCost: 0,
-      retainerMinimumApplied: false,
-    };
-    
-    // Note: All package-specific calculation is handled by the shared calculateInvoice() function below.
-    // No pre-calculation needed here.
-    
-    // Prepare asset breakdown for site-level pricing
-    // Always use cached_capabilities from contract (single source of truth)
     const effectiveCapabilities = selectedCustomer.cachedCapabilities;
-    
     const assetBreakdown = effectiveCapabilities?.assetBreakdown?.map((asset: any) => ({
       assetId: asset.assetId,
       assetName: asset.assetName,
@@ -844,16 +801,10 @@ export function InvoiceCalculator({
       isHybrid: asset.isHybrid,
       hasSolcast: asset.hasSolcast,
       solcastOnboardingDate: asset.solcastOnboardingDate,
-      onboardingDate: asset.onboardingDate
+      onboardingDate: asset.onboardingDate,
     }));
-    
-    // Enable site minimum pricing if we have asset breakdown and minimum charge tiers
-    const enableSiteMinPricing = !!(
-      assetBreakdown && 
-      assetBreakdown.length > 0
-    );
-    
-    // Use shared calculation logic with all parameters
+    const enableSiteMinPricing = !!(assetBreakdown && assetBreakdown.length > 0);
+
     const params: CalculationParams = {
       packageType: selectedCustomer.package,
       totalMW,
@@ -863,7 +814,7 @@ export function InvoiceCalculator({
         complexity: a.complexity,
         customPrice: a.customPrice,
         quantity: a.quantity,
-        customTiers: a.customTiers
+        customTiers: a.customTiers,
       })),
       customPricing: selectedCustomer.customPricing,
       minimumAnnualValue: selectedCustomer.minimumAnnualValue,
@@ -880,62 +831,70 @@ export function InvoiceCalculator({
       retainerHours: selectedCustomer.retainerHours,
       retainerHourlyRate: selectedCustomer.retainerHourlyRate,
       retainerMinimumValue: selectedCustomer.retainerMinimumValue,
-      // Per-site package fields
       onboardingFeePerSite: selectedCustomer.onboardingFeePerSite,
       annualFeePerSite: selectedCustomer.annualFeePerSite,
       sitesToBill: selectedCustomer.package === 'per_site' ? selectedSitesToBill : undefined,
-      // Elum package fields
       siteSizeThresholdKwp: selectedCustomer.siteSizeThresholdKwp,
       belowThresholdPricePerMWp: selectedCustomer.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: selectedCustomer.aboveThresholdPricePerMWp,
-      // Elum Internal fields
       graduatedMWTiers: selectedCustomer.graduatedMWTiers,
-      // Custom asset discount pricing
       customAssetPricing: selectedCustomer.customAssetPricing,
-      // AMMP OS 2026 trial fields
       isTrial: selectedCustomer.isTrial,
       trialSetupFee: selectedCustomer.trialSetupFee,
       vendorApiOnboardingFee: selectedCustomer.vendorApiOnboardingFee,
-      // SolarAfrica API fields
       municipalityCount: selectedCustomer.municipalityCount,
       apiSetupFee: selectedCustomer.apiSetupFee,
       hourlyRate: selectedCustomer.hourlyRate,
       customizationHours: isSolarAfricaPackage(selectedCustomer.package) ? customizationHours : undefined,
       includeSetupFee: isSolarAfricaPackage(selectedCustomer.package) ? includeSetupFee : undefined,
-      // Pro-rata Solcast calculation fields
       invoiceDate,
       periodStart: selectedCustomer.periodStart,
       periodEnd: selectedCustomer.periodEnd,
-      // Custom contract type definitions
       customModuleDefinitions: loadedContractType?.modules_config?.length > 0 ? loadedContractType.modules_config : undefined,
       customAddonDefinitions: isSpsPackage(selectedCustomer.package)
         ? SPS_ADDONS
         : loadedContractType?.addons_config?.length > 0 ? loadedContractType.addons_config : undefined,
-      // SPS Monitoring discount fields
       upfrontDiscountPercent: selectedCustomer.upfrontDiscountPercent,
       commitmentDiscountPercent: selectedCustomer.commitmentDiscountPercent,
-      // Matriarch API fields
       irradiancePerSiteTiers: selectedCustomer.irradiancePerSiteTiers,
       performancePerMwpTiers: selectedCustomer.performancePerMwpTiers,
     };
-    
-    calculationResult = calculateInvoice(params);
-    
-    // Debug logging for minimum contract adjustment
-    console.log('Invoice Calculation Debug:', {
-      package: selectedCustomer.package,
-      minimumAnnualValue: selectedCustomer.minimumAnnualValue,
-      frequencyMultiplier,
-      baseCost: calculationResult.totalMWCost + calculationResult.minimumCharges,
-      minimumContractAdjustment: calculationResult.minimumContractAdjustment,
-      totalPrice: calculationResult.totalPrice
-    });
-    
-    // Note: Addon costs are now calculated by the shared calculateInvoice() function
-    // No need to recalculate them here
-    
-      // Store result with invoice period
-      setResult({ ...calculationResult, invoicePeriod } as any);
+
+    return { params, invoicePeriod: invoicePeriodDisplay };
+  };
+
+  const handleCalculate = async () => {
+    if (calculating) return; // Prevent multiple rapid clicks
+
+    setCalculating(true);
+
+    try {
+      if (!customer || mwManaged === "") {
+        toast({
+          title: "Missing information",
+          description: "Please fill in all required fields.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      if (!selectedCustomer) return;
+
+      const built = buildCalculationParams();
+      if (!built) return;
+
+      const calculationResult = calculateInvoice(built.params);
+
+      console.log('Invoice Calculation Debug:', {
+        package: selectedCustomer.package,
+        minimumAnnualValue: selectedCustomer.minimumAnnualValue,
+        frequencyMultiplier: built.params.frequencyMultiplier,
+        baseCost: calculationResult.totalMWCost + calculationResult.minimumCharges,
+        minimumContractAdjustment: calculationResult.minimumContractAdjustment,
+        totalPrice: calculationResult.totalPrice,
+      });
+
+      setResult({ ...calculationResult, invoicePeriod: built.invoicePeriod } as any);
       setShowResult(true);
     } catch (error) {
       toast({
@@ -950,13 +909,47 @@ export function InvoiceCalculator({
 
   const handleSendToXero = async () => {
     if (!result || !selectedCustomer || !invoiceDate) return;
-    
+
+    // Block sending while site billing data is still loading (per_site only)
+    if (selectedCustomer.package === 'per_site' && loadingSiteBilling) {
+      toast({
+        title: "Still loading sites",
+        description: "Please wait for site billing data to finish loading.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Block empty per_site invoices
+    if (selectedCustomer.package === 'per_site' && selectedSitesToBill.length === 0) {
+      toast({
+        title: "No sites to bill",
+        description: "No sites are due for billing this period.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Recompute fresh from current state to avoid stale `result` (e.g. when
+    // sitesToBill loaded after the user clicked Calculate).
+    const built = buildCalculationParams();
+    if (!built) {
+      toast({ title: "Cannot send", description: "Missing calculation inputs.", variant: "destructive" });
+      return;
+    }
+    const freshResult = calculateInvoice(built.params);
+    (freshResult as any).invoicePeriod = built.invoicePeriod;
+    // Update React state so the UI reflects the recalculated values
+    setResult(freshResult as any);
+
     setIsSending(true);
-    
+
     try {
+      // Shadow outer `result` so the rest of this function uses the fresh values
+      const result = freshResult as typeof freshResult & { invoicePeriod: string };
       // Format invoice data for Xero API
       const lineItems = [];
-      
+
       // Account code constants:
       // 1002 = Platform Fees (ARR - MW-based pricing)
       // 1000 = Implementation Fees (NRR - addons)
@@ -2870,12 +2863,22 @@ export function InvoiceCalculator({
                 <Button 
                   className="w-full" 
                   onClick={handleSendToXero}
-                  disabled={isSending || generatingSupportDoc}
+                  disabled={
+                    isSending ||
+                    generatingSupportDoc ||
+                    (selectedCustomer?.package === 'per_site' && loadingSiteBilling) ||
+                    (selectedCustomer?.package === 'per_site' && selectedSitesToBill.length === 0)
+                  }
                 >
                   {isSending || generatingSupportDoc ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       {generatingSupportDoc ? 'Generating Documents...' : 'Sending...'}
+                    </>
+                  ) : selectedCustomer?.package === 'per_site' && loadingSiteBilling ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading sites...
                     </>
                   ) : (
                     <>
