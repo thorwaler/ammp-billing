@@ -2875,6 +2875,11 @@ export function InvoiceCalculator({
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       {generatingSupportDoc ? 'Generating Documents...' : 'Sending...'}
                     </>
+                  ) : selectedCustomer?.package === 'per_site' && loadingSiteBilling ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading sites...
+                    </>
                   ) : (
                     <>
                       <Send className="mr-2 h-4 w-4" />
