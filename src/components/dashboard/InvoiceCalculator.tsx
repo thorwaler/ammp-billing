@@ -937,9 +937,10 @@ export function InvoiceCalculator({
       toast({ title: "Cannot send", description: "Missing calculation inputs.", variant: "destructive" });
       return;
     }
-    const freshResult = calculateInvoice(built.params);
-    // Shadow `result` for the rest of this function so existing code uses fresh values
-    const result = { ...freshResult, invoicePeriod: built.invoicePeriod } as typeof freshResult & { invoicePeriod: string };
+    const freshResult = calculateInvoice(built.params) as typeof result;
+    (freshResult as any).invoicePeriod = built.invoicePeriod;
+    // Update React state so the UI reflects the recalculated values
+    setResult(freshResult as any);
 
     setIsSending(true);
 
