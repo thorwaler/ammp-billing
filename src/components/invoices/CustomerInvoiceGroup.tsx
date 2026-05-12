@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { differenceInDays } from "date-fns";
+import { differenceInDays, subDays } from "date-fns";
 import { parseDateCET, formatDateCET } from "@/lib/dateUtils";
 
 interface ContractInvoice {
@@ -29,6 +29,7 @@ interface ContractInvoice {
   packageType: string;
   estimatedAmount: number | null;
   invoicingType?: 'standard' | 'manual' | 'automated';
+  invoiceLeadDays?: number;
 }
 
 interface CustomerInvoiceGroupProps {
