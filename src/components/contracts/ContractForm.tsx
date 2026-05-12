@@ -84,6 +84,7 @@ const contractFormSchema = z.object({
   currency: z.enum(["USD", "EUR"]),
   billingFrequency: z.enum(["monthly", "quarterly", "biannual", "annual"]),
   invoicingType: z.enum(["standard", "manual", "automated"]).optional(),
+  invoiceLeadDays: z.coerce.number().int().min(0).optional(),
   nextInvoiceDate: z.string().optional(),
   signedDate: z.string().optional(),
   contractExpiryDate: z.string().optional(),
