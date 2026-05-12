@@ -323,6 +323,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       currency: userCurrency || "EUR",
       billingFrequency: "annual",
       invoicingType: "standard" as const,
+      invoiceLeadDays: 0,
       nextInvoiceDate: "",
       signedDate: "",
       contractExpiryDate: "",
