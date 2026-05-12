@@ -547,6 +547,7 @@ const ContractDetails = () => {
                     initialMW: contract.initial_mw,
                     billingFrequency: contract.billing_frequency || 'annual',
                     invoicingType: contract.invoicing_type,
+                    invoiceLeadDays: (contract as any).invoice_lead_days ?? 0,
                     nextInvoiceDate: contract.next_invoice_date,
                     customPricing: contract.custom_pricing,
                     volumeDiscounts: contract.volume_discounts,
