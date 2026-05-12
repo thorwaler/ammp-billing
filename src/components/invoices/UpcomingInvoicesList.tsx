@@ -218,7 +218,7 @@ export function UpcomingInvoicesList({
             performancePerMwpTiers: Array.isArray((c as any).performance_per_mwp_tiers)
               ? (c as any).performance_per_mwp_tiers as PerformanceMWpTier[]
               : undefined,
-            invoiceLeadDays: Number((c as any).invoice_lead_days) || 0,
+            invoiceLeadDays: c.invoice_lead_days ?? 0,
           };
         });
 
@@ -385,7 +385,7 @@ export function UpcomingInvoicesList({
     // Sort by "create by" date (invoice date minus the max lead days in the group)
     const dayMs = 24 * 60 * 60 * 1000;
     const createByMs = (g: CustomerGroup) => {
-      const maxLead = g.contracts.reduce((m, c) => Math.max(m, c.invoiceLeadDays || 0), 0);
+      const maxLead = g.contracts.reduce((m, c) => Math.max(m, c.invoiceLeadDays ?? 0), 0);
       return new Date(g.invoiceDate).getTime() - maxLead * dayMs;
     };
     return Array.from(groups.values()).sort((a, b) => createByMs(a) - createByMs(b));
@@ -622,7 +622,7 @@ export function UpcomingInvoicesList({
               packageType: c.packageType,
               estimatedAmount: c.packageType === 'per_site' ? null : calculateEstimatedAmount(c),
               invoicingType: c.invoicingType,
-              invoiceLeadDays: c.invoiceLeadDays || 0,
+              invoiceLeadDays: c.invoiceLeadDays ?? 0,
             }))}
             onCreateIndividualInvoice={handleCreateIndividualInvoice}
             onCreateMergedInvoice={handleCreateMergedInvoice}
