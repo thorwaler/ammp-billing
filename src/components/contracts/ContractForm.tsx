@@ -287,6 +287,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       currency: existingContract.currency as "USD" | "EUR",
       billingFrequency: (existingContract.package === 'per_site' ? 'monthly' : existingContract.billingFrequency) as any,
       invoicingType: (existingContract.invoicingType as "standard" | "manual" | "automated") || "standard",
+      invoiceLeadDays: existingContract.invoiceLeadDays ?? 0,
       nextInvoiceDate: existingContract.nextInvoiceDate?.substring(0, 10) || "",
       package: existingContract.package as any,
       maxMw: existingContract.maxMw,
