@@ -2132,6 +2132,62 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </>
             )}
 
+            {/* Invoicing settings - shown for all packages except POC */}
+            {watchPackage !== "poc" && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="invoicingType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Invoicing Type</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || "standard"}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select invoicing type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="standard">Standard (Create invoices here)</SelectItem>
+                          <SelectItem value="manual">Manual (Invoiced externally, mark as sent)</SelectItem>
+                          <SelectItem value="automated">Automated (Xero repeating invoice)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Standard: Create and send invoices from this app. Manual: Mark as sent when invoiced externally. Automated: Managed automatically in Xero.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="invoiceLeadDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Invoice Creation Lead Time (days)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="1"
+                          min="0"
+                          placeholder="0"
+                          {...field}
+                          value={field.value ?? 0}
+                          onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        Surface this invoice in Upcoming Invoices N days before the actual invoice date and sort it by that "create by" date. The invoice itself still carries the next invoice date. Defaults to 45 for Elum packages.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+
             {/* Contract-level dates */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
