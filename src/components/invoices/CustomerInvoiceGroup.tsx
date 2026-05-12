@@ -147,9 +147,16 @@ export function CustomerInvoiceGroup({
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-3.5 w-3.5" />
                 <span>{formatDateCET(invoiceDate, "MMM d, yyyy")}</span>
-                <span className="text-xs">
-                  ({daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
-                </span>
+                {groupLeadDays > 0 && (
+                  <span className="text-xs">
+                    (create by {formatDateCET(createByDate.toISOString(), "MMM d")} — {daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
+                  </span>
+                )}
+                {groupLeadDays === 0 && (
+                  <span className="text-xs">
+                    ({daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
+                  </span>
+                )}
               </div>
             </div>
             {getUrgencyBadge()}
