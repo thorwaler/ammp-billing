@@ -1,36 +1,51 @@
 ## Goal
 
-Stop the system from auto-defaulting `invoiceLeadDays` to 45 when an Elum package is picked. Instead, set 45 once on all existing Elum contracts in the database, then leave the field fully user-controlled going forward.
+Fix two leftover issues from the Elum invoice-lead-time work:
+1. Editing a contract from the Contracts list or Customer card shows `0` in the "Invoice Creation Lead Time" field even when the contract is stored as `45` (e.g. the Jubaili contract).
+2. The form help text still says "Defaults to 45 for Elum packages", which is no longer true.
+
+## Root cause for the `0` display
+
+`ContractDetails.tsx` correctly maps `invoice_lead_days` into `existingContract.invoiceLeadDays` before handing the contract to `ContractForm`. But the two other entry points that open the edit dialog do NOT include that field in the object they pass:
+
+- `src/components/contracts/ContractList.tsx` — `setSelectedContract({...})` at lines ~189–235 omits `invoiceLeadDays` (and the "Edit" button on the /contracts page goes through this path).
+- `src/components/customers/CustomerCard.tsx` — `existingContract={{...}}` at lines ~474–514 omits `invoiceLeadDays` (and `invoicingType`).
+
+Because the field is missing, `ContractForm`'s `defaultValues` falls through to `existingContract.invoiceLeadDays ?? 0`, so the input renders `0` even though the database row has `45`.
 
 ## Changes
 
-### 1. `ContractForm.tsx` — remove the package-driven default
-
-Delete the four `if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45)` lines (lines 713, 719, 724, 729) inside the `elum_epm`, `elum_jubaili`, `elum_portfolio_os`, and `elum_internal` package `onChange` branches.
-
-After this, picking an Elum package no longer touches `invoiceLeadDays`. The field shows whatever the contract already has (or 0 for brand-new contracts), and the user edits it freely.
-
-### 2. One-time data backfill
-
-Update every existing contract whose `package` starts with `elum_` and currently has `invoice_lead_days = 0` to `invoice_lead_days = 45`. Contracts already customized away from 0 are left alone.
-
-```sql
-UPDATE public.contracts
-SET invoice_lead_days = 45
-WHERE package IN ('elum_epm','elum_jubaili','elum_portfolio_os','elum_internal')
-  AND COALESCE(invoice_lead_days, 0) = 0;
+### 1. `src/components/contracts/ContractList.tsx`
+In the `setSelectedContract({...})` object (around line 189–235), add:
+```ts
+invoiceLeadDays: data.invoice_lead_days,
 ```
 
-Run via the data-insert tool (not a migration — this is a data update, not a schema change).
+### 2. `src/components/customers/CustomerCard.tsx`
+In the `existingContract={{...}}` object passed to `ContractForm` (around line 474–514), add:
+```ts
+invoicingType: selectedContractForEdit.invoicing_type,
+invoiceLeadDays: selectedContractForEdit.invoice_lead_days,
+```
+(`invoicingType` was also missing and would have the same kind of bug.)
 
-### 3. No other changes
+### 3. `src/components/contracts/ContractForm.tsx`
+Update the `FormDescription` for the `invoiceLeadDays` field (line 2178) to drop the now-stale sentence:
 
-- Form field stays visible for all non-POC packages (already done).
-- Upcoming Invoices list / sort / "Create by" badge already read whatever value is stored — no change needed.
-- No migration, no schema change.
+Before:
+> Surface this invoice in Upcoming Invoices N days before the actual invoice date and sort it by that "create by" date. The invoice itself still carries the next invoice date. Defaults to 45 for Elum packages.
+
+After:
+> Surface this invoice in Upcoming Invoices N days before the actual invoice date and sort it by that "create by" date. The invoice itself still carries the next invoice date.
+
+## Out of scope
+
+- No database changes (the Jubaili contract already has `45` in the database — verified).
+- No changes to the Upcoming Invoices list, sorting, or the "Create by" badge.
+- No changes to the package selector logic — the auto-default to 45 was already removed in the previous step.
 
 ## Files touched
 
-- `src/components/contracts/ContractForm.tsx` (delete 4 lines)
-- One data-update SQL run against `contracts`
-- `mem://features/invoice-creation-lead-time.md` (note: 45 is a one-time backfill for Elum, not an auto-default)
+- `src/components/contracts/ContractList.tsx`
+- `src/components/customers/CustomerCard.tsx`
+- `src/components/contracts/ContractForm.tsx`

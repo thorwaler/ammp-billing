@@ -2175,7 +2175,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         />
                       </FormControl>
                       <FormDescription>
-                        Surface this invoice in Upcoming Invoices N days before the actual invoice date and sort it by that "create by" date. The invoice itself still carries the next invoice date. Defaults to 45 for Elum packages.
+                        Surface this invoice in Upcoming Invoices N days before the actual invoice date and sort it by that "create by" date. The invoice itself still carries the next invoice date.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
