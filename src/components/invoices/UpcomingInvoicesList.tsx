@@ -257,7 +257,19 @@ export function UpcomingInvoicesList({
         }
       }
 
-      setInvoices(transformedInvoices);
+      // Filter to contracts whose lead-shifted creation window has begun
+      // (now >= nextInvoiceDate - invoiceLeadDays). Contracts with no lead
+      // days behave as before (only show on/after the actual invoice date).
+      const nowMs = Date.now();
+      const visibleInvoices = transformedInvoices.filter(inv => {
+        const leadDays = inv.invoiceLeadDays || 0;
+        if (leadDays <= 0) return true;
+        const nextMs = new Date(inv.nextInvoiceDate).getTime();
+        const shiftedMs = nextMs - leadDays * 24 * 60 * 60 * 1000;
+        return shiftedMs <= nowMs;
+      });
+
+      setInvoices(visibleInvoices);
     } catch (error) {
       console.error('Error loading upcoming invoices:', error);
       toast({
