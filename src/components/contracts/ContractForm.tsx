@@ -710,19 +710,23 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("belowThresholdPricePerMWp", 50);
       form.setValue("aboveThresholdPricePerMWp", 30);
       form.setValue("modules", []);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(false);
     } else if (value === "elum_jubaili") {
       // Elum Jubaili - per-site pricing
       form.setValue("annualFeePerSite", 500);
       form.setValue("modules", []);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(false);
     } else if (value === "elum_portfolio_os") {
       // Elum Portfolio OS - full pricing flexibility
       form.setValue("modules", ["technicalMonitoring"]);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(true);
     } else if (value === "elum_internal") {
       // Elum Internal Assets - graduated MW pricing
       form.setValue("modules", []);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(false);
     } else if (value === "ammp_os_2026") {
       // AMMP OS 2026 - new pricing structure
