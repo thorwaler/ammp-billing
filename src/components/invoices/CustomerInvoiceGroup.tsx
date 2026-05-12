@@ -60,7 +60,7 @@ export function CustomerInvoiceGroup({
   const { formatCurrency } = useCurrency();
   
   const parsedDate = parseDateCET(invoiceDate);
-  const groupLeadDays = Math.max(0, ...contracts.map(c => c.invoiceLeadDays || 0));
+  const groupLeadDays = Math.max(0, ...contracts.map(c => c.invoiceLeadDays ?? 0));
   const createByDate = groupLeadDays > 0 ? subDays(parsedDate, groupLeadDays) : parsedDate;
   const daysUntil = differenceInDays(createByDate, new Date());
   
