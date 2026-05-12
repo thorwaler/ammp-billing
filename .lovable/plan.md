@@ -1,39 +1,36 @@
 ## Goal
 
-Make the invoice creation lead-time feature usable across the app:
-1. Edit/create flow exposes the lead-days field for **all** packages (currently hidden for Elum ePM and Jubaili).
-2. Upcoming Invoices list shows **all** active contracts always; lead days drive when each contract appears in sort order and a "Create by" date is shown on the card.
+Stop the system from auto-defaulting `invoiceLeadDays` to 45 when an Elum package is picked. Instead, set 45 once on all existing Elum contracts in the database, then leave the field fully user-controlled going forward.
 
-## Fixes
+## Changes
 
-### 1. `ContractForm.tsx` — make the field universal
+### 1. `ContractForm.tsx` — remove the package-driven default
 
-The block at line 1953 hides `invoicingType` + `invoiceLeadDays` whenever the package is `elum_epm` or `elum_jubaili` (those packages render their own dedicated billing section above). Lift both `FormField`s out of that conditional into a small "Invoicing" group rendered for every non-POC package, so ePM, Jubaili, Portfolio OS, Internal, Pro, Custom, etc. all expose the field.
+Delete the four `if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45)` lines (lines 713, 719, 724, 729) inside the `elum_epm`, `elum_jubaili`, `elum_portfolio_os`, and `elum_internal` package `onChange` branches.
 
-Behavior unchanged: the four package `onChange` handlers (lines 707/715/724/729) still default `invoiceLeadDays` to 45 when an Elum package is selected; other packages default to 0.
+After this, picking an Elum package no longer touches `invoiceLeadDays`. The field shows whatever the contract already has (or 0 for brand-new contracts), and the user edits it freely.
 
-### 2. `UpcomingInvoicesList.tsx` — drop filter, sort by create-by date
+### 2. One-time data backfill
 
-- Remove the `visibleInvoices` filter entirely. Every active contract with a `next_invoice_date` appears.
-- Compute `createByDate = nextInvoiceDate − invoiceLeadDays` (falls back to `nextInvoiceDate` when leadDays = 0).
-- **Sort the list (and the customer groups) by `createByDate` ascending**, so contracts that need to be prepared soonest bubble to the top — Elum quarterly contracts with 45-day lead surface ~6 weeks before their actual end-of-quarter invoice date.
-- Continue passing `invoiceLeadDays` through to the card.
+Update every existing contract whose `package` starts with `elum_` and currently has `invoice_lead_days = 0` to `invoice_lead_days = 45`. Contracts already customized away from 0 are left alone.
 
-### 3. `CustomerInvoiceGroup.tsx` / invoice card — show "Create by" date
+```sql
+UPDATE public.contracts
+SET invoice_lead_days = 45
+WHERE package IN ('elum_epm','elum_jubaili','elum_portfolio_os','elum_internal')
+  AND COALESCE(invoice_lead_days, 0) = 0;
+```
 
-When `invoiceLeadDays > 0`, render a small secondary line / badge: **"Create by {createByDate}"**. The actual invoice date stays the primary date on the card.
+Run via the data-insert tool (not a migration — this is a data update, not a schema change).
 
-### 4. No data backfill, no migration
+### 3. No other changes
 
-Existing 45-day defaults for Elum stay as-is. The user adjusts per contract via the now-visible form field.
-
-## Out of scope
-
-Invoice generation, period math, Skip / Mark-as-Sent, and Xero sync — none of these read `invoice_lead_days`.
+- Form field stays visible for all non-POC packages (already done).
+- Upcoming Invoices list / sort / "Create by" badge already read whatever value is stored — no change needed.
+- No migration, no schema change.
 
 ## Files touched
 
-- `src/components/contracts/ContractForm.tsx`
-- `src/components/invoices/UpcomingInvoicesList.tsx`
-- `src/components/invoices/CustomerInvoiceGroup.tsx`
-- `mem://features/invoice-creation-lead-time.md` (clarify: lead days are display + sort key; contracts always visible)
+- `src/components/contracts/ContractForm.tsx` (delete 4 lines)
+- One data-update SQL run against `contracts`
+- `mem://features/invoice-creation-lead-time.md` (note: 45 is a one-time backfill for Elum, not an auto-default)
