@@ -382,10 +382,13 @@ export function UpcomingInvoicesList({
       });
     }
     
-    // Sort by date
-    return Array.from(groups.values()).sort((a, b) => 
-      new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime()
-    );
+    // Sort by "create by" date (invoice date minus the max lead days in the group)
+    const dayMs = 24 * 60 * 60 * 1000;
+    const createByMs = (g: CustomerGroup) => {
+      const maxLead = g.contracts.reduce((m, c) => Math.max(m, c.invoiceLeadDays || 0), 0);
+      return new Date(g.invoiceDate).getTime() - maxLead * dayMs;
+    };
+    return Array.from(groups.values()).sort((a, b) => createByMs(a) - createByMs(b));
   }, [invoices]);
 
   const handleCreateIndividualInvoice = (contract: any) => {
