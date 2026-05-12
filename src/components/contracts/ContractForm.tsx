@@ -168,6 +168,7 @@ interface ContractFormProps {
     initialMW: number;
     billingFrequency: string;
     invoicingType?: string;
+    invoiceLeadDays?: number;
     nextInvoiceDate?: string;
     customPricing?: any;
     volumeDiscounts?: any;
