@@ -195,6 +195,7 @@ export function ContractList() {
         initialMW: data.initial_mw,
         billingFrequency: data.billing_frequency || 'annual',
         invoicingType: data.invoicing_type,
+        invoiceLeadDays: data.invoice_lead_days,
         nextInvoiceDate: data.next_invoice_date,
         customPricing: data.custom_pricing,
         volumeDiscounts: data.volume_discounts,

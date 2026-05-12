@@ -512,6 +512,8 @@ export function CustomerCard({
                           notes: selectedContractForEdit.notes,
                           maxMw: selectedContractForEdit.max_mw,
                           onboardingFeePerSite: selectedContractForEdit.onboarding_fee_per_site,
+                          invoicingType: selectedContractForEdit.invoicing_type,
+                          invoiceLeadDays: selectedContractForEdit.invoice_lead_days,
                         }}
                         onComplete={() => {
                           setShowContractForm(false);
