@@ -2040,6 +2040,31 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
 
             <FormField
               control={form.control}
+              name="invoiceLeadDays"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Invoice Creation Lead Time (days)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      placeholder="0"
+                      {...field}
+                      value={field.value ?? 0}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Show this invoice in Upcoming Invoices N days before the actual invoice date. The invoice itself still carries the next invoice date. Defaults to 45 for Elum packages.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
               name="baseMonthlyPrice"
               render={({ field }) => (
                 <FormItem>
