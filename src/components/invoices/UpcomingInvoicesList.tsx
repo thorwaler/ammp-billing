@@ -58,6 +58,7 @@ export interface UpcomingInvoice {
   // Matriarch API fields
   irradiancePerSiteTiers?: IrradianceSiteTier[];
   performancePerMwpTiers?: PerformanceMWpTier[];
+  invoiceLeadDays?: number;
 }
 
 interface CustomerGroup {
