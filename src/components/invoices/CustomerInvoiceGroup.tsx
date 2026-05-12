@@ -15,7 +15,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { differenceInDays } from "date-fns";
+import { differenceInDays, subDays } from "date-fns";
 import { parseDateCET, formatDateCET } from "@/lib/dateUtils";
 
 interface ContractInvoice {
@@ -29,6 +29,7 @@ interface ContractInvoice {
   packageType: string;
   estimatedAmount: number | null;
   invoicingType?: 'standard' | 'manual' | 'automated';
+  invoiceLeadDays?: number;
 }
 
 interface CustomerInvoiceGroupProps {
@@ -59,7 +60,9 @@ export function CustomerInvoiceGroup({
   const { formatCurrency } = useCurrency();
   
   const parsedDate = parseDateCET(invoiceDate);
-  const daysUntil = differenceInDays(parsedDate, new Date());
+  const groupLeadDays = Math.max(0, ...contracts.map(c => c.invoiceLeadDays || 0));
+  const createByDate = groupLeadDays > 0 ? subDays(parsedDate, groupLeadDays) : parsedDate;
+  const daysUntil = differenceInDays(createByDate, new Date());
   
   // Calculate total estimated amount
   const totalEstimatedAmount = useMemo(() => {
@@ -144,9 +147,16 @@ export function CustomerInvoiceGroup({
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-3.5 w-3.5" />
                 <span>{formatDateCET(invoiceDate, "MMM d, yyyy")}</span>
-                <span className="text-xs">
-                  ({daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
-                </span>
+                {groupLeadDays > 0 && (
+                  <span className="text-xs">
+                    (create by {formatDateCET(createByDate.toISOString(), "MMM d")} — {daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
+                  </span>
+                )}
+                {groupLeadDays === 0 && (
+                  <span className="text-xs">
+                    ({daysUntil < 0 ? `${Math.abs(daysUntil)} days ago` : `in ${daysUntil} days`})
+                  </span>
+                )}
               </div>
             </div>
             {getUrgencyBadge()}
@@ -213,6 +223,11 @@ export function CustomerInvoiceGroup({
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Calendar className="h-3.5 w-3.5" />
             <span>{formatDateCET(invoiceDate, "MMM d, yyyy")}</span>
+            {groupLeadDays > 0 && (
+              <span className="text-xs">
+                (create by {formatDateCET(createByDate.toISOString(), "MMM d")})
+              </span>
+            )}
           </div>
           {getUrgencyBadge()}
         </div>

@@ -257,19 +257,9 @@ export function UpcomingInvoicesList({
         }
       }
 
-      // Filter to contracts whose lead-shifted creation window has begun
-      // (now >= nextInvoiceDate - invoiceLeadDays). Contracts with no lead
-      // days behave as before (only show on/after the actual invoice date).
-      const nowMs = Date.now();
-      const visibleInvoices = transformedInvoices.filter(inv => {
-        const leadDays = inv.invoiceLeadDays || 0;
-        if (leadDays <= 0) return true;
-        const nextMs = new Date(inv.nextInvoiceDate).getTime();
-        const shiftedMs = nextMs - leadDays * 24 * 60 * 60 * 1000;
-        return shiftedMs <= nowMs;
-      });
-
-      setInvoices(visibleInvoices);
+      // Show all contracts always; lead days only affect display + sort order
+      // (handled in groupedInvoices below).
+      setInvoices(transformedInvoices);
     } catch (error) {
       console.error('Error loading upcoming invoices:', error);
       toast({
@@ -392,10 +382,13 @@ export function UpcomingInvoicesList({
       });
     }
     
-    // Sort by date
-    return Array.from(groups.values()).sort((a, b) => 
-      new Date(a.invoiceDate).getTime() - new Date(b.invoiceDate).getTime()
-    );
+    // Sort by "create by" date (invoice date minus the max lead days in the group)
+    const dayMs = 24 * 60 * 60 * 1000;
+    const createByMs = (g: CustomerGroup) => {
+      const maxLead = g.contracts.reduce((m, c) => Math.max(m, c.invoiceLeadDays || 0), 0);
+      return new Date(g.invoiceDate).getTime() - maxLead * dayMs;
+    };
+    return Array.from(groups.values()).sort((a, b) => createByMs(a) - createByMs(b));
   }, [invoices]);
 
   const handleCreateIndividualInvoice = (contract: any) => {
@@ -629,6 +622,7 @@ export function UpcomingInvoicesList({
               packageType: c.packageType,
               estimatedAmount: c.packageType === 'per_site' ? null : calculateEstimatedAmount(c),
               invoicingType: c.invoicingType,
+              invoiceLeadDays: c.invoiceLeadDays || 0,
             }))}
             onCreateIndividualInvoice={handleCreateIndividualInvoice}
             onCreateMergedInvoice={handleCreateMergedInvoice}
