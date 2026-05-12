@@ -218,6 +218,7 @@ export function UpcomingInvoicesList({
             performancePerMwpTiers: Array.isArray((c as any).performance_per_mwp_tiers)
               ? (c as any).performance_per_mwp_tiers as PerformanceMWpTier[]
               : undefined,
+            invoiceLeadDays: Number((c as any).invoice_lead_days) || 0,
           };
         });
 
