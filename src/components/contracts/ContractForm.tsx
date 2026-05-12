@@ -1017,6 +1017,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         currency: data.currency,
         billing_frequency: data.package === 'per_site' ? 'monthly' : data.billingFrequency,
         invoicing_type: data.invoicingType || 'standard',
+        invoice_lead_days: data.invoiceLeadDays ?? 0,
         // POC contracts don't have invoicing
         next_invoice_date: data.package === 'poc' ? null : (data.nextInvoiceDate || null),
         signed_date: data.signedDate || null,
