@@ -134,6 +134,7 @@ export function UpcomingInvoicesList({
           commitment_discount_percent,
           irradiance_per_site_tiers,
           performance_per_mwp_tiers,
+          invoice_lead_days,
           customers (
             id,
             name,
