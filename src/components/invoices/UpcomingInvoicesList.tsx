@@ -622,6 +622,7 @@ export function UpcomingInvoicesList({
               packageType: c.packageType,
               estimatedAmount: c.packageType === 'per_site' ? null : calculateEstimatedAmount(c),
               invoicingType: c.invoicingType,
+              invoiceLeadDays: c.invoiceLeadDays || 0,
             }))}
             onCreateIndividualInvoice={handleCreateIndividualInvoice}
             onCreateMergedInvoice={handleCreateMergedInvoice}
