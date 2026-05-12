@@ -223,6 +223,11 @@ export function CustomerInvoiceGroup({
           <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Calendar className="h-3.5 w-3.5" />
             <span>{formatDateCET(invoiceDate, "MMM d, yyyy")}</span>
+            {groupLeadDays > 0 && (
+              <span className="text-xs">
+                (create by {formatDateCET(createByDate.toISOString(), "MMM d")})
+              </span>
+            )}
           </div>
           {getUrgencyBadge()}
         </div>
