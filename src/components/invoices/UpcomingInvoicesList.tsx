@@ -58,6 +58,7 @@ export interface UpcomingInvoice {
   // Matriarch API fields
   irradiancePerSiteTiers?: IrradianceSiteTier[];
   performancePerMwpTiers?: PerformanceMWpTier[];
+  invoiceLeadDays?: number;
 }
 
 interface CustomerGroup {
@@ -133,6 +134,7 @@ export function UpcomingInvoicesList({
           commitment_discount_percent,
           irradiance_per_site_tiers,
           performance_per_mwp_tiers,
+          invoice_lead_days,
           customers (
             id,
             name,
@@ -216,6 +218,7 @@ export function UpcomingInvoicesList({
             performancePerMwpTiers: Array.isArray((c as any).performance_per_mwp_tiers)
               ? (c as any).performance_per_mwp_tiers as PerformanceMWpTier[]
               : undefined,
+            invoiceLeadDays: Number((c as any).invoice_lead_days) || 0,
           };
         });
 
@@ -254,7 +257,19 @@ export function UpcomingInvoicesList({
         }
       }
 
-      setInvoices(transformedInvoices);
+      // Filter to contracts whose lead-shifted creation window has begun
+      // (now >= nextInvoiceDate - invoiceLeadDays). Contracts with no lead
+      // days behave as before (only show on/after the actual invoice date).
+      const nowMs = Date.now();
+      const visibleInvoices = transformedInvoices.filter(inv => {
+        const leadDays = inv.invoiceLeadDays || 0;
+        if (leadDays <= 0) return true;
+        const nextMs = new Date(inv.nextInvoiceDate).getTime();
+        const shiftedMs = nextMs - leadDays * 24 * 60 * 60 * 1000;
+        return shiftedMs <= nowMs;
+      });
+
+      setInvoices(visibleInvoices);
     } catch (error) {
       console.error('Error loading upcoming invoices:', error);
       toast({

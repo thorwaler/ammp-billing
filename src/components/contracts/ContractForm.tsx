@@ -84,6 +84,7 @@ const contractFormSchema = z.object({
   currency: z.enum(["USD", "EUR"]),
   billingFrequency: z.enum(["monthly", "quarterly", "biannual", "annual"]),
   invoicingType: z.enum(["standard", "manual", "automated"]).optional(),
+  invoiceLeadDays: z.coerce.number().int().min(0).optional(),
   nextInvoiceDate: z.string().optional(),
   signedDate: z.string().optional(),
   contractExpiryDate: z.string().optional(),
@@ -167,6 +168,7 @@ interface ContractFormProps {
     initialMW: number;
     billingFrequency: string;
     invoicingType?: string;
+    invoiceLeadDays?: number;
     nextInvoiceDate?: string;
     customPricing?: any;
     volumeDiscounts?: any;
@@ -285,6 +287,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       currency: existingContract.currency as "USD" | "EUR",
       billingFrequency: (existingContract.package === 'per_site' ? 'monthly' : existingContract.billingFrequency) as any,
       invoicingType: (existingContract.invoicingType as "standard" | "manual" | "automated") || "standard",
+      invoiceLeadDays: existingContract.invoiceLeadDays ?? 0,
       nextInvoiceDate: existingContract.nextInvoiceDate?.substring(0, 10) || "",
       package: existingContract.package as any,
       maxMw: existingContract.maxMw,
@@ -320,6 +323,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       currency: userCurrency || "EUR",
       billingFrequency: "annual",
       invoicingType: "standard" as const,
+      invoiceLeadDays: 0,
       nextInvoiceDate: "",
       signedDate: "",
       contractExpiryDate: "",
@@ -706,19 +710,23 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("belowThresholdPricePerMWp", 50);
       form.setValue("aboveThresholdPricePerMWp", 30);
       form.setValue("modules", []);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(false);
     } else if (value === "elum_jubaili") {
       // Elum Jubaili - per-site pricing
       form.setValue("annualFeePerSite", 500);
       form.setValue("modules", []);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(false);
     } else if (value === "elum_portfolio_os") {
       // Elum Portfolio OS - full pricing flexibility
       form.setValue("modules", ["technicalMonitoring"]);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(true);
     } else if (value === "elum_internal") {
       // Elum Internal Assets - graduated MW pricing
       form.setValue("modules", []);
+      if (!form.getValues("invoiceLeadDays")) form.setValue("invoiceLeadDays", 45);
       setShowCustomPricing(false);
     } else if (value === "ammp_os_2026") {
       // AMMP OS 2026 - new pricing structure
@@ -1009,6 +1017,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         currency: data.currency,
         billing_frequency: data.package === 'per_site' ? 'monthly' : data.billingFrequency,
         invoicing_type: data.invoicingType || 'standard',
+        invoice_lead_days: data.invoiceLeadDays ?? 0,
         // POC contracts don't have invoicing
         next_invoice_date: data.package === 'poc' ? null : (data.nextInvoiceDate || null),
         signed_date: data.signedDate || null,
@@ -2023,6 +2032,31 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   </Select>
                   <FormDescription>
                     Standard: Create and send invoices from this app. Manual: Mark as sent when invoiced externally. Automated: Managed automatically in Xero.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="invoiceLeadDays"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Invoice Creation Lead Time (days)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      placeholder="0"
+                      {...field}
+                      value={field.value ?? 0}
+                      onChange={(e) => field.onChange(e.target.valueAsNumber || 0)}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Show this invoice in Upcoming Invoices N days before the actual invoice date. The invoice itself still carries the next invoice date. Defaults to 45 for Elum packages.
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

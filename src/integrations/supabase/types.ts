@@ -418,6 +418,7 @@ export type Database = {
           hourly_rate: number | null
           id: string
           initial_mw: number
+          invoice_lead_days: number
           invoicing_type: string | null
           irradiance_per_site_tiers: Json | null
           is_trial: boolean
@@ -489,6 +490,7 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           initial_mw: number
+          invoice_lead_days?: number
           invoicing_type?: string | null
           irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
@@ -560,6 +562,7 @@ export type Database = {
           hourly_rate?: number | null
           id?: string
           initial_mw?: number
+          invoice_lead_days?: number
           invoicing_type?: string | null
           irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
