@@ -108,11 +108,13 @@ serve(async (req) => {
     const binaryContent = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0));
 
     // Build upload URL
+    const conflictQuery = `?@microsoft.graph.conflictBehavior=replace`;
+    const encodedName = encodeURIComponent(fileName);
     let uploadUrl: string;
     if (folderId) {
-      uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${fileName}:/content`;
+      uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${folderId}:/${encodedName}:/content${conflictQuery}`;
     } else {
-      uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${fileName}:/content`;
+      uploadUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/root:/${encodedName}:/content${conflictQuery}`;
     }
 
     console.log(`Uploading ${fileName} to: ${uploadUrl}`);
