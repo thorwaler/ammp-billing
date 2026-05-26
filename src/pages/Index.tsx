@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { checkAllContractExpirations } from "@/utils/contractExpiration";
+import { checkAllInvoiceDueDates } from "@/utils/invoiceDueNotifications";
 import { getDashboardStats, DashboardStats, getMWGrowthByMonth } from "@/services/analytics/dashboardAnalytics";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid } from "recharts";
@@ -97,11 +98,14 @@ const Index = () => {
     }
   }, [user?.id]);
   
-  // Check contract expirations on dashboard load
+  // Check contract expirations + invoice due dates on dashboard load
   useEffect(() => {
     if (user?.id) {
       checkAllContractExpirations(user.id).catch(err => {
         console.error('Error checking contract expirations:', err);
+      });
+      checkAllInvoiceDueDates(user.id).catch(err => {
+        console.error('Error checking invoice due dates:', err);
       });
     }
   }, [user?.id]);

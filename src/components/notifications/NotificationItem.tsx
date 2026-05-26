@@ -1,4 +1,4 @@
-import { AlertCircle, CheckCircle, Info, Trash2, XCircle, Clock, CalendarX } from 'lucide-react';
+import { AlertCircle, CheckCircle, Info, Trash2, XCircle, Clock, CalendarX, FileText, FileWarning } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
@@ -25,6 +25,16 @@ export const NotificationItem = ({
     if (notification.type === 'contract_expiring_soon') {
       return <Clock className="h-5 w-5 text-yellow-500" />;
     }
+    if (notification.type === 'invoice_overdue') {
+      return <FileWarning className="h-5 w-5 text-destructive" />;
+    }
+    if (notification.type === 'invoice_due_today') {
+      return <FileText className="h-5 w-5 text-yellow-500" />;
+    }
+    if (notification.type === 'invoice_due_soon') {
+      return <FileText className="h-5 w-5 text-blue-500" />;
+    }
+    
     
     switch (notification.severity) {
       case 'error':

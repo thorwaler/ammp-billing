@@ -31,6 +31,10 @@ const NOTIFICATION_TYPES = [
   { id: 'site_decrease', label: 'Site Count Decrease', group: 'Invoice' },
   { id: 'asset_disappeared', label: 'Asset Disappeared (Manipulation)', group: 'Invoice' },
   { id: 'asset_reappeared', label: 'Asset Reappeared (Manipulation)', group: 'Invoice' },
+  // Invoice due reminders (based on create-by date)
+  { id: 'invoice_due_soon', label: 'Invoice Due Soon (heads-up)', group: 'Invoice' },
+  { id: 'invoice_due_today', label: 'Invoice Due Today', group: 'Invoice' },
+  { id: 'invoice_overdue', label: 'Invoice Overdue', group: 'Invoice' },
 ];
 
 const SEVERITY_LEVELS = [
@@ -60,6 +64,7 @@ const WebhookNotifications = () => {
       'contract_expired', 'contract_expiring_soon', 'mw_warning', 'mw_exceeded',
       'ammp_sync_complete', 'ammp_contract_synced', 'xero_sync_complete',
       'invoice_increase', 'mw_decrease', 'site_decrease', 'asset_disappeared', 'asset_reappeared',
+      'invoice_due_soon', 'invoice_due_today', 'invoice_overdue',
     ],
     min_severity: 'info',
   });
