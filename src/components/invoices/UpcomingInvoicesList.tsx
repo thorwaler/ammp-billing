@@ -4,8 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { calculateInvoice } from "@/lib/invoiceCalculations";
-import { addMonths, addYears } from "date-fns";
-import { parseDateCET } from "@/lib/dateUtils";
+import { getNextInvoiceDate, isAnnualUpfrontCycle } from "@/lib/invoiceScheduling";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier, IrradianceSiteTier, PerformanceMWpTier } from "@/data/pricingData";
 
 export interface UpcomingInvoice {
