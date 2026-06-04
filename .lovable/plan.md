@@ -1,59 +1,67 @@
-## Problem
+## What's wrong
 
-The annual floor uses a stored `committed_minimum_mw` field, which is 0 on this contract. Result:
-- `committedMinimumFloor = 0 × €1,250 = €0`
-- Line label says "committed 0 MW"
+In `src/lib/supportDocumentGenerator.ts`, `generateAssetBreakdown` has no `per_mw_annual_upfront` branch, so it falls into the default branch with `baseRatePerMWp = 0` → every asset row renders `pricePerKWp = 0` and `pricePerYear = 0`.
 
-The user wants the floor's MW-based component to use the **live AMMP-synced MW for this contract** (the same `adjustedTotalMW` already computed for everything else from `cached_capabilities` + asset-group filters), not the contract field.
+If we only fix that, a second inconsistency appears: the per-asset subtotal becomes ~€9,125 (7.30 MW × €1,250) but the Calculation Breakdown section keeps showing the €14,500 floor. The "Minimum Contract Adjustment" / "Total with Minimum" rows in the asset table won't render because `minimumContractAdjustment` and `minimumAnnualValue` aren't populated for this package.
 
-## Fix
+## Fix (two coordinated edits, both in `src/lib/supportDocumentGenerator.ts`)
 
-### 1. `src/lib/invoiceCalculations.ts` (per_mw_annual_upfront branch, ~line 1239)
+### 1. Per-asset rows use the real per-MW rate
+Add a `per_mw_annual_upfront` branch in `generateAssetBreakdown` that reads `calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate`:
 
-Replace:
 ```ts
-const committedMinimumFloor = (params.committedMinimumMW || 0) * perMWpRate;
+if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
+  const perMWpRate = calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate;
+  const pricePerKWp = perMWpRate / 1000;
+  return {
+    assetBreakdown: assets.map(asset => {
+      const pvCapacityKWp = (asset.totalMW || 0) * 1000;
+      const isHybrid = asset.isHybrid || false;
+      return {
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
+        isPV: !isHybrid,
+        isHybrid,
+        hubActive: selectedModules.includes('energySavingsHub'),
+        portalActive: selectedModules.includes('stakeholderPortal'),
+        controlActive: selectedModules.includes('control'),
+        reportingActive: selectedAddons.some(a => a.id === 'reporting'),
+        pricePerKWp: Math.round(pricePerKWp * 10000) / 10000,
+        pricePerYear: Math.round(pvCapacityKWp * pricePerKWp * 100) / 100,
+      };
+    })
+  };
+}
 ```
-with the synced MW × rate:
+
+### 2. Surface the annual floor as a minimum adjustment so the table totals match
+
+After the calculation result is assembled (around lines 407 / 534), populate the minimum fields for this package so the existing "Minimum Contract Adjustment" + "Total with Minimum" rows render:
+
 ```ts
-// Floor's MW-based component uses live AMMP-synced MW (adjustedTotalMW),
-// not a static committed value on the contract.
-const mwBasedFloor = adjustedTotalMW * perMWpRate;
-const annualFloor = Math.max(fixedAnnualMinimum, mwBasedFloor);
+// per_mw_annual_upfront: treat €14,500 floor as the minimum annual value
+let minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
+let effectiveMinimumAnnualValue = minimumAnnualValue;
+
+if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
+  const b = calculationResult.perMWAnnualUpfrontBreakdown;
+  effectiveMinimumAnnualValue = b.annualFloor; // already max(fixed, MW-based)
+  const subtotal = b.mwBasedFloor;             // = sum of per-asset annual values
+  if (b.annualFloor > subtotal) {
+    minimumContractAdjustment = b.annualFloor - subtotal;
+  }
+}
 ```
 
-Update the result breakdown name to reflect the new meaning. Rename `committedMinimumFloor` → `mwBasedFloor` in the `perMWAnnualUpfrontBreakdown` shape (`invoiceCalculations.ts` interface + the assignment around line 1281). Keep `committedMinimumMW` removed from output (or set to `adjustedTotalMW` for display).
+Pass `effectiveMinimumAnnualValue` and the adjusted `minimumContractAdjustment` into the returned `SupportDocumentData`.
 
-### 2. `src/components/dashboard/InvoiceCalculator.tsx` (~line 1041–1050)
-
-Change line item description so it reads from synced MW instead of `selectedCustomer.committedMinimumMW`:
-```ts
-const syncedMW = Number(mwManaged) || 0;
-const desc = `Annual Platform Fee — Minimum (max of synced ${syncedMW.toFixed(2)} MW × ${rateDisplay} = ${currencySymbol}${b.mwBasedFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`;
-```
-
-### 3. `src/components/invoices/MergedInvoiceDialog.tsx` (~line 297)
-
-Same label update: replace `b.committedMinimumFloor` with `b.mwBasedFloor` and rephrase "committed MW" → "synced MW".
-
-### 4. `src/components/invoices/SupportDocument.tsx` (~line 270–285)
-
-Render with the new field names, showing synced MW × rate = mwBasedFloor.
-
-### 5. `src/lib/supportDocumentGenerator.ts` (~line 520–530)
-
-Stop deriving `committedMinimumMW` from `committedMinimumFloor / rate`. Use the synced MW directly (already on the invoice/contract context) and emit `mwBasedFloor` for the support doc.
+## Result
+Asset table for per-MW + Annual Upfront with 7.30 MW @ €1,250/MW and €14,500 floor:
+- Each asset row shows its MW × rate.
+- Subtotal (Annual): €9,125.00
+- Minimum Contract Adjustment (Annual): €5,375.00
+- Total with Minimum (Annual): €14,500.00 — matches Calculation Breakdown and invoice total.
 
 ## Out of scope
-
-- The contract form field `committed_minimum_mw` is no longer used for calculation. Leaving the DB column and form field as-is for now (silent no-op). If you want it removed from the contract form UI, say the word and we'll do that in a follow-up — it's a separate edit.
-- No changes to YTD logic, anchor/cycle detection, or quarterly overage math; those already use `adjustedTotalMW` for the overage calculation.
-
-## Validation
-
-Reload the invoice generator on this contract. With 7.3 MW synced and €1,250/MW rate:
-- `mwBasedFloor` = 7.3 × 1,250 ≈ €9,125
-- `annualFloor` = max(9,125, 14,500) = €14,500 (unchanged total)
-- Label now reads: "max of synced 7.30 MW × €1,250/MW = €9,125 and fixed minimum €14,500"
-
-The support document should mirror the same wording.
+- No change to invoice/calculation math, other packages, or `SupportDocument.tsx` markup (existing minimum-adjustment rows are reused as-is).

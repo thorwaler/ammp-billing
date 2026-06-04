@@ -404,7 +404,18 @@ export async function generateSupportDocumentData(
 
   // Calculate total including all addon costs and validate
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
-  const minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
+  let minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
+  let effectiveMinimumAnnualValue = minimumAnnualValue;
+
+  // For per_mw_annual_upfront, surface the annual floor as a minimum so the asset
+  // table subtotal reconciles to the actual invoice amount.
+  if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
+    const b = calculationResult.perMWAnnualUpfrontBreakdown;
+    effectiveMinimumAnnualValue = b.annualFloor;
+    if (b.annualFloor > b.mwBasedFloor) {
+      minimumContractAdjustment = b.annualFloor - b.mwBasedFloor;
+    }
+  }
   
   let assetBreakdownPeriodTotal: number;
   let minimumChargesForBreakdown: number;
@@ -532,7 +543,7 @@ export async function generateSupportDocumentData(
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
-    minimumAnnualValue, // Pass through the minimum annual value from contract
+    minimumAnnualValue: effectiveMinimumAnnualValue, // Pass through the minimum annual value from contract
     totalsMatch,
     calculationBreakdown: {
       assetBreakdownPeriod: assetBreakdownPeriodTotal,
@@ -682,6 +693,31 @@ function generateAssetBreakdown(
     return { assetBreakdown: [] };
   }
   
+  // For Per-MW + Annual Upfront - use the synced per-MW rate so per-asset rows are non-zero
+  if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
+    const perMWpRate = calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate;
+    const pricePerKWp = perMWpRate / 1000;
+    return {
+      assetBreakdown: assets.map(asset => {
+        const pvCapacityKWp = (asset.totalMW || 0) * 1000;
+        const isHybrid = asset.isHybrid || false;
+        return {
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
+          isPV: !isHybrid,
+          isHybrid,
+          hubActive: selectedModules.includes('energySavingsHub'),
+          portalActive: selectedModules.includes('stakeholderPortal'),
+          controlActive: selectedModules.includes('control'),
+          reportingActive: selectedAddons.some(a => a.id === 'reporting'),
+          pricePerKWp: Math.round(pricePerKWp * 10000) / 10000,
+          pricePerYear: Math.round(pvCapacityKWp * pricePerKWp * 100) / 100,
+        };
+      })
+    };
+  }
+
   // For per_site packages - don't show asset breakdown, use per-site section instead
   if (packageType === 'per_site' && calculationResult.perSiteBreakdown) {
     return { assetBreakdown: [] };
