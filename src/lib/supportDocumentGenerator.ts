@@ -404,7 +404,18 @@ export async function generateSupportDocumentData(
 
   // Calculate total including all addon costs and validate
   const totalAddonCosts = calculationResult.addonCosts.reduce((sum, addon) => sum + addon.cost, 0);
-  const minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
+  let minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
+  let effectiveMinimumAnnualValue = minimumAnnualValue;
+
+  // For per_mw_annual_upfront, surface the annual floor as a minimum so the asset
+  // table subtotal reconciles to the actual invoice amount.
+  if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
+    const b = calculationResult.perMWAnnualUpfrontBreakdown;
+    effectiveMinimumAnnualValue = b.annualFloor;
+    if (b.annualFloor > b.mwBasedFloor) {
+      minimumContractAdjustment = b.annualFloor - b.mwBasedFloor;
+    }
+  }
   
   let assetBreakdownPeriodTotal: number;
   let minimumChargesForBreakdown: number;
