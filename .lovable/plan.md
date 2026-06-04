@@ -1,73 +1,45 @@
-## Fix: support document doesn't handle per_mw_annual_upfront
+## Fix: Invoice Calculator shows MW × rate instead of annual floor for per_mw_annual_upfront contracts
 
 ### Root cause
 
-`src/lib/supportDocumentGenerator.ts` has dedicated branches for siteMinimum / perSite / Elum / Matriarch breakdowns but **no branch for `per_mw_annual_upfront`**. The contract falls through to the default `else` (line 429–433), which does:
+The Invoice Calculator's customer/contract loader (`src/components/dashboard/InvoiceCalculator.tsx`, lines ~253–402) doesn't know that SolarX's custom contract type is `per_mw_annual_upfront`:
 
-```ts
-assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
-minimumChargesForBreakdown = calculationResult.minimumCharges;
-```
+1. The `contracts` select (line 261) **doesn't fetch `contract_types(pricing_model)`**, **`committed_minimum_mw`**, or **`annual_billing_anchor_date`**.
+2. The transform (line 343) sets `package: contract.package as PackageType` directly — for custom contract types this is `'pro'` (or similar), never `'per_mw_annual_upfront'`.
+3. `buildCalculationParams` (line 812) passes `packageType: selectedCustomer.package` and never sets `committedMinimumMW` / `annualBillingAnchorDate` / `ytdInvoicedAmount`.
 
-That sums to the raw MW × rate value — not the annual floor that `calculateInvoice` writes into `result.totalPrice`. So:
+Consequence: `calculateInvoice` never enters the `per_mw_annual_upfront` branch, so it doesn't override `result.totalPrice` with the annual floor. The UI's total (line 2921, `result.totalPrice`) shows the raw MW × rate (9,137) instead of the 14,500 minimum.
 
-- The "Asset Breakdown (period)" row shows MW × rate, missing the annual minimum fee.
-- `calculatedTotal` ≠ `invoiceTotal`, so `totalsMatch` flips to false and the doc shows a discrepancy warning.
-- There is no row anywhere that explains the floor (`max(committedMW × rate, fixedAnnualMinimum)`) or the quarterly overage.
-
-The renderer in `src/components/invoices/SupportDocument.tsx` also has no per_mw_annual_upfront branch.
+This is the same root issue we already fixed for `UpcomingInvoicesList` and `InvoiceCalculator`'s YTD/anchor lookup at line 1400 — but only at *invoice-save* time. The *calculation/preview* path was never patched.
 
 ### Fix
 
-1. **`src/lib/supportDocumentGenerator.ts`**
-   - Extend `SupportDocumentData` with:
-     ```ts
-     perMWAnnualUpfrontBreakdown?: {
-       cycleType: 'annual_upfront' | 'quarterly_overage';
-       perMWpRate: number;
-       committedMinimumMW: number;          // from contract
-       committedMinimumFloor: number;       // committedMW × rate
-       fixedAnnualMinimum: number;
-       annualFloor: number;                 // max of the two above
-       ytdModuleValue: number;
-       ytdInvoiced: number;
-       overageAmount: number;
-       currentMW: number;                   // for display
-     };
-     ```
-   - Populate it from `calculationResult.perMWAnnualUpfrontBreakdown` (already produced by `calculateInvoice`). Pull `committedMinimumMW` from the contract record (already fetched in the generator's contract lookup, or pass it through alongside `minimumAnnualValue`).
-   - Add a new branch in the `assetBreakdownPeriodTotal` if/else chain (around line 425):
-     ```ts
-     } else if (calculationResult.perMWAnnualUpfrontBreakdown) {
-       const b = calculationResult.perMWAnnualUpfrontBreakdown;
-       assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront'
-         ? b.annualFloor
-         : b.overageAmount;
-       minimumChargesForBreakdown = 0;
-     }
-     ```
-     This makes `calculatedTotal === invoiceTotal` (both equal `result.totalPrice`), so `totalsMatch` becomes true.
+**`src/components/dashboard/InvoiceCalculator.tsx`** (only file touched):
 
-2. **`src/components/invoices/SupportDocument.tsx`**
-   - Add a top-level breakdown card (similar to the Elum and per-site cards, ~line 209) titled "Per-MW + Annual Upfront Minimum" that lists, when `data.perMWAnnualUpfrontBreakdown` is present:
-     - Cycle type (Annual upfront / Quarterly overage)
-     - Per-MWp rate, current MW
-     - Committed minimum MW × rate = committed floor
-     - Fixed annual minimum
-     - **Annual floor** = max of the two (highlighted)
-     - For quarterly_overage cycle: YTD module value, YTD invoiced, overage charged
-   - Add a branch in the totals reconciliation section (the `data.perSiteBreakdown ? (...) : (...)` chain around line 564) to show:
-     - Annual cycle: a single line `Annual Platform Fee — Minimum: {annualFloor}`.
-     - Quarterly cycle: `Per-MW Quarterly Overage: {overageAmount}`.
+1. Add to the contracts select (line 261 block):
+   - `committed_minimum_mw`
+   - `annual_billing_anchor_date`
+   - `ytd_invoiced_amount`
+   - `contract_types ( pricing_model )`
 
-3. **No DB / no calculation changes** — `calculateInvoice` and the contract record already carry every needed value.
+2. In the transform (line 338 return object):
+   - Override `package`: if `contract.contract_types?.pricing_model === 'per_mw_annual_upfront'`, set `package: 'per_mw_annual_upfront' as PackageType`; otherwise keep `contract.package as PackageType`.
+   - Map `committedMinimumMW: Number(contract.committed_minimum_mw) ?? undefined`
+   - Map `annualBillingAnchorDate: contract.annual_billing_anchor_date ?? undefined`
+   - Map `ytdInvoicedAmount: Number(contract.ytd_invoiced_amount) ?? 0` (add to `Customer` interface if missing)
+
+3. In `buildCalculationParams` (line 812 params object), pass:
+   - `committedMinimumMW: selectedCustomer.committedMinimumMW`
+   - `annualBillingAnchorDate: selectedCustomer.annualBillingAnchorDate`
+   - `ytdInvoicedAmount: selectedCustomer.ytdInvoicedAmount`
+
+That restores `calculateInvoice`'s `per_mw_annual_upfront` branch in the calculator preview, so `result.totalPrice` becomes `max(committedMW × rate, fixedAnnualMinimum) + addons + ...`, matching the Xero line-item and support-doc fix.
 
 ### Out of scope
 
-- Don't touch any other package's branch.
-- No changes to PDF export shell — it reuses the same `SupportDocument` component.
+- No changes to `invoiceCalculations.ts`, the support doc, the Xero builder, or other pages.
+- No DB migration.
 
-### Files to touch
+### Files
 
-- `src/lib/supportDocumentGenerator.ts` — interface + branch + populate.
-- `src/components/invoices/SupportDocument.tsx` — render section + totals branch.
+- `src/components/dashboard/InvoiceCalculator.tsx` — select fields, customer transform, params builder.

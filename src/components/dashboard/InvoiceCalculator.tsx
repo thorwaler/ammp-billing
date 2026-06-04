@@ -172,6 +172,7 @@ interface Customer {
   annualMinimumFee?: number;
   committedMinimumMW?: number;
   annualBillingAnchorDate?: string;
+  ytdInvoicedAmount?: number;
 }
 
 // Default modules and addons from shared data
@@ -305,7 +306,11 @@ export function InvoiceCalculator({
             irradiance_per_site_tiers,
             performance_per_mwp_tiers,
             vendor_api_fee,
-            onboarding_setup_fee
+            onboarding_setup_fee,
+            committed_minimum_mw,
+            annual_billing_anchor_date,
+            ytd_invoiced_amount,
+            contract_types ( pricing_model )
           )
         `)
         .eq('status', 'active');
@@ -340,7 +345,9 @@ export function InvoiceCalculator({
             name: c.name,
             nickname: c.nickname,
             companyName: (contract as any).company_name || undefined,
-            package: contract.package as PackageType,
+            package: ((contract as any).contract_types?.pricing_model === 'per_mw_annual_upfront'
+              ? 'per_mw_annual_upfront'
+              : contract.package) as PackageType,
             mwManaged: cachedCaps?.totalMW || Number(c.mwp_managed) || 0,
             modules,
             addons,
@@ -399,6 +406,10 @@ export function InvoiceCalculator({
             performancePerMwpTiers: Array.isArray((contract as any).performance_per_mwp_tiers) ? (contract as any).performance_per_mwp_tiers : undefined,
             vendorApiFee: Number((contract as any).vendor_api_fee) || undefined,
             onboardingSetupFee: Number((contract as any).onboarding_setup_fee) || undefined,
+            // Per-MW + Annual Upfront fields
+            committedMinimumMW: (contract as any).committed_minimum_mw != null ? Number((contract as any).committed_minimum_mw) : undefined,
+            annualBillingAnchorDate: (contract as any).annual_billing_anchor_date || undefined,
+            ytdInvoicedAmount: (contract as any).ytd_invoiced_amount != null ? Number((contract as any).ytd_invoiced_amount) : 0,
           };
         });
 
@@ -862,6 +873,10 @@ export function InvoiceCalculator({
       commitmentDiscountPercent: selectedCustomer.commitmentDiscountPercent,
       irradiancePerSiteTiers: selectedCustomer.irradiancePerSiteTiers,
       performancePerMwpTiers: selectedCustomer.performancePerMwpTiers,
+      // Per-MW + Annual Upfront params
+      committedMinimumMW: selectedCustomer.committedMinimumMW,
+      annualBillingAnchorDate: selectedCustomer.annualBillingAnchorDate,
+      ytdInvoicedAmount: selectedCustomer.ytdInvoicedAmount,
     };
 
     return { params, invoicePeriod: invoicePeriodDisplay };
