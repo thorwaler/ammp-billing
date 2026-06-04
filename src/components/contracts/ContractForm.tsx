@@ -268,7 +268,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [municipalityCount, setMunicipalityCount] = useState<number>(0);
   const [apiSetupFee, setApiSetupFee] = useState<number>(SOLAR_AFRICA_SETUP_FEE);
   const [hourlyRate, setHourlyRate] = useState<number>(SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
-  const [selectedContractTypeId, setSelectedContractTypeId] = useState<string | null>(null);
+  const [selectedContractTypeId, setSelectedContractTypeId] = useState<string | null>(
+    existingContract?.contractTypeId ?? null
+  );
   const [upfrontDiscountPercent, setUpfrontDiscountPercent] = useState<number>(0);
   const [commitmentDiscountPercent, setCommitmentDiscountPercent] = useState<number>(0);
   const { currency: userCurrency} = useCurrency();
