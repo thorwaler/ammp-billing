@@ -1110,9 +1110,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         upfront_discount_percent: data.package === 'sps_monitoring' ? upfrontDiscountPercent : null,
         commitment_discount_percent: data.package === 'sps_monitoring' ? commitmentDiscountPercent : null,
         // Per-MW with Annual Upfront Minimum
-        annual_minimum_fee: data.package === 'per_mw_annual_upfront' ? (data.annualMinimumFee ?? 0) : null,
-        committed_minimum_mw: data.package === 'per_mw_annual_upfront' ? (data.committedMinimumMW ?? null) : null,
-        annual_billing_anchor_date: data.package === 'per_mw_annual_upfront' ? (data.annualBillingAnchorDate || null) : null,
+        annual_minimum_fee: isAnnualUpfront ? (data.annualMinimumFee ?? 0) : null,
+        committed_minimum_mw: isAnnualUpfront ? (data.committedMinimumMW ?? null) : null,
+        annual_billing_anchor_date: isAnnualUpfront ? (data.annualBillingAnchorDate || null) : null,
       };
 
       const contractMutation = existingContractId
