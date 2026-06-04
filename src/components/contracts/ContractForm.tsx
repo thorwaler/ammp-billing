@@ -1024,7 +1024,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         package: data.package,
         initial_mw: data.initialMW,
         currency: data.currency,
-        billing_frequency: data.package === 'per_site' ? 'monthly' : data.billingFrequency,
+        billing_frequency: data.package === 'per_site' ? 'monthly' : data.package === 'per_mw_annual_upfront' ? 'quarterly' : data.billingFrequency,
         invoicing_type: data.invoicingType || 'standard',
         invoice_lead_days: data.invoiceLeadDays ?? 0,
         // POC contracts don't have invoicing
