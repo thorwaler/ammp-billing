@@ -58,6 +58,11 @@ export interface UpcomingInvoice {
   irradiancePerSiteTiers?: IrradianceSiteTier[];
   performancePerMwpTiers?: PerformanceMWpTier[];
   invoiceLeadDays?: number;
+  // Per-MW + Annual Upfront Minimum fields
+  annualMinimumFee?: number;
+  committedMinimumMW?: number;
+  annualBillingAnchorDate?: string;
+  ytdInvoicedAmount?: number;
 }
 
 interface CustomerGroup {
