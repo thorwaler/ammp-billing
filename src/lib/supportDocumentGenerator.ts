@@ -517,6 +517,20 @@ export async function generateSupportDocumentData(
       performanceTierBreakdown: calculationResult.matriarchApiBreakdown.performanceTierBreakdown,
       totalAnnualCost: calculationResult.matriarchApiBreakdown.totalAnnualCost,
     } : undefined,
+    // Per-MW + Annual Upfront breakdown
+    perMWAnnualUpfrontBreakdown: calculationResult.perMWAnnualUpfrontBreakdown ? {
+      cycleType: calculationResult.perMWAnnualUpfrontBreakdown.cycleType,
+      perMWpRate: calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate,
+      committedMinimumMW: calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate > 0
+        ? calculationResult.perMWAnnualUpfrontBreakdown.committedMinimumFloor / calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate
+        : 0,
+      committedMinimumFloor: calculationResult.perMWAnnualUpfrontBreakdown.committedMinimumFloor,
+      fixedAnnualMinimum: calculationResult.perMWAnnualUpfrontBreakdown.fixedAnnualMinimum,
+      annualFloor: calculationResult.perMWAnnualUpfrontBreakdown.annualFloor,
+      ytdModuleValue: calculationResult.perMWAnnualUpfrontBreakdown.ytdModuleValue,
+      ytdInvoiced: calculationResult.perMWAnnualUpfrontBreakdown.ytdInvoiced,
+      overageAmount: calculationResult.perMWAnnualUpfrontBreakdown.overageAmount,
+    } : undefined,
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
