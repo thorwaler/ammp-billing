@@ -686,6 +686,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   }, [existingCustomer?.id]);
 
   const watchPackage = form.watch("package");
+  const selectedContractType = customContractTypes.find((ct: any) => ct.id === selectedContractTypeId);
+  const isAnnualUpfront =
+    watchPackage === "per_mw_annual_upfront" ||
+    selectedContractType?.pricing_model === "per_mw_annual_upfront";
   const watchModules = form.watch("modules");
   const watchAddons = form.watch("addons");
 
