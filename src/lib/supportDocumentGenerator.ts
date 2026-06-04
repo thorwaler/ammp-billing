@@ -439,6 +439,11 @@ export async function generateSupportDocumentData(
     // For Matriarch API, use the total annual cost adjusted by frequency
     assetBreakdownPeriodTotal = calculationResult.totalMWCost;
     minimumChargesForBreakdown = 0;
+  } else if (calculationResult.perMWAnnualUpfrontBreakdown) {
+    // For Per-MW + Annual Upfront, use floor (annual cycle) or overage (quarterly cycle)
+    const b = calculationResult.perMWAnnualUpfrontBreakdown;
+    assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront' ? b.annualFloor : b.overageAmount;
+    minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
     assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
