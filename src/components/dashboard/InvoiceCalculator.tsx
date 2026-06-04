@@ -406,6 +406,10 @@ export function InvoiceCalculator({
             performancePerMwpTiers: Array.isArray((contract as any).performance_per_mwp_tiers) ? (contract as any).performance_per_mwp_tiers : undefined,
             vendorApiFee: Number((contract as any).vendor_api_fee) || undefined,
             onboardingSetupFee: Number((contract as any).onboarding_setup_fee) || undefined,
+            // Per-MW + Annual Upfront fields
+            committedMinimumMW: (contract as any).committed_minimum_mw != null ? Number((contract as any).committed_minimum_mw) : undefined,
+            annualBillingAnchorDate: (contract as any).annual_billing_anchor_date || undefined,
+            ytdInvoicedAmount: (contract as any).ytd_invoiced_amount != null ? Number((contract as any).ytd_invoiced_amount) : 0,
           };
         });
 
