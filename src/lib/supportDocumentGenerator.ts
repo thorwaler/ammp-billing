@@ -174,6 +174,19 @@ export interface SupportDocumentData {
     totalAnnualCost: number;
   };
   
+  // Per-MW + Annual Upfront Minimum breakdown
+  perMWAnnualUpfrontBreakdown?: {
+    cycleType: 'annual_upfront' | 'quarterly_overage';
+    perMWpRate: number;
+    committedMinimumMW: number;
+    committedMinimumFloor: number;
+    fixedAnnualMinimum: number;
+    annualFloor: number;
+    ytdModuleValue: number;
+    ytdInvoiced: number;
+    overageAmount: number;
+  };
+
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
