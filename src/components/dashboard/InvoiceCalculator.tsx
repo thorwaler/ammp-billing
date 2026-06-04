@@ -1292,10 +1292,15 @@ export function InvoiceCalculator({
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
       const isMatriarch = isMatriarchApiPackage(selectedCustomer.package);
+      const annualUpfrontB = result.perMWAnnualUpfrontBreakdown;
+      const annualUpfrontCycleAmount = annualUpfrontB
+        ? (annualUpfrontB.cycleType === 'annual_upfront' ? annualUpfrontB.annualFloor : annualUpfrontB.overageAmount)
+        : 0;
       const arrAmount = (result.basePricingCost || 0) +
         // SolarAfrica: starterPackageCost is setup fee (NRR), not ARR
         (isSolarAfrica ? 0 : (result.starterPackageCost || 0)) +
-        result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
+        // For per_mw_annual_upfront, ignore raw moduleCosts/minimumCharges — use cycle amount instead.
+        (annualUpfrontB ? annualUpfrontCycleAmount : result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0)) +
         // Hybrid tiered pricing (BLS and similar)
         (result.hybridTieredBreakdown?.ongrid.cost || 0) +
         (result.hybridTieredBreakdown?.hybrid.cost || 0) +
@@ -1304,7 +1309,7 @@ export function InvoiceCalculator({
         (result.elumEpmBreakdown?.totalCost || 0) +
         (result.elumJubailiBreakdown?.totalCost || 0) +
         (result.minimumContractAdjustment || 0) +
-        (result.minimumCharges || 0) +
+        (annualUpfrontB ? 0 : (result.minimumCharges || 0)) +
         // SolarAfrica: retainerCost is customization work (NRR), not ARR
         (isSolarAfrica ? 0 : (result.retainerCost || 0)) +
         // SolarAfrica: totalMWCost is the tier subscription (ARR)
