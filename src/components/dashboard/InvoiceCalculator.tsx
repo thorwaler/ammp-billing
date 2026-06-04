@@ -58,6 +58,7 @@ import {
 } from "@/lib/invoiceCalculations";
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
 import { uploadToSharePoint } from "@/utils/sharePointUpload";
+import { isAnnualUpfrontCycle } from "@/lib/invoiceScheduling";
 // Asset group filtering now handled server-side in ammp-sync-contract
 
 // Simplified interfaces - complex types moved to shared files
@@ -880,6 +881,10 @@ export function InvoiceCalculator({
       committedMinimumMW: selectedCustomer.committedMinimumMW,
       annualBillingAnchorDate: selectedCustomer.annualBillingAnchorDate,
       ytdInvoicedAmount: selectedCustomer.ytdInvoicedAmount,
+      perMWAnnualUpfrontIsAnnualCycle:
+        selectedCustomer.package === 'per_mw_annual_upfront'
+          ? isAnnualUpfrontCycle(invoiceDate ?? new Date(), selectedCustomer.annualBillingAnchorDate)
+          : undefined,
     };
 
     return { params, invoicePeriod: invoicePeriodDisplay };
