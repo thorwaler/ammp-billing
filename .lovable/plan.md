@@ -1,45 +1,52 @@
-## Fix: Invoice Calculator shows MW × rate instead of annual floor for per_mw_annual_upfront contracts
+## Fix: Calculator shows 0 for per_mw_annual_upfront on quarterly preview
 
 ### Root cause
 
-The Invoice Calculator's customer/contract loader (`src/components/dashboard/InvoiceCalculator.tsx`, lines ~253–402) doesn't know that SolarX's custom contract type is `per_mw_annual_upfront`:
+`src/lib/invoiceCalculations.ts` lines 1267–1273 (quarterly_overage branch):
 
-1. The `contracts` select (line 261) **doesn't fetch `contract_types(pricing_model)`**, **`committed_minimum_mw`**, or **`annual_billing_anchor_date`**.
-2. The transform (line 343) sets `package: contract.package as PackageType` directly — for custom contract types this is `'pro'` (or similar), never `'per_mw_annual_upfront'`.
-3. `buildCalculationParams` (line 812) passes `packageType: selectedCustomer.package` and never sets `committedMinimumMW` / `annualBillingAnchorDate` / `ytdInvoicedAmount`.
+```ts
+const billedSoFar = Math.max(ytdInvoiced, annualFloor);
+overageAmount = Math.max(0, annualModuleValue - billedSoFar);
+cycleAmount = overageAmount;
+```
 
-Consequence: `calculateInvoice` never enters the `per_mw_annual_upfront` branch, so it doesn't override `result.totalPrice` with the annual floor. The UI's total (line 2921, `result.totalPrice`) shows the raw MW × rate (9,137) instead of the 14,500 minimum.
+The `Math.max(ytdInvoiced, annualFloor)` **pretends the annual floor has already been billed** even when `ytdInvoiced = 0`. For SolarX previewing a quarterly invoice with `ytd_invoiced_amount = 0`:
 
-This is the same root issue we already fixed for `UpcomingInvoicesList` and `InvoiceCalculator`'s YTD/anchor lookup at line 1400 — but only at *invoice-save* time. The *calculation/preview* path was never patched.
+- `annualFloor = 14500` (fixed minimum)
+- `annualModuleValue ≈ 9137` (MW × rate full-year)
+- `billedSoFar = max(0, 14500) = 14500`
+- `overageAmount = max(0, 9137 − 14500) = 0`
+- → `totalPrice = 0`
+
+This is the bootstrap bug: if the contract's first quarterly invoice isn't at the anchor month, the floor is never billed.
 
 ### Fix
 
-**`src/components/dashboard/InvoiceCalculator.tsx`** (only file touched):
+Change the quarterly_overage block so it catches up to the floor and to YTD module value:
 
-1. Add to the contracts select (line 261 block):
-   - `committed_minimum_mw`
-   - `annual_billing_anchor_date`
-   - `ytd_invoiced_amount`
-   - `contract_types ( pricing_model )`
+```ts
+const targetYTD = Math.max(annualFloor, annualModuleValue);
+overageAmount = Math.max(0, targetYTD - ytdInvoiced);
+cycleAmount = overageAmount;
+```
 
-2. In the transform (line 338 return object):
-   - Override `package`: if `contract.contract_types?.pricing_model === 'per_mw_annual_upfront'`, set `package: 'per_mw_annual_upfront' as PackageType`; otherwise keep `contract.package as PackageType`.
-   - Map `committedMinimumMW: Number(contract.committed_minimum_mw) ?? undefined`
-   - Map `annualBillingAnchorDate: contract.annual_billing_anchor_date ?? undefined`
-   - Map `ytdInvoicedAmount: Number(contract.ytd_invoiced_amount) ?? 0` (add to `Customer` interface if missing)
+Behavior after the fix:
 
-3. In `buildCalculationParams` (line 812 params object), pass:
-   - `committedMinimumMW: selectedCustomer.committedMinimumMW`
-   - `annualBillingAnchorDate: selectedCustomer.annualBillingAnchorDate`
-   - `ytdInvoicedAmount: selectedCustomer.ytdInvoicedAmount`
+| Scenario | `ytdInvoiced` | `annualModuleValue` | `annualFloor` | Charged this Q |
+|---|---|---|---|---|
+| First quarterly (no floor billed yet) | 0 | 9,137 | 14,500 | **14,500** |
+| Anchor-quarter already billed | 14,500 | 9,137 | 14,500 | 0 |
+| Module value exceeds floor | 14,500 | 18,000 | 14,500 | 3,500 |
+| Anchor-cycle billed + later overage | 16,000 | 20,000 | 14,500 | 4,000 |
 
-That restores `calculateInvoice`'s `per_mw_annual_upfront` branch in the calculator preview, so `result.totalPrice` becomes `max(committedMW × rate, fixedAnnualMinimum) + addons + ...`, matching the Xero line-item and support-doc fix.
+Annual-cycle branch is unchanged: anchor month still charges the full `annualFloor` upfront.
 
-### Out of scope
-
-- No changes to `invoiceCalculations.ts`, the support doc, the Xero builder, or other pages.
-- No DB migration.
+The same `cycleAmount`/`overageAmount` flow into `result.totalPrice` and `result.perMWAnnualUpfrontBreakdown.overageAmount`, so the Xero line items, support doc, and dashboard all reflect the catch-up without further changes.
 
 ### Files
 
-- `src/components/dashboard/InvoiceCalculator.tsx` — select fields, customer transform, params builder.
+- `src/lib/invoiceCalculations.ts` — only the quarterly_overage block (lines 1267–1273).
+
+### Out of scope
+
+- The duplicate-key React warning in `UpcomingInvoicesList` (separate issue — same `contractId-date` key appearing twice because the per_mw_annual_upfront contract is being listed under two cycles). Mention only; do not fix in this turn unless the user asks.
