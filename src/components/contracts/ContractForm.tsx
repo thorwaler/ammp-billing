@@ -761,6 +761,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       setOnboardingSetupFee(existingContract?.onboardingSetupFee || MATRIARCH_ONBOARDING_FEE);
       setVendorApiFee(existingContract?.vendorApiFee || MATRIARCH_VENDOR_API_FEE);
       setShowCustomPricing(false);
+    } else if (value === "per_mw_annual_upfront") {
+      // Per-MW with Annual Upfront Minimum — modules drive per-MW pricing (like Pro);
+      // billing is quarterly with one annual upfront invoice on the anchor date.
+      form.setValue("modules", ["technicalMonitoring"]);
+      form.setValue("billingFrequency", "quarterly");
+      form.setValue("annualMinimumFee", (existingContract as any)?.annualMinimumFee ?? (existingContract as any)?.annual_minimum_fee ?? 60000);
+      form.setValue("committedMinimumMW", (existingContract as any)?.committedMinimumMW ?? (existingContract as any)?.committed_minimum_mw ?? 0);
+      form.setValue("annualBillingAnchorDate", ((existingContract as any)?.annualBillingAnchorDate ?? (existingContract as any)?.annual_billing_anchor_date ?? "")?.toString().substring(0, 10) || "");
+      setShowCustomPricing(false);
     } else {
       // Check if this is a custom contract type
       const customType = customContractTypes.find((ct: any) => ct.slug === value);
