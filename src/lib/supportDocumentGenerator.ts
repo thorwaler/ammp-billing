@@ -451,9 +451,12 @@ export async function generateSupportDocumentData(
     assetBreakdownPeriodTotal = calculationResult.totalMWCost;
     minimumChargesForBreakdown = 0;
   } else if (calculationResult.perMWAnnualUpfrontBreakdown) {
-    // For Per-MW + Annual Upfront, use floor (annual cycle) or overage (quarterly cycle)
+    // For Per-MW + Annual Upfront:
+    //  - annual cycle: asset subtotal = MW-based value; minimumContractAdjustment
+    //    (set above) brings it up to the annual floor. Avoids double-counting.
+    //  - quarterly cycle: just the overage amount.
     const b = calculationResult.perMWAnnualUpfrontBreakdown;
-    assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront' ? b.annualFloor : b.overageAmount;
+    assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront' ? b.mwBasedFloor : b.overageAmount;
     minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
