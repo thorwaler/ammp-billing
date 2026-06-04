@@ -227,6 +227,10 @@ export function UpcomingInvoicesList({
               ? (c as any).performance_per_mwp_tiers as PerformanceMWpTier[]
               : undefined,
             invoiceLeadDays: c.invoice_lead_days ?? 0,
+            annualMinimumFee: (c as any).annual_minimum_fee ?? undefined,
+            committedMinimumMW: (c as any).committed_minimum_mw ?? undefined,
+            annualBillingAnchorDate: (c as any).annual_billing_anchor_date ?? undefined,
+            ytdInvoicedAmount: Number((c as any).ytd_invoiced_amount) || 0,
           };
         });
 
