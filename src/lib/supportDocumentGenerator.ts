@@ -543,7 +543,7 @@ export async function generateSupportDocumentData(
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
-    minimumAnnualValue, // Pass through the minimum annual value from contract
+    minimumAnnualValue: effectiveMinimumAnnualValue, // Pass through the minimum annual value from contract
     totalsMatch,
     calculationBreakdown: {
       assetBreakdownPeriod: assetBreakdownPeriodTotal,
