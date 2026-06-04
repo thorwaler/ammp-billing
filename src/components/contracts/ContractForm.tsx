@@ -233,6 +233,7 @@ interface ContractFormProps {
     annualMinimumFee?: number;
     committedMinimumMW?: number;
     annualBillingAnchorDate?: string;
+    contractTypeId?: string;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -267,7 +268,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [municipalityCount, setMunicipalityCount] = useState<number>(0);
   const [apiSetupFee, setApiSetupFee] = useState<number>(SOLAR_AFRICA_SETUP_FEE);
   const [hourlyRate, setHourlyRate] = useState<number>(SOLAR_AFRICA_CUSTOMIZATION_HOURLY_RATE);
-  const [selectedContractTypeId, setSelectedContractTypeId] = useState<string | null>(null);
+  const [selectedContractTypeId, setSelectedContractTypeId] = useState<string | null>(
+    existingContract?.contractTypeId ?? null
+  );
   const [upfrontDiscountPercent, setUpfrontDiscountPercent] = useState<number>(0);
   const [commitmentDiscountPercent, setCommitmentDiscountPercent] = useState<number>(0);
   const { currency: userCurrency} = useCurrency();
@@ -686,6 +689,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   }, [existingCustomer?.id]);
 
   const watchPackage = form.watch("package");
+  const selectedContractType = customContractTypes.find((ct: any) => ct.id === selectedContractTypeId);
+  const isAnnualUpfront =
+    watchPackage === "per_mw_annual_upfront" ||
+    selectedContractType?.pricing_model === "per_mw_annual_upfront";
   const watchModules = form.watch("modules");
   const watchAddons = form.watch("addons");
 
@@ -800,6 +807,17 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         // Set custom pricing visibility based on pricing model
         const needsCustomPricing = ['per_mw_modules'].includes(customType.pricing_model);
         setShowCustomPricing(needsCustomPricing);
+
+        // Seed annual-upfront fields when the custom type uses that pricing model
+        if (customType.pricing_model === 'per_mw_annual_upfront') {
+          form.setValue("billingFrequency", "quarterly");
+          form.setValue("annualMinimumFee", existingContract?.annualMinimumFee ?? 0);
+          form.setValue("committedMinimumMW", existingContract?.committedMinimumMW ?? 0);
+          form.setValue(
+            "annualBillingAnchorDate",
+            (existingContract?.annualBillingAnchorDate ?? "").toString().substring(0, 10) || ""
+          );
+        }
       } else {
         setSelectedContractTypeId(null);
         setShowCustomPricing(false);
@@ -1031,7 +1049,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         package: data.package,
         initial_mw: data.initialMW,
         currency: data.currency,
-        billing_frequency: data.package === 'per_site' ? 'monthly' : data.package === 'per_mw_annual_upfront' ? 'quarterly' : data.billingFrequency,
+        billing_frequency: data.package === 'per_site' ? 'monthly' : isAnnualUpfront ? 'quarterly' : data.billingFrequency,
         invoicing_type: data.invoicingType || 'standard',
         invoice_lead_days: data.invoiceLeadDays ?? 0,
         // POC contracts don't have invoicing
@@ -1106,9 +1124,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         upfront_discount_percent: data.package === 'sps_monitoring' ? upfrontDiscountPercent : null,
         commitment_discount_percent: data.package === 'sps_monitoring' ? commitmentDiscountPercent : null,
         // Per-MW with Annual Upfront Minimum
-        annual_minimum_fee: data.package === 'per_mw_annual_upfront' ? (data.annualMinimumFee ?? 0) : null,
-        committed_minimum_mw: data.package === 'per_mw_annual_upfront' ? (data.committedMinimumMW ?? null) : null,
-        annual_billing_anchor_date: data.package === 'per_mw_annual_upfront' ? (data.annualBillingAnchorDate || null) : null,
+        annual_minimum_fee: isAnnualUpfront ? (data.annualMinimumFee ?? 0) : null,
+        committed_minimum_mw: isAnnualUpfront ? (data.committedMinimumMW ?? null) : null,
+        annual_billing_anchor_date: isAnnualUpfront ? (data.annualBillingAnchorDate || null) : null,
       };
 
       const contractMutation = existingContractId
@@ -1378,7 +1396,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             )}
 
             {/* Per-MW + Annual Upfront Minimum */}
-            {watchPackage === "per_mw_annual_upfront" && (
+            {isAnnualUpfront && (
               <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
                 <h3 className="font-medium">Annual Upfront Minimum</h3>
                 <p className="text-xs text-muted-foreground">

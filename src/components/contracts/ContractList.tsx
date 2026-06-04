@@ -236,6 +236,7 @@ export function ContractList() {
         annualMinimumFee: data.annual_minimum_fee ?? undefined,
         committedMinimumMW: data.committed_minimum_mw ?? undefined,
         annualBillingAnchorDate: data.annual_billing_anchor_date ?? undefined,
+        contractTypeId: data.contract_type_id ?? undefined,
       });
       setShowEditForm(true);
     } catch (error: any) {

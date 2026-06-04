@@ -143,6 +143,7 @@ export function UpcomingInvoicesList({
           committed_minimum_mw,
           annual_billing_anchor_date,
           ytd_invoiced_amount,
+          contract_types ( pricing_model ),
           customers (
             id,
             name,
@@ -178,7 +179,9 @@ export function UpcomingInvoicesList({
             nextInvoiceDate: c.next_invoice_date!,
             billingFrequency: c.billing_frequency || 'annual',
             currency: c.currency || 'EUR',
-            packageType: c.package,
+            packageType: ((c as any).contract_types?.pricing_model === 'per_mw_annual_upfront')
+              ? 'per_mw_annual_upfront'
+              : c.package,
             mwpManaged: Number(customer.mwp_managed) || 0,
             initialMW: Number(c.initial_mw) || Number(customer.mwp_managed) || 0,
             modules: Array.isArray(c.modules) ? c.modules : [],

@@ -1362,14 +1362,24 @@ export function InvoiceCalculator({
 
         const contractUpdate: Record<string, any> = {};
 
-        if (selectedCustomer.package === 'per_mw_annual_upfront' && selectedCustomer.contractId) {
-          // Dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
-          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
-          const { data: contractRow } = await supabase
+        // Detect annual-upfront via the contract's pricing_model too (custom contract types).
+        let isAnnualUpfrontContract = selectedCustomer.package === 'per_mw_annual_upfront';
+        let contractRow: any = null;
+        if (selectedCustomer.contractId) {
+          const { data } = await supabase
             .from('contracts')
-            .select('annual_billing_anchor_date, ytd_invoiced_amount')
+            .select('annual_billing_anchor_date, ytd_invoiced_amount, contract_types(pricing_model)')
             .eq('id', selectedCustomer.contractId)
             .maybeSingle();
+          contractRow = data;
+          if ((contractRow as any)?.contract_types?.pricing_model === 'per_mw_annual_upfront') {
+            isAnnualUpfrontContract = true;
+          }
+        }
+
+        if (isAnnualUpfrontContract && selectedCustomer.contractId) {
+          // Dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
+          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
 
           const anchor = contractRow?.annual_billing_anchor_date ?? null;
           const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
