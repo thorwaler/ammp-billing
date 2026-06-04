@@ -614,6 +614,18 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   </div>
                 )}
               </>
+            ) : data.perMWAnnualUpfrontBreakdown ? (
+              data.perMWAnnualUpfrontBreakdown.cycleType === 'annual_upfront' ? (
+                <div className="flex justify-between">
+                  <span>Annual Platform Fee — Minimum:</span>
+                  <span>{formatCurrency(data.perMWAnnualUpfrontBreakdown.annualFloor)}</span>
+                </div>
+              ) : (
+                <div className="flex justify-between">
+                  <span>Per-MW Quarterly Overage:</span>
+                  <span>{formatCurrency(data.perMWAnnualUpfrontBreakdown.overageAmount)}</span>
+                </div>
+              )
             ) : (
               data.calculationBreakdown.assetBreakdownPeriod > 0 && (
                 <div className="flex justify-between">
