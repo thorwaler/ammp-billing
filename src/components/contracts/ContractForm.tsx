@@ -144,6 +144,10 @@ const contractFormSchema = z.object({
   performancePerMwpTiers: z.array(z.any()).optional(),
   onboardingSetupFee: z.coerce.number().optional(),
   vendorApiFee: z.coerce.number().optional(),
+  // Per-MW with Annual Upfront Minimum
+  annualMinimumFee: z.coerce.number().optional(),
+  committedMinimumMW: z.coerce.number().optional(),
+  annualBillingAnchorDate: z.string().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -757,6 +761,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       setOnboardingSetupFee(existingContract?.onboardingSetupFee || MATRIARCH_ONBOARDING_FEE);
       setVendorApiFee(existingContract?.vendorApiFee || MATRIARCH_VENDOR_API_FEE);
       setShowCustomPricing(false);
+    } else if (value === "per_mw_annual_upfront") {
+      // Per-MW with Annual Upfront Minimum — modules drive per-MW pricing (like Pro);
+      // billing is quarterly with one annual upfront invoice on the anchor date.
+      form.setValue("modules", ["technicalMonitoring"]);
+      form.setValue("billingFrequency", "quarterly");
+      form.setValue("annualMinimumFee", (existingContract as any)?.annualMinimumFee ?? (existingContract as any)?.annual_minimum_fee ?? 60000);
+      form.setValue("committedMinimumMW", (existingContract as any)?.committedMinimumMW ?? (existingContract as any)?.committed_minimum_mw ?? 0);
+      form.setValue("annualBillingAnchorDate", ((existingContract as any)?.annualBillingAnchorDate ?? (existingContract as any)?.annual_billing_anchor_date ?? "")?.toString().substring(0, 10) || "");
+      setShowCustomPricing(false);
     } else {
       // Check if this is a custom contract type
       const customType = customContractTypes.find((ct: any) => ct.slug === value);
@@ -1085,6 +1098,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         // SPS Monitoring discount fields
         upfront_discount_percent: data.package === 'sps_monitoring' ? upfrontDiscountPercent : null,
         commitment_discount_percent: data.package === 'sps_monitoring' ? commitmentDiscountPercent : null,
+        // Per-MW with Annual Upfront Minimum
+        annual_minimum_fee: data.package === 'per_mw_annual_upfront' ? (data.annualMinimumFee ?? 0) : null,
+        committed_minimum_mw: data.package === 'per_mw_annual_upfront' ? (data.committedMinimumMW ?? null) : null,
+        annual_billing_anchor_date: data.package === 'per_mw_annual_upfront' ? (data.annualBillingAnchorDate || null) : null,
       };
 
       const contractMutation = existingContractId
@@ -1235,6 +1252,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="sps_monitoring">SPS Monitoring (3 stacking discounts, quarterly billing, €100k min)</SelectItem>
                       <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
                       <SelectItem value="matriarch_api">Matriarch API (Irradiance + Performance dual pricing)</SelectItem>
+                      <SelectItem value="per_mw_annual_upfront">Per-MW + Annual Upfront Minimum (Annual floor billed upfront, quarterly per-MW overage)</SelectItem>
                       {customContractTypes.length > 0 && (
                         <>
                           <SelectSeparator />
@@ -1351,6 +1369,68 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </div>
               </div>
             )}
+
+            {/* Per-MW + Annual Upfront Minimum */}
+            {watchPackage === "per_mw_annual_upfront" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-medium">Annual Upfront Minimum</h3>
+                <p className="text-xs text-muted-foreground">
+                  On the anchor date each year we invoice the annual floor upfront. Each subsequent
+                  quarter we check year-to-date per-MW value and invoice only the amount that exceeds
+                  what's already been billed for the year.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="annualMinimumFee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fixed Annual Minimum ({form.watch("currency") === "USD" ? "$" : "€"})</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={100} placeholder="60000" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="committedMinimumMW"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Committed Minimum MW (optional)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={0.1} placeholder="0" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          If set, floor = max(fixed, committed MW × per-MW rate).
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="annualBillingAnchorDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Annual Anchor Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          The upfront annual fee re-bills on this date each year.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
+
 
             {/* AMMP OS 2026 Trial Toggle */}
             {watchPackage === "ammp_os_2026" && (
