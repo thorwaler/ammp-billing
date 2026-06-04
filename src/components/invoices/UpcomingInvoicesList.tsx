@@ -139,6 +139,10 @@ export function UpcomingInvoicesList({
           irradiance_per_site_tiers,
           performance_per_mwp_tiers,
           invoice_lead_days,
+          annual_minimum_fee,
+          committed_minimum_mw,
+          annual_billing_anchor_date,
+          ytd_invoiced_amount,
           customers (
             id,
             name,
