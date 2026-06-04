@@ -989,8 +989,9 @@ export function InvoiceCalculator({
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
         }
-      } else {
+      } else if (!result.perMWAnnualUpfrontBreakdown) {
         // Standard module costs (no threshold wording)
+        // Skipped for per_mw_annual_upfront — handled by dedicated floor/overage block below.
         result.moduleCosts.forEach(mc => {
           lineItems.push({
             Description: xeroConfig?.modules?.description || mc.moduleName,
@@ -1006,6 +1007,30 @@ export function InvoiceCalculator({
             Description: "Minimum Charges",
             Quantity: 1,
             UnitAmount: result.minimumCharges,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
+
+      // Per-MW + Annual Upfront Minimum: emit floor or overage line in place of raw MW × rate modules.
+      if (result.perMWAnnualUpfrontBreakdown) {
+        const b = result.perMWAnnualUpfrontBreakdown;
+        const rateDisplay = `${currencySymbol}${b.perMWpRate.toLocaleString()}/MW`;
+        if (b.cycleType === 'annual_upfront') {
+          const committedMW = selectedCustomer.committedMinimumMW || 0;
+          const fixedMin = b.fixedAnnualMinimum || 0;
+          const desc = `Annual Platform Fee — Minimum (max of committed ${committedMW} MW × ${rateDisplay} = ${currencySymbol}${b.committedMinimumFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`;
+          lineItems.push({
+            Description: desc,
+            Quantity: 1,
+            UnitAmount: b.annualFloor,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        } else if (b.overageAmount > 0) {
+          lineItems.push({
+            Description: `Per-MW Quarterly Overage (${Number(mwManaged).toFixed(2)} MW × ${rateDisplay}, YTD adjustment above annual minimum)`,
+            Quantity: 1,
+            UnitAmount: b.overageAmount,
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
         }
