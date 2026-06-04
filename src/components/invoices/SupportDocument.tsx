@@ -261,6 +261,44 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* Per-MW + Annual Upfront Minimum Breakdown */}
+      {data.perMWAnnualUpfrontBreakdown && (
+        <section className="mb-6">
+          <h2 className="text-base font-bold mb-3">Per-MW + Annual Upfront Minimum</h2>
+          <div className="text-sm p-3 rounded space-y-1" style={{ backgroundColor: 'rgba(244, 244, 245, 0.5)' }}>
+            <p>
+              <strong>Billing Cycle:</strong>{' '}
+              {data.perMWAnnualUpfrontBreakdown.cycleType === 'annual_upfront'
+                ? 'Annual upfront (minimum floor billed at start of year)'
+                : 'Quarterly overage (per-MW value exceeded annual minimum YTD)'}
+            </p>
+            <p><strong>Per-MWp Rate:</strong> {formatCurrency(data.perMWAnnualUpfrontBreakdown.perMWpRate)}/MWp/year</p>
+            <p>
+              <strong>Committed Minimum:</strong>{' '}
+              {data.perMWAnnualUpfrontBreakdown.committedMinimumMW.toFixed(2)} MW ×{' '}
+              {formatCurrency(data.perMWAnnualUpfrontBreakdown.perMWpRate)} ={' '}
+              {formatCurrency(data.perMWAnnualUpfrontBreakdown.committedMinimumFloor)}
+            </p>
+            <p>
+              <strong>Fixed Annual Minimum:</strong>{' '}
+              {formatCurrency(data.perMWAnnualUpfrontBreakdown.fixedAnnualMinimum)}
+            </p>
+            <p className="font-bold pt-1 border-t border-border/50">
+              Annual Floor (max of above): {formatCurrency(data.perMWAnnualUpfrontBreakdown.annualFloor)}
+            </p>
+            {data.perMWAnnualUpfrontBreakdown.cycleType === 'quarterly_overage' && (
+              <div className="pt-2 mt-2 border-t border-border/50 space-y-1">
+                <p><strong>YTD Module Value:</strong> {formatCurrency(data.perMWAnnualUpfrontBreakdown.ytdModuleValue)}</p>
+                <p><strong>YTD Already Invoiced:</strong> {formatCurrency(data.perMWAnnualUpfrontBreakdown.ytdInvoiced)}</p>
+                <p className="font-bold">
+                  Overage Charged This Quarter: {formatCurrency(data.perMWAnnualUpfrontBreakdown.overageAmount)}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Solcast Tracking (if applicable) */}
       {data.solcastBreakdown && data.solcastBreakdown.length > 0 && (
         <section className="mb-6">
@@ -576,6 +614,18 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   </div>
                 )}
               </>
+            ) : data.perMWAnnualUpfrontBreakdown ? (
+              data.perMWAnnualUpfrontBreakdown.cycleType === 'annual_upfront' ? (
+                <div className="flex justify-between">
+                  <span>Annual Platform Fee — Minimum:</span>
+                  <span>{formatCurrency(data.perMWAnnualUpfrontBreakdown.annualFloor)}</span>
+                </div>
+              ) : (
+                <div className="flex justify-between">
+                  <span>Per-MW Quarterly Overage:</span>
+                  <span>{formatCurrency(data.perMWAnnualUpfrontBreakdown.overageAmount)}</span>
+                </div>
+              )
             ) : (
               data.calculationBreakdown.assetBreakdownPeriod > 0 && (
                 <div className="flex justify-between">

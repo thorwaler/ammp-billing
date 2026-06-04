@@ -174,6 +174,19 @@ export interface SupportDocumentData {
     totalAnnualCost: number;
   };
   
+  // Per-MW + Annual Upfront Minimum breakdown
+  perMWAnnualUpfrontBreakdown?: {
+    cycleType: 'annual_upfront' | 'quarterly_overage';
+    perMWpRate: number;
+    committedMinimumMW: number;
+    committedMinimumFloor: number;
+    fixedAnnualMinimum: number;
+    annualFloor: number;
+    ytdModuleValue: number;
+    ytdInvoiced: number;
+    overageAmount: number;
+  };
+
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
@@ -426,6 +439,11 @@ export async function generateSupportDocumentData(
     // For Matriarch API, use the total annual cost adjusted by frequency
     assetBreakdownPeriodTotal = calculationResult.totalMWCost;
     minimumChargesForBreakdown = 0;
+  } else if (calculationResult.perMWAnnualUpfrontBreakdown) {
+    // For Per-MW + Annual Upfront, use floor (annual cycle) or overage (quarterly cycle)
+    const b = calculationResult.perMWAnnualUpfrontBreakdown;
+    assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront' ? b.annualFloor : b.overageAmount;
+    minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
     assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
@@ -498,6 +516,20 @@ export async function generateSupportDocumentData(
       performanceAnnualTotal: calculationResult.matriarchApiBreakdown.performanceAnnualTotal,
       performanceTierBreakdown: calculationResult.matriarchApiBreakdown.performanceTierBreakdown,
       totalAnnualCost: calculationResult.matriarchApiBreakdown.totalAnnualCost,
+    } : undefined,
+    // Per-MW + Annual Upfront breakdown
+    perMWAnnualUpfrontBreakdown: calculationResult.perMWAnnualUpfrontBreakdown ? {
+      cycleType: calculationResult.perMWAnnualUpfrontBreakdown.cycleType,
+      perMWpRate: calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate,
+      committedMinimumMW: calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate > 0
+        ? calculationResult.perMWAnnualUpfrontBreakdown.committedMinimumFloor / calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate
+        : 0,
+      committedMinimumFloor: calculationResult.perMWAnnualUpfrontBreakdown.committedMinimumFloor,
+      fixedAnnualMinimum: calculationResult.perMWAnnualUpfrontBreakdown.fixedAnnualMinimum,
+      annualFloor: calculationResult.perMWAnnualUpfrontBreakdown.annualFloor,
+      ytdModuleValue: calculationResult.perMWAnnualUpfrontBreakdown.ytdModuleValue,
+      ytdInvoiced: calculationResult.perMWAnnualUpfrontBreakdown.ytdInvoiced,
+      overageAmount: calculationResult.perMWAnnualUpfrontBreakdown.overageAmount,
     } : undefined,
     calculatedTotal,
     invoiceTotal,
