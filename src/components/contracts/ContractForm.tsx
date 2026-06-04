@@ -229,6 +229,10 @@ interface ContractFormProps {
     performancePerMwpTiers?: any[];
     onboardingSetupFee?: number;
     vendorApiFee?: number;
+    // Per-MW + Annual Upfront Minimum fields
+    annualMinimumFee?: number;
+    committedMinimumMW?: number;
+    annualBillingAnchorDate?: string;
   };
   onComplete?: () => void;
   onCancel?: () => void;
