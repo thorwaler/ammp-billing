@@ -415,7 +415,7 @@ export function UpcomingInvoicesList({
       const invoice = invoices.find(i => i.contractId === contract.contractId);
       if (!invoice) return;
 
-      const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+      const nextDate = calculateNextInvoiceDate(invoice);
       
       const { error } = await supabase
         .from('contracts')
@@ -456,7 +456,7 @@ export function UpcomingInvoicesList({
 
       // Build update promises for each contract
       const updates = fullInvoices.map(invoice => {
-        const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+        const nextDate = calculateNextInvoiceDate(invoice);
         return supabase
           .from('contracts')
           .update({
@@ -509,7 +509,7 @@ export function UpcomingInvoicesList({
         .maybeSingle();
       const exchangeRate = currencySettings?.exchange_rate || 0.92;
 
-      const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+      const nextDate = calculateNextInvoiceDate(invoice);
       const estimatedAmount = calculateEstimatedAmount(invoice);
       
       // Calculate EUR amount
