@@ -324,6 +324,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       siteSizeThresholdKwp: existingContract.siteSizeThresholdKwp,
       belowThresholdPricePerMWp: existingContract.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: existingContract.aboveThresholdPricePerMWp,
+      annualMinimumFee: existingContract.annualMinimumFee ?? 0,
+      committedMinimumMW: existingContract.committedMinimumMW ?? 0,
+      annualBillingAnchorDate: existingContract.annualBillingAnchorDate?.toString().substring(0, 10) || "",
     } : {
       contractName: "",
       companyName: existingCustomer?.name || "",
