@@ -355,6 +355,14 @@ export function UpcomingInvoicesList({
       // SPS Monitoring discount fields
       upfrontDiscountPercent: invoice.upfrontDiscountPercent,
       commitmentDiscountPercent: invoice.commitmentDiscountPercent,
+      // Per-MW + Annual Upfront Minimum fields
+      annualMinimumFee: invoice.annualMinimumFee,
+      committedMinimumMW: invoice.committedMinimumMW,
+      annualBillingAnchorDate: invoice.annualBillingAnchorDate,
+      ytdInvoicedAmount: invoice.ytdInvoicedAmount,
+      perMWAnnualUpfrontIsAnnualCycle: invoice.packageType === 'per_mw_annual_upfront'
+        ? isAnnualUpfrontCycle(invoice.nextInvoiceDate, invoice.annualBillingAnchorDate)
+        : undefined,
     });
     
     return result.totalPrice;
