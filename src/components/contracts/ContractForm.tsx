@@ -766,9 +766,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       // billing is quarterly with one annual upfront invoice on the anchor date.
       form.setValue("modules", ["technicalMonitoring"]);
       form.setValue("billingFrequency", "quarterly");
-      form.setValue("annualMinimumFee", (existingContract as any)?.annualMinimumFee ?? (existingContract as any)?.annual_minimum_fee ?? 60000);
-      form.setValue("committedMinimumMW", (existingContract as any)?.committedMinimumMW ?? (existingContract as any)?.committed_minimum_mw ?? 0);
-      form.setValue("annualBillingAnchorDate", ((existingContract as any)?.annualBillingAnchorDate ?? (existingContract as any)?.annual_billing_anchor_date ?? "")?.toString().substring(0, 10) || "");
+      form.setValue("annualMinimumFee", existingContract?.annualMinimumFee ?? 0);
+      form.setValue("committedMinimumMW", existingContract?.committedMinimumMW ?? 0);
+      form.setValue("annualBillingAnchorDate", (existingContract?.annualBillingAnchorDate ?? "").toString().substring(0, 10) || "");
       setShowCustomPricing(false);
     } else {
       // Check if this is a custom contract type
