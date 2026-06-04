@@ -1044,9 +1044,9 @@ export function InvoiceCalculator({
         const b = result.perMWAnnualUpfrontBreakdown;
         const rateDisplay = `${currencySymbol}${b.perMWpRate.toLocaleString()}/MW`;
         if (b.cycleType === 'annual_upfront') {
-          const committedMW = selectedCustomer.committedMinimumMW || 0;
+          const syncedMW = b.syncedMW || 0;
           const fixedMin = b.fixedAnnualMinimum || 0;
-          const desc = `Annual Platform Fee — Minimum (max of committed ${committedMW} MW × ${rateDisplay} = ${currencySymbol}${b.committedMinimumFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`;
+          const desc = `Annual Platform Fee — Minimum (max of synced ${syncedMW.toFixed(2)} MW × ${rateDisplay} = ${currencySymbol}${b.mwBasedFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`;
           lineItems.push({
             Description: desc,
             Quantity: 1,

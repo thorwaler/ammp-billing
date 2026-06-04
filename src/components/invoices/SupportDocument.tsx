@@ -274,10 +274,10 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             </p>
             <p><strong>Per-MWp Rate:</strong> {formatCurrency(data.perMWAnnualUpfrontBreakdown.perMWpRate)}/MWp/year</p>
             <p>
-              <strong>Committed Minimum:</strong>{' '}
-              {data.perMWAnnualUpfrontBreakdown.committedMinimumMW.toFixed(2)} MW ×{' '}
+              <strong>MW-Based Minimum (synced):</strong>{' '}
+              {data.perMWAnnualUpfrontBreakdown.syncedMW.toFixed(2)} MW ×{' '}
               {formatCurrency(data.perMWAnnualUpfrontBreakdown.perMWpRate)} ={' '}
-              {formatCurrency(data.perMWAnnualUpfrontBreakdown.committedMinimumFloor)}
+              {formatCurrency(data.perMWAnnualUpfrontBreakdown.mwBasedFloor)}
             </p>
             <p>
               <strong>Fixed Annual Minimum:</strong>{' '}

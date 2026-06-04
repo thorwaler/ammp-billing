@@ -1,38 +1,59 @@
 ## Problem
 
-For the `per_mw_annual_upfront` contract, the invoice calculator shows **€5,362.82** instead of the **€14,500** annual minimum.
+The annual floor uses a stored `committed_minimum_mw` field, which is 0 on this contract. Result:
+- `committedMinimumFloor = 0 × €1,250 = €0`
+- Line label says "committed 0 MW"
 
-That value is exactly `14,500 − 9,137 YTD`, which is the **quarterly overage** branch in `invoiceCalculations.ts`. The calculator is being routed there because:
-
-- `InvoiceCalculator.tsx` does not pass `perMWAnnualUpfrontIsAnnualCycle`.
-- The fallback in `invoiceCalculations.ts` compares `params.periodStart` month vs the anchor month. The contract's `periodStart` is not in the anchor month (June), so it returns `false` → quarterly overage cycle → catch-up to floor minus existing YTD.
-
-The Upcoming Invoices list already handles this correctly using `isAnnualUpfrontCycle(invoiceDate, annualBillingAnchorDate)` from `src/lib/invoiceScheduling.ts`. The manual calculator just isn't using the same helper.
+The user wants the floor's MW-based component to use the **live AMMP-synced MW for this contract** (the same `adjustedTotalMW` already computed for everything else from `cached_capabilities` + asset-group filters), not the contract field.
 
 ## Fix
 
-In `src/components/dashboard/InvoiceCalculator.tsx`, inside `buildCalculationParams` (around line 879–882), set the annual-cycle flag explicitly using the chosen `invoiceDate` and the contract's anchor:
+### 1. `src/lib/invoiceCalculations.ts` (per_mw_annual_upfront branch, ~line 1239)
 
+Replace:
 ```ts
-import { isAnnualUpfrontCycle } from "@/lib/invoiceScheduling";
-
-// inside buildCalculationParams params object:
-perMWAnnualUpfrontIsAnnualCycle:
-  selectedCustomer.package === 'per_mw_annual_upfront'
-    ? isAnnualUpfrontCycle(invoiceDate ?? new Date(), selectedCustomer.annualBillingAnchorDate)
-    : undefined,
+const committedMinimumFloor = (params.committedMinimumMW || 0) * perMWpRate;
+```
+with the synced MW × rate:
+```ts
+// Floor's MW-based component uses live AMMP-synced MW (adjustedTotalMW),
+// not a static committed value on the contract.
+const mwBasedFloor = adjustedTotalMW * perMWpRate;
+const annualFloor = Math.max(fixedAnnualMinimum, mwBasedFloor);
 ```
 
-With anchor = June 4 and `invoiceDate` in June, this returns `true`, so the calculator enters the `annual_upfront` branch and `cycleAmount = annualFloor = 14,500`. YTD is no longer subtracted on the annual cycle invoice.
+Update the result breakdown name to reflect the new meaning. Rename `committedMinimumFloor` → `mwBasedFloor` in the `perMWAnnualUpfrontBreakdown` shape (`invoiceCalculations.ts` interface + the assignment around line 1281). Keep `committedMinimumMW` removed from output (or set to `adjustedTotalMW` for display).
+
+### 2. `src/components/dashboard/InvoiceCalculator.tsx` (~line 1041–1050)
+
+Change line item description so it reads from synced MW instead of `selectedCustomer.committedMinimumMW`:
+```ts
+const syncedMW = Number(mwManaged) || 0;
+const desc = `Annual Platform Fee — Minimum (max of synced ${syncedMW.toFixed(2)} MW × ${rateDisplay} = ${currencySymbol}${b.mwBasedFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`;
+```
+
+### 3. `src/components/invoices/MergedInvoiceDialog.tsx` (~line 297)
+
+Same label update: replace `b.committedMinimumFloor` with `b.mwBasedFloor` and rephrase "committed MW" → "synced MW".
+
+### 4. `src/components/invoices/SupportDocument.tsx` (~line 270–285)
+
+Render with the new field names, showing synced MW × rate = mwBasedFloor.
+
+### 5. `src/lib/supportDocumentGenerator.ts` (~line 520–530)
+
+Stop deriving `committedMinimumMW` from `committedMinimumFloor / rate`. Use the synced MW directly (already on the invoice/contract context) and emit `mwBasedFloor` for the support doc.
 
 ## Out of scope
 
-- No changes to `invoiceCalculations.ts`. The annual/quarterly branches there are correct; they just need the right input.
-- No changes to YTD storage, schema, or the post-send YTD rollover logic (`handleSendToXero` still uses `isAnnualUpfrontCycle` independently for the DB update).
-- No changes to `UpcomingInvoicesList.tsx` — it already uses this helper.
+- The contract form field `committed_minimum_mw` is no longer used for calculation. Leaving the DB column and form field as-is for now (silent no-op). If you want it removed from the contract form UI, say the word and we'll do that in a follow-up — it's a separate edit.
+- No changes to YTD logic, anchor/cycle detection, or quarterly overage math; those already use `adjustedTotalMW` for the overage calculation.
 
 ## Validation
 
-1. Open the per-MW + Annual Upfront contract in the Invoice Generator with an invoice date in June (anchor month). Expect total **€14,500**, with the line item "Annual Platform Fee — Minimum …".
-2. Change the invoice date to a non-anchor month (e.g. September). Expect the quarterly overage branch: `max(0, max(floor, MW × rate) − YTD)`.
-3. Confirm the console debug log shows `totalPrice: 14500` for the June case.
+Reload the invoice generator on this contract. With 7.3 MW synced and €1,250/MW rate:
+- `mwBasedFloor` = 7.3 × 1,250 ≈ €9,125
+- `annualFloor` = max(9,125, 14,500) = €14,500 (unchanged total)
+- Label now reads: "max of synced 7.30 MW × €1,250/MW = €9,125 and fixed minimum €14,500"
+
+The support document should mirror the same wording.

@@ -293,8 +293,9 @@ export function MergedInvoiceDialog({
         const rateDisplay = `${currencySymbol}${b.perMWpRate.toLocaleString()}/MW`;
         if (b.cycleType === 'annual_upfront') {
           const fixedMin = b.fixedAnnualMinimum || 0;
+          const syncedMW = b.syncedMW || 0;
           lineItems.push({
-            Description: `[${contractLabel}] Annual Platform Fee — Minimum (max of committed MW × ${rateDisplay} = ${currencySymbol}${b.committedMinimumFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`,
+            Description: `[${contractLabel}] Annual Platform Fee — Minimum (max of synced ${syncedMW.toFixed(2)} MW × ${rateDisplay} = ${currencySymbol}${b.mwBasedFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`,
             Quantity: 1,
             UnitAmount: b.annualFloor,
             AccountCode: ACCOUNT_PLATFORM_FEES
