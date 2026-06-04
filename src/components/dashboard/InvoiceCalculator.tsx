@@ -881,6 +881,10 @@ export function InvoiceCalculator({
       committedMinimumMW: selectedCustomer.committedMinimumMW,
       annualBillingAnchorDate: selectedCustomer.annualBillingAnchorDate,
       ytdInvoicedAmount: selectedCustomer.ytdInvoicedAmount,
+      perMWAnnualUpfrontIsAnnualCycle:
+        selectedCustomer.package === 'per_mw_annual_upfront'
+          ? isAnnualUpfrontCycle(invoiceDate ?? new Date(), selectedCustomer.annualBillingAnchorDate)
+          : undefined,
     };
 
     return { params, invoicePeriod: invoicePeriodDisplay };
