@@ -4,8 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { calculateInvoice } from "@/lib/invoiceCalculations";
-import { addMonths, addYears } from "date-fns";
-import { parseDateCET } from "@/lib/dateUtils";
+import { getNextInvoiceDate, isAnnualUpfrontCycle } from "@/lib/invoiceScheduling";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier, IrradianceSiteTier, PerformanceMWpTier } from "@/data/pricingData";
 
 export interface UpcomingInvoice {
@@ -59,6 +58,11 @@ export interface UpcomingInvoice {
   irradiancePerSiteTiers?: IrradianceSiteTier[];
   performancePerMwpTiers?: PerformanceMWpTier[];
   invoiceLeadDays?: number;
+  // Per-MW + Annual Upfront Minimum fields
+  annualMinimumFee?: number;
+  committedMinimumMW?: number;
+  annualBillingAnchorDate?: string;
+  ytdInvoicedAmount?: number;
 }
 
 interface CustomerGroup {
@@ -135,6 +139,10 @@ export function UpcomingInvoicesList({
           irradiance_per_site_tiers,
           performance_per_mwp_tiers,
           invoice_lead_days,
+          annual_minimum_fee,
+          committed_minimum_mw,
+          annual_billing_anchor_date,
+          ytd_invoiced_amount,
           customers (
             id,
             name,
@@ -219,6 +227,10 @@ export function UpcomingInvoicesList({
               ? (c as any).performance_per_mwp_tiers as PerformanceMWpTier[]
               : undefined,
             invoiceLeadDays: c.invoice_lead_days ?? 0,
+            annualMinimumFee: (c as any).annual_minimum_fee ?? undefined,
+            committedMinimumMW: (c as any).committed_minimum_mw ?? undefined,
+            annualBillingAnchorDate: (c as any).annual_billing_anchor_date ?? undefined,
+            ytdInvoicedAmount: Number((c as any).ytd_invoiced_amount) || 0,
           };
         });
 
@@ -229,20 +241,13 @@ export function UpcomingInvoicesList({
       );
 
       if (automatedPastDue.length > 0) {
-        // Helper to calculate next date inline (since the function is defined later)
-        const getNextDate = (currentDate: string, billingFrequency: string): Date => {
-          const date = parseDateCET(currentDate);
-          switch (billingFrequency) {
-            case 'monthly': return addMonths(date, 1);
-            case 'quarterly': return addMonths(date, 3);
-            case 'biannual': return addMonths(date, 6);
-            case 'annual': default: return addYears(date, 1);
-          }
-        };
-
         // Update each automated contract to next cycle
         for (const inv of automatedPastDue) {
-          const nextDate = getNextDate(inv.nextInvoiceDate, inv.billingFrequency);
+          const nextDate = getNextInvoiceDate(inv.nextInvoiceDate, {
+            packageType: inv.packageType,
+            billingFrequency: inv.billingFrequency,
+            annualBillingAnchorDate: inv.annualBillingAnchorDate,
+          });
           await supabase
             .from('contracts')
             .update({
@@ -350,6 +355,14 @@ export function UpcomingInvoicesList({
       // SPS Monitoring discount fields
       upfrontDiscountPercent: invoice.upfrontDiscountPercent,
       commitmentDiscountPercent: invoice.commitmentDiscountPercent,
+      // Per-MW + Annual Upfront Minimum fields
+      annualMinimumFee: invoice.annualMinimumFee,
+      committedMinimumMW: invoice.committedMinimumMW,
+      annualBillingAnchorDate: invoice.annualBillingAnchorDate,
+      ytdInvoicedAmount: invoice.ytdInvoicedAmount,
+      perMWAnnualUpfrontIsAnnualCycle: invoice.packageType === 'per_mw_annual_upfront'
+        ? isAnnualUpfrontCycle(invoice.nextInvoiceDate, invoice.annualBillingAnchorDate)
+        : undefined,
     });
     
     return result.totalPrice;
@@ -411,27 +424,19 @@ export function UpcomingInvoicesList({
   };
 
   // Calculate the next invoice date based on billing frequency
-  const calculateNextInvoiceDate = (currentDate: string, billingFrequency: string): Date => {
-    const date = parseDateCET(currentDate);
-    switch (billingFrequency) {
-      case 'monthly':
-        return addMonths(date, 1);
-      case 'quarterly':
-        return addMonths(date, 3);
-      case 'biannual':
-        return addMonths(date, 6);
-      case 'annual':
-      default:
-        return addYears(date, 1);
-    }
-  };
+  const calculateNextInvoiceDate = (invoice: UpcomingInvoice): Date =>
+    getNextInvoiceDate(invoice.nextInvoiceDate, {
+      packageType: invoice.packageType,
+      billingFrequency: invoice.billingFrequency,
+      annualBillingAnchorDate: invoice.annualBillingAnchorDate,
+    });
 
   const handleSkipInvoice = async (contract: any) => {
     try {
       const invoice = invoices.find(i => i.contractId === contract.contractId);
       if (!invoice) return;
 
-      const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+      const nextDate = calculateNextInvoiceDate(invoice);
       
       const { error } = await supabase
         .from('contracts')
@@ -472,7 +477,7 @@ export function UpcomingInvoicesList({
 
       // Build update promises for each contract
       const updates = fullInvoices.map(invoice => {
-        const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+        const nextDate = calculateNextInvoiceDate(invoice);
         return supabase
           .from('contracts')
           .update({
@@ -525,7 +530,7 @@ export function UpcomingInvoicesList({
         .maybeSingle();
       const exchangeRate = currencySettings?.exchange_rate || 0.92;
 
-      const nextDate = calculateNextInvoiceDate(invoice.nextInvoiceDate, invoice.billingFrequency);
+      const nextDate = calculateNextInvoiceDate(invoice);
       const estimatedAmount = calculateEstimatedAmount(invoice);
       
       // Calculate EUR amount

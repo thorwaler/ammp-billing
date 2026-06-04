@@ -1359,34 +1359,72 @@ export function InvoiceCalculator({
         const currentPeriodEnd = invoiceDate ? new Date(invoiceDate) : new Date();
         const nextPeriodStart = new Date(currentPeriodEnd);
         nextPeriodStart.setDate(nextPeriodStart.getDate() + 1);
-        
-        let nextPeriodEnd = new Date(nextPeriodStart);
-        switch (billingFrequency) {
-          case 'monthly':
-            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
-            break;
-          case 'quarterly':
-            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 3);
-            break;
-          case 'biannual':
-            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 6);
-            break;
-          case 'annual':
-            nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
-            break;
+
+        const contractUpdate: Record<string, any> = {};
+
+        if (selectedCustomer.package === 'per_mw_annual_upfront' && selectedCustomer.contractId) {
+          // Dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
+          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
+          const { data: contractRow } = await supabase
+            .from('contracts')
+            .select('annual_billing_anchor_date, ytd_invoiced_amount')
+            .eq('id', selectedCustomer.contractId)
+            .maybeSingle();
+
+          const anchor = contractRow?.annual_billing_anchor_date ?? null;
+          const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
+          const nextDate = getNextInvoiceDate(invoiceDate, {
+            packageType: 'per_mw_annual_upfront',
+            billingFrequency: 'quarterly',
+            annualBillingAnchorDate: anchor,
+          });
+
+          const nextPeriodEnd = new Date(nextDate);
+          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+
+          contractUpdate.period_start = nextPeriodStart.toISOString();
+          contractUpdate.period_end = nextPeriodEnd.toISOString();
+          contractUpdate.next_invoice_date = nextDate.toISOString();
+
+          if (wasAnnualCycle) {
+            // Annual rollover: reset YTD to this invoice's amount.
+            contractUpdate.last_annual_invoice_date = invoiceDate.toISOString();
+            contractUpdate.ytd_invoiced_amount = result.totalPrice;
+          } else {
+            // Quarterly overage: increment YTD by this invoice's amount.
+            const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
+            contractUpdate.ytd_invoiced_amount = prevYtd + result.totalPrice;
+          }
+        } else {
+          let nextPeriodEnd = new Date(nextPeriodStart);
+          switch (billingFrequency) {
+            case 'monthly':
+              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
+              break;
+            case 'quarterly':
+              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 3);
+              break;
+            case 'biannual':
+              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 6);
+              break;
+            case 'annual':
+              nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
+              break;
+          }
+          // Subtract 1 day to get the last day of the period (not first day of next)
+          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+
+          contractUpdate.period_start = nextPeriodStart.toISOString();
+          contractUpdate.period_end = nextPeriodEnd.toISOString();
+          contractUpdate.next_invoice_date = nextPeriodEnd.toISOString();
         }
-        
-        // Subtract 1 day to get the last day of the period (not first day of next)
-        nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
-        
-        await supabase
-          .from('contracts')
-          .update({
-            period_start: nextPeriodStart.toISOString(),
-            period_end: nextPeriodEnd.toISOString(),
-            next_invoice_date: nextPeriodEnd.toISOString()
-          })
-          .eq('id', selectedCustomer.contractId);
+
+        if (selectedCustomer.contractId) {
+          await supabase
+            .from('contracts')
+            .update(contractUpdate)
+            .eq('id', selectedCustomer.contractId);
+        }
       }
       
       // Save invoice record to database for history tracking

@@ -229,6 +229,10 @@ interface ContractFormProps {
     performancePerMwpTiers?: any[];
     onboardingSetupFee?: number;
     vendorApiFee?: number;
+    // Per-MW + Annual Upfront Minimum fields
+    annualMinimumFee?: number;
+    committedMinimumMW?: number;
+    annualBillingAnchorDate?: string;
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -320,6 +324,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       siteSizeThresholdKwp: existingContract.siteSizeThresholdKwp,
       belowThresholdPricePerMWp: existingContract.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: existingContract.aboveThresholdPricePerMWp,
+      annualMinimumFee: existingContract.annualMinimumFee ?? 0,
+      committedMinimumMW: existingContract.committedMinimumMW ?? 0,
+      annualBillingAnchorDate: existingContract.annualBillingAnchorDate?.toString().substring(0, 10) || "",
     } : {
       contractName: "",
       companyName: existingCustomer?.name || "",
@@ -766,9 +773,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       // billing is quarterly with one annual upfront invoice on the anchor date.
       form.setValue("modules", ["technicalMonitoring"]);
       form.setValue("billingFrequency", "quarterly");
-      form.setValue("annualMinimumFee", (existingContract as any)?.annualMinimumFee ?? (existingContract as any)?.annual_minimum_fee ?? 60000);
-      form.setValue("committedMinimumMW", (existingContract as any)?.committedMinimumMW ?? (existingContract as any)?.committed_minimum_mw ?? 0);
-      form.setValue("annualBillingAnchorDate", ((existingContract as any)?.annualBillingAnchorDate ?? (existingContract as any)?.annual_billing_anchor_date ?? "")?.toString().substring(0, 10) || "");
+      form.setValue("annualMinimumFee", existingContract?.annualMinimumFee ?? 0);
+      form.setValue("committedMinimumMW", existingContract?.committedMinimumMW ?? 0);
+      form.setValue("annualBillingAnchorDate", (existingContract?.annualBillingAnchorDate ?? "").toString().substring(0, 10) || "");
       setShowCustomPricing(false);
     } else {
       // Check if this is a custom contract type
@@ -1024,7 +1031,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         package: data.package,
         initial_mw: data.initialMW,
         currency: data.currency,
-        billing_frequency: data.package === 'per_site' ? 'monthly' : data.billingFrequency,
+        billing_frequency: data.package === 'per_site' ? 'monthly' : data.package === 'per_mw_annual_upfront' ? 'quarterly' : data.billingFrequency,
         invoicing_type: data.invoicingType || 'standard',
         invoice_lead_days: data.invoiceLeadDays ?? 0,
         // POC contracts don't have invoicing

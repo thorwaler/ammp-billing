@@ -177,7 +177,8 @@ export type PackageType =
   | "ammp_os_2026"
   | "solar_africa_api"
   | "sps_monitoring"
-  | "matriarch_api";
+  | "matriarch_api"
+  | "per_mw_annual_upfront";
 
 // === SolarAfrica API Pricing ===
 

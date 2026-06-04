@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label";
 
 export type PricingModel =
   | "per_mw_modules"
+  | "per_mw_annual_upfront"
   | "hybrid_tiered"
   | "capped"
   | "per_site"
@@ -14,6 +15,7 @@ export type PricingModel =
 
 export const PRICING_MODEL_OPTIONS: { value: PricingModel; label: string; description: string }[] = [
   { value: "per_mw_modules", label: "Per-MW Modules", description: "Select modules priced per MWp/year" },
+  { value: "per_mw_annual_upfront", label: "Per-MW + Annual Upfront Minimum", description: "Annual floor billed upfront, quarterly per-MW overage when YTD value exceeds floor" },
   { value: "hybrid_tiered", label: "Hybrid Tiered", description: "Different rates for on-grid vs hybrid sites" },
   { value: "capped", label: "Capped / Flat Fee", description: "Fixed annual/monthly fee with optional MW cap" },
   { value: "per_site", label: "Per-Site", description: "Onboarding fee + annual subscription per site" },
