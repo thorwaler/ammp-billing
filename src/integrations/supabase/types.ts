@@ -395,13 +395,16 @@ export type Database = {
           ammp_asset_ids: Json | null
           ammp_org_id: string | null
           ammp_sync_status: string | null
+          annual_billing_anchor_date: string | null
           annual_fee_per_site: number | null
+          annual_minimum_fee: number | null
           api_setup_fee: number | null
           base_monthly_price: number | null
           below_threshold_price_per_mwp: number | null
           billing_frequency: string | null
           cached_capabilities: Json | null
           commitment_discount_percent: number | null
+          committed_minimum_mw: number | null
           company_name: string
           contract_ammp_org_id: string | null
           contract_expiry_date: string | null
@@ -423,6 +426,7 @@ export type Database = {
           irradiance_per_site_tiers: Json | null
           is_trial: boolean
           last_ammp_sync: string | null
+          last_annual_invoice_date: string | null
           max_mw: number | null
           minimum_annual_value: number | null
           minimum_charge: number | null
@@ -454,6 +458,7 @@ export type Database = {
           vendor_api_fee: number | null
           vendor_api_onboarding_fee: number | null
           volume_discounts: Json | null
+          ytd_invoiced_amount: number
         }
         Insert: {
           above_threshold_price_per_mwp?: number | null
@@ -467,13 +472,16 @@ export type Database = {
           ammp_asset_ids?: Json | null
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
+          annual_billing_anchor_date?: string | null
           annual_fee_per_site?: number | null
+          annual_minimum_fee?: number | null
           api_setup_fee?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
           cached_capabilities?: Json | null
           commitment_discount_percent?: number | null
+          committed_minimum_mw?: number | null
           company_name: string
           contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
@@ -495,6 +503,7 @@ export type Database = {
           irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
           last_ammp_sync?: string | null
+          last_annual_invoice_date?: string | null
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
@@ -526,6 +535,7 @@ export type Database = {
           vendor_api_fee?: number | null
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
+          ytd_invoiced_amount?: number
         }
         Update: {
           above_threshold_price_per_mwp?: number | null
@@ -539,13 +549,16 @@ export type Database = {
           ammp_asset_ids?: Json | null
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
+          annual_billing_anchor_date?: string | null
           annual_fee_per_site?: number | null
+          annual_minimum_fee?: number | null
           api_setup_fee?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
           billing_frequency?: string | null
           cached_capabilities?: Json | null
           commitment_discount_percent?: number | null
+          committed_minimum_mw?: number | null
           company_name?: string
           contract_ammp_org_id?: string | null
           contract_expiry_date?: string | null
@@ -567,6 +580,7 @@ export type Database = {
           irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
           last_ammp_sync?: string | null
+          last_annual_invoice_date?: string | null
           max_mw?: number | null
           minimum_annual_value?: number | null
           minimum_charge?: number | null
@@ -598,6 +612,7 @@ export type Database = {
           vendor_api_fee?: number | null
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
+          ytd_invoiced_amount?: number
         }
         Relationships: [
           {
