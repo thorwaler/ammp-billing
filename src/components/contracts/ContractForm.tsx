@@ -804,6 +804,17 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         // Set custom pricing visibility based on pricing model
         const needsCustomPricing = ['per_mw_modules'].includes(customType.pricing_model);
         setShowCustomPricing(needsCustomPricing);
+
+        // Seed annual-upfront fields when the custom type uses that pricing model
+        if (customType.pricing_model === 'per_mw_annual_upfront') {
+          form.setValue("billingFrequency", "quarterly");
+          form.setValue("annualMinimumFee", existingContract?.annualMinimumFee ?? 0);
+          form.setValue("committedMinimumMW", existingContract?.committedMinimumMW ?? 0);
+          form.setValue(
+            "annualBillingAnchorDate",
+            (existingContract?.annualBillingAnchorDate ?? "").toString().substring(0, 10) || ""
+          );
+        }
       } else {
         setSelectedContractTypeId(null);
         setShowCustomPricing(false);
