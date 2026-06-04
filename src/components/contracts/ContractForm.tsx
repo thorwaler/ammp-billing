@@ -1382,7 +1382,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
             )}
 
             {/* Per-MW + Annual Upfront Minimum */}
-            {watchPackage === "per_mw_annual_upfront" && (
+            {isAnnualUpfront && (
               <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
                 <h3 className="font-medium">Annual Upfront Minimum</h3>
                 <p className="text-xs text-muted-foreground">
