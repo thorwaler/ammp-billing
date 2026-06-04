@@ -1,67 +1,33 @@
-## What's wrong
+# Fix support document mismatch for per-MW annual upfront billing
 
-In `src/lib/supportDocumentGenerator.ts`, `generateAssetBreakdown` has no `per_mw_annual_upfront` branch, so it falls into the default branch with `baseRatePerMWp = 0` → every asset row renders `pricePerKWp = 0` and `pricePerYear = 0`.
+## Goal
+Make the support document reconcile exactly to the invoice total for the `per_mw_annual_upfront` package.
 
-If we only fix that, a second inconsistency appears: the per-asset subtotal becomes ~€9,125 (7.30 MW × €1,250) but the Calculation Breakdown section keeps showing the €14,500 floor. The "Minimum Contract Adjustment" / "Total with Minimum" rows in the asset table won't render because `minimumContractAdjustment` and `minimumAnnualValue` aren't populated for this package.
+## What I’ll change
+1. Update the support-document total builder so the annual floor is represented only once.
+   - Keep the asset table as the annual MW-based subtotal.
+   - Keep the minimum contract adjustment as the delta up to the annual floor.
+   - Stop using the annual floor itself as the separate `assetBreakdownPeriod` amount for annual-upfront cycles, because that duplicates the minimum in the final total.
 
-## Fix (two coordinated edits, both in `src/lib/supportDocumentGenerator.ts`)
+2. Keep the existing support-document explanation intact, but make the calculation breakdown match the same logic.
+   - Annual-upfront cycle should show:
+     - asset subtotal from synced MW
+     - minimum adjustment only when the fixed annual minimum exceeds the MW subtotal
+     - final support-document total equal to the invoice total
+   - Quarterly overage cycle should still show only the overage amount.
 
-### 1. Per-asset rows use the real per-MW rate
-Add a `per_mw_annual_upfront` branch in `generateAssetBreakdown` that reads `calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate`:
+3. Verify the per-MW annual-upfront path against the current rendering rules.
+   - Confirm the mismatch row disappears.
+   - Confirm the support doc still shows the annual floor logic clearly.
 
-```ts
-if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
-  const perMWpRate = calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate;
-  const pricePerKWp = perMWpRate / 1000;
-  return {
-    assetBreakdown: assets.map(asset => {
-      const pvCapacityKWp = (asset.totalMW || 0) * 1000;
-      const isHybrid = asset.isHybrid || false;
-      return {
-        assetId: asset.assetId,
-        assetName: asset.assetName,
-        pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
-        isPV: !isHybrid,
-        isHybrid,
-        hubActive: selectedModules.includes('energySavingsHub'),
-        portalActive: selectedModules.includes('stakeholderPortal'),
-        controlActive: selectedModules.includes('control'),
-        reportingActive: selectedAddons.some(a => a.id === 'reporting'),
-        pricePerKWp: Math.round(pricePerKWp * 10000) / 10000,
-        pricePerYear: Math.round(pvCapacityKWp * pricePerKWp * 100) / 100,
-      };
-    })
-  };
-}
-```
+## Expected result
+For a case like 7.30 MW × €1,250 = €9,137.18-ish below a €14,500 floor, the document should show:
+- asset subtotal based on synced MW
+- minimum contract adjustment for the gap
+- support document total = €14,500.00
+- totals match
 
-### 2. Surface the annual floor as a minimum adjustment so the table totals match
-
-After the calculation result is assembled (around lines 407 / 534), populate the minimum fields for this package so the existing "Minimum Contract Adjustment" + "Total with Minimum" rows render:
-
-```ts
-// per_mw_annual_upfront: treat €14,500 floor as the minimum annual value
-let minimumContractAdjustment = calculationResult.minimumContractAdjustment || 0;
-let effectiveMinimumAnnualValue = minimumAnnualValue;
-
-if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
-  const b = calculationResult.perMWAnnualUpfrontBreakdown;
-  effectiveMinimumAnnualValue = b.annualFloor; // already max(fixed, MW-based)
-  const subtotal = b.mwBasedFloor;             // = sum of per-asset annual values
-  if (b.annualFloor > subtotal) {
-    minimumContractAdjustment = b.annualFloor - subtotal;
-  }
-}
-```
-
-Pass `effectiveMinimumAnnualValue` and the adjusted `minimumContractAdjustment` into the returned `SupportDocumentData`.
-
-## Result
-Asset table for per-MW + Annual Upfront with 7.30 MW @ €1,250/MW and €14,500 floor:
-- Each asset row shows its MW × rate.
-- Subtotal (Annual): €9,125.00
-- Minimum Contract Adjustment (Annual): €5,375.00
-- Total with Minimum (Annual): €14,500.00 — matches Calculation Breakdown and invoice total.
-
-## Out of scope
-- No change to invoice/calculation math, other packages, or `SupportDocument.tsx` markup (existing minimum-adjustment rows are reused as-is).
+## Technical details
+- File to update: `src/lib/supportDocumentGenerator.ts`
+- Likely fix: in the `perMWAnnualUpfrontBreakdown` annual-upfront branch, use the asset-based subtotal (`mwBasedFloor` / asset rows) in the breakdown math instead of `annualFloor`, so the minimum adjustment is not added twice.
+- `src/components/invoices/SupportDocument.tsx` likely does not need structural changes unless a label needs tightening after the data fix.
