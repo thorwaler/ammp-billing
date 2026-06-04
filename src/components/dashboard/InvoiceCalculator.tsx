@@ -345,7 +345,9 @@ export function InvoiceCalculator({
             name: c.name,
             nickname: c.nickname,
             companyName: (contract as any).company_name || undefined,
-            package: contract.package as PackageType,
+            package: ((contract as any).contract_types?.pricing_model === 'per_mw_annual_upfront'
+              ? 'per_mw_annual_upfront'
+              : contract.package) as PackageType,
             mwManaged: cachedCaps?.totalMW || Number(c.mwp_managed) || 0,
             modules,
             addons,
