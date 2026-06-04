@@ -306,7 +306,11 @@ export function InvoiceCalculator({
             irradiance_per_site_tiers,
             performance_per_mwp_tiers,
             vendor_api_fee,
-            onboarding_setup_fee
+            onboarding_setup_fee,
+            committed_minimum_mw,
+            annual_billing_anchor_date,
+            ytd_invoiced_amount,
+            contract_types ( pricing_model )
           )
         `)
         .eq('status', 'active');
