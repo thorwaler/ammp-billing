@@ -1370,6 +1370,68 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
 
+            {/* Per-MW + Annual Upfront Minimum */}
+            {watchPackage === "per_mw_annual_upfront" && (
+              <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
+                <h3 className="font-medium">Annual Upfront Minimum</h3>
+                <p className="text-xs text-muted-foreground">
+                  On the anchor date each year we invoice the annual floor upfront. Each subsequent
+                  quarter we check year-to-date per-MW value and invoice only the amount that exceeds
+                  what's already been billed for the year.
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="annualMinimumFee"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Fixed Annual Minimum ({form.watch("currency") === "USD" ? "$" : "€"})</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={100} placeholder="60000" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="committedMinimumMW"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Committed Minimum MW (optional)</FormLabel>
+                        <FormControl>
+                          <Input type="number" min={0} step={0.1} placeholder="0" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          If set, floor = max(fixed, committed MW × per-MW rate).
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="annualBillingAnchorDate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Annual Anchor Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          The upfront annual fee re-bills on this date each year.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            )}
+
+
+
             {/* AMMP OS 2026 Trial Toggle */}
             {watchPackage === "ammp_os_2026" && (
               <div className="space-y-4 p-4 border-l-4 border-primary rounded-md bg-muted/30">
