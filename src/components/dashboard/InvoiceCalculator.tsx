@@ -172,6 +172,7 @@ interface Customer {
   annualMinimumFee?: number;
   committedMinimumMW?: number;
   annualBillingAnchorDate?: string;
+  ytdInvoicedAmount?: number;
 }
 
 // Default modules and addons from shared data
