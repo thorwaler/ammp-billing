@@ -873,6 +873,10 @@ export function InvoiceCalculator({
       commitmentDiscountPercent: selectedCustomer.commitmentDiscountPercent,
       irradiancePerSiteTiers: selectedCustomer.irradiancePerSiteTiers,
       performancePerMwpTiers: selectedCustomer.performancePerMwpTiers,
+      // Per-MW + Annual Upfront params
+      committedMinimumMW: selectedCustomer.committedMinimumMW,
+      annualBillingAnchorDate: selectedCustomer.annualBillingAnchorDate,
+      ytdInvoicedAmount: selectedCustomer.ytdInvoicedAmount,
     };
 
     return { params, invoicePeriod: invoicePeriodDisplay };
