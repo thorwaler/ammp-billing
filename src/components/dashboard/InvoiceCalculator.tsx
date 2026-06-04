@@ -168,6 +168,10 @@ interface Customer {
   performancePerMwpTiers?: any[];
   vendorApiFee?: number;
   onboardingSetupFee?: number;
+  // Per-MW + Annual Upfront fields
+  annualMinimumFee?: number;
+  committedMinimumMW?: number;
+  annualBillingAnchorDate?: string;
 }
 
 // Default modules and addons from shared data
