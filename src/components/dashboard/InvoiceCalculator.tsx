@@ -309,6 +309,7 @@ export function InvoiceCalculator({
             onboarding_setup_fee,
             committed_minimum_mw,
             annual_billing_anchor_date,
+            annual_minimum_fee,
             ytd_invoiced_amount,
             contract_types ( pricing_model )
           )
@@ -407,6 +408,7 @@ export function InvoiceCalculator({
             vendorApiFee: Number((contract as any).vendor_api_fee) || undefined,
             onboardingSetupFee: Number((contract as any).onboarding_setup_fee) || undefined,
             // Per-MW + Annual Upfront fields
+            annualMinimumFee: (contract as any).annual_minimum_fee != null ? Number((contract as any).annual_minimum_fee) : undefined,
             committedMinimumMW: (contract as any).committed_minimum_mw != null ? Number((contract as any).committed_minimum_mw) : undefined,
             annualBillingAnchorDate: (contract as any).annual_billing_anchor_date || undefined,
             ytdInvoicedAmount: (contract as any).ytd_invoiced_amount != null ? Number((contract as any).ytd_invoiced_amount) : 0,
@@ -874,6 +876,7 @@ export function InvoiceCalculator({
       irradiancePerSiteTiers: selectedCustomer.irradiancePerSiteTiers,
       performancePerMwpTiers: selectedCustomer.performancePerMwpTiers,
       // Per-MW + Annual Upfront params
+      annualMinimumFee: selectedCustomer.annualMinimumFee,
       committedMinimumMW: selectedCustomer.committedMinimumMW,
       annualBillingAnchorDate: selectedCustomer.annualBillingAnchorDate,
       ytdInvoicedAmount: selectedCustomer.ytdInvoicedAmount,
