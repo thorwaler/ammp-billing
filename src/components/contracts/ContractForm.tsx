@@ -233,6 +233,7 @@ interface ContractFormProps {
     annualMinimumFee?: number;
     committedMinimumMW?: number;
     annualBillingAnchorDate?: string;
+    contractTypeId?: string;
   };
   onComplete?: () => void;
   onCancel?: () => void;
