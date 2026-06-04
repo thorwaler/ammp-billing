@@ -228,20 +228,13 @@ export function UpcomingInvoicesList({
       );
 
       if (automatedPastDue.length > 0) {
-        // Helper to calculate next date inline (since the function is defined later)
-        const getNextDate = (currentDate: string, billingFrequency: string): Date => {
-          const date = parseDateCET(currentDate);
-          switch (billingFrequency) {
-            case 'monthly': return addMonths(date, 1);
-            case 'quarterly': return addMonths(date, 3);
-            case 'biannual': return addMonths(date, 6);
-            case 'annual': default: return addYears(date, 1);
-          }
-        };
-
         // Update each automated contract to next cycle
         for (const inv of automatedPastDue) {
-          const nextDate = getNextDate(inv.nextInvoiceDate, inv.billingFrequency);
+          const nextDate = getNextInvoiceDate(inv.nextInvoiceDate, {
+            packageType: inv.packageType,
+            billingFrequency: inv.billingFrequency,
+            annualBillingAnchorDate: inv.annualBillingAnchorDate,
+          });
           await supabase
             .from('contracts')
             .update({
