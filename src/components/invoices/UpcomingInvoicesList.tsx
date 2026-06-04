@@ -403,20 +403,12 @@ export function UpcomingInvoicesList({
   };
 
   // Calculate the next invoice date based on billing frequency
-  const calculateNextInvoiceDate = (currentDate: string, billingFrequency: string): Date => {
-    const date = parseDateCET(currentDate);
-    switch (billingFrequency) {
-      case 'monthly':
-        return addMonths(date, 1);
-      case 'quarterly':
-        return addMonths(date, 3);
-      case 'biannual':
-        return addMonths(date, 6);
-      case 'annual':
-      default:
-        return addYears(date, 1);
-    }
-  };
+  const calculateNextInvoiceDate = (invoice: UpcomingInvoice): Date =>
+    getNextInvoiceDate(invoice.nextInvoiceDate, {
+      packageType: invoice.packageType,
+      billingFrequency: invoice.billingFrequency,
+      annualBillingAnchorDate: invoice.annualBillingAnchorDate,
+    });
 
   const handleSkipInvoice = async (contract: any) => {
     try {
