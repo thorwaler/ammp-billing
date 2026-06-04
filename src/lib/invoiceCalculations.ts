@@ -308,7 +308,8 @@ export interface CalculationResult {
     perMWpRate: number;
     annualFloor: number;
     fixedAnnualMinimum: number;
-    committedMinimumFloor: number;
+    syncedMW: number;
+    mwBasedFloor: number;
     ytdModuleValue: number;
     ytdInvoiced: number;
     overageAmount: number;
@@ -1236,8 +1237,10 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     }, 0);
 
     const fixedAnnualMinimum = params.annualMinimumFee || 0;
-    const committedMinimumFloor = (params.committedMinimumMW || 0) * perMWpRate;
-    const annualFloor = Math.max(fixedAnnualMinimum, committedMinimumFloor);
+    // Floor's MW-based component uses live AMMP-synced MW (adjustedTotalMW),
+    // not a static committed value on the contract.
+    const mwBasedFloor = adjustedTotalMW * perMWpRate;
+    const annualFloor = Math.max(fixedAnnualMinimum, mwBasedFloor);
 
     // Annual module value at current MW (full-year basis)
     const annualModuleValue = adjustedTotalMW * perMWpRate;
@@ -1278,7 +1281,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       perMWpRate,
       annualFloor,
       fixedAnnualMinimum,
-      committedMinimumFloor,
+      syncedMW: adjustedTotalMW,
+      mwBasedFloor,
       ytdModuleValue: annualModuleValue,
       ytdInvoiced,
       overageAmount,

@@ -178,8 +178,8 @@ export interface SupportDocumentData {
   perMWAnnualUpfrontBreakdown?: {
     cycleType: 'annual_upfront' | 'quarterly_overage';
     perMWpRate: number;
-    committedMinimumMW: number;
-    committedMinimumFloor: number;
+    syncedMW: number;
+    mwBasedFloor: number;
     fixedAnnualMinimum: number;
     annualFloor: number;
     ytdModuleValue: number;
@@ -521,10 +521,8 @@ export async function generateSupportDocumentData(
     perMWAnnualUpfrontBreakdown: calculationResult.perMWAnnualUpfrontBreakdown ? {
       cycleType: calculationResult.perMWAnnualUpfrontBreakdown.cycleType,
       perMWpRate: calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate,
-      committedMinimumMW: calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate > 0
-        ? calculationResult.perMWAnnualUpfrontBreakdown.committedMinimumFloor / calculationResult.perMWAnnualUpfrontBreakdown.perMWpRate
-        : 0,
-      committedMinimumFloor: calculationResult.perMWAnnualUpfrontBreakdown.committedMinimumFloor,
+      syncedMW: calculationResult.perMWAnnualUpfrontBreakdown.syncedMW,
+      mwBasedFloor: calculationResult.perMWAnnualUpfrontBreakdown.mwBasedFloor,
       fixedAnnualMinimum: calculationResult.perMWAnnualUpfrontBreakdown.fixedAnnualMinimum,
       annualFloor: calculationResult.perMWAnnualUpfrontBreakdown.annualFloor,
       ytdModuleValue: calculationResult.perMWAnnualUpfrontBreakdown.ytdModuleValue,
