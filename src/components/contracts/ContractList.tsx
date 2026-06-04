@@ -233,6 +233,9 @@ export function ContractList() {
         lastAmmpSync: data.last_ammp_sync,
         cachedCapabilities: data.cached_capabilities,
         graduatedMWTiers: data.graduated_mw_tiers,
+        annualMinimumFee: data.annual_minimum_fee ?? undefined,
+        committedMinimumMW: data.committed_minimum_mw ?? undefined,
+        annualBillingAnchorDate: data.annual_billing_anchor_date ?? undefined,
       });
       setShowEditForm(true);
     } catch (error: any) {
