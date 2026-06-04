@@ -1225,9 +1225,72 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     trialFees = (params.trialSetupFee || TRIAL_2026.setupFee) + (params.vendorApiOnboardingFee || TRIAL_2026.vendorApiOnboardingFee);
   }
   result.totalPrice = baseCost + addonTotal + result.basePricingCost + result.retainerCost + discountedAssetsTotal + trialFees;
-  
+
+  // Per-MW + Annual Upfront Minimum — overrides totalPrice with floor or overage logic
+  if (packageType === 'per_mw_annual_upfront') {
+    const perMWpRate = params.selectedModules.reduce((sum, moduleId) => {
+      const moduleList = params.customModuleDefinitions || MODULES;
+      const module = moduleList.find(m => m.id === moduleId);
+      const price = params.customPricing?.[moduleId] ?? module?.price ?? 0;
+      return sum + price;
+    }, 0);
+
+    const fixedAnnualMinimum = params.annualMinimumFee || 0;
+    const committedMinimumFloor = (params.committedMinimumMW || 0) * perMWpRate;
+    const annualFloor = Math.max(fixedAnnualMinimum, committedMinimumFloor);
+
+    // Annual module value at current MW (full-year basis)
+    const annualModuleValue = adjustedTotalMW * perMWpRate;
+
+    // Derive cycle type if not provided
+    let isAnnualCycle = params.perMWAnnualUpfrontIsAnnualCycle;
+    if (isAnnualCycle === undefined) {
+      // Anchor month match → annual cycle. Defaults to false if no info.
+      if (params.annualBillingAnchorDate && params.periodStart) {
+        const anchor = new Date(params.annualBillingAnchorDate);
+        const start = new Date(params.periodStart);
+        isAnnualCycle = anchor.getUTCMonth() === start.getUTCMonth();
+      } else {
+        isAnnualCycle = (params.billingFrequency || 'annual') === 'annual';
+      }
+    }
+
+    const ytdInvoiced = params.ytdInvoicedAmount || 0;
+    let cycleAmount = 0;
+    let overageAmount = 0;
+    const cycleType: 'annual_upfront' | 'quarterly_overage' = isAnnualCycle ? 'annual_upfront' : 'quarterly_overage';
+
+    if (isAnnualCycle) {
+      // Charge the full annual floor upfront. Any YTD excess from the prior year
+      // is assumed to have been billed quarterly already.
+      cycleAmount = annualFloor;
+    } else {
+      // Quarterly overage: only invoice the difference between cumulative module
+      // value YTD (incl. this quarter) and what has already been billed for the year.
+      // ytdInvoicedAmount should already cover the annualFloor for active years.
+      const billedSoFar = Math.max(ytdInvoiced, annualFloor);
+      overageAmount = Math.max(0, annualModuleValue - billedSoFar);
+      cycleAmount = overageAmount;
+    }
+
+    result.perMWAnnualUpfrontBreakdown = {
+      cycleType,
+      perMWpRate,
+      annualFloor,
+      fixedAnnualMinimum,
+      committedMinimumFloor,
+      ytdModuleValue: annualModuleValue,
+      ytdInvoiced,
+      overageAmount,
+    };
+
+    // Override total price: addons + retainer + base pricing are still additive.
+    result.totalPrice = cycleAmount + addonTotal + result.basePricingCost + result.retainerCost + discountedAssetsTotal;
+  }
+
   return result;
 }
+
 
 /**
  * Helper to calculate frequency multiplier
