@@ -492,16 +492,20 @@ export function MergedInvoiceDialog({
         
         const solcastCost = result.addonCosts?.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
         
+        const auB = result.perMWAnnualUpfrontBreakdown;
+        const auCycleAmount = auB
+          ? (auB.cycleType === 'annual_upfront' ? auB.annualFloor : auB.overageAmount)
+          : 0;
         const contractARR = (result.basePricingCost || 0) +
           (result.starterPackageCost || 0) +
-          (result.moduleCosts?.reduce((sum, mc) => sum + mc.cost, 0) || 0) +
+          (auB ? auCycleAmount : (result.moduleCosts?.reduce((sum, mc) => sum + mc.cost, 0) || 0)) +
           (result.hybridTieredBreakdown?.ongrid.cost || 0) +
           (result.hybridTieredBreakdown?.hybrid.cost || 0) +
           (result.elumInternalBreakdown?.totalCost || 0) +
           (result.elumEpmBreakdown?.totalCost || 0) +
           (result.elumJubailiBreakdown?.totalCost || 0) +
           (result.minimumContractAdjustment || 0) +
-          (result.minimumCharges || 0) +
+          (auB ? 0 : (result.minimumCharges || 0)) +
           (result.retainerCost || 0) +
           (result.discountedAssetsTotal || 0) +
           (result.perSiteBreakdown?.onboardingCost || 0) +
