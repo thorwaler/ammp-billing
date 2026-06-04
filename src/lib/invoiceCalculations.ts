@@ -152,6 +152,15 @@ export interface CalculationParams {
   // Matriarch API fields
   irradiancePerSiteTiers?: IrradianceSiteTier[];
   performancePerMwpTiers?: PerformanceMWpTier[];
+  // Per-MW with Annual Upfront Minimum fields
+  annualMinimumFee?: number;
+  committedMinimumMW?: number;
+  annualBillingAnchorDate?: string | Date;
+  ytdInvoicedAmount?: number;
+  // When true the calc treats the current invoice as the upfront annual cycle;
+  // when false it treats it as a quarterly overage cycle. If undefined, the calc
+  // derives it from `periodStart` vs `annualBillingAnchorDate` (anchor month = annual).
+  perMWAnnualUpfrontIsAnnualCycle?: boolean;
 }
 
 export interface SiteMinimumPricingResult {
