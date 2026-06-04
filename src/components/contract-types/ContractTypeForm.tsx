@@ -58,7 +58,7 @@ function generateSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 }
 
-const showModulesFor: PricingModel[] = ["per_mw_modules", "hybrid_tiered"];
+const showModulesFor: PricingModel[] = ["per_mw_modules", "per_mw_annual_upfront", "hybrid_tiered"];
 
 export function ContractTypeForm({ initialData, onSubmit, onCancel, isLoading }: ContractTypeFormProps) {
   const [form, setForm] = useState<ContractTypeFormData>(initialData || emptyFormData);
