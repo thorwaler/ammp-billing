@@ -1265,11 +1265,11 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       // is assumed to have been billed quarterly already.
       cycleAmount = annualFloor;
     } else {
-      // Quarterly overage: only invoice the difference between cumulative module
-      // value YTD (incl. this quarter) and what has already been billed for the year.
-      // ytdInvoicedAmount should already cover the annualFloor for active years.
-      const billedSoFar = Math.max(ytdInvoiced, annualFloor);
-      overageAmount = Math.max(0, annualModuleValue - billedSoFar);
+      // Quarterly overage: invoice whatever is needed to bring YTD billed up to
+      // max(annualFloor, annualModuleValue). Catches up the floor if the anchor
+      // upfront invoice was missed, and bills genuine overage once value > floor.
+      const targetYTD = Math.max(annualFloor, annualModuleValue);
+      overageAmount = Math.max(0, targetYTD - ytdInvoiced);
       cycleAmount = overageAmount;
     }
 
