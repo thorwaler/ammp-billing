@@ -144,6 +144,10 @@ const contractFormSchema = z.object({
   performancePerMwpTiers: z.array(z.any()).optional(),
   onboardingSetupFee: z.coerce.number().optional(),
   vendorApiFee: z.coerce.number().optional(),
+  // Per-MW with Annual Upfront Minimum
+  annualMinimumFee: z.coerce.number().optional(),
+  committedMinimumMW: z.coerce.number().optional(),
+  annualBillingAnchorDate: z.string().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
