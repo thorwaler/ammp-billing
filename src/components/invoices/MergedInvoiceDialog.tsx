@@ -274,8 +274,8 @@ export function MergedInvoiceDialog({
       
       const contractLabel = contract.contractName || contract.packageType;
       
-      // Add module costs
-      if (result.moduleCosts && result.moduleCosts.length > 0) {
+      // Add module costs (skip for per_mw_annual_upfront — handled by dedicated block below)
+      if (result.moduleCosts && result.moduleCosts.length > 0 && !result.perMWAnnualUpfrontBreakdown) {
         result.moduleCosts.forEach((mc: any) => {
           lineItems.push({
             Description: `[${contractLabel}] ${mc.moduleName}`,
@@ -284,6 +284,29 @@ export function MergedInvoiceDialog({
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
         });
+      }
+
+      // Per-MW + Annual Upfront: floor or overage line
+      if (result.perMWAnnualUpfrontBreakdown) {
+        const b = result.perMWAnnualUpfrontBreakdown;
+        const currencySymbol = contract.currency === 'USD' ? '$' : '€';
+        const rateDisplay = `${currencySymbol}${b.perMWpRate.toLocaleString()}/MW`;
+        if (b.cycleType === 'annual_upfront') {
+          const fixedMin = b.fixedAnnualMinimum || 0;
+          lineItems.push({
+            Description: `[${contractLabel}] Annual Platform Fee — Minimum (max of committed MW × ${rateDisplay} = ${currencySymbol}${b.committedMinimumFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`,
+            Quantity: 1,
+            UnitAmount: b.annualFloor,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        } else if (b.overageAmount > 0) {
+          lineItems.push({
+            Description: `[${contractLabel}] Per-MW Quarterly Overage (YTD adjustment above annual minimum, ${rateDisplay})`,
+            Quantity: 1,
+            UnitAmount: b.overageAmount,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
       }
       
       // Add site minimum pricing if applicable
@@ -469,16 +492,20 @@ export function MergedInvoiceDialog({
         
         const solcastCost = result.addonCosts?.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0;
         
+        const auB = result.perMWAnnualUpfrontBreakdown;
+        const auCycleAmount = auB
+          ? (auB.cycleType === 'annual_upfront' ? auB.annualFloor : auB.overageAmount)
+          : 0;
         const contractARR = (result.basePricingCost || 0) +
           (result.starterPackageCost || 0) +
-          (result.moduleCosts?.reduce((sum, mc) => sum + mc.cost, 0) || 0) +
+          (auB ? auCycleAmount : (result.moduleCosts?.reduce((sum, mc) => sum + mc.cost, 0) || 0)) +
           (result.hybridTieredBreakdown?.ongrid.cost || 0) +
           (result.hybridTieredBreakdown?.hybrid.cost || 0) +
           (result.elumInternalBreakdown?.totalCost || 0) +
           (result.elumEpmBreakdown?.totalCost || 0) +
           (result.elumJubailiBreakdown?.totalCost || 0) +
           (result.minimumContractAdjustment || 0) +
-          (result.minimumCharges || 0) +
+          (auB ? 0 : (result.minimumCharges || 0)) +
           (result.retainerCost || 0) +
           (result.discountedAssetsTotal || 0) +
           (result.perSiteBreakdown?.onboardingCost || 0) +

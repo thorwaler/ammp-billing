@@ -1,53 +1,49 @@
-## Fix: per-MW + Annual Upfront fields don't save for custom Contract Types
+## Fix: SolarX Xero invoice missing annual upfront minimum fee
 
 ### Root cause
 
-The annual-upfront UI section and save mapping are gated on the literal package slug:
+For `per_mw_annual_upfront` contracts, `calculateInvoice` correctly overrides `result.totalPrice` to the **annual floor** (`max(fixedAnnualMinimum, committedMW × perMWpRate)`) and exposes it via `result.perMWAnnualUpfrontBreakdown` with `cycleType`, `annualFloor`, `overageAmount`, etc.
 
-```
-{watchPackage === "per_mw_annual_upfront" && (...) }   // line 1381
-annual_minimum_fee: data.package === 'per_mw_annual_upfront' ? ... : null   // line 1106
-billing_frequency: ... data.package === 'per_mw_annual_upfront' ? 'quarterly' : ...   // line 1027
-```
+But the **Xero line-item builder** in `src/components/dashboard/InvoiceCalculator.tsx` (and the merged-invoice equivalent) always pushes raw `result.moduleCosts` (MW × rate). It never reads `perMWAnnualUpfrontBreakdown`, so:
 
-SolarX is configured as a **custom Contract Type** whose `pricing_model = 'per_mw_annual_upfront'`. On those contracts, `data.package` is the custom slug (e.g. `"solarx-..."`), not the literal `'per_mw_annual_upfront'`. Every gate above evaluates false → the fields are neither shown nor saved.
+- When `annualFloor > MW × rate` on the annual cycle → Xero shows only the smaller MW-based amount, missing the minimum fee.
+- The ARR sum (line ~1266) also adds `result.moduleCosts`, so `arr_amount` is understated.
+- `invoice_amount` already uses `result.totalPrice`, so the stored total is correct, which is why Xero's total differs from our internal record.
 
-Same issue exists for `per_mw_modules` (line 800 checks the custom type's `pricing_model`, but the annual-upfront block doesn't), and for `ContractTypeForm.showModulesFor` (already covered, fine).
+Same gap exists in `MergedInvoiceDialog.buildMergedLineItems` for merged invoices that include a per_mw_annual_upfront contract.
 
 ### Fix
 
-Add a single derived boolean used by both the UI section and save mapping:
+In `src/components/dashboard/InvoiceCalculator.tsx`, inside the Xero line-items section:
 
-```ts
-const selectedContractType = customContractTypes.find((ct: any) => ct.id === selectedContractTypeId);
-const isAnnualUpfront =
-  watchPackage === 'per_mw_annual_upfront' ||
-  selectedContractType?.pricing_model === 'per_mw_annual_upfront';
-```
+1. **Detect** the package via `result.perMWAnnualUpfrontBreakdown` (works for both literal `per_mw_annual_upfront` and custom contract types whose `pricing_model` is `per_mw_annual_upfront`, since the calculator already sets this breakdown when the effective package type matches).
 
-Then:
+2. **Skip** the standard `result.moduleCosts.forEach(...)` push for this package (lines 994–1001) and the `result.minimumCharges` line (already covered by floor).
 
-1. **UI gate** (line 1381): replace `watchPackage === "per_mw_annual_upfront"` with `isAnnualUpfront`.
-2. **Save: billing_frequency** (line 1027): use `isAnnualUpfront ? 'quarterly' : data.billingFrequency` instead of the slug check.
-3. **Save: annual_minimum_fee / committed_minimum_mw / annual_billing_anchor_date** (lines 1102–1104): gate on `isAnnualUpfront` instead of the slug.
-4. **Edit hydration**: when an existing contract loads with a custom type, the `handlePackageChange` path doesn't seed the three annual-upfront form values (only the literal-package branch does). The `defaultValues` block on the form (lines 327–329) already seeds them from `existingContract`, so this should work as-is — but verify and, if needed, also seed them inside the custom-type branch around line 798 when `customType.pricing_model === 'per_mw_annual_upfront'`.
+3. **Emit dedicated lines** from the breakdown:
+   - **Annual upfront cycle** (`cycleType === 'annual_upfront'`):
+     - One line: `Annual Platform Fee — Minimum (committed {committedMW} MW × {rate}/MW or fixed minimum {fixedAnnualMinimum}, whichever is higher)` with `UnitAmount = annualFloor`, account = `ACCOUNT_PLATFORM_FEES`.
+     - Optionally a second informational line if you want to show the MW reading, but the amount must total `annualFloor` only — no double-billing.
+   - **Quarterly overage cycle** (`cycleType === 'quarterly_overage'`):
+     - If `overageAmount > 0`: one line `Per-MW Overage — Q{n} ({mw} MW × {rate}/MW, YTD adjustment)` with `UnitAmount = overageAmount`.
+     - If `overageAmount === 0`: no module/overage line at all (the invoice will only contain addons/retainer if any; if everything is zero, surface a UI warning before sending — but typical case has addons).
 
-### Downstream check
+4. **Update `arrAmount`** (line ~1266): for per_mw_annual_upfront, exclude `result.moduleCosts` and instead add `result.perMWAnnualUpfrontBreakdown.cycleType === 'annual_upfront' ? annualFloor : overageAmount`. This keeps the stored ARR consistent with the actual Xero line items and `result.totalPrice`.
 
-`InvoiceCalculator.tsx` line 1365 also gates on `selectedCustomer.package === 'per_mw_annual_upfront'`. For custom-type contracts the calculator needs the contract's `pricing_model` too. Two options:
-
-- **A. Cheaper**: pass `pricing_model` through `selectedCustomer` (it already loads via the customer/contract fetch); compare against both. Requires checking that the SelectedCustomer object carries the contract type.
-- **B. More robust**: in the per-MW-annual-upfront DB-update branch, key off the **contract row itself** — read `pricing_model` (via `contract_types` join) when fetching `annual_billing_anchor_date`, and run the dual-cadence path when either the package slug or the joined pricing_model matches.
-
-Recommend **B** since it works regardless of how `selectedCustomer` was assembled.
+5. **Mirror the same logic** in `src/components/invoices/MergedInvoiceDialog.tsx` `buildMergedLineItems()` so merged invoices including a per_mw_annual_upfront contract bill the floor/overage correctly.
 
 ### Out of scope
 
-- No DB migration needed (fields already exist).
-- No change to `invoiceCalculations.ts` — it already keys off `packageType === 'per_mw_annual_upfront'`; we'll pass that effective type from callers in a follow-up if needed for custom types in preview calculations.
+- No changes to `invoiceCalculations.ts` — the breakdown is already exposed.
+- No DB migration.
+- No change to the support-document generator unless the user reports the same discrepancy there (it reads `result.totalPrice` for the headline total, so it should be OK, but I'll verify during implementation).
 
 ### Files to touch
 
-- `src/components/contracts/ContractForm.tsx` — derive `isAnnualUpfront`, replace 4 gates.
-- `src/components/dashboard/InvoiceCalculator.tsx` — fetch `contract_types.pricing_model` alongside anchor date, treat as annual-upfront when either matches.
-- `src/components/invoices/UpcomingInvoicesList.tsx` — same: when computing `perMWAnnualUpfrontIsAnnualCycle` and passing fields to `calculateInvoice`, also treat contracts whose joined `contract_types.pricing_model` is `per_mw_annual_upfront` as the new package. Add `contract_types(pricing_model)` to the select.
+- `src/components/dashboard/InvoiceCalculator.tsx` — line items + ARR sum.
+- `src/components/invoices/MergedInvoiceDialog.tsx` — merged line items.
+- Spot-check `src/lib/supportDocumentGenerator.ts` for any module-cost-vs-floor mismatch.
+
+### Recovery for the already-sent SolarX invoice
+
+The plan only fixes future invoices. For the already-sent SolarX draft in Xero you'll need to either edit the draft in Xero to add the minimum-fee line, or void it and regenerate from the Invoice Creator after this fix lands. Let me know which you prefer.

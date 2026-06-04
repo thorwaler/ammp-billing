@@ -168,6 +168,10 @@ interface Customer {
   performancePerMwpTiers?: any[];
   vendorApiFee?: number;
   onboardingSetupFee?: number;
+  // Per-MW + Annual Upfront fields
+  annualMinimumFee?: number;
+  committedMinimumMW?: number;
+  annualBillingAnchorDate?: string;
 }
 
 // Default modules and addons from shared data
@@ -989,8 +993,9 @@ export function InvoiceCalculator({
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
         }
-      } else {
+      } else if (!result.perMWAnnualUpfrontBreakdown) {
         // Standard module costs (no threshold wording)
+        // Skipped for per_mw_annual_upfront — handled by dedicated floor/overage block below.
         result.moduleCosts.forEach(mc => {
           lineItems.push({
             Description: xeroConfig?.modules?.description || mc.moduleName,
@@ -1006,6 +1011,30 @@ export function InvoiceCalculator({
             Description: "Minimum Charges",
             Quantity: 1,
             UnitAmount: result.minimumCharges,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        }
+      }
+
+      // Per-MW + Annual Upfront Minimum: emit floor or overage line in place of raw MW × rate modules.
+      if (result.perMWAnnualUpfrontBreakdown) {
+        const b = result.perMWAnnualUpfrontBreakdown;
+        const rateDisplay = `${currencySymbol}${b.perMWpRate.toLocaleString()}/MW`;
+        if (b.cycleType === 'annual_upfront') {
+          const committedMW = selectedCustomer.committedMinimumMW || 0;
+          const fixedMin = b.fixedAnnualMinimum || 0;
+          const desc = `Annual Platform Fee — Minimum (max of committed ${committedMW} MW × ${rateDisplay} = ${currencySymbol}${b.committedMinimumFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`;
+          lineItems.push({
+            Description: desc,
+            Quantity: 1,
+            UnitAmount: b.annualFloor,
+            AccountCode: ACCOUNT_PLATFORM_FEES
+          });
+        } else if (b.overageAmount > 0) {
+          lineItems.push({
+            Description: `Per-MW Quarterly Overage (${Number(mwManaged).toFixed(2)} MW × ${rateDisplay}, YTD adjustment above annual minimum)`,
+            Quantity: 1,
+            UnitAmount: b.overageAmount,
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
         }
@@ -1263,10 +1292,15 @@ export function InvoiceCalculator({
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
       const isMatriarch = isMatriarchApiPackage(selectedCustomer.package);
+      const annualUpfrontB = result.perMWAnnualUpfrontBreakdown;
+      const annualUpfrontCycleAmount = annualUpfrontB
+        ? (annualUpfrontB.cycleType === 'annual_upfront' ? annualUpfrontB.annualFloor : annualUpfrontB.overageAmount)
+        : 0;
       const arrAmount = (result.basePricingCost || 0) +
         // SolarAfrica: starterPackageCost is setup fee (NRR), not ARR
         (isSolarAfrica ? 0 : (result.starterPackageCost || 0)) +
-        result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0) +
+        // For per_mw_annual_upfront, ignore raw moduleCosts/minimumCharges — use cycle amount instead.
+        (annualUpfrontB ? annualUpfrontCycleAmount : result.moduleCosts.reduce((sum, mc) => sum + mc.cost, 0)) +
         // Hybrid tiered pricing (BLS and similar)
         (result.hybridTieredBreakdown?.ongrid.cost || 0) +
         (result.hybridTieredBreakdown?.hybrid.cost || 0) +
@@ -1275,7 +1309,7 @@ export function InvoiceCalculator({
         (result.elumEpmBreakdown?.totalCost || 0) +
         (result.elumJubailiBreakdown?.totalCost || 0) +
         (result.minimumContractAdjustment || 0) +
-        (result.minimumCharges || 0) +
+        (annualUpfrontB ? 0 : (result.minimumCharges || 0)) +
         // SolarAfrica: retainerCost is customization work (NRR), not ARR
         (isSolarAfrica ? 0 : (result.retainerCost || 0)) +
         // SolarAfrica: totalMWCost is the tier subscription (ARR)
