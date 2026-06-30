@@ -392,6 +392,37 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     y = (doc as any).lastAutoTable.finalY + 6;
   }
 
+  // === SPS ANNUAL UPFRONT / PREPAID BALANCE ===
+  if ((data as any).spsAnnualUpfrontBreakdown) {
+    const spsU: any = (data as any).spsAnnualUpfrontBreakdown;
+    y = addSectionTitle(doc, 'SPS Annual Upfront Billing', y);
+    const rows: [string, string][] = [
+      ['Cycle', spsU.cycleType === 'annual_upfront'
+        ? 'Annual upfront (year start)'
+        : 'Quarterly with prepaid-balance credit'],
+      ['Discounted Annual SPS Value', fmt(spsU.annualDiscountedFee, cur)],
+      ['Annual Minimum Floor', fmt(spsU.annualMinimum, cur)],
+      ['Annual Upfront Amount (max of above)', fmt(spsU.annualUpfrontAmount, cur)],
+    ];
+    if (spsU.cycleType === 'quarterly_with_credit') {
+      rows.push(
+        ['Full Quarterly Fee', fmt(spsU.quarterCost, cur)],
+        ['Prepaid Balance Before', fmt(spsU.prepaidBalanceBefore, cur)],
+        ['Credit Applied This Quarter', `-${fmt(spsU.creditApplied, cur)}`],
+        ['Prepaid Balance Remaining', fmt(spsU.prepaidBalanceAfter, cur)],
+        ['Net Charged This Quarter', fmt((spsU.quarterCost || 0) - (spsU.creditApplied || 0), cur)],
+      );
+    }
+    autoTable(doc, {
+      startY: y, margin: { left: MARGIN, right: MARGIN },
+      body: rows,
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      columnStyles: { 1: { halign: 'right' } },
+    });
+    y = (doc as any).lastAutoTable.finalY + 6;
+  }
+
+
   // === CALCULATION BREAKDOWN ===
   y = addSectionTitle(doc, 'Calculation Breakdown', y);
   const breakdownLines: [string, string][] = [];
