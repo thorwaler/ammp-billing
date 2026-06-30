@@ -1126,7 +1126,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         // Per-MW with Annual Upfront Minimum
         annual_minimum_fee: isAnnualUpfront ? (data.annualMinimumFee ?? 0) : null,
         committed_minimum_mw: isAnnualUpfront ? (data.committedMinimumMW ?? null) : null,
-        annual_billing_anchor_date: isAnnualUpfront ? (data.annualBillingAnchorDate || null) : null,
+        annual_billing_anchor_date: (isAnnualUpfront || data.package === 'sps_monitoring') ? (data.annualBillingAnchorDate || null) : null,
       };
 
       const contractMutation = existingContractId
