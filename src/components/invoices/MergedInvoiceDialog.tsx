@@ -579,38 +579,109 @@ export function MergedInvoiceDialog({
         description: "Merged invoice has been created as a draft.",
       });
       
-      // Update period dates for all included contracts
+      // Update period dates for all included contracts and track prepaid-balance deltas
+      const deltasByContract: Record<string, number> = {};
       for (const contract of selectedContractsList) {
         const currentPeriodEnd = new Date(contract.nextInvoiceDate);
         const nextPeriodStart = new Date(currentPeriodEnd);
         nextPeriodStart.setDate(nextPeriodStart.getDate() + 1);
-        
-        let nextPeriodEnd = new Date(nextPeriodStart);
-        switch (contract.billingFrequency) {
-          case 'monthly':
-            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
-            break;
-          case 'quarterly':
-            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 3);
-            break;
-          case 'biannual':
-            nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 6);
-            break;
-          case 'annual':
-            nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
-            break;
+
+        const contractUpdate: Record<string, any> = {};
+        const result = calculationResults.get(contract.contractId);
+        const spsB: any = (result as any)?.spsAnnualUpfrontBreakdown;
+        const perMwB: any = (result as any)?.perMWAnnualUpfrontBreakdown;
+
+        // Fetch anchor + current ytd when this contract has a dual-cadence model
+        let contractRow: any = null;
+        if (spsB || perMwB) {
+          const { data } = await supabase
+            .from('contracts')
+            .select('annual_billing_anchor_date, ytd_invoiced_amount, contract_types(pricing_model)')
+            .eq('id', contract.contractId)
+            .maybeSingle();
+          contractRow = data;
         }
-        nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
-        
+
+        if (perMwB) {
+          // Per-MW dual-cadence
+          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
+          const anchor = contractRow?.annual_billing_anchor_date ?? null;
+          const invoiceDt = new Date(contract.nextInvoiceDate);
+          const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDt, anchor);
+          const nextDate = getNextInvoiceDate(invoiceDt, {
+            packageType: 'per_mw_annual_upfront',
+            billingFrequency: 'quarterly',
+            annualBillingAnchorDate: anchor,
+          });
+          const nextPeriodEnd = new Date(nextDate);
+          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+
+          contractUpdate.period_start = nextPeriodStart.toISOString();
+          contractUpdate.period_end = nextPeriodEnd.toISOString();
+          contractUpdate.next_invoice_date = nextDate.toISOString();
+
+          const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
+          if (wasAnnualCycle) {
+            contractUpdate.last_annual_invoice_date = invoiceDt.toISOString();
+            contractUpdate.ytd_invoiced_amount = result!.totalPrice;
+          } else {
+            contractUpdate.ytd_invoiced_amount = prevYtd + result!.totalPrice;
+          }
+          deltasByContract[contract.contractId] = Number(contractUpdate.ytd_invoiced_amount) - prevYtd;
+        } else if (spsB && contractRow?.annual_billing_anchor_date) {
+          // SPS dual-cadence: ytd_invoiced_amount tracks REMAINING PREPAID BALANCE
+          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
+          const anchor = contractRow.annual_billing_anchor_date;
+          const invoiceDt = new Date(contract.nextInvoiceDate);
+          const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDt, anchor);
+          const nextDate = getNextInvoiceDate(invoiceDt, {
+            packageType: 'per_mw_annual_upfront',
+            billingFrequency: 'quarterly',
+            annualBillingAnchorDate: anchor,
+          });
+          const nextPeriodEnd = new Date(nextDate);
+          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+
+          contractUpdate.period_start = nextPeriodStart.toISOString();
+          contractUpdate.period_end = nextPeriodEnd.toISOString();
+          contractUpdate.next_invoice_date = nextDate.toISOString();
+
+          const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
+          if (wasAnnualCycle) {
+            contractUpdate.last_annual_invoice_date = invoiceDt.toISOString();
+            contractUpdate.ytd_invoiced_amount = spsB.annualUpfrontAmount ?? result!.totalPrice;
+          } else {
+            contractUpdate.ytd_invoiced_amount = spsB.prepaidBalanceAfter;
+          }
+          deltasByContract[contract.contractId] = Number(contractUpdate.ytd_invoiced_amount) - prevYtd;
+        } else {
+          let nextPeriodEnd = new Date(nextPeriodStart);
+          switch (contract.billingFrequency) {
+            case 'monthly':
+              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
+              break;
+            case 'quarterly':
+              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 3);
+              break;
+            case 'biannual':
+              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 6);
+              break;
+            case 'annual':
+              nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
+              break;
+          }
+          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+          contractUpdate.period_start = nextPeriodStart.toISOString();
+          contractUpdate.period_end = nextPeriodEnd.toISOString();
+          contractUpdate.next_invoice_date = nextPeriodEnd.toISOString();
+        }
+
         await supabase
           .from('contracts')
-          .update({
-            period_start: nextPeriodStart.toISOString(),
-            period_end: nextPeriodEnd.toISOString(),
-            next_invoice_date: nextPeriodEnd.toISOString()
-          })
+          .update(contractUpdate)
           .eq('id', contract.contractId);
       }
+
       
       // Save merged invoice record
       const { data: { user } } = await supabase.auth.getUser();
