@@ -1031,7 +1031,7 @@ export function InvoiceCalculator({
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
         }
-      } else if (!result.perMWAnnualUpfrontBreakdown) {
+      } else if (!result.perMWAnnualUpfrontBreakdown && !(result.spsAnnualUpfrontBreakdown?.cycleType === 'annual_upfront')) {
         // Standard module costs (no threshold wording)
         // Skipped for per_mw_annual_upfront — handled by dedicated floor/overage block below.
         result.moduleCosts.forEach(mc => {
