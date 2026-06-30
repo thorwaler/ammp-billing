@@ -1,33 +1,49 @@
-# Fix support document mismatch for per-MW annual upfront billing
+## Problem
 
-## Goal
-Make the support document reconcile exactly to the invoice total for the `per_mw_annual_upfront` package.
+The Invoice Calculator displays the correct billing period (e.g. April 1 – April 30, 2026 = 1 month), but the cost calculation still multiplies by the full quarterly multiplier (3 months). For Bright Light this produced €5,017.54 instead of ~€1,672.51, because `frequencyMultiplier` is derived only from `billingFrequency` (quarterly → 3), ignoring the actual period length.
 
-## What I’ll change
-1. Update the support-document total builder so the annual floor is represented only once.
-   - Keep the asset table as the annual MW-based subtotal.
-   - Keep the minimum contract adjustment as the delta up to the annual floor.
-   - Stop using the annual floor itself as the separate `assetBreakdownPeriod` amount for annual-upfront cycles, because that duplicates the minimum in the final total.
+## Root cause
 
-2. Keep the existing support-document explanation intact, but make the calculation breakdown match the same logic.
-   - Annual-upfront cycle should show:
-     - asset subtotal from synced MW
-     - minimum adjustment only when the fixed annual minimum exceeds the MW subtotal
-     - final support-document total equal to the invoice total
-   - Quarterly overage cycle should still show only the overage amount.
+In `src/components/dashboard/InvoiceCalculator.tsx` (`buildCalculationParams`, ~line 803):
 
-3. Verify the per-MW annual-upfront path against the current rendering rules.
-   - Confirm the mismatch row disappears.
-   - Confirm the support doc still shows the annual floor logic clearly.
+```ts
+let frequencyMultiplier = getFrequencyMultiplier(billingFrequency); // always 3 for quarterly
+```
 
-## Expected result
-For a case like 7.30 MW × €1,250 = €9,137.18-ish below a €14,500 floor, the document should show:
-- asset subtotal based on synced MW
-- minimum contract adjustment for the gap
-- support document total = €14,500.00
-- totals match
+It is only overridden for the *first* invoice via `calculateProrationMultiplier(signedDate, firstInvoiceDate, …)`. Catch-up / short periods (when `periodStart`–`periodEnd` spans fewer months than the billing frequency) are not handled, so every per-MW branch in `invoiceCalculations.ts` that uses `frequencyMultiplier` (hybrid tiered, Elum ePM, Jubaili, graduated, per-MW annual upfront overage, etc.) over-charges.
 
-## Technical details
-- File to update: `src/lib/supportDocumentGenerator.ts`
-- Likely fix: in the `perMWAnnualUpfrontBreakdown` annual-upfront branch, use the asset-based subtotal (`mwBasedFloor` / asset rows) in the breakdown math instead of `annualFloor`, so the minimum adjustment is not added twice.
-- `src/components/invoices/SupportDocument.tsx` likely does not need structural changes unless a label needs tightening after the data fix.
+The same issue exists in `MergedInvoiceDialog.tsx`, which builds per-contract params the same way.
+
+## Fix
+
+1. **Add a shared helper** in `src/lib/invoiceScheduling.ts` (or `dateUtils.ts`):
+
+   ```ts
+   // Inclusive month count between two YYYY-MM-DD dates (CET-safe)
+   export function monthsInPeriod(periodStart: string, periodEnd: string): number
+   ```
+
+   Returns `(endYear-startYear)*12 + (endMonth-startMonth) + 1`, clamped to ≥1.
+
+2. **`InvoiceCalculator.tsx` – `buildCalculationParams`**:
+   - When `selectedCustomer.periodStart` and `periodEnd` are both present, compute `actualMonths = monthsInPeriod(...)`.
+   - Compare to `getFrequencyMultiplier(billingFrequency)`; if `actualMonths < frequencyMultiplier`, set `frequencyMultiplier = actualMonths` and update `invoicePeriodDisplay` to reflect the short period (already correct from `getInvoicePeriodText`).
+   - Keep the existing first-invoice proration path; the new logic only kicks in when proration didn't already shorten the multiplier.
+
+3. **`MergedInvoiceDialog.tsx`** – apply the same override per contract where `frequencyMultiplier` is constructed.
+
+4. **Display labels**: The "× 3 months" text in the hybrid tiered breakdown line is rendered from the calculation (`InvoiceCalculator.tsx` line items + `MergedInvoiceDialog`). Update those template strings to use the actual months value instead of hardcoded `3 months` / `frequencyMultiplier` so the UI says "× 1 month" for short periods. Same review pass for the other per-MW branches that print "× N months".
+
+5. **Support document & Xero line items**: Already derive cost from `result.*` values, so they will automatically inherit the corrected amount once `frequencyMultiplier` is right. Verify the label strings in `supportDocumentGenerator.ts` for hybrid tiered / per-MW lines and switch any hardcoded "3 months" to the actual months value.
+
+## Out of scope
+
+- No schema changes; `periodStart`/`periodEnd` already drive the period.
+- No changes to how `period_end` is advanced after invoice creation (handled separately by `invoiceScheduling.ts`).
+- Full first-invoice proration logic (sub-month days) stays as-is; this fix only addresses whole-month catch-up periods.
+
+## Verification
+
+- Reopen the Bright Light calculator for April 1–30, 2026: total should drop from €5,017.54 to ~€1,672.51 (1/3 of the prior amount); line items should read "× 1 month".
+- A normal quarterly period (3 months) should be unchanged.
+- A 2-month catch-up period should produce 2/3 of the quarterly amount.
