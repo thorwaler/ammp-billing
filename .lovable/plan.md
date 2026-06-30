@@ -1,17 +1,35 @@
-## Reset SPS prepaid balance
+## Move contract to a different customer
 
-The SPS Q2 invoice was redone, so the prepaid balance needs to be reverted to its post-annual-upfront state (full €100,000 remaining, no quarterly credit drawn yet).
+Add the ability to reassign an existing contract to another customer from the Edit Contract form.
 
-### Change
+### UX
 
-Update the SPS Investments Seychelles Ltd contract (`460a2fc6-af1b-401f-8b91-aaaccdfc98e3`):
+- In `ContractForm.tsx`, when editing an existing contract, show a small "Move to different customer" link/button next to the (read-only) Company Name field.
+- Clicking it opens a confirmation dialog with:
+  - A searchable customer dropdown (existing customers, excluding the current one)
+  - Warning text explaining the impact: invoices, billing periods, amendments, and AMMP sync history stay attached to the contract, but will now appear under the new customer
+  - Confirm / Cancel buttons
+- On confirm: update `contracts.customer_id` to the selected customer, toast success, reload the form bound to the new customer.
 
-- `ytd_invoiced_amount` → `100000` (annual upfront paid, no quarterly draws applied)
-- `annual_billing_anchor_date` → `2026-02-28` (unchanged)
-- `last_annual_invoice_date` → `2026-02-28` (unchanged — annual upfront still considered issued)
+### Scope (what moves with the contract)
 
-This restores "Prepaid Balance Before" to €100,000 for the Apr–Jun period so the redone Q2 invoice draws the credit cleanly.
+The contract row's `customer_id` is the only authoritative link. All related rows (invoices, site_billing_status, contract_amendments, asset_status_history, notifications, invoice_alerts) reference `contract_id`, so they follow automatically — no extra updates needed.
 
-### Confirm before running
+### Out of scope
 
-Just to be safe: should I also clear `last_annual_invoice_date` (which would cause the system to re-bill the €100k annual upfront again), or keep it as-is so only the quarterly credit pool is reset? Default plan keeps it as-is.
+- No bulk move
+- No Xero contact change (the existing Xero invoices remain under their original Xero contact; future invoices will use the new customer's Xero contact as normal)
+- No customer merge
+
+### Permissions
+
+Restricted to users who can already edit contracts (existing `can_write` check via RLS on the contracts table — no policy changes needed).
+
+### Files touched
+
+- `src/components/contracts/ContractForm.tsx` — add the "Move" button + dialog, customer picker, update handler.
+- Possibly a new small component `src/components/contracts/MoveContractDialog.tsx` to keep the form tidy.
+
+### Question
+
+Should the move be allowed when the contract has invoices already issued under the old customer? (Default: yes, with a warning that historical invoices stay linked to the contract and will now display under the new customer in the app — Xero records are unaffected.)

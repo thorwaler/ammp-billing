@@ -11,6 +11,7 @@ import { DiscountTierEditor } from "@/components/contracts/DiscountTierEditor";
 import { MinimumChargeTierEditor } from "@/components/contracts/MinimumChargeTierEditor";
 import { GraduatedMWTierEditor } from "@/components/contracts/GraduatedMWTierEditor";
 import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
+import { MoveContractDialog } from "@/components/contracts/MoveContractDialog";
 import { SelectSeparator } from "@/components/ui/select";
 import { 
   MODULES, 
@@ -245,6 +246,7 @@ interface ContractFormProps {
 
 export function ContractForm({ existingCustomer, existingContract, onComplete, onCancel, isExtending, isNewContract }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
   const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: ComplexityLevel}>({});
@@ -1213,7 +1215,20 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 name="companyName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Company Name</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Company Name</FormLabel>
+                      {existingCustomer && existingContract && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-xs"
+                          onClick={() => setMoveDialogOpen(true)}
+                        >
+                          Move to different customer
+                        </Button>
+                      )}
+                    </div>
                     <FormControl>
                       <Input 
                         placeholder="Enter company name" 
@@ -1226,6 +1241,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   </FormItem>
             )}
             />
+
             
             <FormField
                 control={form.control}
@@ -2826,6 +2842,16 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           </Form>
         )}
       </CardContent>
+      {existingCustomer && existingContract && (
+        <MoveContractDialog
+          open={moveDialogOpen}
+          onOpenChange={setMoveDialogOpen}
+          contractId={existingContract.id}
+          currentCustomerId={existingCustomer.id}
+          currentCustomerName={existingCustomer.name}
+          onMoved={() => onComplete?.()}
+        />
+      )}
     </Card>
   );
 }
