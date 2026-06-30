@@ -1,50 +1,63 @@
 ## Goal
 
-1. Reset the SPS Investments Seychelles Ltd prepaid balance to €100,000 so the Q2 invoice can be redone.
-2. Make deleting any invoice automatically reverse whatever effect it had on the contract's prepaid balance (`contracts.ytd_invoiced_amount`), so resets aren't needed manually next time.
+Make SPS Monitoring discounts additive — every discount (volume, upfront, commitment) applies to the original pre-discount fee, not to the running discounted base. The per-MW / per-kWp rate shown in the support document must follow the same additive logic on top of the €900/MW base rate.
 
-## Approach
+## Current behavior (bug)
 
-Store the signed prepaid-balance change on each invoice at creation time, then reverse it on deletion.
+In `src/lib/invoiceCalculations.ts` (lines 1043–1056), all three SPS discounts stack multiplicatively:
+- Volume → applied to preDiscount
+- Upfront → applied to `preDiscount − volume`
+- Commitment → applied to `preDiscount − volume − upfront`
 
-### 1. Data reset (no code, data only)
-- Set `contracts.ytd_invoiced_amount = 100000` for the SPS contract (`460a2fc6-af1b-401f-8b91-aaaccdfc98e3`).
+So a 5% + 3% combo on €100,734.17 gives less than (5% + 3%) of €100,734.17 because each later discount sees a shrunken base.
 
-### 2. Schema change — `invoices.prepaid_balance_delta`
-- Add a nullable `numeric` column `prepaid_balance_delta` to `public.invoices`.
-- Semantics: signed change applied to the related contract's `ytd_invoiced_amount` when this invoice was created.
-  - SPS quarterly with credit: negative (e.g. `-25,183.54`) — balance went down.
-  - SPS annual upfront: `newBalance − oldBalance` (typically positive when the annual upfront tops up).
-  - Per-MW + Annual Upfront: positive YTD increment (or `newYtd − oldYtd` on the annual reset).
-  - Everything else: `NULL` (no effect).
+## Desired behavior
 
-### 3. Write the delta on invoice creation
-In `src/components/dashboard/InvoiceCalculator.tsx` (around lines 1482–1532), capture `oldYtd` from `contractRow` and compute `delta = newYtd − oldYtd` for both branches:
-- `isAnnualUpfrontContract` (per-MW annual upfront)
-- `isSpsDualCadence` (SPS monitoring)
+All discounts apply to the **original** `preDiscountAnnualFee`:
+- `volumeDiscountAmount     = preDiscount × volume% / 100`
+- `upfrontDiscountAmount    = preDiscount × upfront% / 100`
+- `commitmentDiscountAmount = preDiscount × commitment% / 100`
+- `annualDiscountedFee      = preDiscount − (volumeAmt + upfrontAmt + commitmentAmt)`
 
-Persist `prepaid_balance_delta = delta` on the inserted invoice row alongside the existing contract update.
+Example on the attached doc (pre-discount €100,734.17, 5% + 3%, 0% commitment):
+- Volume 5% → €5,036.71 (taken from €100,734.17)
+- Upfront 3% → €3,022.03 (taken from €100,734.17, **not** from €95,697.46)
+- Final annual → €92,675.44
 
-### 4. Reverse the delta on invoice deletion
-In `src/pages/InvoiceHistory.tsx` `handleDeleteInvoice` (lines 207–287):
-- Before the delete, read `prepaid_balance_delta` from the selected invoice (already on `Invoice` after the schema change; otherwise fetch it).
-- After deletion, for each affected contract id (single or merged), if `delta` is non-null and non-zero:
-  - Fetch the contract's current `ytd_invoiced_amount`.
-  - Update it to `current − delta` (reverses both increments and decrements).
-- Existing period/next-date reset logic stays unchanged.
+## Per-MW / per-kWp rate in the support document
 
-Merged invoices: the per-contract delta isn't separated today. Since SPS/Per-MW-Annual contracts are never part of merged invoices in current usage, we'll apply the delta only when the invoice is single-contract (`contract_id` set, no `merged_contract_ids`). If a merged invoice has a delta, log a warning and skip the reversal rather than mis-apply it.
+`src/lib/supportDocumentGenerator.ts` (~line 890) derives the SPS blended rate as `annualDiscountedFee / totalMW`. Once the discount math is additive at the source, this rate automatically reflects the additive formula:
 
-### 5. Types
-After the migration runs, `src/integrations/supabase/types.ts` is regenerated automatically and `Invoice` picks up the new field — no manual type edits needed.
+`effectiveRate = €900/MW × (1 − (volume% + upfront% + commitment%) / 100)`
 
-## Files touched
+No extra computation is needed in the support doc — the existing divide-by-MW path is already correct as long as `annualDiscountedFee` is fixed upstream. Verify after the change that per-site €/kWp · €/Year sum to `annualDiscountedFee`.
 
-- Migration (new): add `prepaid_balance_delta` to `invoices`.
-- Data update (insert tool): reset SPS `ytd_invoiced_amount` to 100000.
-- `src/components/dashboard/InvoiceCalculator.tsx`: write delta on create.
-- `src/pages/InvoiceHistory.tsx`: reverse delta on delete.
+## Changes
+
+### `src/lib/invoiceCalculations.ts` (~lines 1043–1056)
+Replace sequential math with additive math. Keep existing field names so PDF / UI consumers (`PdfRenderer.tsx` 370–374, `InvoiceCalculator.tsx` 2817+, `supportDocumentGenerator.ts` 549+) keep working:
+
+```ts
+const volumeDiscountAmount     = preDiscountAnnualFee * (volumeDiscountPercent / 100);
+const upfrontDiscountAmount    = preDiscountAnnualFee * (upfrontDiscountPercent / 100);
+const commitmentDiscountAmount = preDiscountAnnualFee * (commitmentDiscountPercent / 100);
+
+const afterVolumeDiscount   = preDiscountAnnualFee - volumeDiscountAmount;
+const afterUpfrontDiscount  = afterVolumeDiscount   - upfrontDiscountAmount;
+const annualDiscountedFee   = afterUpfrontDiscount  - commitmentDiscountAmount;
+```
+
+The running `afterVolumeDiscount` / `afterUpfrontDiscount` subtotals are still mathematically valid because each `*Amount` is now anchored to `preDiscount` — the PDF rows ("After Volume Discount", "After Upfront Discount") remain meaningful waypoints.
+
+### No other code edits
+- Support doc per-MW / per-kWp rate is already derived from `annualDiscountedFee` and updates automatically.
+- Type definitions unchanged.
+- PDF and calculator UI unchanged.
+
+### Memory update
+Update `mem://features/package-sps-monitoring` (or its index entry) with: "All SPS discounts (volume, upfront, commitment) are additive against the pre-discount annual fee — never sequential. Per-MW rate in support docs follows the same rule."
 
 ## Out of scope
 
-- Backfilling `prepaid_balance_delta` on historical invoices — only newly created invoices will carry the delta. Historical deletes will continue to require a manual reset (only relevant for SPS / per-MW annual contracts).
+- No change to dual-cadence (annual upfront vs quarterly credit), minimum fee handling, or prepaid balance logic.
+- No backfill of historical invoices — they were generated under the old multiplicative rule. Recalculations / future invoices will use the additive formula.

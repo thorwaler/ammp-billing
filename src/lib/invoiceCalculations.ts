@@ -1040,20 +1040,26 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     // Pre-discount ANNUAL monitoring fee
     const preDiscountAnnualFee = annualModuleCost;
 
+    // Discounts are ADDITIVE: each applies to the original pre-discount fee,
+    // never to a previously-discounted base.
     // 1. Volume discount
     const volumeDiscountPercent = getApplicableDiscount(adjustedTotalMW, params.portfolioDiscountTiers);
     const volumeDiscountAmount = preDiscountAnnualFee * (volumeDiscountPercent / 100);
-    const afterVolumeDiscount = preDiscountAnnualFee - volumeDiscountAmount;
 
-    // 2. Upfront discount
+    // 2. Upfront discount (anchored to preDiscount, not to afterVolume)
     const upfrontDiscountPercent = params.upfrontDiscountPercent || 0;
-    const upfrontDiscountAmount = afterVolumeDiscount * (upfrontDiscountPercent / 100);
-    const afterUpfrontDiscount = afterVolumeDiscount - upfrontDiscountAmount;
+    const upfrontDiscountAmount = preDiscountAnnualFee * (upfrontDiscountPercent / 100);
 
-    // 3. Commitment discount
+    // 3. Commitment discount (anchored to preDiscount)
     const commitmentDiscountPercent = params.commitmentDiscountPercent || 0;
-    const commitmentDiscountAmount = afterUpfrontDiscount * (commitmentDiscountPercent / 100);
+    const commitmentDiscountAmount = preDiscountAnnualFee * (commitmentDiscountPercent / 100);
+
+    // Running subtotals for PDF / UI readability — still equal preDiscount minus
+    // the sum of all amounts applied so far.
+    const afterVolumeDiscount = preDiscountAnnualFee - volumeDiscountAmount;
+    const afterUpfrontDiscount = afterVolumeDiscount - upfrontDiscountAmount;
     const annualDiscountedFee = afterUpfrontDiscount - commitmentDiscountAmount;
+
 
     const annualMinimum = minimumAnnualValue || 0;
     // Dual cadence is active when an anchor date is set. Without an anchor we
