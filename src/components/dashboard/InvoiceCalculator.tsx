@@ -1453,13 +1453,14 @@ export function InvoiceCalculator({
       });
       
       // Update period dates for next invoice
+      let prepaidBalanceDelta: number | null = null;
       if (selectedCustomer) {
         const currentPeriodEnd = invoiceDate ? new Date(invoiceDate) : new Date();
         const nextPeriodStart = new Date(currentPeriodEnd);
         nextPeriodStart.setDate(nextPeriodStart.getDate() + 1);
 
         const contractUpdate: Record<string, any> = {};
-        let prepaidBalanceDelta: number | null = null;
+
 
 
         // Detect annual-upfront via the contract's pricing_model too (custom contract types).
