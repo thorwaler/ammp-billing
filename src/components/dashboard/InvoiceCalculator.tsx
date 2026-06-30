@@ -808,7 +808,17 @@ export function InvoiceCalculator({
       const firstInvoiceDate = new Date(invoiceDate);
       frequencyMultiplier = calculateProrationMultiplier(signedDate, firstInvoiceDate, billingFrequency);
       invoicePeriodDisplay = `${new Date(selectedCustomer.signedDate).toLocaleDateString()} - ${firstInvoiceDate.toLocaleDateString()}`;
+    } else {
+      // Catch-up / short period: when the contract's periodStart..periodEnd spans
+      // fewer whole months than the billing frequency (e.g. April-only on a quarterly
+      // contract), bill only for those actual months instead of the full quarter.
+      const actualMonths = monthsInPeriod(selectedCustomer.periodStart, selectedCustomer.periodEnd);
+      const defaultMonths = getPeriodMonthsMultiplier(billingFrequency);
+      if (actualMonths && actualMonths < defaultMonths) {
+        frequencyMultiplier = actualMonths / 12;
+      }
     }
+
 
     const totalMW = Number(mwManaged);
     const effectiveCapabilities = selectedCustomer.cachedCapabilities;
