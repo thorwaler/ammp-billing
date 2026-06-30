@@ -276,10 +276,8 @@ export default function InvoiceHistory() {
         // Reverse any prepaid-balance change this invoice applied (SPS / Per-MW Annual Upfront).
         const delta = (selectedInvoice as any).prepaid_balance_delta;
         const isMerged = (selectedInvoice.merged_contract_ids?.length ?? 0) > 0;
-        if (delta != null && Number(delta) !== 0) {
-          if (isMerged) {
-            console.warn('Invoice has prepaid_balance_delta but is merged; skipping reversal.', selectedInvoice.id);
-          } else if (selectedInvoice.contract_id) {
+        if (!isMerged && selectedInvoice.contract_id) {
+          if (delta != null && Number(delta) !== 0) {
             const { data: c } = await supabase
               .from('contracts')
               .select('ytd_invoiced_amount')
@@ -290,7 +288,71 @@ export default function InvoiceHistory() {
               .from('contracts')
               .update({ ytd_invoiced_amount: current - Number(delta) })
               .eq('id', selectedInvoice.contract_id);
+          } else {
+            // Legacy fallback: no stored delta (invoice predates the column).
+            // Best-effort reversal for SPS / per-MW annual upfront contracts.
+            const { data: contract } = await supabase
+              .from('contracts')
+              .select('package, ytd_invoiced_amount, annual_billing_anchor_date, contract_types(pricing_model)')
+              .eq('id', selectedInvoice.contract_id)
+              .maybeSingle();
+
+            const pkg = (contract as any)?.package;
+            const pricingModel = (contract as any)?.contract_types?.pricing_model;
+            const anchor = (contract as any)?.annual_billing_anchor_date ?? null;
+            const isAnnualUpfront = pkg === 'per_mw_annual_upfront' || pricingModel === 'per_mw_annual_upfront';
+            const isSpsDual = pkg === 'sps_monitoring' && !!anchor;
+
+            if (isAnnualUpfront || isSpsDual) {
+              const { isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
+              const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
+              const currentYtd = Number((contract as any)?.ytd_invoiced_amount) || 0;
+              const lineItems = (selectedInvoice as any).xero_line_items as any[] | null;
+
+              let newYtd: number | null = null;
+              let warn = false;
+
+              if (wasAnnualCycle) {
+                // Annual cycle invoice → restore to a clean pre-annual state.
+                newYtd = isSpsDual ? 0 : 0;
+                warn = true; // can't recover the exact prior balance from a legacy row
+              } else if (Array.isArray(lineItems)) {
+                if (isSpsDual) {
+                  // Quarterly with credit: credit line reduced ytd; reversing means ADDING credit back.
+                  const creditLine = lineItems.find((li: any) =>
+                    typeof li?.description === 'string' &&
+                    /prepaid credit applied/i.test(li.description)
+                  );
+                  const creditAmount = Math.abs(Number(creditLine?.lineAmount ?? creditLine?.unitAmount ?? 0));
+                  if (creditAmount > 0) newYtd = currentYtd + creditAmount;
+                } else {
+                  // Per-MW overage: overage line added to ytd; reverse by subtracting it.
+                  const overageLine = lineItems.find((li: any) =>
+                    typeof li?.description === 'string' &&
+                    /per-mw|overage|quarterly overage/i.test(li.description)
+                  );
+                  const overageAmount = Math.abs(Number(overageLine?.lineAmount ?? overageLine?.unitAmount ?? 0));
+                  if (overageAmount > 0) newYtd = Math.max(0, currentYtd - overageAmount);
+                }
+              }
+
+              if (newYtd != null) {
+                await supabase
+                  .from('contracts')
+                  .update({ ytd_invoiced_amount: newYtd })
+                  .eq('id', selectedInvoice.contract_id);
+                if (warn) {
+                  toast.warning('Legacy invoice deleted — prepaid balance reset to 0. Adjust manually if needed.');
+                } else {
+                  toast.success('Prepaid balance restored from legacy invoice.');
+                }
+              } else if (isAnnualUpfront || isSpsDual) {
+                toast.warning('Could not auto-reverse prepaid balance for this legacy invoice — please adjust manually.');
+              }
+            }
           }
+        } else if (isMerged && delta != null && Number(delta) !== 0) {
+          console.warn('Invoice has prepaid_balance_delta but is merged; skipping reversal.', selectedInvoice.id);
         }
       } else {
         toast.success('Invoice deleted successfully');
