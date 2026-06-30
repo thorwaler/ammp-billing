@@ -176,6 +176,8 @@ export interface SupportDocumentData {
       cost: number;
     }>;
     totalAnnualCost: number;
+    irradianceAssetIds?: string[];
+    performanceAssetIds?: string[];
   };
   
   // Per-MW + Annual Upfront Minimum breakdown
