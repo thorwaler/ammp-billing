@@ -751,10 +751,18 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <span>{formatCurrency(data.calculationBreakdown.fixedPackageCost)}</span>
               </div>
             )}
+            {data.spsAnnualUpfrontBreakdown?.cycleType === 'quarterly_with_credit'
+              && data.spsAnnualUpfrontBreakdown.creditApplied > 0 && (
+              <div className="flex justify-between" style={{ color: '#d97706' }}>
+                <span>− Prepaid Credit Applied:</span>
+                <span>−{formatCurrency(data.spsAnnualUpfrontBreakdown.creditApplied)}</span>
+              </div>
+            )}
             <div className="border-t border-border pt-1 mt-1 flex justify-between font-bold">
               <span>= Support Document Total:</span>
               <span>{formatCurrency(data.calculatedTotal)}</span>
             </div>
+
           </div>
         )}
         
