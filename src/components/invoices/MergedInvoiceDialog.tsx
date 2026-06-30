@@ -274,8 +274,11 @@ export function MergedInvoiceDialog({
       
       const contractLabel = contract.contractName || contract.packageType;
       
-      // Add module costs (skip for per_mw_annual_upfront — handled by dedicated block below)
-      if (result.moduleCosts && result.moduleCosts.length > 0 && !result.perMWAnnualUpfrontBreakdown) {
+      // Add module costs (skip for per_mw_annual_upfront and SPS annual upfront — handled by dedicated blocks below)
+      const spsB = (result as any).spsAnnualUpfrontBreakdown;
+      const suppressModules = !!result.perMWAnnualUpfrontBreakdown
+        || spsB?.cycleType === 'annual_upfront';
+      if (result.moduleCosts && result.moduleCosts.length > 0 && !suppressModules) {
         result.moduleCosts.forEach((mc: any) => {
           lineItems.push({
             Description: `[${contractLabel}] ${mc.moduleName}`,
@@ -309,6 +312,30 @@ export function MergedInvoiceDialog({
           });
         }
       }
+
+      // SPS Monitoring annual-upfront dual cadence
+      if (spsB) {
+        const currencySymbol = contract.currency === 'USD' ? '$' : '€';
+        if (spsB.cycleType === 'annual_upfront') {
+          const desc = spsB.annualUpfrontAmount > spsB.annualDiscountedFee
+            ? `[${contractLabel}] Annual Platform Fee — Minimum (Minimum Annual Contract Value ${currencySymbol}${spsB.annualMinimum.toLocaleString()} exceeds discounted annual SPS value ${currencySymbol}${spsB.annualDiscountedFee.toLocaleString()})`
+            : `[${contractLabel}] Annual Platform Fee — Full Annual SPS Value (${currencySymbol}${spsB.annualDiscountedFee.toLocaleString()} exceeds minimum ${currencySymbol}${spsB.annualMinimum.toLocaleString()})`;
+          lineItems.push({
+            Description: desc,
+            Quantity: 1,
+            UnitAmount: spsB.annualUpfrontAmount,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        } else if (spsB.creditApplied > 0) {
+          lineItems.push({
+            Description: `[${contractLabel}] Annual Minimum Already Paid — credit applied from prepaid balance (remaining: ${currencySymbol}${spsB.prepaidBalanceAfter.toLocaleString()})`,
+            Quantity: 1,
+            UnitAmount: -spsB.creditApplied,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        }
+      }
+
       
       // Add site minimum pricing if applicable
       if (result.siteMinimumPricingBreakdown) {

@@ -161,6 +161,10 @@ export interface CalculationParams {
   // when false it treats it as a quarterly overage cycle. If undefined, the calc
   // derives it from `periodStart` vs `annualBillingAnchorDate` (anchor month = annual).
   perMWAnnualUpfrontIsAnnualCycle?: boolean;
+  // SPS Monitoring annual-upfront dual cadence. Mirrors the per-MW version:
+  // true = annual upfront cycle, false = quarterly with prepaid-balance credit.
+  // For SPS, `ytdInvoicedAmount` is repurposed as the remaining prepaid balance.
+  spsIsAnnualCycle?: boolean;
 }
 
 export interface SiteMinimumPricingResult {
@@ -301,6 +305,17 @@ export interface CalculationResult {
     minimumQuarterlyValue: number;
     upfrontAnnualPayment?: number;
     excessAnnualAmount?: number;
+  };
+  // SPS Monitoring annual-upfront dual cadence breakdown
+  spsAnnualUpfrontBreakdown?: {
+    cycleType: 'annual_upfront' | 'quarterly_with_credit';
+    annualDiscountedFee: number;
+    annualMinimum: number;
+    annualUpfrontAmount: number;
+    quarterCost: number;
+    prepaidBalanceBefore: number;
+    creditApplied: number;
+    prepaidBalanceAfter: number;
   };
   // Per-MW + Annual Upfront Minimum breakdown
   perMWAnnualUpfrontBreakdown?: {
@@ -1017,58 +1032,127 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
   } else if (packageType === 'sps_monitoring') {
-    // SPS Monitoring - module-based pricing with 3 stacking discounts
-    // Calculate at ANNUAL rate first, regardless of billing frequency
+    // SPS Monitoring - module-based pricing with 3 stacking discounts.
+    // Calculate at ANNUAL rate first, regardless of billing frequency.
     const annualParams = { ...adjustedParams, frequencyMultiplier: 1 };
-    const { moduleCosts, totalMWCost: annualModuleCost } = calculateModuleCosts(annualParams);
-    result.moduleCosts = moduleCosts;
-    
+    const { moduleCosts: annualModuleCosts, totalMWCost: annualModuleCost } = calculateModuleCosts(annualParams);
+
     // Pre-discount ANNUAL monitoring fee
     const preDiscountAnnualFee = annualModuleCost;
-    
-    // 1. Apply volume discount from portfolio discount tiers
+
+    // 1. Volume discount
     const volumeDiscountPercent = getApplicableDiscount(adjustedTotalMW, params.portfolioDiscountTiers);
     const volumeDiscountAmount = preDiscountAnnualFee * (volumeDiscountPercent / 100);
     const afterVolumeDiscount = preDiscountAnnualFee - volumeDiscountAmount;
-    
-    // 2. Apply upfront discount
+
+    // 2. Upfront discount
     const upfrontDiscountPercent = params.upfrontDiscountPercent || 0;
     const upfrontDiscountAmount = afterVolumeDiscount * (upfrontDiscountPercent / 100);
     const afterUpfrontDiscount = afterVolumeDiscount - upfrontDiscountAmount;
-    
-    // 3. Apply commitment discount
+
+    // 3. Commitment discount
     const commitmentDiscountPercent = params.commitmentDiscountPercent || 0;
     const commitmentDiscountAmount = afterUpfrontDiscount * (commitmentDiscountPercent / 100);
     const annualDiscountedFee = afterUpfrontDiscount - commitmentDiscountAmount;
-    
-    // The minimum annual value is paid UPFRONT annually.
-    // Quarterly invoices only charge the EXCESS beyond that prepayment.
-    const upfrontAnnualPayment = minimumAnnualValue || 0;
-    const excessAnnualAmount = Math.max(0, annualDiscountedFee - upfrontAnnualPayment);
-    
-    // Pro-rate the excess to the billing period
-    const periodMonitoringFee = excessAnnualAmount * frequencyMultiplier;
-    const minimumApplied = upfrontAnnualPayment > 0 && annualDiscountedFee <= upfrontAnnualPayment;
-    
-    result.totalMWCost = periodMonitoringFee;
-    
-    // Store discount breakdown for display
-    result.spsDiscountBreakdown = {
-      preDiscountMonitoringFee: preDiscountAnnualFee,
-      volumeDiscountPercent,
-      volumeDiscountAmount,
-      afterVolumeDiscount,
-      upfrontDiscountPercent,
-      upfrontDiscountAmount,
-      afterUpfrontDiscount,
-      commitmentDiscountPercent,
-      commitmentDiscountAmount,
-      finalMonitoringFee: annualDiscountedFee,
-      minimumApplied,
-      minimumQuarterlyValue: periodMonitoringFee,
-      upfrontAnnualPayment,
-      excessAnnualAmount,
-    };
+
+    const annualMinimum = minimumAnnualValue || 0;
+    // Dual cadence is active when an anchor date is set. Without an anchor we
+    // keep the legacy single-cadence behaviour (pro-rated period charge).
+    const hasAnnualUpfront = !!params.annualBillingAnchorDate;
+
+    // Per-period scaling factor (e.g. 0.25 for quarterly)
+    const periodFraction = frequencyMultiplier;
+    const quarterCost = annualDiscountedFee * periodFraction;
+
+    if (hasAnnualUpfront) {
+      // Resolve cycle type: explicit flag wins, else derive from anchor month
+      let isAnnualCycle: boolean | undefined = params.spsIsAnnualCycle;
+      if (isAnnualCycle === undefined) {
+        if (params.periodStart) {
+          const anchor = new Date(params.annualBillingAnchorDate as string | Date);
+          const start = new Date(params.periodStart);
+          isAnnualCycle = anchor.getUTCMonth() === start.getUTCMonth();
+        } else {
+          isAnnualCycle = false;
+        }
+      }
+
+      // Annual upfront = max(minimum annual contract value, full annual SPS fee)
+      const annualUpfrontAmount = Math.max(annualMinimum, annualDiscountedFee);
+      const prepaidBalanceBefore = Math.max(0, params.ytdInvoicedAmount || 0);
+
+      let periodMonitoringFee = 0;
+      let creditApplied = 0;
+      let prepaidBalanceAfter = prepaidBalanceBefore;
+      let cycleType: 'annual_upfront' | 'quarterly_with_credit';
+
+      if (isAnnualCycle) {
+        // Bill the full annual upfront amount as ONE line; suppress per-module lines
+        cycleType = 'annual_upfront';
+        periodMonitoringFee = annualUpfrontAmount;
+        prepaidBalanceAfter = annualUpfrontAmount;
+        result.moduleCosts = [];
+      } else {
+        // Quarterly cycle: bill full quarterly value, then apply credit from prepaid balance
+        cycleType = 'quarterly_with_credit';
+        creditApplied = Math.min(quarterCost, prepaidBalanceBefore);
+        periodMonitoringFee = quarterCost - creditApplied;
+        prepaidBalanceAfter = Math.max(0, prepaidBalanceBefore - creditApplied);
+        // Scale module line items to the period so Xero/UI line items sum to quarterCost
+        result.moduleCosts = annualModuleCosts.map(mc => ({ ...mc, cost: mc.cost * periodFraction }));
+      }
+
+      result.totalMWCost = periodMonitoringFee;
+      result.spsAnnualUpfrontBreakdown = {
+        cycleType,
+        annualDiscountedFee,
+        annualMinimum,
+        annualUpfrontAmount,
+        quarterCost,
+        prepaidBalanceBefore,
+        creditApplied,
+        prepaidBalanceAfter,
+      };
+      result.spsDiscountBreakdown = {
+        preDiscountMonitoringFee: preDiscountAnnualFee,
+        volumeDiscountPercent,
+        volumeDiscountAmount,
+        afterVolumeDiscount,
+        upfrontDiscountPercent,
+        upfrontDiscountAmount,
+        afterUpfrontDiscount,
+        commitmentDiscountPercent,
+        commitmentDiscountAmount,
+        finalMonitoringFee: annualDiscountedFee,
+        minimumApplied: annualMinimum > annualDiscountedFee,
+        minimumQuarterlyValue: periodMonitoringFee,
+        upfrontAnnualPayment: annualUpfrontAmount,
+        excessAnnualAmount: Math.max(0, annualDiscountedFee - annualMinimum),
+      };
+    } else {
+      // Legacy single-cadence behaviour: pro-rate annual fee to billing period,
+      // apply pro-rated minimum as a floor.
+      result.moduleCosts = annualModuleCosts.map(mc => ({ ...mc, cost: mc.cost * periodFraction }));
+      const periodMinimum = annualMinimum * periodFraction;
+      const periodFee = Math.max(periodMinimum, quarterCost);
+      result.totalMWCost = periodFee;
+      const minimumApplied = annualMinimum > 0 && annualDiscountedFee <= annualMinimum;
+      result.spsDiscountBreakdown = {
+        preDiscountMonitoringFee: preDiscountAnnualFee,
+        volumeDiscountPercent,
+        volumeDiscountAmount,
+        afterVolumeDiscount,
+        upfrontDiscountPercent,
+        upfrontDiscountAmount,
+        afterUpfrontDiscount,
+        commitmentDiscountPercent,
+        commitmentDiscountAmount,
+        finalMonitoringFee: annualDiscountedFee,
+        minimumApplied,
+        minimumQuarterlyValue: periodFee,
+      };
+    }
+
   } else if (packageType === 'solar_africa_api') {
     // SolarAfrica API - tier-based pricing by municipality count
     const municipalityCount = params.municipalityCount || 0;

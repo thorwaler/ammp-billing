@@ -895,6 +895,11 @@ export function InvoiceCalculator({
         selectedCustomer.package === 'per_mw_annual_upfront'
           ? isAnnualUpfrontCycle(invoiceDate ?? new Date(), selectedCustomer.annualBillingAnchorDate)
           : undefined,
+      // SPS dual-cadence flag (only when an anchor date is configured)
+      spsIsAnnualCycle:
+        selectedCustomer.package === 'sps_monitoring' && selectedCustomer.annualBillingAnchorDate
+          ? isAnnualUpfrontCycle(invoiceDate ?? new Date(), selectedCustomer.annualBillingAnchorDate)
+          : undefined,
     };
 
     return { params, invoicePeriod: invoicePeriodDisplay };
@@ -1026,7 +1031,7 @@ export function InvoiceCalculator({
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
         }
-      } else if (!result.perMWAnnualUpfrontBreakdown) {
+      } else if (!result.perMWAnnualUpfrontBreakdown && !(result.spsAnnualUpfrontBreakdown?.cycleType === 'annual_upfront')) {
         // Standard module costs (no threshold wording)
         // Skipped for per_mw_annual_upfront — handled by dedicated floor/overage block below.
         result.moduleCosts.forEach(mc => {
@@ -1070,7 +1075,33 @@ export function InvoiceCalculator({
             UnitAmount: b.overageAmount,
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
+      }
+
+      // SPS Monitoring annual-upfront dual cadence
+      if (result.spsAnnualUpfrontBreakdown) {
+        const sb = result.spsAnnualUpfrontBreakdown;
+        if (sb.cycleType === 'annual_upfront') {
+          // Single upfront line. Per-module lines suppressed by the gate above.
+          const annualDesc = sb.annualUpfrontAmount > sb.annualDiscountedFee
+            ? `Annual Platform Fee — Minimum (Minimum Annual Contract Value ${currencySymbol}${sb.annualMinimum.toLocaleString()} exceeds discounted annual SPS value ${currencySymbol}${sb.annualDiscountedFee.toLocaleString()})`
+            : `Annual Platform Fee — Full Annual SPS Value (${currencySymbol}${sb.annualDiscountedFee.toLocaleString()} exceeds minimum ${currencySymbol}${sb.annualMinimum.toLocaleString()})`;
+          lineItems.push({
+            Description: annualDesc,
+            Quantity: 1,
+            UnitAmount: sb.annualUpfrontAmount,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        } else if (sb.creditApplied > 0) {
+          // Quarterly cycle: module lines already emitted above; append negative credit.
+          lineItems.push({
+            Description: `Annual Minimum Already Paid — credit applied from prepaid balance (remaining after this invoice: ${currencySymbol}${sb.prepaidBalanceAfter.toLocaleString()})`,
+            Quantity: 1,
+            UnitAmount: -sb.creditApplied,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
         }
+      }
+
       }
       
       // Add hybrid tiered pricing line items (for hybrid_tiered packages like BLS)
@@ -1444,8 +1475,12 @@ export function InvoiceCalculator({
           }
         }
 
+        // SPS dual-cadence active only when an anchor date is configured.
+        const isSpsDualCadence = selectedCustomer.package === 'sps_monitoring'
+          && !!contractRow?.annual_billing_anchor_date;
+
         if (isAnnualUpfrontContract && selectedCustomer.contractId) {
-          // Dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
+          // Per-MW dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
           const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
 
           const anchor = contractRow?.annual_billing_anchor_date ?? null;
@@ -1464,13 +1499,36 @@ export function InvoiceCalculator({
           contractUpdate.next_invoice_date = nextDate.toISOString();
 
           if (wasAnnualCycle) {
-            // Annual rollover: reset YTD to this invoice's amount.
             contractUpdate.last_annual_invoice_date = invoiceDate.toISOString();
             contractUpdate.ytd_invoiced_amount = result.totalPrice;
           } else {
-            // Quarterly overage: increment YTD by this invoice's amount.
             const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
             contractUpdate.ytd_invoiced_amount = prevYtd + result.totalPrice;
+          }
+        } else if (isSpsDualCadence && selectedCustomer.contractId) {
+          // SPS dual-cadence: ytd_invoiced_amount tracks REMAINING PREPAID BALANCE.
+          // Annual cycle → set to annualUpfrontAmount. Quarterly → decrement by credit applied.
+          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
+          const anchor = contractRow?.annual_billing_anchor_date ?? null;
+          const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
+          const nextDate = getNextInvoiceDate(invoiceDate, {
+            packageType: 'per_mw_annual_upfront', // reuse dual-cadence scheduling
+            billingFrequency: 'quarterly',
+            annualBillingAnchorDate: anchor,
+          });
+          const nextPeriodEnd = new Date(nextDate);
+          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+
+          contractUpdate.period_start = nextPeriodStart.toISOString();
+          contractUpdate.period_end = nextPeriodEnd.toISOString();
+          contractUpdate.next_invoice_date = nextDate.toISOString();
+
+          const sb = (result as any).spsAnnualUpfrontBreakdown;
+          if (wasAnnualCycle) {
+            contractUpdate.last_annual_invoice_date = invoiceDate.toISOString();
+            contractUpdate.ytd_invoiced_amount = sb?.annualUpfrontAmount ?? result.totalPrice;
+          } else if (sb) {
+            contractUpdate.ytd_invoiced_amount = sb.prepaidBalanceAfter;
           }
         } else {
           let nextPeriodEnd = new Date(nextPeriodStart);
@@ -1495,6 +1553,7 @@ export function InvoiceCalculator({
           contractUpdate.period_end = nextPeriodEnd.toISOString();
           contractUpdate.next_invoice_date = nextPeriodEnd.toISOString();
         }
+
 
         if (selectedCustomer.contractId) {
           await supabase
