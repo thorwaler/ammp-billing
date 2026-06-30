@@ -1215,7 +1215,20 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 name="companyName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Company Name</FormLabel>
+                    <div className="flex items-center justify-between">
+                      <FormLabel>Company Name</FormLabel>
+                      {existingCustomer && existingContract && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          size="sm"
+                          className="h-auto p-0 text-xs"
+                          onClick={() => setMoveDialogOpen(true)}
+                        >
+                          Move to different customer
+                        </Button>
+                      )}
+                    </div>
                     <FormControl>
                       <Input 
                         placeholder="Enter company name" 
@@ -1228,6 +1241,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   </FormItem>
             )}
             />
+
             
             <FormField
                 control={form.control}
