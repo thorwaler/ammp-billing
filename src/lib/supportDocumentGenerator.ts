@@ -774,10 +774,54 @@ function generateAssetBreakdown(
     };
   }
 
+  // For Matriarch API - classify each site (irradiance-only vs performance) and
+  // assign the rate that actually applies. Irradiance-only sites pay a flat
+  // €X/site/month (annualised); performance sites are billed on a blended
+  // per-MWp rate so per-row totals reconcile to performanceAnnualTotal.
+  if (packageType === 'matriarch_api' && calculationResult.matriarchApiBreakdown) {
+    const mat = calculationResult.matriarchApiBreakdown;
+    const irradianceAnnualPerSite = (mat.irradiancePerSiteRate || 0) * 12;
+    const perfBlendedRatePerMWp = mat.performanceTotalMWp > 0
+      ? mat.performanceAnnualTotal / mat.performanceTotalMWp
+      : 0;
+    const perfPricePerKWp = perfBlendedRatePerMWp / 1000;
+
+    return {
+      assetBreakdown: assets.map((asset: any) => {
+        const pvCapacityKWp = (asset.totalMW || 0) * 1000;
+        const isHybrid = asset.isHybrid || false;
+        const hasDevicesBeyondSolcast = (asset.deviceCount || 0) > 1 ||
+          (asset.devices && asset.devices.some((d: any) =>
+            d.deviceType && !['solcast', 'satellite', 'irradiance'].includes(d.deviceType.toLowerCase())
+          ));
+        const isIrradianceOnly = asset.hasSolcast && !hasDevicesBeyondSolcast;
+        const pricePerYear = isIrradianceOnly
+          ? irradianceAnnualPerSite
+          : pvCapacityKWp * perfPricePerKWp;
+        const pricePerKWp = isIrradianceOnly ? 0 : perfPricePerKWp;
+        return {
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          pvCapacityKWp: Math.round(pvCapacityKWp * 100) / 100,
+          isPV: !isHybrid,
+          isHybrid,
+          hubActive: false,
+          portalActive: false,
+          controlActive: false,
+          reportingActive: false,
+          pricePerKWp: Math.round(pricePerKWp * 10000) / 10000,
+          pricePerYear: Math.round(pricePerYear * 100) / 100,
+          pricingModel: isIrradianceOnly ? 'irradiance' : 'performance',
+        };
+      }),
+    };
+  }
+
   // For per_site packages - don't show asset breakdown, use per-site section instead
   if (packageType === 'per_site' && calculationResult.perSiteBreakdown) {
     return { assetBreakdown: [] };
   }
+
   
   // For pro/custom packages WITH site minimum pricing - use the breakdown data
   // Convert period-adjusted costs back to annual for display with "/y" label
