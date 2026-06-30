@@ -1233,6 +1233,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       performanceAnnualTotal: perfResult.totalCost,
       performanceTierBreakdown: perfResult.tierBreakdown,
       totalAnnualCost: totalAnnual,
+      irradianceAssetIds: irradianceOnlySites.map(a => a.assetId),
+      performanceAssetIds: performanceSites.map(a => a.assetId),
     };
     
     result.totalMWCost = totalAnnual * frequencyMultiplier;
