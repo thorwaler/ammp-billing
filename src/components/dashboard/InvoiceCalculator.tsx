@@ -2779,7 +2779,20 @@ export function InvoiceCalculator({
             )}
 
             {/* SPS Monitoring discount breakdown */}
-            {result.spsDiscountBreakdown && (
+            {result.spsDiscountBreakdown && (() => {
+              const sb = (result as any).spsAnnualUpfrontBreakdown as
+                | {
+                    cycleType: 'annual_upfront' | 'quarterly_with_credit';
+                    annualDiscountedFee: number;
+                    annualMinimum: number;
+                    annualUpfrontAmount: number;
+                    quarterCost: number;
+                    prepaidBalanceBefore: number;
+                    creditApplied: number;
+                    prepaidBalanceAfter: number;
+                  }
+                | undefined;
+              return (
               <div className="space-y-3 mb-4">
                 <h4 className="font-medium text-sm">SPS Monitoring Discount Waterfall:</h4>
                 <div className="space-y-1 text-sm pl-2">
@@ -2809,30 +2822,90 @@ export function InvoiceCalculator({
                     <span>Annual Discounted Fee:</span>
                     <span>{formatContractCurrency(result.spsDiscountBreakdown.finalMonitoringFee)}</span>
                   </div>
-                  {(result.spsDiscountBreakdown.upfrontAnnualPayment || 0) > 0 && (
+
+                  {sb ? (
                     <>
-                      <div className="flex justify-between text-muted-foreground">
-                        <span>Upfront Annual Payment (prepaid):</span>
-                        <span>-{formatContractCurrency(result.spsDiscountBreakdown.upfrontAnnualPayment || 0)}</span>
-                      </div>
                       <div className="flex justify-between">
-                        <span>Excess Annual Amount:</span>
-                        <span>{formatContractCurrency(result.spsDiscountBreakdown.excessAnnualAmount || 0)}</span>
+                        <span>Annual Upfront Amount (max of fee and {formatContractCurrency(sb.annualMinimum)} minimum):</span>
+                        <span>{formatContractCurrency(sb.annualUpfrontAmount)}</span>
+                      </div>
+
+                      {sb.cycleType === 'annual_upfront' ? (
+                        <>
+                          <div className="text-xs text-muted-foreground italic mt-1">
+                            This invoice bills the full annual upfront amount. Future quarterly invoices will draw down from the prepaid balance.
+                          </div>
+                          <div className="flex justify-between border-t border-border pt-1 mt-1">
+                            <span>Prepaid Balance After:</span>
+                            <span>{formatContractCurrency(sb.prepaidBalanceAfter)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
+                            <span>Annual Upfront Charged:</span>
+                            <span>{formatContractCurrency(sb.annualUpfrontAmount)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex justify-between border-t border-border pt-1 mt-1">
+                            <span>Prepaid Balance Before:</span>
+                            <span>{formatContractCurrency(sb.prepaidBalanceBefore)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Quarterly Fee (gross):</span>
+                            <span>{formatContractCurrency(sb.quarterCost)}</span>
+                          </div>
+                          {sb.creditApplied > 0 && (
+                            <div className="flex justify-between text-muted-foreground">
+                              <span>Credit Applied (drawn from prepaid balance):</span>
+                              <span>-{formatContractCurrency(sb.creditApplied)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between">
+                            <span>Prepaid Balance Remaining:</span>
+                            <span>{formatContractCurrency(sb.prepaidBalanceAfter)}</span>
+                          </div>
+                          {sb.creditApplied >= sb.quarterCost && sb.quarterCost > 0 && (
+                            <div className="text-xs text-muted-foreground italic mt-1">
+                              Monitoring fee fully covered by prepaid annual payment — net quarterly monitoring charge is {formatContractCurrency(0)}.
+                            </div>
+                          )}
+                          <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
+                            <span>Quarterly Monitoring Fee (net):</span>
+                            <span>{formatContractCurrency(Math.max(0, sb.quarterCost - sb.creditApplied))}</span>
+                          </div>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {(result.spsDiscountBreakdown.upfrontAnnualPayment || 0) > 0 && (
+                        <>
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Upfront Annual Payment (prepaid):</span>
+                            <span>-{formatContractCurrency(result.spsDiscountBreakdown.upfrontAnnualPayment || 0)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Excess Annual Amount:</span>
+                            <span>{formatContractCurrency(result.spsDiscountBreakdown.excessAnnualAmount || 0)}</span>
+                          </div>
+                        </>
+                      )}
+                      {result.spsDiscountBreakdown.minimumApplied && (
+                        <div className="text-xs text-muted-foreground italic mt-1">
+                          Monitoring fee fully covered by upfront annual payment — quarterly monitoring charge is {formatContractCurrency(0)}.
+                        </div>
+                      )}
+                      <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
+                        <span>Quarterly Monitoring Fee:</span>
+                        <span>{formatContractCurrency(result.spsDiscountBreakdown.minimumQuarterlyValue)}</span>
                       </div>
                     </>
                   )}
-                  {result.spsDiscountBreakdown.minimumApplied && (
-                    <div className="text-xs text-muted-foreground italic mt-1">
-                      Monitoring fee fully covered by upfront annual payment — quarterly monitoring charge is €0.
-                    </div>
-                  )}
-                  <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1">
-                    <span>Quarterly Monitoring Fee:</span>
-                    <span>{formatContractCurrency(result.spsDiscountBreakdown.minimumQuarterlyValue)}</span>
-                  </div>
                 </div>
               </div>
-            )}
+              );
+            })()}
+
 
             {/* Per-site billing breakdown */}
             {result.perSiteBreakdown && (result.perSiteBreakdown.onboardingCost > 0 || result.perSiteBreakdown.annualSubscriptionCost > 0) && (
