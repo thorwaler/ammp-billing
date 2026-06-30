@@ -594,6 +594,8 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 )}
               </tbody>
             </table>
+              );
+            })()}
           </div>
           {data.siteMinimumPricingSummary && (
             <p className="text-muted-foreground mt-1" style={{ fontSize: '7px' }}>
