@@ -272,9 +272,30 @@ export default function InvoiceHistory() {
           const contractWord = contractIds.length > 1 ? 'contracts' : 'contract';
           toast.success(`Invoice deleted - ${contractIds.length} ${contractWord} will reappear in upcoming invoices`);
         }
+
+        // Reverse any prepaid-balance change this invoice applied (SPS / Per-MW Annual Upfront).
+        const delta = (selectedInvoice as any).prepaid_balance_delta;
+        const isMerged = (selectedInvoice.merged_contract_ids?.length ?? 0) > 0;
+        if (delta != null && Number(delta) !== 0) {
+          if (isMerged) {
+            console.warn('Invoice has prepaid_balance_delta but is merged; skipping reversal.', selectedInvoice.id);
+          } else if (selectedInvoice.contract_id) {
+            const { data: c } = await supabase
+              .from('contracts')
+              .select('ytd_invoiced_amount')
+              .eq('id', selectedInvoice.contract_id)
+              .maybeSingle();
+            const current = Number((c as any)?.ytd_invoiced_amount) || 0;
+            await supabase
+              .from('contracts')
+              .update({ ytd_invoiced_amount: current - Number(delta) })
+              .eq('id', selectedInvoice.contract_id);
+          }
+        }
       } else {
         toast.success('Invoice deleted successfully');
       }
+
 
       fetchInvoices();
     } catch (error) {
