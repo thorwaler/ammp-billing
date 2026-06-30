@@ -1,63 +1,34 @@
 ## Goal
+Make the Matriarch support document's per-asset breakdown actually useful instead of showing `€0.00 / 0.00 €/kWp` for every site.
 
-Make SPS Monitoring discounts additive — every discount (volume, upfront, commitment) applies to the original pre-discount fee, not to the running discounted base. The per-MW / per-kWp rate shown in the support document must follow the same additive logic on top of the €900/MW base rate.
+## Approach
+Populate per-asset pricing in `generateAssetBreakdown` for `matriarch_api` packages by mirroring the same classification used in `invoiceCalculations.ts` (irradiance-only vs performance) and assigning each row the rate that actually applies to it. The existing dual-subscription summary block stays unchanged — the per-asset table becomes its line-by-line view.
 
-## Current behavior (bug)
+## Per-row pricing rules
 
-In `src/lib/invoiceCalculations.ts` (lines 1043–1056), all three SPS discounts stack multiplicatively:
-- Volume → applied to preDiscount
-- Upfront → applied to `preDiscount − volume`
-- Commitment → applied to `preDiscount − volume − upfront`
+- **Irradiance-only site** (passes `hasSolcast && !hasDevicesBeyondSolcast`)
+  - `pricePerYear` = `irradiancePerSiteRate × 12` (e.g. €5 × 12 = €60)
+  - `pricePerKWp` = 0 (flat per-site fee — not capacity-based)
+  - Label/tag the row as "Irradiance" so the 0 €/kWp reads correctly
+- **Performance site**
+  - `pricePerKWp` = applicable graduated tier rate ÷ 1000 (use the asset's MWp position in the cumulative tier ladder, matching `calculatePerformanceMWpCost`)
+  - `pricePerYear` = `pvCapacityKWp × pricePerKWp`
+  - Tag the row as "Performance"
 
-So a 5% + 3% combo on €100,734.17 gives less than (5% + 3%) of €100,734.17 because each later discount sees a shrunken base.
+Sum of all `pricePerYear` rows will equal `matriarchApiBreakdown.totalAnnualCost`, so the existing `assetBreakdownTotal` / `Subtotal (Annual)` line reconciles automatically and the calculation-breakdown section keeps using `totalMWCost` for the period total (no change to invoice math).
 
-## Desired behavior
+## UI changes
 
-All discounts apply to the **original** `preDiscountAnnualFee`:
-- `volumeDiscountAmount     = preDiscount × volume% / 100`
-- `upfrontDiscountAmount    = preDiscount × upfront% / 100`
-- `commitmentDiscountAmount = preDiscount × commitment% / 100`
-- `annualDiscountedFee      = preDiscount − (volumeAmt + upfrontAmt + commitmentAmt)`
+- `SupportDocument.tsx` asset table: add a small "Model" column (or reuse the Hybrid/Hub indicators) showing `Irradiance` / `Performance` for `matriarch_api` rows so the flat €60/yr lines are self-explanatory. Keep the column hidden / unused for other packages.
+- `PdfRenderer.tsx`: mirror the same extra column for Matriarch contracts only.
 
-Example on the attached doc (pre-discount €100,734.17, 5% + 3%, 0% commitment):
-- Volume 5% → €5,036.71 (taken from €100,734.17)
-- Upfront 3% → €3,022.03 (taken from €100,734.17, **not** from €95,697.46)
-- Final annual → €92,675.44
+## Files to change
 
-## Per-MW / per-kWp rate in the support document
-
-`src/lib/supportDocumentGenerator.ts` (~line 890) derives the SPS blended rate as `annualDiscountedFee / totalMW`. Once the discount math is additive at the source, this rate automatically reflects the additive formula:
-
-`effectiveRate = €900/MW × (1 − (volume% + upfront% + commitment%) / 100)`
-
-No extra computation is needed in the support doc — the existing divide-by-MW path is already correct as long as `annualDiscountedFee` is fixed upstream. Verify after the change that per-site €/kWp · €/Year sum to `annualDiscountedFee`.
-
-## Changes
-
-### `src/lib/invoiceCalculations.ts` (~lines 1043–1056)
-Replace sequential math with additive math. Keep existing field names so PDF / UI consumers (`PdfRenderer.tsx` 370–374, `InvoiceCalculator.tsx` 2817+, `supportDocumentGenerator.ts` 549+) keep working:
-
-```ts
-const volumeDiscountAmount     = preDiscountAnnualFee * (volumeDiscountPercent / 100);
-const upfrontDiscountAmount    = preDiscountAnnualFee * (upfrontDiscountPercent / 100);
-const commitmentDiscountAmount = preDiscountAnnualFee * (commitmentDiscountPercent / 100);
-
-const afterVolumeDiscount   = preDiscountAnnualFee - volumeDiscountAmount;
-const afterUpfrontDiscount  = afterVolumeDiscount   - upfrontDiscountAmount;
-const annualDiscountedFee   = afterUpfrontDiscount  - commitmentDiscountAmount;
-```
-
-The running `afterVolumeDiscount` / `afterUpfrontDiscount` subtotals are still mathematically valid because each `*Amount` is now anchored to `preDiscount` — the PDF rows ("After Volume Discount", "After Upfront Discount") remain meaningful waypoints.
-
-### No other code edits
-- Support doc per-MW / per-kWp rate is already derived from `annualDiscountedFee` and updates automatically.
-- Type definitions unchanged.
-- PDF and calculator UI unchanged.
-
-### Memory update
-Update `mem://features/package-sps-monitoring` (or its index entry) with: "All SPS discounts (volume, upfront, commitment) are additive against the pre-discount annual fee — never sequential. Per-MW rate in support docs follows the same rule."
+- `src/lib/supportDocumentGenerator.ts` — add a `matriarch_api` branch in `generateAssetBreakdown` (around line 749) that classifies assets, computes per-row irradiance vs performance pricing, and optionally returns a `pricingModel` tag per row. Extend the `assetBreakdown` row type with an optional `pricingModel?: 'irradiance' | 'performance'`.
+- `src/components/invoices/SupportDocument.tsx` — render the model tag (only when present) in the asset table.
+- `src/components/invoices/PdfRenderer.tsx` — same column in the PDF output.
 
 ## Out of scope
 
-- No change to dual-cadence (annual upfront vs quarterly credit), minimum fee handling, or prepaid balance logic.
-- No backfill of historical invoices — they were generated under the old multiplicative rule. Recalculations / future invoices will use the additive formula.
+- No change to `invoiceCalculations.ts`, totals, or Xero line items — pricing math stays exactly as today.
+- No change to the dual-subscription summary block above the asset table; it remains the authoritative tier/site-count view.
