@@ -1,0 +1,2 @@
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS prepaid_balance_delta numeric;
+COMMENT ON COLUMN public.invoices.prepaid_balance_delta IS 'Signed change applied to contracts.ytd_invoiced_amount when this invoice was created. Reversed on delete.';
