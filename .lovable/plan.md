@@ -1,20 +1,39 @@
-## Fix: Customer not changing on Contracts page after a move
+## Fix: Xero SPS quarterly invoice — Technical Monitoring line uses pre-discount fee
 
 ### Root cause
 
-`contracts.company_name` is a denormalized snapshot used by the contracts list (and the form's Company field). `MoveContractDialog` updates only `contracts.customer_id`, so the row keeps its old `company_name` and appears unchanged in the list — even though the underlying `customer_id` has switched.
+In `src/lib/invoiceCalculations.ts` (SPS dual-cadence quarterly branch, ~line 1102), `result.moduleCosts` is scaled to the period using **pre-discount** annual module costs:
+
+```ts
+result.moduleCosts = annualModuleCosts.map(mc => ({ ...mc, cost: mc.cost * periodFraction }));
+```
+
+But the credit and the calculator's "Quarterly Monitoring Fee" use **post-discount** `quarterCost = annualDiscountedFee × periodFraction`. So Xero gets:
+
+- Technical Monitoring (pre-discount, ×0.25): **25,183.54**
+- Credit (post-discount): **−20,885.97**
+- Net monitoring: **4,297.57** (wrong; should be 0)
+
+The calculator UI hides this because it renders the SPS waterfall from `spsAnnualUpfrontBreakdown` (post-discount), not from `moduleCosts`.
 
 ### Change
 
-In `src/components/contracts/MoveContractDialog.tsx`:
+In `src/lib/invoiceCalculations.ts`, in the `cycleType === 'quarterly_with_credit'` branch only:
 
-- When the user confirms a move, update both fields in the same `contracts` update:
-  - `customer_id = selectedCustomerId`
-  - `company_name = <selected customer's name>` (use the official `name`, not nickname, to match how `company_name` is captured on create/edit)
-- Keep the existing toast + `onMoved()` callback (which already triggers `loadContracts()` in `ContractList`).
+- Scale each module cost by `periodFraction × (annualDiscountedFee / preDiscountAnnualFee)` so the line items sum to `quarterCost` (post-discount) instead of the pre-discount quarter value.
+- Guard division-by-zero (if `preDiscountAnnualFee === 0`, leave moduleCosts empty).
 
-No other tables need touching — `company_name` is the only denormalized field on `contracts`; everything else joins via `customer_id`.
+This keeps the per-module Xero lines (Technical Monitoring, etc.), but each now reflects its share of the discounted quarterly fee, so credit fully nets to €0 when prepaid balance covers it.
+
+### Verification
+
+After fix, the SPS Apr–Jun invoice in Xero should show:
+
+- Technical Monitoring: **20,885.97**
+- Credit: **−20,885.97**
+- Satellite Data API Access: **688.00**
+- Total: **688.00** (matches the calculator)
 
 ### Files touched
 
-- `src/components/contracts/MoveContractDialog.tsx` — extend the update payload with `company_name`.
+- `src/lib/invoiceCalculations.ts` — adjust module-cost scaling in the SPS `quarterly_with_credit` branch.
