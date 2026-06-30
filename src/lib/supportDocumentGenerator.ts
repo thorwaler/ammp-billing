@@ -507,9 +507,17 @@ export async function generateSupportDocumentData(
     discountedAssetsTotal +
     totalAddonCosts +
     fixedPackageCost;
-  
+  // SPS quarterly cycle: subtract the prepaid credit so the calculated total
+  // matches the net invoice amount (credit row is rendered separately in the UI).
+  const spsBd: any = (calculationResult as any).spsAnnualUpfrontBreakdown;
+  const spsCreditAdjustment = spsBd?.cycleType === 'quarterly_with_credit'
+    ? (spsBd.creditApplied || 0)
+    : 0;
+
   const invoiceTotal = calculationResult.totalPrice;
-  const totalsMatch = Math.abs(calculatedTotal - invoiceTotal) < 0.01;
+  const calculatedTotalNet = calculatedTotal - spsCreditAdjustment;
+  const totalsMatch = Math.abs(calculatedTotalNet - invoiceTotal) < 0.01;
+
 
   return {
     customerName,
