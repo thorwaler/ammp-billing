@@ -865,7 +865,19 @@ function generateAssetBreakdown(
     baseRatePerMWp = totalMW > 0 ? calculationResult.starterPackageCost / totalMW : 0;
   } else if (packageType === 'capped') {
     baseRatePerMWp = totalMW > 0 ? calculationResult.starterPackageCost / totalMW : 0;
+  } else if (packageType === 'sps_monitoring') {
+    // Use post-discount blended rate so per-site values reflect actual pricing
+    // and sum to the contract's annual discounted monitoring fee.
+    const sps: any = (calculationResult as any).spsAnnualUpfrontBreakdown
+      || calculationResult.spsDiscountBreakdown;
+    const annualDiscounted = sps?.annualDiscountedFee
+      ?? calculationResult.spsDiscountBreakdown?.finalMonitoringFee
+      ?? 0;
+    baseRatePerMWp = totalMW > 0
+      ? annualDiscounted / totalMW
+      : calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
   }
+
 
   return {
     assetBreakdown: assets.map(asset => {
