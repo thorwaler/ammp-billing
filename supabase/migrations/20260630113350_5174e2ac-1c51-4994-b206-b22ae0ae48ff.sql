@@ -1,0 +1,1 @@
+ALTER TABLE public.invoices ADD COLUMN IF NOT EXISTS prepaid_balance_deltas_by_contract jsonb;
