@@ -717,10 +717,14 @@ export function MergedInvoiceDialog({
           xero_synced_at: new Date().toISOString(),
           xero_line_items: lineItems as any,
           merged_contract_ids: selectedContractsList.map(c => c.contractId),
+          prepaid_balance_deltas_by_contract: Object.keys(deltasByContract).length > 0
+            ? (deltasByContract as any)
+            : null,
           support_document_data: Array.from(supportDocuments.entries())
             .filter(([id]) => selectedContracts.has(id))
             .map(([id, doc]) => ({ contractId: id, data: doc })) as any
         }]);
+
         
         // STEP 3 & 4: Generate support documents and PDFs AFTER saving to DB (so YTD includes this invoice)
         let generatedPdfs: Array<{ contractName: string; pdfBase64: string }> = [];
