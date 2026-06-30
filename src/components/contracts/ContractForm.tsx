@@ -246,6 +246,7 @@ interface ContractFormProps {
 
 export function ContractForm({ existingCustomer, existingContract, onComplete, onCancel, isExtending, isNewContract }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
+  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [showCustomPricing, setShowCustomPricing] = useState(false);
   const [selectedComplexityItems, setSelectedComplexityItems] = useState<{[key: string]: ComplexityLevel}>({});
