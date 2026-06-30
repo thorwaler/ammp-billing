@@ -1604,7 +1604,9 @@ export function InvoiceCalculator({
             source: 'internal',
             arr_amount: storedArrAmount,
             nrr_amount: storedNrrAmount,
-            xero_line_items: lineItems
+            xero_line_items: lineItems,
+            prepaid_balance_delta: prepaidBalanceDelta,
+
           }])
           .select()
           .single();
