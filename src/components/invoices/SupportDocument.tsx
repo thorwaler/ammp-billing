@@ -666,6 +666,26 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   <span>{formatCurrency(data.perMWAnnualUpfrontBreakdown.overageAmount)}</span>
                 </div>
               )
+            ) : data.spsAnnualUpfrontBreakdown ? (
+              data.spsAnnualUpfrontBreakdown.cycleType === 'annual_upfront' ? (
+                <div className="flex justify-between">
+                  <span>Annual Platform Fee — Upfront:</span>
+                  <span>{formatCurrency(data.spsAnnualUpfrontBreakdown.annualUpfrontAmount)}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between">
+                    <span>Quarterly SPS Fee:</span>
+                    <span>{formatCurrency(data.spsAnnualUpfrontBreakdown.quarterCost)}</span>
+                  </div>
+                  {data.spsAnnualUpfrontBreakdown.creditApplied > 0 && (
+                    <div className="flex justify-between" style={{ color: '#d97706' }}>
+                      <span>− Annual Minimum Already Paid:</span>
+                      <span>−{formatCurrency(data.spsAnnualUpfrontBreakdown.creditApplied)}</span>
+                    </div>
+                  )}
+                </>
+              )
             ) : (
               data.calculationBreakdown.assetBreakdownPeriod > 0 && (
                 <div className="flex justify-between">
