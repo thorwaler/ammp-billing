@@ -1390,7 +1390,31 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                     <li>Upfront Discount ({upfrontDiscountPercent}%)</li>
                     <li>Commitment Discount ({commitmentDiscountPercent}%)</li>
                   </ol>
-                  <p className="mt-2">Discounted fee is then compared against the Minimum Annual Value (pro-rated for billing period).</p>
+                  <p className="mt-2">Discounted fee is then compared against the Minimum Annual Contract Value (pro-rated for billing period).</p>
+                </div>
+
+                {/* Annual Upfront Billing — optional. When set, drives dual-cadence billing. */}
+                <div className="pt-4 border-t space-y-3">
+                  <h4 className="font-medium text-sm">Annual Upfront Billing (optional)</h4>
+                  <p className="text-xs text-muted-foreground">
+                    If an anchor date is set, the full annual SPS fee — or the <strong>Minimum Annual Contract Value</strong> above, whichever is higher — is billed upfront on that date each year. Subsequent quarterly invoices show the full quarterly fee with line items, plus an <em>"Annual Minimum Already Paid"</em> credit that drains the prepaid balance until it's exhausted. Leave blank to keep the legacy pro-rated quarterly behaviour.
+                  </p>
+                  <FormField
+                    control={form.control}
+                    name="annualBillingAnchorDate"
+                    render={({ field }) => (
+                      <FormItem className="max-w-sm">
+                        <FormLabel>Annual Anchor Date</FormLabel>
+                        <FormControl>
+                          <Input type="date" {...field} value={field.value ?? ""} />
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          The annual upfront invoice re-bills on this date each year. Reuses the Minimum Annual Contract Value above as the floor.
+                        </p>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
               </div>
             )}
