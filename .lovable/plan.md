@@ -1,35 +1,20 @@
-## Move contract to a different customer
+## Fix: Customer not changing on Contracts page after a move
 
-Add the ability to reassign an existing contract to another customer from the Edit Contract form.
+### Root cause
 
-### UX
+`contracts.company_name` is a denormalized snapshot used by the contracts list (and the form's Company field). `MoveContractDialog` updates only `contracts.customer_id`, so the row keeps its old `company_name` and appears unchanged in the list — even though the underlying `customer_id` has switched.
 
-- In `ContractForm.tsx`, when editing an existing contract, show a small "Move to different customer" link/button next to the (read-only) Company Name field.
-- Clicking it opens a confirmation dialog with:
-  - A searchable customer dropdown (existing customers, excluding the current one)
-  - Warning text explaining the impact: invoices, billing periods, amendments, and AMMP sync history stay attached to the contract, but will now appear under the new customer
-  - Confirm / Cancel buttons
-- On confirm: update `contracts.customer_id` to the selected customer, toast success, reload the form bound to the new customer.
+### Change
 
-### Scope (what moves with the contract)
+In `src/components/contracts/MoveContractDialog.tsx`:
 
-The contract row's `customer_id` is the only authoritative link. All related rows (invoices, site_billing_status, contract_amendments, asset_status_history, notifications, invoice_alerts) reference `contract_id`, so they follow automatically — no extra updates needed.
+- When the user confirms a move, update both fields in the same `contracts` update:
+  - `customer_id = selectedCustomerId`
+  - `company_name = <selected customer's name>` (use the official `name`, not nickname, to match how `company_name` is captured on create/edit)
+- Keep the existing toast + `onMoved()` callback (which already triggers `loadContracts()` in `ContractList`).
 
-### Out of scope
-
-- No bulk move
-- No Xero contact change (the existing Xero invoices remain under their original Xero contact; future invoices will use the new customer's Xero contact as normal)
-- No customer merge
-
-### Permissions
-
-Restricted to users who can already edit contracts (existing `can_write` check via RLS on the contracts table — no policy changes needed).
+No other tables need touching — `company_name` is the only denormalized field on `contracts`; everything else joins via `customer_id`.
 
 ### Files touched
 
-- `src/components/contracts/ContractForm.tsx` — add the "Move" button + dialog, customer picker, update handler.
-- Possibly a new small component `src/components/contracts/MoveContractDialog.tsx` to keep the form tidy.
-
-### Question
-
-Should the move be allowed when the contract has invoices already issued under the old customer? (Default: yes, with a warning that historical invoices stay linked to the contract and will now display under the new customer in the app — Xero records are unaffected.)
+- `src/components/contracts/MoveContractDialog.tsx` — extend the update payload with `company_name`.
