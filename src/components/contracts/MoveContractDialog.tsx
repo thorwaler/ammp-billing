@@ -60,13 +60,16 @@ export function MoveContractDialog({
     if (!selectedCustomerId) return;
     setIsMoving(true);
     try {
+      const target = customers?.find((c) => c.id === selectedCustomerId);
       const { error } = await supabase
         .from("contracts")
-        .update({ customer_id: selectedCustomerId })
+        .update({
+          customer_id: selectedCustomerId,
+          ...(target?.name ? { company_name: target.name } : {}),
+        })
         .eq("id", contractId);
       if (error) throw error;
 
-      const target = customers?.find((c) => c.id === selectedCustomerId);
       toast({
         title: "Contract moved",
         description: `Contract reassigned to ${target?.name ?? "selected customer"}.`,
