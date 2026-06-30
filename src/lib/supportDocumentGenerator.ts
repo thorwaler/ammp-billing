@@ -189,6 +189,18 @@ export interface SupportDocumentData {
     overageAmount: number;
   };
 
+  // SPS Monitoring annual-upfront dual cadence breakdown
+  spsAnnualUpfrontBreakdown?: {
+    cycleType: 'annual_upfront' | 'quarterly_with_credit';
+    annualDiscountedFee: number;
+    annualMinimum: number;
+    annualUpfrontAmount: number;
+    quarterCost: number;
+    prepaidBalanceBefore: number;
+    creditApplied: number;
+    prepaidBalanceAfter: number;
+  };
+
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
