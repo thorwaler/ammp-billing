@@ -42,6 +42,8 @@ export interface SupportDocumentData {
     // Site minimum pricing fields
     calculatedCost?: number;
     minimumCharge?: number;
+    // Matriarch API: which pricing model applies to this row
+    pricingModel?: 'irradiance' | 'performance';
   }[];
   
   // Site minimum pricing summary (for pro/custom with minimum charges)
