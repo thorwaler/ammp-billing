@@ -1916,6 +1916,8 @@ export function InvoiceCalculator({
     const actual = monthsInPeriod(selectedCustomer?.periodStart, selectedCustomer?.periodEnd);
     return actual && actual < def ? actual : def;
   })();
+  const effectiveFrequencyMultiplier = effectivePeriodMonths / 12;
+
 
   return (
 
