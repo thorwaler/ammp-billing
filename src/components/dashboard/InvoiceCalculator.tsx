@@ -2607,10 +2607,10 @@ export function InvoiceCalculator({
                   )}
                 </div>
                 
-            {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && !result.siteMinimumPricingBreakdown && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency) && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
+            {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && !result.siteMinimumPricingBreakdown && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * effectiveFrequencyMultiplier && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Contract Value Applied:</span>
-                    <span>{formatContractCurrency((selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency))}</span>
+                    <span>{formatContractCurrency((selectedCustomer.minimumAnnualValue || 0) * effectiveFrequencyMultiplier)}</span>
                   </div>
                 )}
               </div>
@@ -2849,7 +2849,7 @@ export function InvoiceCalculator({
                             )}
                             {quantity > 1 && item.addonId !== 'satelliteDataAPI' && (
                               <span className="text-muted-foreground">
-                                {' '}({quantity} × {formatContractCurrency(item.cost / quantity / getFrequencyMultiplier(billingFrequency))})
+                                {' '}({quantity} × {formatContractCurrency(item.cost / quantity / effectiveFrequencyMultiplier)})
                               </span>
                             )}:
                           </span>
