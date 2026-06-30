@@ -1500,13 +1500,14 @@ export function InvoiceCalculator({
           contractUpdate.period_end = nextPeriodEnd.toISOString();
           contractUpdate.next_invoice_date = nextDate.toISOString();
 
+          const prevYtdAnnual = Number(contractRow?.ytd_invoiced_amount) || 0;
           if (wasAnnualCycle) {
             contractUpdate.last_annual_invoice_date = invoiceDate.toISOString();
             contractUpdate.ytd_invoiced_amount = result.totalPrice;
           } else {
-            const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
-            contractUpdate.ytd_invoiced_amount = prevYtd + result.totalPrice;
+            contractUpdate.ytd_invoiced_amount = prevYtdAnnual + result.totalPrice;
           }
+          prepaidBalanceDelta = Number(contractUpdate.ytd_invoiced_amount) - prevYtdAnnual;
         } else if (isSpsDualCadence && selectedCustomer.contractId) {
           // SPS dual-cadence: ytd_invoiced_amount tracks REMAINING PREPAID BALANCE.
           // Annual cycle → set to annualUpfrontAmount. Quarterly → decrement by credit applied.
@@ -1526,12 +1527,17 @@ export function InvoiceCalculator({
           contractUpdate.next_invoice_date = nextDate.toISOString();
 
           const sb = (result as any).spsAnnualUpfrontBreakdown;
+          const prevYtdSps = Number(contractRow?.ytd_invoiced_amount) || 0;
           if (wasAnnualCycle) {
             contractUpdate.last_annual_invoice_date = invoiceDate.toISOString();
             contractUpdate.ytd_invoiced_amount = sb?.annualUpfrontAmount ?? result.totalPrice;
           } else if (sb) {
             contractUpdate.ytd_invoiced_amount = sb.prepaidBalanceAfter;
           }
+          if (contractUpdate.ytd_invoiced_amount != null) {
+            prepaidBalanceDelta = Number(contractUpdate.ytd_invoiced_amount) - prevYtdSps;
+          }
+
         } else {
           let nextPeriodEnd = new Date(nextPeriodStart);
           switch (billingFrequency) {
