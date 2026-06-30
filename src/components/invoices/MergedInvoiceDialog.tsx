@@ -130,7 +130,12 @@ export function MergedInvoiceDialog({
       assetId: asset.assetId,
       assetName: asset.assetName,
       totalMW: asset.totalMW,
-      isHybrid: asset.isHybrid
+      isHybrid: asset.isHybrid,
+      hasSolcast: asset.hasSolcast,
+      solcastOnboardingDate: asset.solcastOnboardingDate,
+      onboardingDate: asset.onboardingDate,
+      deviceCount: asset.deviceCount,
+      devices: asset.devices,
     }));
     
     const totalMW = assetBreakdown?.reduce((sum: number, a: any) => sum + (a.totalMW || 0), 0) 

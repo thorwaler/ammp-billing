@@ -1,24 +1,64 @@
-## Fix: merged-invoice flow must update SPS / per-MW prepaid balance and persist per-contract deltas
+## Root cause
 
-### Problem
-`MergedInvoiceDialog.tsx` updates each contract's period dates and inserts the merged invoice row, but it never debits `contracts.ytd_invoiced_amount` for `sps_monitoring` or `per_mw_annual_upfront` contracts, and never stores prepaid-balance deltas. Consequence: SPS contracts invoiced via a merged invoice don't decrement the prepaid balance, the next quarter's credit is wrong, and deletion is a silent dead end (the legacy fallback in `InvoiceHistory.handleDeleteInvoice` explicitly skips merged invoices).
+The Matriarch classifier in `src/lib/invoiceCalculations.ts` (lines 1201–1212) is correct:
 
-### Changes
+```ts
+const hasDevicesBeyondSolcast =
+  (asset.deviceCount || 0) > 1 ||
+  (asset.devices && asset.devices.some(d =>
+    !['solcast','satellite','irradiance'].includes(d.deviceType.toLowerCase())
+  ));
+if (asset.hasSolcast && !hasDevicesBeyondSolcast) irradianceOnlySites.push(asset);
+else performanceSites.push(asset);
+```
 
-**1. `supabase/migrations/...` — add per-contract delta map column**
-- `ALTER TABLE public.invoices ADD COLUMN prepaid_balance_deltas_by_contract jsonb;`
-- Shape: `{ "<contract_id>": <signed_number>, ... }` — positive = balance went up (annual upfront billed), negative = credit applied. No backfill; legacy rows stay `null`.
+But the two callers shape the asset list before passing it in and **drop `deviceCount` and `devices`**:
 
-**2. `src/components/invoices/MergedInvoiceDialog.tsx`**
-Inside the existing `for (const contract of selectedContractsList)` loop that updates period dates (lines 583–613), for each contract whose calc `result` has `spsAnnualUpfrontBreakdown` or `perMWAnnualUpfrontBreakdown`, compute the new `ytd_invoiced_amount` using the same logic as `InvoiceCalculator.tsx` (lines ~1500–1540) and include it in the same `contracts` update call. Track the signed delta per contract in a local `Record<string, number>`.
+- `src/components/dashboard/InvoiceCalculator.tsx` lines 825–833 — maps only `assetId, assetName, totalMW, isHybrid, hasSolcast, solcastOnboardingDate, onboardingDate`.
+- `src/components/invoices/MergedInvoiceDialog.tsx` lines 129–134 — even worse: only `assetId, assetName, totalMW, isHybrid`.
 
-When inserting the merged invoice row (line 627), add `prepaid_balance_deltas_by_contract: deltasByContract` (or omit when the map is empty so non-SPS merges stay clean).
+With those fields missing, `hasDevicesBeyondSolcast` evaluates to `false` for every asset, so every Solcast site is classified as irradiance-only. That gives the 39 irradiance / 3 performance result you're seeing. The 3 "performance" sites are simply the ones without Solcast (Busamed Hillcrest Private Hospital, Manhattan Plaza, Sable Square Phase 2).
 
-**3. `src/pages/InvoiceHistory.tsx` — reverse deltas on merged-invoice deletion**
-In `handleDeleteInvoice` (around line 277/355), before deleting:
-- If `selectedInvoice.prepaid_balance_deltas_by_contract` is present, iterate the map and for each `[contractId, delta]` fetch the contract's current `ytd_invoiced_amount` and write back `current - delta` (clamped at 0 when appropriate, mirroring single-contract logic).
-- Drop the "merged; skipping reversal" early-return; only fall through to the legacy Xero-line fallback when neither `prepaid_balance_delta` nor the new map is set.
+Confirmed against `cached_capabilities.assetBreakdown` for the Matriarch contract — 39 sites have `pv_inverter`/`meter`/`grid`/`load` devices on top of satellite. They should all be Performance.
 
-### Out of scope
-- The `(x as any).spsAnnualUpfrontBreakdown` cast cleanup — leaving for later as agreed.
-- Schema types regen runs automatically after the migration; code reading the new column uses it via the regenerated `Database` type (no manual `as any` needed afterward).
+## Fix
+
+### 1. `src/components/dashboard/InvoiceCalculator.tsx` (≈line 825)
+Forward `deviceCount` and `devices` in the asset mapping:
+
+```ts
+const assetBreakdown = effectiveCapabilities?.assetBreakdown?.map((asset: any) => ({
+  assetId: asset.assetId,
+  assetName: asset.assetName,
+  totalMW: asset.totalMW,
+  isHybrid: asset.isHybrid,
+  hasSolcast: asset.hasSolcast,
+  solcastOnboardingDate: asset.solcastOnboardingDate,
+  onboardingDate: asset.onboardingDate,
+  deviceCount: asset.deviceCount,
+  devices: asset.devices,
+}));
+```
+
+### 2. `src/components/invoices/MergedInvoiceDialog.tsx` (≈line 129)
+Same forward plus the Solcast fields the merged path was missing too:
+
+```ts
+const assetBreakdown = contract.cachedCapabilities?.assetBreakdown?.map((asset: any) => ({
+  assetId: asset.assetId,
+  assetName: asset.assetName,
+  totalMW: asset.totalMW,
+  isHybrid: asset.isHybrid,
+  hasSolcast: asset.hasSolcast,
+  solcastOnboardingDate: asset.solcastOnboardingDate,
+  onboardingDate: asset.onboardingDate,
+  deviceCount: asset.deviceCount,
+  devices: asset.devices,
+}));
+```
+
+### 3. Sanity check
+Re-open the Matriarch invoice calculator and confirm the split flips to **3 irradiance / 39 performance** (the 3 being the no-Solcast sites). The asset-breakdown table in the support document will follow because it consumes the same `irradianceAssetIds` / `performanceAssetIds` arrays.
+
+## Out of scope
+No schema or pricing-logic changes — purely fixing the data the classifier receives. The longer-term "manual override per asset from the spreadsheet" can come later if you decide AMMP device topology still doesn't reflect the actual subscription for some sites.
