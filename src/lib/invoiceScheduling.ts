@@ -68,3 +68,21 @@ export function isAnnualUpfrontCycle(invoiceDate: string | Date, anchorDate?: st
   const anchor = new Date(anchorDate);
   return inv.getUTCMonth() === anchor.getUTCMonth();
 }
+
+/**
+ * Inclusive whole-month count between two ISO date strings (YYYY-MM-DD or full ISO).
+ * Returns at least 1. Used to derive an effective period multiplier when a billing
+ * period is shorter than its nominal frequency (e.g. a catch-up 1-month invoice on
+ * a quarterly contract).
+ */
+export function monthsInPeriod(periodStart?: string | null, periodEnd?: string | null): number | null {
+  if (!periodStart || !periodEnd) return null;
+  const startStr = String(periodStart).split("T")[0];
+  const endStr = String(periodEnd).split("T")[0];
+  const [sy, sm] = startStr.split("-").map(Number);
+  const [ey, em] = endStr.split("-").map(Number);
+  if (!sy || !sm || !ey || !em) return null;
+  const months = (ey - sy) * 12 + (em - sm) + 1;
+  return Math.max(1, months);
+}
+

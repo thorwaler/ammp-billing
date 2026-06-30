@@ -58,7 +58,7 @@ import {
 } from "@/lib/invoiceCalculations";
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
 import { uploadToSharePoint } from "@/utils/sharePointUpload";
-import { isAnnualUpfrontCycle } from "@/lib/invoiceScheduling";
+import { isAnnualUpfrontCycle, monthsInPeriod } from "@/lib/invoiceScheduling";
 // Asset group filtering now handled server-side in ammp-sync-contract
 
 // Simplified interfaces - complex types moved to shared files
@@ -808,7 +808,17 @@ export function InvoiceCalculator({
       const firstInvoiceDate = new Date(invoiceDate);
       frequencyMultiplier = calculateProrationMultiplier(signedDate, firstInvoiceDate, billingFrequency);
       invoicePeriodDisplay = `${new Date(selectedCustomer.signedDate).toLocaleDateString()} - ${firstInvoiceDate.toLocaleDateString()}`;
+    } else {
+      // Catch-up / short period: when the contract's periodStart..periodEnd spans
+      // fewer whole months than the billing frequency (e.g. April-only on a quarterly
+      // contract), bill only for those actual months instead of the full quarter.
+      const actualMonths = monthsInPeriod(selectedCustomer.periodStart, selectedCustomer.periodEnd);
+      const defaultMonths = getPeriodMonthsMultiplier(billingFrequency);
+      if (actualMonths && actualMonths < defaultMonths) {
+        frequencyMultiplier = actualMonths / 12;
+      }
     }
+
 
     const totalMW = Number(mwManaged);
     const effectiveCapabilities = selectedCustomer.cachedCapabilities;
@@ -1898,7 +1908,19 @@ export function InvoiceCalculator({
     }
   };
 
+  // Effective month count for the current invoice period. Falls back to the
+  // billing frequency default when contract period dates aren't set, and shrinks
+  // when a catch-up/short period spans fewer months than the nominal frequency.
+  const effectivePeriodMonths = (() => {
+    const def = getPeriodMonthsMultiplier(billingFrequency);
+    const actual = monthsInPeriod(selectedCustomer?.periodStart, selectedCustomer?.periodEnd);
+    return actual && actual < def ? actual : def;
+  })();
+  const effectiveFrequencyMultiplier = effectivePeriodMonths / 12;
+
+
   return (
+
     <Card>
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
@@ -2475,7 +2497,8 @@ export function InvoiceCalculator({
             {/* Matriarch API result breakdown */}
             {isMatriarchApiPackage(selectedCustomer?.package || '') && result.matriarchApiBreakdown && (() => {
               const mb = result.matriarchApiBreakdown;
-              const periodMonths = getPeriodMonthsMultiplier(billingFrequency);
+              const periodMonths = effectivePeriodMonths;
+
               const periodLabel = billingFrequency === 'quarterly' ? 'Quarter' : billingFrequency === 'monthly' ? 'Month' : billingFrequency === 'biannual' ? 'Half-Year' : 'Year';
               const irradiancePeriodCost = mb.irradianceOnlySites * mb.irradiancePerSiteRate * periodMonths;
               const performancePeriodCost = mb.performanceAnnualTotal * (periodMonths / 12);
@@ -2551,7 +2574,7 @@ export function InvoiceCalculator({
                       {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
                         <div className="flex justify-between">
                           <span>
-                            Sites above threshold ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites, {result.siteMinimumPricingBreakdown.sitesAboveThreshold.reduce((sum, s) => sum + s.mw, 0).toFixed(2)} MW × {formatContractCurrency(result.moduleCosts[0]?.rate || 0)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):
+                            Sites above threshold ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites, {result.siteMinimumPricingBreakdown.sitesAboveThreshold.reduce((sum, s) => sum + s.mw, 0).toFixed(2)} MW × {formatContractCurrency(result.moduleCosts[0]?.rate || 0)}/MW/yr × {effectivePeriodMonths} months):
                           </span>
                           <span>{formatContractCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal)}</span>
                         </div>
@@ -2577,17 +2600,17 @@ export function InvoiceCalculator({
                     /* Standard module costs display when no site minimum pricing */
                     result.moduleCosts.map((item) => (
                       <div key={item.moduleId} className="flex justify-between">
-                        <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {formatContractCurrency(item.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                        <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {formatContractCurrency(item.rate)}/MW/yr × {effectivePeriodMonths} months):</span>
                         <span>{formatContractCurrency(item.cost)}</span>
                       </div>
                     ))
                   )}
                 </div>
                 
-            {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && !result.siteMinimumPricingBreakdown && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency) && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
+            {(selectedCustomer?.package === 'pro' || selectedCustomer?.package === 'elum_portfolio_os') && !result.siteMinimumPricingBreakdown && result.moduleCosts.reduce((sum, m) => sum + m.cost, 0) < (selectedCustomer.minimumAnnualValue || 0) * effectiveFrequencyMultiplier && (selectedCustomer.minimumAnnualValue || 0) > 0 && (
                   <div className="text-sm pl-2 flex justify-between font-medium">
                     <span>Minimum Contract Value Applied:</span>
-                    <span>{formatContractCurrency((selectedCustomer.minimumAnnualValue || 0) * getFrequencyMultiplier(billingFrequency))}</span>
+                    <span>{formatContractCurrency((selectedCustomer.minimumAnnualValue || 0) * effectiveFrequencyMultiplier)}</span>
                   </div>
                 )}
               </div>
@@ -2598,11 +2621,11 @@ export function InvoiceCalculator({
                 <h4 className="font-medium text-sm">Hybrid Tiered Pricing:</h4>
                 <div className="space-y-1 text-sm pl-2">
                   <div className="flex justify-between">
-                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.ongrid.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.ongrid.rate)}/MW/yr × {effectivePeriodMonths} months):</span>
                     <span>{formatContractCurrency(result.hybridTieredBreakdown.ongrid.cost)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.hybrid.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.hybrid.rate)}/MW/yr × {effectivePeriodMonths} months):</span>
                     <span>{formatContractCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
                   </div>
                 </div>
@@ -2821,12 +2844,12 @@ export function InvoiceCalculator({
                             {item.addonName}
                             {quantity > 1 && item.addonId === 'satelliteDataAPI' && item.pricePerUnit && (
                               <span className="text-muted-foreground">
-                                {' '}({quantity} sites × {formatContractCurrency(item.pricePerUnit)}/mo × {getPeriodMonthsMultiplier(billingFrequency)} months)
+                                {' '}({quantity} sites × {formatContractCurrency(item.pricePerUnit)}/mo × {effectivePeriodMonths} months)
                               </span>
                             )}
                             {quantity > 1 && item.addonId !== 'satelliteDataAPI' && (
                               <span className="text-muted-foreground">
-                                {' '}({quantity} × {formatContractCurrency(item.cost / quantity / getFrequencyMultiplier(billingFrequency))})
+                                {' '}({quantity} × {formatContractCurrency(item.cost / quantity / effectiveFrequencyMultiplier)})
                               </span>
                             )}:
                           </span>
@@ -2919,7 +2942,7 @@ export function InvoiceCalculator({
             
             {result.basePricingCost > 0 && (
               <div className="flex justify-between text-sm mb-3">
-                <span>Base Pricing ({getPeriodMonthsMultiplier(billingFrequency)} months × {formatContractCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
+                <span>Base Pricing ({effectivePeriodMonths} months × {formatContractCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
                 <span>{formatContractCurrency(result.basePricingCost)}</span>
               </div>
             )}

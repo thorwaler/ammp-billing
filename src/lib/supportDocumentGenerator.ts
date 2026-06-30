@@ -1,6 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
-import { CalculationResult, getFrequencyMultiplier } from "./invoiceCalculations";
+import { CalculationResult, getFrequencyMultiplier, getPeriodMonthsMultiplier } from "./invoiceCalculations";
+import { monthsInPeriod } from "./invoiceScheduling";
 import { format, startOfYear, endOfYear } from "date-fns";
+
 
 export interface SupportDocumentData {
   // Header info
@@ -259,7 +261,15 @@ export async function generateSupportDocumentData(
   const yearTotal = (yearInvoices || []).reduce((sum, inv) => sum + Number(inv.invoice_amount), 0);
 
   // Generate asset breakdown based on package type (Fix #1)
-  const frequencyMultiplier = getFrequencyMultiplier(billingFrequency);
+  // Use actual period length when shorter than the nominal frequency (catch-up periods),
+  // so per-year amounts are reconstructed correctly from the period cost.
+  const nominalMultiplier = getFrequencyMultiplier(billingFrequency);
+  const actualMonths = monthsInPeriod(periodStart, periodEnd);
+  const nominalMonths = getPeriodMonthsMultiplier(billingFrequency);
+  const frequencyMultiplier = actualMonths && actualMonths < nominalMonths
+    ? actualMonths / 12
+    : nominalMultiplier;
+
   const { assetBreakdown, siteMinimumPricingSummary } = generateAssetBreakdown(
     ammpCapabilities?.assetBreakdown || [],
     calculationResult,
