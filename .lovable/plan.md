@@ -1,24 +1,12 @@
 ## Goal
-Surface the SPS prepaid-balance details (annual upfront amount, balance before/after, credit applied this quarter) on the support document PDF — the on-screen support doc already shows this, but the PDF renderer skips it.
+The Calculation Breakdown total already nets out the SPS prepaid credit, but the credit line itself isn't shown — so the listed rows don't add up to the total. Insert an explicit "− Prepaid Credit Applied" row right before the total whenever an SPS quarterly-with-credit cycle applied a credit.
 
 ## Changes
 
-**`src/components/invoices/PdfRenderer.tsx`** — add an "SPS Annual Upfront Billing" section right after the existing SPS Discount Breakdown block (around line 393), gated on `data.spsAnnualUpfrontBreakdown`.
+**`src/components/invoices/PdfRenderer.tsx`** (Calculation Breakdown section, before line 457 `= Support Document Total`):
+- If `data.spsAnnualUpfrontBreakdown?.cycleType === 'quarterly_with_credit'` and `creditApplied > 0`, push a row: `['− Prepaid Credit Applied', \`-${fmt(creditApplied, cur)}\`]`.
 
-Rendered as a single two-column table:
+**`src/components/invoices/SupportDocument.tsx`** (Calculation Breakdown list, just before the "= Support Document Total" row):
+- Same conditional row, styled like the existing credit/adjustment lines (amber `#d97706`), showing `−{formatCurrency(creditApplied)}`.
 
-- Cycle: `Annual upfront (year start)` or `Quarterly with prepaid-balance credit`
-- Discounted Annual SPS Value
-- Annual Minimum Floor
-- Annual Upfront Amount (max of the two)
-
-If `cycleType === 'quarterly_with_credit'`, append:
-- Full Quarterly Fee
-- Prepaid Balance Before
-- Credit Applied This Quarter (negative)
-- Prepaid Balance Remaining
-- Net Charged This Quarter (= quarterCost − creditApplied)
-
-All values formatted with the contract currency via the existing `fmt(..., cur)` helper. Mirrors the on-screen SupportDocument.tsx block (lines 303–337) so screen and PDF match.
-
-No changes to calculation logic, data shape, or other packages.
+No calculation logic changes; the stored `calculatedTotal` already reflects the net so the math will reconcile once the row is visible.
