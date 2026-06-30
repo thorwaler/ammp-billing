@@ -299,6 +299,46 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* SPS Monitoring Annual Upfront Dual Cadence */}
+      {data.spsAnnualUpfrontBreakdown && (
+        <section className="mb-6">
+          <h2 className="text-base font-bold mb-3">SPS Annual Upfront Billing</h2>
+          <div className="text-sm p-3 rounded space-y-1" style={{ backgroundColor: 'rgba(244, 244, 245, 0.5)' }}>
+            <p>
+              <strong>Billing Cycle:</strong>{' '}
+              {data.spsAnnualUpfrontBreakdown.cycleType === 'annual_upfront'
+                ? 'Annual upfront (full year billed at anchor date)'
+                : 'Quarterly with prepaid-balance credit'}
+            </p>
+            <p>
+              <strong>Discounted Annual SPS Value:</strong>{' '}
+              {formatCurrency(data.spsAnnualUpfrontBreakdown.annualDiscountedFee)}
+            </p>
+            <p>
+              <strong>Minimum Annual Contract Value:</strong>{' '}
+              {formatCurrency(data.spsAnnualUpfrontBreakdown.annualMinimum)}
+            </p>
+            <p className="font-bold pt-1 border-t border-border/50">
+              Annual Upfront Amount (max of above):{' '}
+              {formatCurrency(data.spsAnnualUpfrontBreakdown.annualUpfrontAmount)}
+            </p>
+            {data.spsAnnualUpfrontBreakdown.cycleType === 'quarterly_with_credit' && (
+              <div className="pt-2 mt-2 border-t border-border/50 space-y-1">
+                <p><strong>Full Quarterly Fee:</strong> {formatCurrency(data.spsAnnualUpfrontBreakdown.quarterCost)}</p>
+                <p><strong>Prepaid Balance Before:</strong> {formatCurrency(data.spsAnnualUpfrontBreakdown.prepaidBalanceBefore)}</p>
+                <p><strong>Credit Applied This Quarter:</strong> −{formatCurrency(data.spsAnnualUpfrontBreakdown.creditApplied)}</p>
+                <p><strong>Prepaid Balance Remaining:</strong> {formatCurrency(data.spsAnnualUpfrontBreakdown.prepaidBalanceAfter)}</p>
+                <p className="font-bold">
+                  Net Invoiced This Quarter:{' '}
+                  {formatCurrency(data.spsAnnualUpfrontBreakdown.quarterCost - data.spsAnnualUpfrontBreakdown.creditApplied)}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+
       {/* Solcast Tracking (if applicable) */}
       {data.solcastBreakdown && data.solcastBreakdown.length > 0 && (
         <section className="mb-6">
