@@ -895,6 +895,11 @@ export function InvoiceCalculator({
         selectedCustomer.package === 'per_mw_annual_upfront'
           ? isAnnualUpfrontCycle(invoiceDate ?? new Date(), selectedCustomer.annualBillingAnchorDate)
           : undefined,
+      // SPS dual-cadence flag (only when an anchor date is configured)
+      spsIsAnnualCycle:
+        selectedCustomer.package === 'sps_monitoring' && selectedCustomer.annualBillingAnchorDate
+          ? isAnnualUpfrontCycle(invoiceDate ?? new Date(), selectedCustomer.annualBillingAnchorDate)
+          : undefined,
     };
 
     return { params, invoicePeriod: invoicePeriodDisplay };
