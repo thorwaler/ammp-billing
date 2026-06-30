@@ -480,11 +480,21 @@ export async function generateSupportDocumentData(
     const b = calculationResult.perMWAnnualUpfrontBreakdown;
     assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront' ? b.mwBasedFloor : b.overageAmount;
     minimumChargesForBreakdown = 0;
+  } else if ((calculationResult as any).spsAnnualUpfrontBreakdown) {
+    // SPS Monitoring with annual upfront:
+    //  - annual_upfront cycle: subtotal = full annual upfront amount
+    //  - quarterly_with_credit: subtotal = gross quarter cost (credit shown separately below)
+    const b: any = (calculationResult as any).spsAnnualUpfrontBreakdown;
+    assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront'
+      ? b.annualUpfrontAmount
+      : b.quarterCost;
+    minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
     assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
     minimumChargesForBreakdown = calculationResult.minimumCharges;
   }
+
   
   // Handle starter/capped packages with fixed annual fee
   const fixedPackageCost = calculationResult.starterPackageCost || 0;
@@ -497,9 +507,17 @@ export async function generateSupportDocumentData(
     discountedAssetsTotal +
     totalAddonCosts +
     fixedPackageCost;
-  
+  // SPS quarterly cycle: subtract the prepaid credit so the calculated total
+  // matches the net invoice amount (credit row is rendered separately in the UI).
+  const spsBd: any = (calculationResult as any).spsAnnualUpfrontBreakdown;
+  const spsCreditAdjustment = spsBd?.cycleType === 'quarterly_with_credit'
+    ? (spsBd.creditApplied || 0)
+    : 0;
+
   const invoiceTotal = calculationResult.totalPrice;
-  const totalsMatch = Math.abs(calculatedTotal - invoiceTotal) < 0.01;
+  const calculatedTotalNet = calculatedTotal - spsCreditAdjustment;
+  const totalsMatch = Math.abs(calculatedTotalNet - invoiceTotal) < 0.01;
+
 
   return {
     customerName,
@@ -576,7 +594,7 @@ export async function generateSupportDocumentData(
       creditApplied: (calculationResult as any).spsAnnualUpfrontBreakdown.creditApplied,
       prepaidBalanceAfter: (calculationResult as any).spsAnnualUpfrontBreakdown.prepaidBalanceAfter,
     } : undefined,
-    calculatedTotal,
+    calculatedTotal: calculatedTotalNet,
     invoiceTotal,
     minimumContractAdjustment,
     minimumAnnualValue: effectiveMinimumAnnualValue, // Pass through the minimum annual value from contract
@@ -865,7 +883,19 @@ function generateAssetBreakdown(
     baseRatePerMWp = totalMW > 0 ? calculationResult.starterPackageCost / totalMW : 0;
   } else if (packageType === 'capped') {
     baseRatePerMWp = totalMW > 0 ? calculationResult.starterPackageCost / totalMW : 0;
+  } else if (packageType === 'sps_monitoring') {
+    // Use post-discount blended rate so per-site values reflect actual pricing
+    // and sum to the contract's annual discounted monitoring fee.
+    const sps: any = (calculationResult as any).spsAnnualUpfrontBreakdown
+      || calculationResult.spsDiscountBreakdown;
+    const annualDiscounted = sps?.annualDiscountedFee
+      ?? calculationResult.spsDiscountBreakdown?.finalMonitoringFee
+      ?? 0;
+    baseRatePerMWp = totalMW > 0
+      ? annualDiscounted / totalMW
+      : calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
   }
+
 
   return {
     assetBreakdown: assets.map(asset => {
