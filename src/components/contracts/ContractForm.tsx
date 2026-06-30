@@ -2842,6 +2842,16 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           </Form>
         )}
       </CardContent>
+      {existingCustomer && existingContract && (
+        <MoveContractDialog
+          open={moveDialogOpen}
+          onOpenChange={setMoveDialogOpen}
+          contractId={existingContract.id}
+          currentCustomerId={existingCustomer.id}
+          currentCustomerName={existingCustomer.name}
+          onMoved={() => onComplete?.()}
+        />
+      )}
     </Card>
   );
 }
