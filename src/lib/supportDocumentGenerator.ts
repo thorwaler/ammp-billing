@@ -176,6 +176,8 @@ export interface SupportDocumentData {
       cost: number;
     }>;
     totalAnnualCost: number;
+    irradianceAssetIds?: string[];
+    performanceAssetIds?: string[];
   };
   
   // Per-MW + Annual Upfront Minimum breakdown
@@ -572,6 +574,8 @@ export async function generateSupportDocumentData(
       performanceAnnualTotal: calculationResult.matriarchApiBreakdown.performanceAnnualTotal,
       performanceTierBreakdown: calculationResult.matriarchApiBreakdown.performanceTierBreakdown,
       totalAnnualCost: calculationResult.matriarchApiBreakdown.totalAnnualCost,
+      irradianceAssetIds: calculationResult.matriarchApiBreakdown.irradianceAssetIds,
+      performanceAssetIds: calculationResult.matriarchApiBreakdown.performanceAssetIds,
     } : undefined,
     // Per-MW + Annual Upfront breakdown
     perMWAnnualUpfrontBreakdown: calculationResult.perMWAnnualUpfrontBreakdown ? {
@@ -786,15 +790,39 @@ function generateAssetBreakdown(
       : 0;
     const perfPricePerKWp = perfBlendedRatePerMWp / 1000;
 
+    // Prefer the exact partition produced by invoiceCalculations so the row
+    // table can never diverge from the dual-sub summary above. Fall back to
+    // the device heuristic only for legacy data without persisted IDs.
+    const irradianceIdSet = new Set(mat.irradianceAssetIds || []);
+    const performanceIdSet = new Set(mat.performanceAssetIds || []);
+    const hasPersistedClassification = irradianceIdSet.size > 0 || performanceIdSet.size > 0;
+
     return {
       assetBreakdown: assets.map((asset: any) => {
         const pvCapacityKWp = (asset.totalMW || 0) * 1000;
         const isHybrid = asset.isHybrid || false;
-        const hasDevicesBeyondSolcast = (asset.deviceCount || 0) > 1 ||
-          (asset.devices && asset.devices.some((d: any) =>
-            d.deviceType && !['solcast', 'satellite', 'irradiance'].includes(d.deviceType.toLowerCase())
-          ));
-        const isIrradianceOnly = asset.hasSolcast && !hasDevicesBeyondSolcast;
+        let isIrradianceOnly: boolean;
+        if (hasPersistedClassification) {
+          if (irradianceIdSet.has(asset.assetId)) {
+            isIrradianceOnly = true;
+          } else if (performanceIdSet.has(asset.assetId)) {
+            isIrradianceOnly = false;
+          } else {
+            // Asset not present in either list (e.g. discounted/filtered out
+            // before classification). Fall back to the heuristic.
+            const hasDevicesBeyondSolcast = (asset.deviceCount || 0) > 1 ||
+              (asset.devices && asset.devices.some((d: any) =>
+                d.deviceType && !['solcast', 'satellite', 'irradiance'].includes(d.deviceType.toLowerCase())
+              ));
+            isIrradianceOnly = !!asset.hasSolcast && !hasDevicesBeyondSolcast;
+          }
+        } else {
+          const hasDevicesBeyondSolcast = (asset.deviceCount || 0) > 1 ||
+            (asset.devices && asset.devices.some((d: any) =>
+              d.deviceType && !['solcast', 'satellite', 'irradiance'].includes(d.deviceType.toLowerCase())
+            ));
+          isIrradianceOnly = !!asset.hasSolcast && !hasDevicesBeyondSolcast;
+        }
         const pricePerYear = isIrradianceOnly
           ? irradianceAnnualPerSite
           : pvCapacityKWp * perfPricePerKWp;

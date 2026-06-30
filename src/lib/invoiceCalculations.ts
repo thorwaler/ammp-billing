@@ -245,6 +245,11 @@ export interface MatriarchApiBreakdown {
   performanceAnnualTotal: number;
   performanceTierBreakdown: Array<{ label: string; mwInTier: number; pricePerMWp: number; cost: number }>;
   totalAnnualCost: number;
+  // Per-asset classification used to produce the counts above. Persisted so the
+  // support document row-level table can match the dual-sub summary exactly,
+  // even if cached AMMP capabilities change after invoice creation.
+  irradianceAssetIds?: string[];
+  performanceAssetIds?: string[];
 }
 
 export interface CalculationResult {
@@ -1228,6 +1233,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       performanceAnnualTotal: perfResult.totalCost,
       performanceTierBreakdown: perfResult.tierBreakdown,
       totalAnnualCost: totalAnnual,
+      irradianceAssetIds: irradianceOnlySites.map(a => a.assetId),
+      performanceAssetIds: performanceSites.map(a => a.assetId),
     };
     
     result.totalMWCost = totalAnnual * frequencyMultiplier;

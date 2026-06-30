@@ -1,34 +1,43 @@
-## Goal
-1. Reset the SPS Investments Seychelles contract's prepaid balance to €100,000 so the Q2 invoice can be redone.
-2. Make invoice deletion correctly restore the prepaid balance — including for legacy invoices that don't have `prepaid_balance_delta` recorded.
+## Issue
+In the Matriarch support document, the dual-subscription block correctly splits the 42 sites into **39 irradiance-only + 3 performance**, but the "Monitoring Fee Price Breakdown" table below labels **every site as Performance**.
 
-## Why deletion looked broken
-The `prepaid_balance_delta` column shipped today (migration `20260630105053…`). The current Q2 SPS invoice was created on Apr 1 — before the column existed — so its `prepaid_balance_delta` is `NULL`. The delete handler in `src/pages/InvoiceHistory.tsx` only reverses the balance when a non-null delta is stored, so legacy invoices silently leave the balance untouched.
-
-## Changes
-
-### 1. Data reset (insert tool)
-```sql
-UPDATE contracts
-SET ytd_invoiced_amount = 100000
-WHERE id = '460a2fc6-af1b-401f-8b91-aaaccdfc98e3';
+## Root cause
+The classification is computed in two places using the same rule:
+```ts
+hasDevicesBeyondSolcast = (asset.deviceCount || 0) > 1
+  || asset.devices?.some(d => !['solcast','satellite','irradiance'].includes(d.deviceType?.toLowerCase()))
+isIrradianceOnly = asset.hasSolcast && !hasDevicesBeyondSolcast
 ```
+- `src/lib/invoiceCalculations.ts` (≈ line 1196) produces the 39 / 3 counts shown in the dual-sub block.
+- `src/lib/supportDocumentGenerator.ts` (≈ line 793) re-runs the same rule per row in the asset table.
 
-### 2. Robust deletion fallback — `src/pages/InvoiceHistory.tsx`
-In `handleDeleteInvoice`, when `prepaid_balance_delta` is `NULL` and the invoice is not merged:
+These two calls receive slightly different asset arrays (the calculator uses `normalAssets` after discount filtering; the support doc uses the raw `ammpCapabilities.assetBreakdown`) and, more importantly, the breakdown table runs at PDF render time against whatever cached capabilities are current — which can differ from the snapshot used during invoice calculation. The result is that the row-level classification disagrees with the summary block.
 
-- Load the contract with its package / pricing_model + `annual_billing_anchor_date`.
-- If the contract is `sps_monitoring` (with anchor) or `per_mw_annual_upfront`:
-  - Determine whether the invoice's `invoice_date` is on an annual cycle using the existing `isAnnualUpfrontCycle` helper from `@/lib/invoiceScheduling`.
-  - **Annual cycle invoice** → the invoice originally set the balance to the annual upfront amount. Reversal: set `ytd_invoiced_amount` back to `0` (per-MW) or to the prior balance for SPS. Since we can't reconstruct the prior balance from a legacy row, fall back to `0` and surface a toast noting the user may need to manually adjust if multiple legacy annual invoices existed.
-  - **Quarterly cycle invoice** → derive the credit/overage amount from `xero_line_items` (look for the SPS credit line, description containing "Prepaid Credit Applied", or the per-MW overage line) and add/subtract it back to `ytd_invoiced_amount`.
-- Keep the existing non-null-delta path unchanged.
+In the current cached capabilities every site has `deviceCount > 1` and at least one non-satellite device, so the row-level rule marks all 42 as Performance, while the summary block (which was computed against an earlier snapshot, or different filters) reports 39 irradiance / 3 performance.
 
-This keeps new invoices fully automatic (delta column) and gives legacy invoices a best-effort restore with clear user feedback.
+## Fix
+Make the per-row classification reuse the **exact same classification** that produced the summary numbers, so the two views can never disagree.
 
-### 3. No schema changes
-The column already exists; no new migration needed.
+### 1. Extend the breakdown type — `src/lib/invoiceCalculations.ts`
+Add asset-ID lists to `MatriarchApiBreakdown`:
+```ts
+irradianceAssetIds: string[];
+performanceAssetIds: string[];
+```
+Populate them in the matriarch branch (≈ line 1187) when partitioning `irradianceOnlySites` / `performanceSites`.
+
+### 2. Use them in the support doc — `src/lib/supportDocumentGenerator.ts`
+In the `packageType === 'matriarch_api'` branch (≈ line 781):
+- If `matriarchApiBreakdown.irradianceAssetIds` / `performanceAssetIds` are present, classify each row by set membership instead of re-running the device heuristic.
+- Fallback to the existing heuristic only when the arrays are missing (legacy invoices).
+- Keep the existing price logic (irradiance → annual per-site rate; performance → blended €/kWp).
+
+### 3. Propagate the arrays through `SupportDocumentData` — `src/lib/supportDocumentGenerator.ts`
+Extend the `matriarchApiBreakdown` shape on `SupportDocumentData` (and the mapper at line 565) so the persisted JSON keeps the IDs. This means historical invoices regenerated from saved data also classify rows consistently.
+
+### 4. No PDF renderer change required
+`PdfRenderer.tsx` already renders `(a as any).pricingModel` (line 337), so once the generator emits the correct value the PDF picks it up automatically.
 
 ## Out of scope
-- Backfilling `prepaid_balance_delta` on historical invoices (only one legacy SPS invoice exists and it's about to be deleted/recreated).
-- Merged-invoice prepaid handling (still warned + skipped, as today).
+- Re-deciding the underlying irradiance-vs-performance rule itself (matches `mem://features/package-matriarch-api`).
+- Backfilling historical invoices' classification — they continue to use the heuristic fallback.
