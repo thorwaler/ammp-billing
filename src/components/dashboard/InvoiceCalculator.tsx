@@ -1075,6 +1075,7 @@ export function InvoiceCalculator({
             UnitAmount: b.overageAmount,
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
+        }
       }
 
       // SPS Monitoring annual-upfront dual cadence
@@ -1102,7 +1103,6 @@ export function InvoiceCalculator({
         }
       }
 
-      }
       
       // Add hybrid tiered pricing line items (for hybrid_tiered packages like BLS)
       if (result.hybridTieredBreakdown) {
