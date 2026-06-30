@@ -826,6 +826,7 @@ export type Database = {
           mw_managed: number
           nrr_amount: number | null
           nrr_amount_eur: number | null
+          prepaid_balance_delta: number | null
           source: string | null
           support_document_data: Json | null
           total_mw: number
@@ -859,6 +860,7 @@ export type Database = {
           mw_managed: number
           nrr_amount?: number | null
           nrr_amount_eur?: number | null
+          prepaid_balance_delta?: number | null
           source?: string | null
           support_document_data?: Json | null
           total_mw: number
@@ -892,6 +894,7 @@ export type Database = {
           mw_managed?: number
           nrr_amount?: number | null
           nrr_amount_eur?: number | null
+          prepaid_balance_delta?: number | null
           source?: string | null
           support_document_data?: Json | null
           total_mw?: number
