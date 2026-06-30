@@ -161,6 +161,10 @@ export interface CalculationParams {
   // when false it treats it as a quarterly overage cycle. If undefined, the calc
   // derives it from `periodStart` vs `annualBillingAnchorDate` (anchor month = annual).
   perMWAnnualUpfrontIsAnnualCycle?: boolean;
+  // SPS Monitoring annual-upfront dual cadence. Mirrors the per-MW version:
+  // true = annual upfront cycle, false = quarterly with prepaid-balance credit.
+  // For SPS, `ytdInvoicedAmount` is repurposed as the remaining prepaid balance.
+  spsIsAnnualCycle?: boolean;
 }
 
 export interface SiteMinimumPricingResult {
