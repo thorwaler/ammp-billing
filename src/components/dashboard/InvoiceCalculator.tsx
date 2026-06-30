@@ -830,6 +830,8 @@ export function InvoiceCalculator({
       hasSolcast: asset.hasSolcast,
       solcastOnboardingDate: asset.solcastOnboardingDate,
       onboardingDate: asset.onboardingDate,
+      deviceCount: asset.deviceCount,
+      devices: asset.devices,
     }));
     const enableSiteMinPricing = !!(assetBreakdown && assetBreakdown.length > 0);
 
