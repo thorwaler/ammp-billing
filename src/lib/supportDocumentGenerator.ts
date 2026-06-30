@@ -480,11 +480,21 @@ export async function generateSupportDocumentData(
     const b = calculationResult.perMWAnnualUpfrontBreakdown;
     assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront' ? b.mwBasedFloor : b.overageAmount;
     minimumChargesForBreakdown = 0;
+  } else if ((calculationResult as any).spsAnnualUpfrontBreakdown) {
+    // SPS Monitoring with annual upfront:
+    //  - annual_upfront cycle: subtotal = full annual upfront amount
+    //  - quarterly_with_credit: subtotal = gross quarter cost (credit shown separately below)
+    const b: any = (calculationResult as any).spsAnnualUpfrontBreakdown;
+    assetBreakdownPeriodTotal = b.cycleType === 'annual_upfront'
+      ? b.annualUpfrontAmount
+      : b.quarterCost;
+    minimumChargesForBreakdown = 0;
   } else {
     // For other packages, multiply annual asset breakdown by frequency
     assetBreakdownPeriodTotal = assetBreakdownTotal * frequencyMultiplier;
     minimumChargesForBreakdown = calculationResult.minimumCharges;
   }
+
   
   // Handle starter/capped packages with fixed annual fee
   const fixedPackageCost = calculationResult.starterPackageCost || 0;
