@@ -594,7 +594,7 @@ export async function generateSupportDocumentData(
       creditApplied: (calculationResult as any).spsAnnualUpfrontBreakdown.creditApplied,
       prepaidBalanceAfter: (calculationResult as any).spsAnnualUpfrontBreakdown.prepaidBalanceAfter,
     } : undefined,
-    calculatedTotal,
+    calculatedTotal: calculatedTotalNet,
     invoiceTotal,
     minimumContractAdjustment,
     minimumAnnualValue: effectiveMinimumAnnualValue, // Pass through the minimum annual value from contract
