@@ -1,79 +1,54 @@
-## Goal
 
-For `sps_monitoring` contracts, support an **annual upfront payment with a €100k minimum** (configurable per contract). At the annual anchor date we bill the **full annual portfolio value** (= 4 × the quarterly SPS calculation), floored at the annual minimum. Subsequent quarterly invoices keep their full SPS stacking-discount line items but each quarter's value is offset by a credit line "Annual Upfront Credit Applied", €-for-€, until the prepaid balance is exhausted (true overage thereafter, next anniversary tops up again).
+## How the two minimum fields relate
 
-Extends — not replaces — the existing SPS package. Contracts with no annual minimum set keep today's behaviour.
+- **Minimum Annual Contract Value** (`minimum_annual_value`) — the original, generic field. Already drives the SPS €100k floor today.
+- **Fixed Annual Minimum** (`annual_minimum_fee`) — a newer field added for the Per‑MW + Annual Upfront (SolarX) package, which also needs an anchor date and YTD tracking.
 
-## Annual upfront amount
+They mean the same thing conceptually. To avoid two fields that do the same job on the same contract, we'll **reuse `minimum_annual_value` for SPS** and only add what's actually missing: the annual anchor date.
 
-`annualUpfront = max(annualMinimum, annualPortfolioValue)` where `annualPortfolioValue = quarterlySpsCost × 4`, computed with the existing SPS stacking-discount math.
+## Changes
 
-- Smaller portfolio → upfront = €100k (minimum kicks in).
-- Larger portfolio → upfront = real annual value (e.g. €140k).
+### 1. Contract form — SPS Monitoring section
+File: `src/components/contracts/ContractForm.tsx` (inside the existing `watchPackage === "sps_monitoring"` block, ~line 1350)
 
-## Anchor date
+Add one new sub‑section "Annual Upfront Billing" with:
+- **Annual Anchor Date** (`annualBillingAnchorDate`) — date picker, optional. Helper text: "If set, the full annual SPS fee (or €100k minimum, whichever is higher) is billed upfront on this date each year. Subsequent quarterly invoices apply a credit until the prepaid balance is exhausted."
+- A read‑only info line referencing the existing **Minimum Annual Contract Value** above: "Annual upfront amount = max(Minimum Annual Contract Value, full annual SPS portfolio value)."
 
-The `annual_billing_anchor_date` field on the contract is the user-set date that drives the annual cycle. For SPS this will be configured to **28 Feb 2026** in the contract form — that's the date the upfront annual invoice fires and what subsequent anniversaries (Feb 28, 2027 …) inherit. No special handling needed; the existing `isAnnualUpfrontCycle` helper already matches the anchor month/day against the current period.
+No new "Fixed Annual Minimum" input for SPS — we reuse `minimum_annual_value`.
 
-## Behaviour by cycle
+Persist `annual_billing_anchor_date` on save for the `sps_monitoring` package (extend the existing save mapping that currently gates it behind `isAnnualUpfront`).
 
-Reuses existing contract columns (`annual_minimum_fee`, `annual_billing_anchor_date`, `last_annual_invoice_date`, `ytd_invoiced_amount`).
+### 2. Calculation wiring
+File: `src/lib/invoiceCalculations.ts` — `sps_monitoring` branch
 
-- **Annual upfront cycle** (period contains the anchor date, or first invoice after signed_date when anchor is set):
-  - Single line `Annual Platform Fee — SPS Monitoring (max of portfolio €X and minimum €100,000)`, amount = `annualUpfront`.
-  - SPS stacking module/discount lines suppressed for this cycle only.
-  - `ytd_invoiced_amount := annualUpfront`, `last_annual_invoice_date := cycle date`.
-- **Quarterly cycles** (non-anchor):
-  - Existing SPS stacking calculation runs unchanged — all monitoring + discount lines as today.
-  - Append a single credit line `Annual Upfront Credit Applied (€X of €Y remaining)`, amount = `−min(quarterCost, ytdInvoiced)`. `ytd_invoiced_amount` is treated as the remaining prepaid balance, decremented each quarter.
-  - Net invoice = `max(0, quarterCost − creditApplied)`.
-  - On creation: `ytd_invoiced_amount -= creditApplied`. Once balance hits 0, future quarters bill at full value (true overage).
-- Anniversary reset: any leftover balance from the prior year is preserved (anniversary adds the new annual amount on top). If the user later wants leftover forfeited, this is a one-line change — flagging during build.
+Replace the current "bill excess pro‑rated forever" logic (lines ~1044‑1051) with a real dual‑cadence prepaid‑balance model, driven by the new `spsIsAnnualCycle` flag:
 
-## Files
+- **Annual cycle** (`invoiceDate` matches anchor month/day): one line = `max(minimumAnnualValue, annualDiscountedFee)`; suppress per‑module SPS lines. Caller resets `ytd_invoiced_amount` to this amount.
+- **Quarterly cycle**: bill the full quarter normally (`annualDiscountedFee / 4`, all module lines visible); emit a negative **"Annual Minimum Already Paid"** credit of `min(quarterCost, remainingPrepaidBalance)`, where `remainingPrepaidBalance = max(0, ytdInvoiced − ytdConsumed)`. Caller increments `ytd_invoiced_amount` consumption.
 
-1. **`src/components/contracts/ContractForm.tsx`**
-   - When `package === 'sps_monitoring'`, surface the existing annual-upfront fields (`annual_minimum_fee`, `annual_billing_anchor_date`) labelled "Annual minimum (billed upfront, €100k default)" and "Annual billing anchor date". Optional; leaving `annual_minimum_fee` blank = today's behaviour.
+Add `spsAnnualUpfrontBreakdown` to the result interface mirroring `perMWAnnualUpfrontBreakdown`.
 
-2. **`src/lib/invoiceCalculations.ts`** (`sps_monitoring` branch ~line 1019)
-   - Compute quarterly SPS cost as today.
-   - If `annualMinimumFee > 0`:
-     - `annualPortfolioValue = quarterCost × 4`; `annualUpfront = max(annualMinimumFee, annualPortfolioValue)`.
-     - **Annual cycle** (`spsAnnualUpfrontIsAnnualCycle === true` or anchor-month match): override `totalPrice = annualUpfront`; populate `result.spsAnnualUpfrontBreakdown = { cycleType: 'annual_upfront', annualMinimum, annualPortfolioValue, annualUpfront }`.
-     - **Quarterly cycle**: `creditApplied = min(quarterCost, max(0, ytdInvoiced))`; `result.spsAnnualUpfrontBreakdown = { cycleType: 'quarterly_credit', annualMinimum, ytdRemainingBefore: ytdInvoiced, grossQuarterCost: quarterCost, creditApplied, netAfterCredit: quarterCost − creditApplied }`; `result.totalPrice -= creditApplied`.
-   - New optional input `spsAnnualUpfrontIsAnnualCycle?: boolean`.
+### 3. Invoice Calculator
+File: `src/components/dashboard/InvoiceCalculator.tsx`
 
-3. **`src/components/dashboard/InvoiceCalculator.tsx`**
-   - When `package === 'sps_monitoring'` and `annualMinimumFee > 0`, pass `annualMinimumFee`, `ytdInvoicedAmount`, `annualBillingAnchorDate`, and derive `spsAnnualUpfrontIsAnnualCycle` via `isAnnualUpfrontCycle`.
-   - Xero line items:
-     - Annual cycle → suppress SPS module/discount lines, emit `Annual Platform Fee — SPS Monitoring (max of portfolio €X and minimum €Y)` = `annualUpfront`.
-     - Quarterly cycle → keep all SPS lines, append `Annual Upfront Credit Applied (€creditApplied of €ytdRemainingBefore remaining)` with negative UnitAmount, same Platform Fees account.
-   - On invoice creation atomically update `ytd_invoiced_amount` (`= annualUpfront` annual / `-= creditApplied` quarterly) and `last_annual_invoice_date` (set only on annual cycles).
+- In `buildCalculationParams`: set `spsIsAnnualCycle` via `isAnnualUpfrontCycle(invoiceDate, anchor)` when package is `sps_monitoring`.
+- In the post‑Xero contract update block (lines ~1430‑1497): extend the `isAnnualUpfrontContract` branch to also trigger for `sps_monitoring` when the anchor is set, so YTD reset/increment runs.
+- In the Xero line‑item builder: when `spsAnnualUpfrontBreakdown` is present, emit either the single "Annual Platform Fee — Minimum" line (annual cycle) or append the negative credit line (quarterly cycle).
 
-4. **`src/components/invoices/MergedInvoiceDialog.tsx`** — same per-contract treatment (line items + DB update).
+### 4. Support document + merged invoices
+- `src/lib/supportDocumentGenerator.ts`: add an `sps_monitoring` annual‑upfront branch that shows either the floor calc (annual) or the credit line (quarterly).
+- `src/components/invoices/SupportDocument.tsx`: render the new breakdown section.
+- `src/components/invoices/MergedInvoiceDialog.tsx`: mirror the Xero line‑item logic.
 
-5. **`src/lib/supportDocumentGenerator.ts` + `src/components/invoices/SupportDocument.tsx`**
-   - Extend `SupportDocumentData` with `spsAnnualUpfrontBreakdown`.
-   - Annual cycle: dedicated "Annual Platform Fee — SPS Monitoring" section showing the max formula; asset table shown for reference, period total = `annualUpfront`.
-   - Quarterly cycle: existing SPS section unchanged, plus a "Annual Upfront Credit Applied" row (`−creditApplied`) and a footnote "Prepaid balance remaining: €X of original €Y".
+### 5. Set the SPS contract values
 
-6. **`src/components/invoices/UpcomingInvoicesList.tsx`** — pass the same fields through for `sps_monitoring` rows so previews are correct.
+Per your confirmation, after the form change ships, set on contract `460a2fc6-af1b-401f-8b91-aaaccdfc98e3` (SPS Investments Seychelles Ltd, sps_monitoring):
+- Minimum Annual Contract Value: **€100,000** (already the intent; please confirm via form)
+- Annual Anchor Date: **2026‑02‑28**
 
-## Out of scope
+I can also pre‑seed those two values directly in the database in the same change if you'd like — just say the word.
 
-- No schema changes (columns already exist).
-- No change to per_mw_annual_upfront behaviour.
-- No change to SPS stacking-discount math.
+## No schema migration needed
 
-## Verification (anchor = 28 Feb 2026)
-
-Portfolio value €120k/year (€30k/qtr):
-- **28 Feb 2026**: annualUpfront = max(100k, 120k) = €120k, single line, ytd = 120k.
-- **May 2026** quarter: gross €30k, credit −€30k, net €0, ytd = 90k.
-- **Aug 2026**: gross €30k, credit −€30k, net €0, ytd = 60k.
-- **Nov 2026**: gross €30k, credit −€30k, net €0, ytd = 30k.
-- **28 Feb 2027**: anniversary → new annual upfront billed on top, ytd refreshed (carry-over behaviour to confirm in build).
-
-Smaller portfolio (€80k/year): 28 Feb 2026 upfront = €100k (minimum); all 4 quarters fully credited; €20k credit carries (subject to carry-over decision).
-
-SPS contracts without `annual_minimum_fee` → unchanged. SolarX (per_mw_annual_upfront) → unchanged.
+`annual_billing_anchor_date` and `ytd_invoiced_amount` already exist on `contracts`. No new columns.
