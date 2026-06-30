@@ -519,6 +519,11 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           )}
           
           <div className="overflow-x-auto">
+            {(() => {
+              const hasPricingModel = data.assetBreakdown.some(a => a.pricingModel);
+              const minPricingCol = !!data.siteMinimumPricingSummary;
+              const labelColSpan = 7 + (minPricingCol ? 1 : 0) + (hasPricingModel ? 1 : 0) + 1; // up to €/kWp
+              return (
             <table className="w-full border-collapse border border-border" style={{ fontSize: '8px' }}>
               <thead>
                 <tr style={{ backgroundColor: '#f4f4f5' }}>
@@ -529,8 +534,11 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   <th className="border border-border px-1 py-0.5 text-center">Portal</th>
                   <th className="border border-border px-1 py-0.5 text-center">Control</th>
                   <th className="border border-border px-1 py-0.5 text-center">Report</th>
-                  {data.siteMinimumPricingSummary && (
+                  {minPricingCol && (
                     <th className="border border-border px-1 py-0.5 text-center">Pricing</th>
+                  )}
+                  {hasPricingModel && (
+                    <th className="border border-border px-1 py-0.5 text-center">Model</th>
                   )}
                   <th className="border border-border px-1 py-0.5 text-right">€/kWp</th>
                   <th className="border border-border px-1 py-0.5 text-right">€/Year</th>
@@ -546,9 +554,14 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     <td className="border border-border px-1 py-0.5 text-center">{asset.portalActive ? 'Y' : '-'}</td>
                     <td className="border border-border px-1 py-0.5 text-center">{asset.controlActive ? 'Y' : '-'}</td>
                     <td className="border border-border px-1 py-0.5 text-center">{asset.reportingActive ? 'Y' : '-'}</td>
-                    {data.siteMinimumPricingSummary && (
+                    {minPricingCol && (
                       <td className="border border-border px-1 py-0.5 text-center font-medium" style={{ color: asset.usesMinimum ? '#ea580c' : '#16a34a' }}>
                         {asset.usesMinimum ? 'Min' : 'kWp'}
+                      </td>
+                    )}
+                    {hasPricingModel && (
+                      <td className="border border-border px-1 py-0.5 text-center font-medium" style={{ color: asset.pricingModel === 'irradiance' ? '#2563eb' : '#16a34a' }}>
+                        {asset.pricingModel === 'irradiance' ? 'Irradiance' : asset.pricingModel === 'performance' ? 'Performance' : '-'}
                       </td>
                     )}
                     <td className="border border-border px-1 py-0.5 text-right">{asset.pricePerKWp.toFixed(2)}</td>
@@ -558,13 +571,13 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   </tr>
                 ))}
                 <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
-                  <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>Subtotal (Annual):</td>
+                  <td className="border border-border px-1 py-0.5" colSpan={labelColSpan}>Subtotal (Annual):</td>
                   <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(data.assetBreakdownTotal)}</td>
                 </tr>
                 {data.minimumContractAdjustment > 0 && data.minimumAnnualValue && (
                   <>
                     <tr style={{ backgroundColor: '#fffbeb' }}>
-                      <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>
+                      <td className="border border-border px-1 py-0.5" colSpan={labelColSpan}>
                         Minimum Contract Adjustment (Annual):
                       </td>
                       <td className="border border-border px-1 py-0.5 text-right font-medium" style={{ color: '#d97706' }}>
@@ -572,7 +585,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                       </td>
                     </tr>
                     <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
-                      <td className="border border-border px-1 py-0.5" colSpan={data.siteMinimumPricingSummary ? 9 : 8}>
+                      <td className="border border-border px-1 py-0.5" colSpan={labelColSpan}>
                         Total with Minimum (Annual):
                       </td>
                       <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(data.minimumAnnualValue)}</td>
@@ -581,6 +594,8 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 )}
               </tbody>
             </table>
+              );
+            })()}
           </div>
           {data.siteMinimumPricingSummary && (
             <p className="text-muted-foreground mt-1" style={{ fontSize: '7px' }}>
