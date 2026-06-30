@@ -351,9 +351,33 @@ export default function InvoiceHistory() {
               }
             }
           }
-        } else if (isMerged && delta != null && Number(delta) !== 0) {
-          console.warn('Invoice has prepaid_balance_delta but is merged; skipping reversal.', selectedInvoice.id);
+        } else if (isMerged) {
+          const deltasMap = (selectedInvoice as any).prepaid_balance_deltas_by_contract as
+            | Record<string, number>
+            | null
+            | undefined;
+          if (deltasMap && typeof deltasMap === 'object') {
+            const entries = Object.entries(deltasMap).filter(([, d]) => Number(d) !== 0);
+            for (const [contractId, d] of entries) {
+              const { data: c } = await supabase
+                .from('contracts')
+                .select('ytd_invoiced_amount')
+                .eq('id', contractId)
+                .maybeSingle();
+              const current = Number((c as any)?.ytd_invoiced_amount) || 0;
+              await supabase
+                .from('contracts')
+                .update({ ytd_invoiced_amount: Math.max(0, current - Number(d)) })
+                .eq('id', contractId);
+            }
+            if (entries.length > 0) {
+              toast.success(`Prepaid balance restored for ${entries.length} contract${entries.length > 1 ? 's' : ''}.`);
+            }
+          } else if (delta != null && Number(delta) !== 0) {
+            console.warn('Merged invoice has scalar prepaid_balance_delta but no per-contract map; skipping reversal.', selectedInvoice.id);
+          }
         }
+
       } else {
         toast.success('Invoice deleted successfully');
       }
