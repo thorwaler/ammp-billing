@@ -574,6 +574,8 @@ export async function generateSupportDocumentData(
       performanceAnnualTotal: calculationResult.matriarchApiBreakdown.performanceAnnualTotal,
       performanceTierBreakdown: calculationResult.matriarchApiBreakdown.performanceTierBreakdown,
       totalAnnualCost: calculationResult.matriarchApiBreakdown.totalAnnualCost,
+      irradianceAssetIds: calculationResult.matriarchApiBreakdown.irradianceAssetIds,
+      performanceAssetIds: calculationResult.matriarchApiBreakdown.performanceAssetIds,
     } : undefined,
     // Per-MW + Annual Upfront breakdown
     perMWAnnualUpfrontBreakdown: calculationResult.perMWAnnualUpfrontBreakdown ? {
