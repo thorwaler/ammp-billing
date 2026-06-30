@@ -1098,8 +1098,16 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
         creditApplied = Math.min(quarterCost, prepaidBalanceBefore);
         periodMonitoringFee = quarterCost - creditApplied;
         prepaidBalanceAfter = Math.max(0, prepaidBalanceBefore - creditApplied);
-        // Scale module line items to the period so Xero/UI line items sum to quarterCost
-        result.moduleCosts = annualModuleCosts.map(mc => ({ ...mc, cost: mc.cost * periodFraction }));
+        // Scale module line items to the period AND to the post-discount fee
+        // so they sum to quarterCost (matches the credit basis).
+        const discountScale = preDiscountAnnualFee > 0
+          ? (annualDiscountedFee / preDiscountAnnualFee)
+          : 0;
+        result.moduleCosts = annualModuleCosts.map(mc => ({
+          ...mc,
+          cost: mc.cost * periodFraction * discountScale,
+        }));
+
       }
 
       result.totalMWCost = periodMonitoringFee;
