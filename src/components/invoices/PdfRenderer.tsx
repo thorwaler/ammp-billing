@@ -316,8 +316,10 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     }
 
     const hasMinPricing = !!data.siteMinimumPricingSummary;
+    const hasPricingModel = data.assetBreakdown.some(a => (a as any).pricingModel);
     const assetHead = ['Asset Name', 'kWp', 'Hybrid', 'Hub', 'Portal', 'Control', 'Report'];
     if (hasMinPricing) assetHead.push('Pricing');
+    if (hasPricingModel) assetHead.push('Model');
     assetHead.push(`${cur}/kWp`, `${cur}/Year`);
 
     const assetBody = data.assetBreakdown.map(a => {
@@ -331,6 +333,10 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
         a.reportingActive ? 'Y' : '-',
       ];
       if (hasMinPricing) row.push(a.usesMinimum ? 'Min' : 'kWp');
+      if (hasPricingModel) {
+        const pm = (a as any).pricingModel;
+        row.push(pm === 'irradiance' ? 'Irradiance' : pm === 'performance' ? 'Performance' : '-');
+      }
       row.push(a.pricePerKWp.toFixed(2), fmt(a.pricePerYear, cur));
       return row;
     });
