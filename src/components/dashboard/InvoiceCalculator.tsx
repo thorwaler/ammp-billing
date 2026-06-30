@@ -1475,8 +1475,12 @@ export function InvoiceCalculator({
           }
         }
 
+        // SPS dual-cadence active only when an anchor date is configured.
+        const isSpsDualCadence = selectedCustomer.package === 'sps_monitoring'
+          && !!contractRow?.annual_billing_anchor_date;
+
         if (isAnnualUpfrontContract && selectedCustomer.contractId) {
-          // Dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
+          // Per-MW dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
           const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
 
           const anchor = contractRow?.annual_billing_anchor_date ?? null;
@@ -1495,13 +1499,36 @@ export function InvoiceCalculator({
           contractUpdate.next_invoice_date = nextDate.toISOString();
 
           if (wasAnnualCycle) {
-            // Annual rollover: reset YTD to this invoice's amount.
             contractUpdate.last_annual_invoice_date = invoiceDate.toISOString();
             contractUpdate.ytd_invoiced_amount = result.totalPrice;
           } else {
-            // Quarterly overage: increment YTD by this invoice's amount.
             const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
             contractUpdate.ytd_invoiced_amount = prevYtd + result.totalPrice;
+          }
+        } else if (isSpsDualCadence && selectedCustomer.contractId) {
+          // SPS dual-cadence: ytd_invoiced_amount tracks REMAINING PREPAID BALANCE.
+          // Annual cycle → set to annualUpfrontAmount. Quarterly → decrement by credit applied.
+          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
+          const anchor = contractRow?.annual_billing_anchor_date ?? null;
+          const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
+          const nextDate = getNextInvoiceDate(invoiceDate, {
+            packageType: 'per_mw_annual_upfront', // reuse dual-cadence scheduling
+            billingFrequency: 'quarterly',
+            annualBillingAnchorDate: anchor,
+          });
+          const nextPeriodEnd = new Date(nextDate);
+          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+
+          contractUpdate.period_start = nextPeriodStart.toISOString();
+          contractUpdate.period_end = nextPeriodEnd.toISOString();
+          contractUpdate.next_invoice_date = nextDate.toISOString();
+
+          const sb = (result as any).spsAnnualUpfrontBreakdown;
+          if (wasAnnualCycle) {
+            contractUpdate.last_annual_invoice_date = invoiceDate.toISOString();
+            contractUpdate.ytd_invoiced_amount = sb?.annualUpfrontAmount ?? result.totalPrice;
+          } else if (sb) {
+            contractUpdate.ytd_invoiced_amount = sb.prepaidBalanceAfter;
           }
         } else {
           let nextPeriodEnd = new Date(nextPeriodStart);
@@ -1526,6 +1553,7 @@ export function InvoiceCalculator({
           contractUpdate.period_end = nextPeriodEnd.toISOString();
           contractUpdate.next_invoice_date = nextPeriodEnd.toISOString();
         }
+
 
         if (selectedCustomer.contractId) {
           await supabase
