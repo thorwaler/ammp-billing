@@ -2571,7 +2571,7 @@ export function InvoiceCalculator({
                       {result.siteMinimumPricingBreakdown.sitesAboveThreshold.length > 0 && (
                         <div className="flex justify-between">
                           <span>
-                            Sites above threshold ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites, {result.siteMinimumPricingBreakdown.sitesAboveThreshold.reduce((sum, s) => sum + s.mw, 0).toFixed(2)} MW × {formatContractCurrency(result.moduleCosts[0]?.rate || 0)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):
+                            Sites above threshold ({result.siteMinimumPricingBreakdown.sitesAboveThreshold.length} sites, {result.siteMinimumPricingBreakdown.sitesAboveThreshold.reduce((sum, s) => sum + s.mw, 0).toFixed(2)} MW × {formatContractCurrency(result.moduleCosts[0]?.rate || 0)}/MW/yr × {effectivePeriodMonths} months):
                           </span>
                           <span>{formatContractCurrency(result.siteMinimumPricingBreakdown.normalPricingTotal)}</span>
                         </div>
@@ -2597,7 +2597,7 @@ export function InvoiceCalculator({
                     /* Standard module costs display when no site minimum pricing */
                     result.moduleCosts.map((item) => (
                       <div key={item.moduleId} className="flex justify-between">
-                        <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {formatContractCurrency(item.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                        <span>{item.moduleName} ({item.mw.toFixed(2)} MW × {formatContractCurrency(item.rate)}/MW/yr × {effectivePeriodMonths} months):</span>
                         <span>{formatContractCurrency(item.cost)}</span>
                       </div>
                     ))
@@ -2618,11 +2618,11 @@ export function InvoiceCalculator({
                 <h4 className="font-medium text-sm">Hybrid Tiered Pricing:</h4>
                 <div className="space-y-1 text-sm pl-2">
                   <div className="flex justify-between">
-                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.ongrid.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                    <span>On-Grid Sites ({result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.ongrid.rate)}/MW/yr × {effectivePeriodMonths} months):</span>
                     <span>{formatContractCurrency(result.hybridTieredBreakdown.ongrid.cost)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.hybrid.rate)}/MW/yr × {getPeriodMonthsMultiplier(billingFrequency)} months):</span>
+                    <span>Hybrid Sites ({result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW × {formatContractCurrency(result.hybridTieredBreakdown.hybrid.rate)}/MW/yr × {effectivePeriodMonths} months):</span>
                     <span>{formatContractCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
                   </div>
                 </div>
@@ -2841,7 +2841,7 @@ export function InvoiceCalculator({
                             {item.addonName}
                             {quantity > 1 && item.addonId === 'satelliteDataAPI' && item.pricePerUnit && (
                               <span className="text-muted-foreground">
-                                {' '}({quantity} sites × {formatContractCurrency(item.pricePerUnit)}/mo × {getPeriodMonthsMultiplier(billingFrequency)} months)
+                                {' '}({quantity} sites × {formatContractCurrency(item.pricePerUnit)}/mo × {effectivePeriodMonths} months)
                               </span>
                             )}
                             {quantity > 1 && item.addonId !== 'satelliteDataAPI' && (
@@ -2939,7 +2939,7 @@ export function InvoiceCalculator({
             
             {result.basePricingCost > 0 && (
               <div className="flex justify-between text-sm mb-3">
-                <span>Base Pricing ({getPeriodMonthsMultiplier(billingFrequency)} months × {formatContractCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
+                <span>Base Pricing ({effectivePeriodMonths} months × {formatContractCurrency(selectedCustomer.baseMonthlyPrice || 0)}/mo):</span>
                 <span>{formatContractCurrency(result.basePricingCost)}</span>
               </div>
             )}
