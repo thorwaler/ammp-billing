@@ -565,6 +565,17 @@ export async function generateSupportDocumentData(
       ytdInvoiced: calculationResult.perMWAnnualUpfrontBreakdown.ytdInvoiced,
       overageAmount: calculationResult.perMWAnnualUpfrontBreakdown.overageAmount,
     } : undefined,
+    // SPS Monitoring annual-upfront breakdown
+    spsAnnualUpfrontBreakdown: (calculationResult as any).spsAnnualUpfrontBreakdown ? {
+      cycleType: (calculationResult as any).spsAnnualUpfrontBreakdown.cycleType,
+      annualDiscountedFee: (calculationResult as any).spsAnnualUpfrontBreakdown.annualDiscountedFee,
+      annualMinimum: (calculationResult as any).spsAnnualUpfrontBreakdown.annualMinimum,
+      annualUpfrontAmount: (calculationResult as any).spsAnnualUpfrontBreakdown.annualUpfrontAmount,
+      quarterCost: (calculationResult as any).spsAnnualUpfrontBreakdown.quarterCost,
+      prepaidBalanceBefore: (calculationResult as any).spsAnnualUpfrontBreakdown.prepaidBalanceBefore,
+      creditApplied: (calculationResult as any).spsAnnualUpfrontBreakdown.creditApplied,
+      prepaidBalanceAfter: (calculationResult as any).spsAnnualUpfrontBreakdown.prepaidBalanceAfter,
+    } : undefined,
     calculatedTotal,
     invoiceTotal,
     minimumContractAdjustment,
