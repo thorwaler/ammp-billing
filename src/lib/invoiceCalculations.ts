@@ -306,6 +306,17 @@ export interface CalculationResult {
     upfrontAnnualPayment?: number;
     excessAnnualAmount?: number;
   };
+  // SPS Monitoring annual-upfront dual cadence breakdown
+  spsAnnualUpfrontBreakdown?: {
+    cycleType: 'annual_upfront' | 'quarterly_with_credit';
+    annualDiscountedFee: number;
+    annualMinimum: number;
+    annualUpfrontAmount: number;
+    quarterCost: number;
+    prepaidBalanceBefore: number;
+    creditApplied: number;
+    prepaidBalanceAfter: number;
+  };
   // Per-MW + Annual Upfront Minimum breakdown
   perMWAnnualUpfrontBreakdown?: {
     cycleType: 'annual_upfront' | 'quarterly_overage';
