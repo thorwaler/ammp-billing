@@ -1908,7 +1908,17 @@ export function InvoiceCalculator({
     }
   };
 
+  // Effective month count for the current invoice period. Falls back to the
+  // billing frequency default when contract period dates aren't set, and shrinks
+  // when a catch-up/short period spans fewer months than the nominal frequency.
+  const effectivePeriodMonths = (() => {
+    const def = getPeriodMonthsMultiplier(billingFrequency);
+    const actual = monthsInPeriod(selectedCustomer?.periodStart, selectedCustomer?.periodEnd);
+    return actual && actual < def ? actual : def;
+  })();
+
   return (
+
     <Card>
       <CardHeader>
         <CardTitle className="text-xl flex items-center gap-2">
