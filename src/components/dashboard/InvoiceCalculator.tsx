@@ -58,7 +58,7 @@ import {
 } from "@/lib/invoiceCalculations";
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
 import { uploadToSharePoint } from "@/utils/sharePointUpload";
-import { isAnnualUpfrontCycle } from "@/lib/invoiceScheduling";
+import { isAnnualUpfrontCycle, monthsInPeriod } from "@/lib/invoiceScheduling";
 // Asset group filtering now handled server-side in ammp-sync-contract
 
 // Simplified interfaces - complex types moved to shared files
