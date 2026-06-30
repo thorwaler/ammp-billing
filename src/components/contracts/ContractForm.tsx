@@ -11,6 +11,7 @@ import { DiscountTierEditor } from "@/components/contracts/DiscountTierEditor";
 import { MinimumChargeTierEditor } from "@/components/contracts/MinimumChargeTierEditor";
 import { GraduatedMWTierEditor } from "@/components/contracts/GraduatedMWTierEditor";
 import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
+import { MoveContractDialog } from "@/components/contracts/MoveContractDialog";
 import { SelectSeparator } from "@/components/ui/select";
 import { 
   MODULES, 
