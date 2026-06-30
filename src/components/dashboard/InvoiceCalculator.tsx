@@ -1075,7 +1075,33 @@ export function InvoiceCalculator({
             UnitAmount: b.overageAmount,
             AccountCode: ACCOUNT_PLATFORM_FEES
           });
+      }
+
+      // SPS Monitoring annual-upfront dual cadence
+      if (result.spsAnnualUpfrontBreakdown) {
+        const sb = result.spsAnnualUpfrontBreakdown;
+        if (sb.cycleType === 'annual_upfront') {
+          // Single upfront line. Per-module lines suppressed by the gate above.
+          const annualDesc = sb.annualUpfrontAmount > sb.annualDiscountedFee
+            ? `Annual Platform Fee — Minimum (Minimum Annual Contract Value ${currencySymbol}${sb.annualMinimum.toLocaleString()} exceeds discounted annual SPS value ${currencySymbol}${sb.annualDiscountedFee.toLocaleString()})`
+            : `Annual Platform Fee — Full Annual SPS Value (${currencySymbol}${sb.annualDiscountedFee.toLocaleString()} exceeds minimum ${currencySymbol}${sb.annualMinimum.toLocaleString()})`;
+          lineItems.push({
+            Description: annualDesc,
+            Quantity: 1,
+            UnitAmount: sb.annualUpfrontAmount,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        } else if (sb.creditApplied > 0) {
+          // Quarterly cycle: module lines already emitted above; append negative credit.
+          lineItems.push({
+            Description: `Annual Minimum Already Paid — credit applied from prepaid balance (remaining after this invoice: ${currencySymbol}${sb.prepaidBalanceAfter.toLocaleString()})`,
+            Quantity: 1,
+            UnitAmount: -sb.creditApplied,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
         }
+      }
+
       }
       
       // Add hybrid tiered pricing line items (for hybrid_tiered packages like BLS)
