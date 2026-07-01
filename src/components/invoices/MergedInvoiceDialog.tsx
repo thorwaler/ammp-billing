@@ -700,7 +700,7 @@ export function MergedInvoiceDialog({
         // Calculate EUR amounts using dynamic exchange rate
         const eurMultiplier = primaryCurrency === 'USD' ? exchangeRate : 1;
         
-        await supabase.from('invoices').insert([{
+        const { data: insertedMergedInvoice } = await supabase.from('invoices').insert([{
           user_id: user.id,
           customer_id: contracts[0].customerId,
           contract_id: contracts[0].contractId, // Primary contract
@@ -728,7 +728,8 @@ export function MergedInvoiceDialog({
           support_document_data: Array.from(supportDocuments.entries())
             .filter(([id]) => selectedContracts.has(id))
             .map(([id, doc]) => ({ contractId: id, data: doc })) as any
-        }]);
+        }]).select('id').maybeSingle();
+        const mergedInvoiceId = insertedMergedInvoice?.id as string | undefined;
 
         
         // STEP 3 & 4: Generate support documents and PDFs AFTER saving to DB (so YTD includes this invoice)
