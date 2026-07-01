@@ -1783,6 +1783,16 @@ export function InvoiceCalculator({
                   const spResult = await uploadToSharePoint(pdfBase64, fileName, 'support_document');
                   
                   if (spResult.success) {
+                    // Persist SharePoint file reference so deletion can clean it up later.
+                    if (spResult.fileId && spResult.driveId) {
+                      await supabase
+                        .from('invoices')
+                        .update({
+                          sharepoint_file_id: spResult.fileId,
+                          sharepoint_drive_id: spResult.driveId,
+                        } as any)
+                        .eq('id', insertedInvoice.id);
+                    }
                     toast({
                       title: "Uploaded to SharePoint",
                       description: "Support document uploaded successfully.",
