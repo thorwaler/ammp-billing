@@ -828,6 +828,9 @@ export type Database = {
           nrr_amount_eur: number | null
           prepaid_balance_delta: number | null
           prepaid_balance_deltas_by_contract: Json | null
+          sharepoint_drive_id: string | null
+          sharepoint_file_id: string | null
+          sharepoint_files: Json | null
           source: string | null
           support_document_data: Json | null
           total_mw: number
@@ -863,6 +866,9 @@ export type Database = {
           nrr_amount_eur?: number | null
           prepaid_balance_delta?: number | null
           prepaid_balance_deltas_by_contract?: Json | null
+          sharepoint_drive_id?: string | null
+          sharepoint_file_id?: string | null
+          sharepoint_files?: Json | null
           source?: string | null
           support_document_data?: Json | null
           total_mw: number
@@ -898,6 +904,9 @@ export type Database = {
           nrr_amount_eur?: number | null
           prepaid_balance_delta?: number | null
           prepaid_balance_deltas_by_contract?: Json | null
+          sharepoint_drive_id?: string | null
+          sharepoint_file_id?: string | null
+          sharepoint_files?: Json | null
           source?: string | null
           support_document_data?: Json | null
           total_mw?: number
