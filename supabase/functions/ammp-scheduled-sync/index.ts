@@ -427,12 +427,25 @@ Deno.serve(async (req) => {
 
     console.log(`[AMMP Scheduled Sync] Started. Manual: ${isManual}, Target: ${targetUserId || 'all'}`);
 
-    const { effectiveUserId, isServiceRoleRequest } = await resolveAuthorizedUser(
-      req,
-      supabase,
-      serviceKey,
-      targetUserId ?? undefined,
-    );
+    // Only enforce user auth for manual (browser-initiated) invocations.
+    // Scheduled cron invocations arrive without an Authorization header — for those
+    // we run under the service-role client and derive user_id from the connection row.
+    let effectiveUserId: string | undefined;
+    let isServiceRoleRequest = false;
+    if (isManual) {
+      const resolved = await resolveAuthorizedUser(
+        req,
+        supabase,
+        serviceKey,
+        targetUserId ?? undefined,
+      );
+      effectiveUserId = resolved.effectiveUserId;
+      isServiceRoleRequest = resolved.isServiceRoleRequest;
+    } else {
+      // Cron/scheduled path — treat as service-role.
+      isServiceRoleRequest = true;
+      console.log('[AMMP Scheduled Sync] Scheduled invocation — skipping user auth check');
+    }
 
     const sharedConnection = await getSharedAmmpConnection(supabase);
     const connections = [sharedConnection];
