@@ -212,6 +212,13 @@ export default function InvoiceHistory() {
       const invoiceDate = new Date(selectedInvoice.invoice_date);
       const billingFrequency = selectedInvoice.billing_frequency;
 
+      // Fetch SharePoint file refs so we can clean them up after deletion.
+      const { data: spRow } = await supabase
+        .from('invoices')
+        .select('sharepoint_file_id, sharepoint_drive_id, sharepoint_files')
+        .eq('id', selectedInvoice.id)
+        .maybeSingle();
+
       // Delete the invoice
       const { error } = await supabase
         .from('invoices')
@@ -219,6 +226,39 @@ export default function InvoiceHistory() {
         .eq('id', selectedInvoice.id);
 
       if (error) throw error;
+
+      // Delete SharePoint support docs (non-blocking).
+      try {
+        const { deleteMultipleFromSharePoint } = await import('@/utils/sharePointUpload');
+        const filesToDelete: Array<{ driveId: string; fileId: string }> = [];
+        const singleFileId = (spRow as any)?.sharepoint_file_id;
+        const singleDriveId = (spRow as any)?.sharepoint_drive_id;
+        if (singleFileId && singleDriveId) {
+          filesToDelete.push({ driveId: singleDriveId, fileId: singleFileId });
+        }
+        const multi = (spRow as any)?.sharepoint_files;
+        if (Array.isArray(multi)) {
+          for (const f of multi) {
+            if (f?.driveId && f?.fileId) {
+              filesToDelete.push({ driveId: f.driveId, fileId: f.fileId });
+            }
+          }
+        }
+        if (filesToDelete.length > 0) {
+          const results = await deleteMultipleFromSharePoint(filesToDelete);
+          const okCount = results.filter(r => r.success).length;
+          const failCount = results.filter(r => !r.success && !r.skipped).length;
+          if (okCount > 0) {
+            toast.success(`Removed ${okCount} support document${okCount > 1 ? 's' : ''} from SharePoint`);
+          }
+          if (failCount > 0) {
+            toast.warning(`${failCount} SharePoint document${failCount > 1 ? 's' : ''} could not be removed automatically`);
+          }
+        }
+      } catch (spErr) {
+        console.error('[SharePoint] Cleanup on invoice delete failed:', spErr);
+      }
+
 
       // Determine which contracts to update
       // For merged invoices, use merged_contract_ids; otherwise use contract_id
