@@ -4,8 +4,16 @@ export interface SharePointUploadResult {
   success: boolean;
   fileUrl?: string;
   fileId?: string;
+  driveId?: string;
+  fileName?: string;
   error?: string;
   skipped?: boolean; // True if no SharePoint config exists
+}
+
+export interface SharePointDeleteResult {
+  success: boolean;
+  error?: string;
+  skipped?: boolean;
 }
 
 /**
@@ -80,7 +88,9 @@ export async function uploadToSharePoint(
       return {
         success: true,
         fileUrl: data.webUrl,
-        fileId: data.fileId
+        fileId: data.fileId,
+        driveId: folderSettings.drive_id,
+        fileName: data.fileName,
       };
     }
 
@@ -117,4 +127,66 @@ export async function uploadMultipleToSharePoint(
     }
     return { success: false, error: 'Upload failed unexpectedly' };
   });
+}
+
+/**
+ * Delete a document from SharePoint by driveId and fileId.
+ * Skips gracefully if the SharePoint integration is missing or disabled.
+ * Treats "not found" as success (already gone).
+ */
+export async function deleteFromSharePoint(
+  driveId: string,
+  fileId: string
+): Promise<SharePointDeleteResult> {
+  try {
+    if (!driveId || !fileId) {
+      return { success: false, skipped: true };
+    }
+
+    // Check integration is configured and enabled
+    const { data: connection } = await supabase
+      .from('sharepoint_connections')
+      .select('id, is_enabled')
+      .limit(1)
+      .maybeSingle();
+
+    if (!connection || !connection.is_enabled) {
+      return { success: false, skipped: true };
+    }
+
+    const { data, error } = await supabase.functions.invoke('sharepoint-delete-document', {
+      body: { driveId, fileId },
+    });
+
+    if (error) {
+      console.error('[SharePoint] Delete error:', error);
+      return { success: false, error: error.message };
+    }
+
+    if (data?.success) {
+      return { success: true };
+    }
+
+    return { success: false, error: data?.error || 'Unknown error' };
+  } catch (error) {
+    console.error('[SharePoint] Unexpected delete error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Delete multiple SharePoint files in parallel. Non-throwing.
+ */
+export async function deleteMultipleFromSharePoint(
+  files: Array<{ driveId: string; fileId: string }>
+): Promise<SharePointDeleteResult[]> {
+  const results = await Promise.allSettled(
+    files.map(f => deleteFromSharePoint(f.driveId, f.fileId))
+  );
+  return results.map(r =>
+    r.status === 'fulfilled' ? r.value : { success: false, error: 'Delete failed unexpectedly' }
+  );
 }
