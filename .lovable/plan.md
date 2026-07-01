@@ -1,34 +1,49 @@
-## Goal
-When an invoice is deleted from Invoice History, also remove its associated support document(s) from the connected SharePoint/OneDrive folder so duplicates don't pile up when invoices are regenerated.
+# Fix: Automated AMMP sync has been broken since April 5, 2026
 
-## Approach
+## What's actually happening
 
-**1. Persist the SharePoint file reference on the invoice**
-- Add two columns to `invoices`:
-  - `sharepoint_file_id` (text)
-  - `sharepoint_drive_id` (text)
-- For merged invoices, add `sharepoint_files` (jsonb) storing an array of `{ driveId, fileId, fileName }` so multiple docs can be tracked.
+The daily 02:00 UTC AMMP sync cron has been failing silently for ~3 months. When you opened contracts yesterday and saw no synced assets, that's because nothing had been auto-synced — the "synced" contracts you see were updated only when you (or someone) hit the manual resync button.
 
-**2. Save the reference at upload time**
-- In `InvoiceCalculator.tsx`: after `uploadToSharePoint` returns `success`, update the just-created invoice row with `sharepoint_file_id` / `sharepoint_drive_id` (already returned by the edge function).
-- In `MergedInvoiceDialog.tsx`: after `uploadMultipleToSharePoint`, save the collected `{driveId, fileId, fileName}` array into `sharepoint_files` on the merged invoice.
-- Update `sharePointUpload.ts` return type so callers get `driveId` alongside `fileId` (the folder setting already knows the driveId — return it).
+Two compounding bugs:
 
-**3. New edge function `sharepoint-delete-document`**
-- Accepts `{ driveId, fileId }`.
-- Reuses the same `getValidAccessToken` pattern as `sharepoint-upload-document`.
-- Calls `DELETE https://graph.microsoft.com/v1.0/drives/{driveId}/items/{fileId}`.
-- Treats 404 as success (already gone).
-- Returns `{ success: true }` or an error.
+1. **Auth guard blocks cron invocations.** `supabase/functions/ammp-scheduled-sync/index.ts:430` calls `resolveAuthorizedUser()` unconditionally at the top of the handler. Supabase cron fires the function with no `Authorization` header, so this throws `"User authentication required"` and returns HTTP 500 before any sync logic runs. No notification, no log surfaced to the UI.
+2. **`ammp_connections.sync_schedule` is `"weekly"`, not `"daily"`.** Even if auth were fixed, `shouldRunToday("weekly")` only passes on Sundays. Project memory says the schedule should be daily.
 
-**4. Client helper `deleteFromSharePoint(driveId, fileId)`**
-- Added to `src/utils/sharePointUpload.ts`.
-- Skips gracefully if SharePoint connection is missing/disabled (same guard pattern as upload).
+Evidence from the DB:
+- `last_sync_at = 2026-04-05` (a Sunday — the last time both bugs happened to align)
+- `next_sync_at = 2026-04-12` (never updated since)
+- 24/26 contracts got manually resynced on 2026-06-30; Daybreak and Energea are still at April 5.
 
-**5. Wire deletion into `handleDeleteInvoice` (InvoiceHistory.tsx)**
-- Before deleting the invoice row, read `sharepoint_file_id`/`sharepoint_drive_id` (and `sharepoint_files` for merged).
-- Fire `deleteFromSharePoint` calls in parallel (`Promise.allSettled`) — non-blocking on failures, just toast a warning if any fail.
-- Continue with existing deletion logic (Xero void, prepaid balance reversal, DB delete).
+## Plan
 
-## Not doing
-- No backfill for existing invoices already uploaded — only newly created invoices will have the reference stored and be auto-deletable. Older docs remain until manually cleaned. (Happy to add a one-off "match by filename" fallback if you want — let me know.)
+### 1. Fix the auth guard in `ammp-scheduled-sync`
+
+Restructure `index.ts` so `resolveAuthorizedUser` is only called on the manual HTTP path:
+
+- Detect cron invocation by absence of `Authorization` header (or presence of the service-role key).
+- On cron path: use the service-role Supabase client directly, iterate `ammp_connections`, and derive `user_id` from each connection row (already fetched).
+- On manual path: keep the existing `resolveAuthorizedUser` flow so user-initiated syncs continue to work with their JWT.
+- Keep the existing `isServiceRoleRequest` 403 guard as a defense-in-depth check on the scheduled branch.
+
+### 2. Flip the schedule back to daily
+
+Update the `ammp_connections` row(s): `sync_schedule = 'daily'`, and reset `next_sync_at` to the next 02:00 UTC. Done via migration so it's reproducible.
+
+### 3. Backfill the two stuck contracts
+
+Trigger a one-off sync for Daybreak Power Solutions and Energea after the fix deploys, so their `last_sync_at` catches up. Also worth confirming they aren't filtered out by `getSyncableContracts` (e.g., missing `ammp_org_id` / `ammp_asset_group_id`, or POC package) — if they are, that's expected and no action needed.
+
+### 4. Add a lightweight failure signal
+
+Right now scheduled failures are completely silent. Add a `notifications` insert (severity `error`, type `ammp_sync_failed`) whenever the scheduled path throws, so you'd see this in the UI next time instead of discovering it during invoicing.
+
+## Files touched
+
+- `supabase/functions/ammp-scheduled-sync/index.ts` — split cron vs manual auth paths, add failure notification.
+- New migration — set `sync_schedule = 'daily'`, recompute `next_sync_at`.
+- No frontend changes.
+
+## Out of scope
+
+- Not touching the manual sync button flow (works fine).
+- Not changing `resolveAuthorizedUser` itself — other functions rely on it.
