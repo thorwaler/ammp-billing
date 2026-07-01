@@ -700,7 +700,7 @@ export function MergedInvoiceDialog({
         // Calculate EUR amounts using dynamic exchange rate
         const eurMultiplier = primaryCurrency === 'USD' ? exchangeRate : 1;
         
-        await supabase.from('invoices').insert([{
+        const { data: insertedMergedInvoice } = await supabase.from('invoices').insert([{
           user_id: user.id,
           customer_id: contracts[0].customerId,
           contract_id: contracts[0].contractId, // Primary contract
@@ -728,7 +728,8 @@ export function MergedInvoiceDialog({
           support_document_data: Array.from(supportDocuments.entries())
             .filter(([id]) => selectedContracts.has(id))
             .map(([id, doc]) => ({ contractId: id, data: doc })) as any
-        }]);
+        }]).select('id').maybeSingle();
+        const mergedInvoiceId = insertedMergedInvoice?.id as string | undefined;
 
         
         // STEP 3 & 4: Generate support documents and PDFs AFTER saving to DB (so YTD includes this invoice)
@@ -825,6 +826,21 @@ export function MergedInvoiceDialog({
             
             const successCount = sharePointResults.filter(r => r.success).length;
             const failedCount = sharePointResults.filter(r => !r.success && !r.skipped).length;
+            
+            // Persist SharePoint file refs so deletion can clean them up later.
+            const sharePointFiles = sharePointResults
+              .map((r, idx) => (r.success && r.fileId && r.driveId ? {
+                driveId: r.driveId,
+                fileId: r.fileId,
+                fileName: r.fileName || sharePointDocs[idx].fileName,
+              } : null))
+              .filter(Boolean);
+            if (mergedInvoiceId && sharePointFiles.length > 0) {
+              await supabase
+                .from('invoices')
+                .update({ sharepoint_files: sharePointFiles as any } as any)
+                .eq('id', mergedInvoiceId);
+            }
             
             if (successCount > 0) {
               toast({
