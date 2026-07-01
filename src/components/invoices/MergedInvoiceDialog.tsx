@@ -827,6 +827,21 @@ export function MergedInvoiceDialog({
             const successCount = sharePointResults.filter(r => r.success).length;
             const failedCount = sharePointResults.filter(r => !r.success && !r.skipped).length;
             
+            // Persist SharePoint file refs so deletion can clean them up later.
+            const sharePointFiles = sharePointResults
+              .map((r, idx) => (r.success && r.fileId && r.driveId ? {
+                driveId: r.driveId,
+                fileId: r.fileId,
+                fileName: r.fileName || sharePointDocs[idx].fileName,
+              } : null))
+              .filter(Boolean);
+            if (mergedInvoiceId && sharePointFiles.length > 0) {
+              await supabase
+                .from('invoices')
+                .update({ sharepoint_files: sharePointFiles as any } as any)
+                .eq('id', mergedInvoiceId);
+            }
+            
             if (successCount > 0) {
               toast({
                 title: "Uploaded to SharePoint",
