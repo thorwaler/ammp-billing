@@ -431,7 +431,6 @@ Deno.serve(async (req) => {
     // Scheduled cron invocations arrive without an Authorization header — for those
     // we run under the service-role client and derive user_id from the connection row.
     let effectiveUserId: string | undefined;
-    let isServiceRoleRequest = false;
     if (isManual) {
       const resolved = await resolveAuthorizedUser(
         req,
@@ -440,10 +439,7 @@ Deno.serve(async (req) => {
         targetUserId ?? undefined,
       );
       effectiveUserId = resolved.effectiveUserId;
-      isServiceRoleRequest = resolved.isServiceRoleRequest;
     } else {
-      // Cron/scheduled path — treat as service-role.
-      isServiceRoleRequest = true;
       console.log('[AMMP Scheduled Sync] Scheduled invocation — skipping user auth check');
     }
 
@@ -515,12 +511,9 @@ Deno.serve(async (req) => {
       error?: string;
     }> = [];
 
-    if (!isServiceRoleRequest) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Scheduled sync requires a backend invocation' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // (Scheduled path guard removed — manual path returned earlier, and cron
+    // is treated as service-role by construction.)
+
 
     for (const connection of connections) {
       const { id: connectionId, user_id, sync_schedule } = connection;
@@ -569,6 +562,34 @@ Deno.serve(async (req) => {
 
   } catch (error: any) {
     console.error('[AMMP Scheduled Sync] Error:', error);
+
+    // Best-effort: surface a notification so scheduled failures don't stay silent.
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && serviceKey) {
+        const admin = createClient(supabaseUrl, serviceKey);
+        const { data: conn } = await admin
+          .from('ammp_connections')
+          .select('user_id')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (conn?.user_id) {
+          await admin.from('notifications').insert({
+            user_id: conn.user_id,
+            type: 'ammp_sync_failed',
+            title: 'AMMP Scheduled Sync Failed',
+            message: `Scheduled sync could not start: ${error.message}`,
+            severity: 'error',
+            metadata: { error: error.message, isManual: false, scope: 'top_level' },
+          });
+        }
+      }
+    } catch (notifyErr) {
+      console.error('[AMMP Scheduled Sync] Failed to record failure notification:', notifyErr);
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
