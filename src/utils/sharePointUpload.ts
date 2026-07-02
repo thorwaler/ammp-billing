@@ -190,3 +190,26 @@ export async function deleteMultipleFromSharePoint(
     r.status === 'fulfilled' ? r.value : { success: false, error: 'Delete failed unexpectedly' }
   );
 }
+
+/**
+ * Normalize SharePoint file refs from an invoice row.
+ * Handles both the single-file columns (sharepoint_file_id/drive_id)
+ * and the merged-invoice JSONB array (sharepoint_files).
+ */
+export function getSharePointFileRefs(row: {
+  sharepoint_file_id?: string | null;
+  sharepoint_drive_id?: string | null;
+  sharepoint_files?: unknown;
+} | null | undefined): Array<{ driveId: string; fileId: string }> {
+  const refs: Array<{ driveId: string; fileId: string }> = [];
+  if (!row) return refs;
+  if (row.sharepoint_file_id && row.sharepoint_drive_id) {
+    refs.push({ driveId: row.sharepoint_drive_id, fileId: row.sharepoint_file_id });
+  }
+  if (Array.isArray(row.sharepoint_files)) {
+    for (const f of row.sharepoint_files as any[]) {
+      if (f?.driveId && f?.fileId) refs.push({ driveId: f.driveId, fileId: f.fileId });
+    }
+  }
+  return refs;
+}
