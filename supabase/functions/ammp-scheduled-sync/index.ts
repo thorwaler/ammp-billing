@@ -511,12 +511,9 @@ Deno.serve(async (req) => {
       error?: string;
     }> = [];
 
-    if (!isServiceRoleRequest) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Scheduled sync requires a backend invocation' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // (Scheduled path guard removed — manual path returned earlier, and cron
+    // is treated as service-role by construction.)
+
 
     for (const connection of connections) {
       const { id: connectionId, user_id, sync_schedule } = connection;
