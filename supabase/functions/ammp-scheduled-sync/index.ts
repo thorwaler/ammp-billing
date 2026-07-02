@@ -431,7 +431,6 @@ Deno.serve(async (req) => {
     // Scheduled cron invocations arrive without an Authorization header — for those
     // we run under the service-role client and derive user_id from the connection row.
     let effectiveUserId: string | undefined;
-    let isServiceRoleRequest = false;
     if (isManual) {
       const resolved = await resolveAuthorizedUser(
         req,
@@ -440,10 +439,7 @@ Deno.serve(async (req) => {
         targetUserId ?? undefined,
       );
       effectiveUserId = resolved.effectiveUserId;
-      isServiceRoleRequest = resolved.isServiceRoleRequest;
     } else {
-      // Cron/scheduled path — treat as service-role.
-      isServiceRoleRequest = true;
       console.log('[AMMP Scheduled Sync] Scheduled invocation — skipping user auth check');
     }
 
