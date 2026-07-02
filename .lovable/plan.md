@@ -1,49 +1,66 @@
-# Fix: Automated AMMP sync has been broken since April 5, 2026
+## Post-change cleanup review
 
-## What's actually happening
+After walking through today's changes (AMMP cron fix, SharePoint delete-on-invoice-delete, SPS/per-MW annual upfront, Matriarch breakdown, merged-invoice per-contract deltas, support doc polish), here's what's worth cleaning up. Nothing is broken — this is hygiene, not bug fixing.
 
-The daily 02:00 UTC AMMP sync cron has been failing silently for ~3 months. When you opened contracts yesterday and saw no synced assets, that's because nothing had been auto-synced — the "synced" contracts you see were updated only when you (or someone) hit the manual resync button.
+### 1. Extract prepaid-balance reversal from `InvoiceHistory.handleDeleteInvoice`
 
-Two compounding bugs:
+The delete handler is now ~230 lines and does five different things inline: SharePoint cleanup, contract-date reset, single-contract delta reversal, legacy-fallback reversal from Xero line items, and merged-map reversal. Move to a small helper module:
 
-1. **Auth guard blocks cron invocations.** `supabase/functions/ammp-scheduled-sync/index.ts:430` calls `resolveAuthorizedUser()` unconditionally at the top of the handler. Supabase cron fires the function with no `Authorization` header, so this throws `"User authentication required"` and returns HTTP 500 before any sync logic runs. No notification, no log surfaced to the UI.
-2. **`ammp_connections.sync_schedule` is `"weekly"`, not `"daily"`.** Even if auth were fixed, `shouldRunToday("weekly")` only passes on Sundays. Project memory says the schedule should be daily.
+- `src/lib/prepaidBalance.ts` with:
+  - `reverseSingleContractDelta(invoice)`
+  - `reverseLegacyFromLineItems(invoice, contract)`
+  - `reverseMergedDeltas(invoice)`
+- Handler becomes a linear `await` sequence, easy to read and test.
 
-Evidence from the DB:
-- `last_sync_at = 2026-04-05` (a Sunday — the last time both bugs happened to align)
-- `next_sync_at = 2026-04-12` (never updated since)
-- 24/26 contracts got manually resynced on 2026-06-30; Daybreak and Energea are still at April 5.
+### 2. Consolidate SharePoint file refs into one shape
 
-## Plan
+Right now single invoices write `sharepoint_file_id` + `sharepoint_drive_id`, merged invoices write `sharepoint_files` (JSONB array), and the delete path has to check both. Keep both columns for back-compat, but:
 
-### 1. Fix the auth guard in `ammp-scheduled-sync`
+- Add a `getSharePointFileRefs(invoiceRow)` helper in `src/utils/sharePointUpload.ts` that always returns `Array<{driveId, fileId}>`.
+- Delete handler calls that single helper instead of branching on shape.
 
-Restructure `index.ts` so `resolveAuthorizedUser` is only called on the manual HTTP path:
+### 3. Type the new invoice columns properly
 
-- Detect cron invocation by absence of `Authorization` header (or presence of the service-role key).
-- On cron path: use the service-role Supabase client directly, iterate `ammp_connections`, and derive `user_id` from each connection row (already fetched).
-- On manual path: keep the existing `resolveAuthorizedUser` flow so user-initiated syncs continue to work with their JWT.
-- Keep the existing `isServiceRoleRequest` 403 guard as a defense-in-depth check on the scheduled branch.
+`prepaid_balance_delta`, `prepaid_balance_deltas_by_contract`, `sharepoint_file_id`, `sharepoint_drive_id`, `sharepoint_files` are all accessed via `(x as any)` casts. The generated `types.ts` already has them (migrations ran). Sweep the codebase and drop the casts so TS actually checks these paths.
 
-### 2. Flip the schedule back to daily
+### 4. Split `InvoiceCalculator.tsx` (3,182 lines)
 
-Update the `ammp_connections` row(s): `sync_schedule = 'daily'`, and reset `next_sync_at` to the next 02:00 UTC. Done via migration so it's reproducible.
+Not a today-only problem, but today's SPS + per-MW annual upfront + SharePoint persistence pushed it past a comfortable size. Minimum viable split:
 
-### 3. Backfill the two stuck contracts
+- `useInvoiceCalculation` hook — all the calculation `useMemo` blocks and dependent state.
+- `useSaveInvoice` hook — the save/upload/persist chain including SharePoint ref persistence and `ytd_invoiced_amount` update.
+- Component keeps only rendering + wiring.
 
-Trigger a one-off sync for Daybreak Power Solutions and Energea after the fix deploys, so their `last_sync_at` catches up. Also worth confirming they aren't filtered out by `getSyncableContracts` (e.g., missing `ammp_org_id` / `ammp_asset_group_id`, or POC package) — if they are, that's expected and no action needed.
+Same pattern already applied elsewhere; low risk if done as pure move-and-rename.
 
-### 4. Add a lightweight failure signal
+### 5. Deduplicate SPS / per-MW annual-upfront serialization
 
-Right now scheduled failures are completely silent. Add a `notifications` insert (severity `error`, type `ammp_sync_failed`) whenever the scheduled path throws, so you'd see this in the UI next time instead of discovering it during invoicing.
+`InvoiceCalculator.tsx` and `MergedInvoiceDialog.tsx` both build Xero line items for SPS credit lines and per-MW overage lines, and both compute `prepaid_balance_delta`. Extract to `src/lib/invoicePersistence.ts`:
 
-## Files touched
+- `buildDualCadenceXeroLines(breakdown)`
+- `computePrepaidDelta(breakdown)` (returns scalar for single, map for merged)
 
-- `supabase/functions/ammp-scheduled-sync/index.ts` — split cron vs manual auth paths, add failure notification.
-- New migration — set `sync_schedule = 'daily'`, recompute `next_sync_at`.
-- No frontend changes.
+Guarantees the two entry points stay in sync — this is exactly where the recent "Xero shows different numbers than the calculator" bug came from.
 
-## Out of scope
+### 6. `ammp-scheduled-sync`: finish the plan-file's item 4
 
-- Not touching the manual sync button flow (works fine).
-- Not changing `resolveAuthorizedUser` itself — other functions rely on it.
+`.lovable/plan.md` promised a scheduled-path failure notification. The current cron branch does per-user error notifications inside the loop, but a top-level `try/catch` failure (e.g. `getSharedAmmpConnection` throws) still returns 500 silently with no notification. Add one `notifications` insert in the outer `catch` before the 500 response, targeting the shared connection's `user_id` (fetched best-effort).
+
+### 7. Small dead-weight
+
+- `src/pages/InvoiceHistory.tsx` imports `deleteMultipleFromSharePoint` dynamically inside the handler — fine, but pair it with `deleteFromSharePoint` (unused now) audit; if nothing calls the single-file version, drop it.
+- `supabase/functions/ammp-scheduled-sync/index.ts` still has the `isServiceRoleRequest` variable set but only read once as a guard that can never fail on the cron branch (we set it to `true` ourselves). Simplify.
+
+### 8. Memory update
+
+Add one short memory file `mem://architecture/prepaid-balance-persistence` documenting: delta column on single invoices, per-contract map on merged, reversal on delete, legacy fallback. This is the piece most likely to trip up a future change.
+
+### Out of scope
+
+- No calculation logic changes.
+- No schema changes.
+- No UI changes visible to the user.
+
+### Order of work
+
+1, 3, 7, 8 first (mechanical, low risk). Then 2 and 5 (small refactors with shared helpers). Then 6 (edge function redeploy). Then 4 (bigger, do last so review is isolated).
