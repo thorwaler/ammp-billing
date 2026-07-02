@@ -49,6 +49,12 @@ interface Invoice {
   xero_reference: string | null;
   xero_status: string | null;
   xero_contact_name: string | null;
+  xero_line_items: any[] | null;
+  prepaid_balance_delta: number | null;
+  prepaid_balance_deltas_by_contract: Record<string, number> | null;
+  sharepoint_file_id: string | null;
+  sharepoint_drive_id: string | null;
+  sharepoint_files: Array<{ driveId: string; fileId: string; fileName?: string }> | null;
   customer: {
     name: string;
   } | null;
