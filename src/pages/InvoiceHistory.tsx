@@ -214,7 +214,6 @@ export default function InvoiceHistory() {
     if (!selectedInvoice) return;
 
     try {
-      // Get invoice details before deletion
       const invoiceDate = new Date(selectedInvoice.invoice_date);
       const billingFrequency = selectedInvoice.billing_frequency;
 
@@ -225,7 +224,7 @@ export default function InvoiceHistory() {
         .eq('id', selectedInvoice.id)
         .maybeSingle();
 
-      // Delete the invoice
+      // Delete the invoice row.
       const { error } = await supabase
         .from('invoices')
         .delete()
@@ -235,21 +234,10 @@ export default function InvoiceHistory() {
 
       // Delete SharePoint support docs (non-blocking).
       try {
-        const { deleteMultipleFromSharePoint } = await import('@/utils/sharePointUpload');
-        const filesToDelete: Array<{ driveId: string; fileId: string }> = [];
-        const singleFileId = (spRow as any)?.sharepoint_file_id;
-        const singleDriveId = (spRow as any)?.sharepoint_drive_id;
-        if (singleFileId && singleDriveId) {
-          filesToDelete.push({ driveId: singleDriveId, fileId: singleFileId });
-        }
-        const multi = (spRow as any)?.sharepoint_files;
-        if (Array.isArray(multi)) {
-          for (const f of multi) {
-            if (f?.driveId && f?.fileId) {
-              filesToDelete.push({ driveId: f.driveId, fileId: f.fileId });
-            }
-          }
-        }
+        const { deleteMultipleFromSharePoint, getSharePointFileRefs } = await import(
+          '@/utils/sharePointUpload'
+        );
+        const filesToDelete = getSharePointFileRefs(spRow as any);
         if (filesToDelete.length > 0) {
           const results = await deleteMultipleFromSharePoint(filesToDelete);
           const okCount = results.filter(r => r.success).length;
@@ -265,9 +253,7 @@ export default function InvoiceHistory() {
         console.error('[SharePoint] Cleanup on invoice delete failed:', spErr);
       }
 
-
-      // Determine which contracts to update
-      // For merged invoices, use merged_contract_ids; otherwise use contract_id
+      // Determine which contracts to update.
       const contractIds: string[] = [];
       if (selectedInvoice.merged_contract_ids && selectedInvoice.merged_contract_ids.length > 0) {
         contractIds.push(...selectedInvoice.merged_contract_ids);
@@ -276,12 +262,10 @@ export default function InvoiceHistory() {
       }
 
       if (contractIds.length > 0) {
-        // Calculate the period end (day before invoice date)
         const periodEnd = new Date(invoiceDate);
         periodEnd.setDate(periodEnd.getDate() - 1);
-        
-        // Calculate the previous period start based on billing frequency
-        let previousPeriodStart = new Date(periodEnd);
+
+        const previousPeriodStart = new Date(periodEnd);
         switch (billingFrequency) {
           case 'monthly':
             previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 1);
@@ -301,7 +285,6 @@ export default function InvoiceHistory() {
             break;
         }
 
-        // Update ALL contracts (handles both single and merged invoices)
         const { error: updateError } = await supabase
           .from('contracts')
           .update({
@@ -319,115 +302,47 @@ export default function InvoiceHistory() {
           toast.success(`Invoice deleted - ${contractIds.length} ${contractWord} will reappear in upcoming invoices`);
         }
 
-        // Reverse any prepaid-balance change this invoice applied (SPS / Per-MW Annual Upfront).
-        const delta = (selectedInvoice as any).prepaid_balance_delta;
+        // Reverse prepaid-balance side effects (SPS / Per-MW Annual Upfront).
+        const {
+          reverseSingleContractDelta,
+          reverseMergedDeltas,
+          reverseLegacyFromLineItems,
+        } = await import('@/lib/prepaidBalance');
+
         const isMerged = (selectedInvoice.merged_contract_ids?.length ?? 0) > 0;
         if (!isMerged && selectedInvoice.contract_id) {
-          if (delta != null && Number(delta) !== 0) {
-            const { data: c } = await supabase
-              .from('contracts')
-              .select('ytd_invoiced_amount')
-              .eq('id', selectedInvoice.contract_id)
-              .maybeSingle();
-            const current = Number((c as any)?.ytd_invoiced_amount) || 0;
-            await supabase
-              .from('contracts')
-              .update({ ytd_invoiced_amount: current - Number(delta) })
-              .eq('id', selectedInvoice.contract_id);
-          } else {
-            // Legacy fallback: no stored delta (invoice predates the column).
-            // Best-effort reversal for SPS / per-MW annual upfront contracts.
-            const { data: contract } = await supabase
-              .from('contracts')
-              .select('package, ytd_invoiced_amount, annual_billing_anchor_date, contract_types(pricing_model)')
-              .eq('id', selectedInvoice.contract_id)
-              .maybeSingle();
-
-            const pkg = (contract as any)?.package;
-            const pricingModel = (contract as any)?.contract_types?.pricing_model;
-            const anchor = (contract as any)?.annual_billing_anchor_date ?? null;
-            const isAnnualUpfront = pkg === 'per_mw_annual_upfront' || pricingModel === 'per_mw_annual_upfront';
-            const isSpsDual = pkg === 'sps_monitoring' && !!anchor;
-
-            if (isAnnualUpfront || isSpsDual) {
-              const { isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
-              const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
-              const currentYtd = Number((contract as any)?.ytd_invoiced_amount) || 0;
-              const lineItems = (selectedInvoice as any).xero_line_items as any[] | null;
-
-              let newYtd: number | null = null;
-              let warn = false;
-
-              if (wasAnnualCycle) {
-                // Annual cycle invoice → restore to a clean pre-annual state.
-                newYtd = isSpsDual ? 0 : 0;
-                warn = true; // can't recover the exact prior balance from a legacy row
-              } else if (Array.isArray(lineItems)) {
-                if (isSpsDual) {
-                  // Quarterly with credit: credit line reduced ytd; reversing means ADDING credit back.
-                  const creditLine = lineItems.find((li: any) =>
-                    typeof li?.description === 'string' &&
-                    /prepaid credit applied/i.test(li.description)
-                  );
-                  const creditAmount = Math.abs(Number(creditLine?.lineAmount ?? creditLine?.unitAmount ?? 0));
-                  if (creditAmount > 0) newYtd = currentYtd + creditAmount;
-                } else {
-                  // Per-MW overage: overage line added to ytd; reverse by subtracting it.
-                  const overageLine = lineItems.find((li: any) =>
-                    typeof li?.description === 'string' &&
-                    /per-mw|overage|quarterly overage/i.test(li.description)
-                  );
-                  const overageAmount = Math.abs(Number(overageLine?.lineAmount ?? overageLine?.unitAmount ?? 0));
-                  if (overageAmount > 0) newYtd = Math.max(0, currentYtd - overageAmount);
-                }
-              }
-
-              if (newYtd != null) {
-                await supabase
-                  .from('contracts')
-                  .update({ ytd_invoiced_amount: newYtd })
-                  .eq('id', selectedInvoice.contract_id);
-                if (warn) {
-                  toast.warning('Legacy invoice deleted — prepaid balance reset to 0. Adjust manually if needed.');
-                } else {
-                  toast.success('Prepaid balance restored from legacy invoice.');
-                }
-              } else if (isAnnualUpfront || isSpsDual) {
-                toast.warning('Could not auto-reverse prepaid balance for this legacy invoice — please adjust manually.');
-              }
+          const reversed = await reverseSingleContractDelta(
+            selectedInvoice.contract_id,
+            selectedInvoice.prepaid_balance_delta,
+          );
+          if (!reversed) {
+            const outcome = await reverseLegacyFromLineItems(
+              selectedInvoice.contract_id,
+              invoiceDate,
+              selectedInvoice.xero_line_items,
+            );
+            if (outcome.kind === 'reset') {
+              toast.warning('Legacy invoice deleted — prepaid balance reset to 0. Adjust manually if needed.');
+            } else if (outcome.kind === 'reversed') {
+              toast.success('Prepaid balance restored from legacy invoice.');
+            } else if (outcome.kind === 'unresolved') {
+              toast.warning('Could not auto-reverse prepaid balance for this legacy invoice — please adjust manually.');
             }
           }
         } else if (isMerged) {
-          const deltasMap = (selectedInvoice as any).prepaid_balance_deltas_by_contract as
-            | Record<string, number>
-            | null
-            | undefined;
-          if (deltasMap && typeof deltasMap === 'object') {
-            const entries = Object.entries(deltasMap).filter(([, d]) => Number(d) !== 0);
-            for (const [contractId, d] of entries) {
-              const { data: c } = await supabase
-                .from('contracts')
-                .select('ytd_invoiced_amount')
-                .eq('id', contractId)
-                .maybeSingle();
-              const current = Number((c as any)?.ytd_invoiced_amount) || 0;
-              await supabase
-                .from('contracts')
-                .update({ ytd_invoiced_amount: Math.max(0, current - Number(d)) })
-                .eq('id', contractId);
-            }
-            if (entries.length > 0) {
-              toast.success(`Prepaid balance restored for ${entries.length} contract${entries.length > 1 ? 's' : ''}.`);
-            }
-          } else if (delta != null && Number(delta) !== 0) {
-            console.warn('Merged invoice has scalar prepaid_balance_delta but no per-contract map; skipping reversal.', selectedInvoice.id);
+          const count = await reverseMergedDeltas(selectedInvoice.prepaid_balance_deltas_by_contract);
+          if (count > 0) {
+            toast.success(`Prepaid balance restored for ${count} contract${count > 1 ? 's' : ''}.`);
+          } else if (selectedInvoice.prepaid_balance_delta != null && Number(selectedInvoice.prepaid_balance_delta) !== 0) {
+            console.warn(
+              'Merged invoice has scalar prepaid_balance_delta but no per-contract map; skipping reversal.',
+              selectedInvoice.id,
+            );
           }
         }
-
       } else {
         toast.success('Invoice deleted successfully');
       }
-
 
       fetchInvoices();
     } catch (error) {
@@ -438,6 +353,7 @@ export default function InvoiceHistory() {
       setSelectedInvoice(null);
     }
   };
+
 
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('en-US', {
