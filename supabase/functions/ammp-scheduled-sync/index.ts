@@ -562,6 +562,34 @@ Deno.serve(async (req) => {
 
   } catch (error: any) {
     console.error('[AMMP Scheduled Sync] Error:', error);
+
+    // Best-effort: surface a notification so scheduled failures don't stay silent.
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && serviceKey) {
+        const admin = createClient(supabaseUrl, serviceKey);
+        const { data: conn } = await admin
+          .from('ammp_connections')
+          .select('user_id')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (conn?.user_id) {
+          await admin.from('notifications').insert({
+            user_id: conn.user_id,
+            type: 'ammp_sync_failed',
+            title: 'AMMP Scheduled Sync Failed',
+            message: `Scheduled sync could not start: ${error.message}`,
+            severity: 'error',
+            metadata: { error: error.message, isManual: false, scope: 'top_level' },
+          });
+        }
+      }
+    } catch (notifyErr) {
+      console.error('[AMMP Scheduled Sync] Failed to record failure notification:', notifyErr);
+    }
+
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
