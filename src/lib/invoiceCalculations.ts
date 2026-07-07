@@ -447,7 +447,10 @@ export function calculateModuleCosts(params: CalculationParams): {
 }
 
 /**
- * Get months for a billing period (working backward from invoice date)
+ * Get months for a billing period.
+ * When periodStart/periodEnd are provided, iterate the actual months of that
+ * period (so catch-up / short periods bill only the months they cover).
+ * Otherwise fall back to walking back the nominal frequency from the invoice date.
  */
 function getMonthsForPeriodCalc(
   billingFrequency: string,
@@ -456,17 +459,28 @@ function getMonthsForPeriodCalc(
   periodEnd?: string
 ): Date[] {
   const months: Date[] = [];
-  const monthCount = getPeriodMonthsMultiplier(billingFrequency);
-  
-  // Use invoice date or current date
-  const baseDate = invoiceDate || new Date();
-  
-  // Work backward from the invoice date month to get the billing period months
-  for (let i = monthCount - 1; i >= 0; i--) {
-    const monthDate = new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1);
-    months.push(monthDate);
+
+  if (periodStart && periodEnd) {
+    const startStr = periodStart.split('T')[0] || periodStart.substring(0, 10);
+    const endStr = periodEnd.split('T')[0] || periodEnd.substring(0, 10);
+    const [sy, sm, sd] = startStr.split('-').map(Number);
+    const [ey, em, ed] = endStr.split('-').map(Number);
+    const start = new Date(sy, sm - 1, sd);
+    const end = new Date(ey, em - 1, ed);
+    let current = new Date(start.getFullYear(), start.getMonth(), 1);
+    const endMonth = new Date(end.getFullYear(), end.getMonth(), 1);
+    while (current <= endMonth) {
+      months.push(new Date(current));
+      current = new Date(current.getFullYear(), current.getMonth() + 1, 1);
+    }
+    return months;
   }
-  
+
+  const monthCount = getPeriodMonthsMultiplier(billingFrequency);
+  const baseDate = invoiceDate || new Date();
+  for (let i = monthCount - 1; i >= 0; i--) {
+    months.push(new Date(baseDate.getFullYear(), baseDate.getMonth() - i, 1));
+  }
   return months;
 }
 
