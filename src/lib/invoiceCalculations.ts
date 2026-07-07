@@ -551,8 +551,10 @@ export function calculateAddonCosts(
       }
       
       // Non-Solcast addons or no asset data - use flat calculation
+      // For Satellite Data API, prefer the actual month count from the billing
+      // period (catch-up / short periods) instead of the nominal frequency.
       const priceMultiplier = addon.id === 'satelliteDataAPI' && billingFrequency
-        ? getPeriodMonthsMultiplier(billingFrequency)
+        ? getMonthsForPeriodCalc(billingFrequency, invoiceDate, periodStart, periodEnd).length
         : 1;
       
       return {
