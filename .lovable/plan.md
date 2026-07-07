@@ -1,66 +1,42 @@
-## Post-change cleanup review
+## Problem
 
-After walking through today's changes (AMMP cron fix, SharePoint delete-on-invoice-delete, SPS/per-MW annual upfront, Matriarch breakdown, merged-invoice per-contract deltas, support doc polish), here's what's worth cleaning up. Nothing is broken — this is hygiene, not bug fixing.
+Forest Energy's latest invoice is on a quarterly contract but the actual billing period is shorter than 3 months (catch-up / partial period). The Satellite Data API (Solcast) fee is being charged for a full quarter — 3 × sites × price — instead of only the months in the actual invoice period.
 
-### 1. Extract prepaid-balance reversal from `InvoiceHistory.handleDeleteInvoice`
+The support document's "Solcast Fee Breakdown" table already handles this correctly (`getMonthsForPeriod` respects `periodStart`/`periodEnd`), but the calculator that produces the invoice total does not.
 
-The delete handler is now ~230 lines and does five different things inline: SharePoint cleanup, contract-date reset, single-contract delta reversal, legacy-fallback reversal from Xero line items, and merged-map reversal. Move to a small helper module:
+## Root cause
 
-- `src/lib/prepaidBalance.ts` with:
-  - `reverseSingleContractDelta(invoice)`
-  - `reverseLegacyFromLineItems(invoice, contract)`
-  - `reverseMergedDeltas(invoice)`
-- Handler becomes a linear `await` sequence, easy to read and test.
+In `src/lib/invoiceCalculations.ts`, inside `calculateAddonCosts`:
 
-### 2. Consolidate SharePoint file refs into one shape
+1. **Pro-rata path (line 507–536)** calls `getMonthsForPeriodCalc(billingFrequency, invoiceDate, periodStart, periodEnd)`. That helper (line 452) ignores `periodStart`/`periodEnd` entirely and always walks back `getPeriodMonthsMultiplier(billingFrequency)` months from the invoice date — so quarterly always yields 3 months.
 
-Right now single invoices write `sharepoint_file_id` + `sharepoint_drive_id`, merged invoices write `sharepoint_files` (JSONB array), and the delete path has to check both. Keep both columns for back-compat, but:
+2. **Flat fallback (line 540–542)** — used when there is no per-asset Solcast breakdown — multiplies the tiered price by `getPeriodMonthsMultiplier(billingFrequency)`, again always 3 for quarterly.
 
-- Add a `getSharePointFileRefs(invoiceRow)` helper in `src/utils/sharePointUpload.ts` that always returns `Array<{driveId, fileId}>`.
-- Delete handler calls that single helper instead of branching on shape.
+Both produce a 3-month Solcast fee regardless of the actual period length.
 
-### 3. Type the new invoice columns properly
+## Fix
 
-`prepaid_balance_delta`, `prepaid_balance_deltas_by_contract`, `sharepoint_file_id`, `sharepoint_drive_id`, `sharepoint_files` are all accessed via `(x as any)` casts. The generated `types.ts` already has them (migrations ran). Sweep the codebase and drop the casts so TS actually checks these paths.
+### 1. `src/lib/invoiceCalculations.ts` — `getMonthsForPeriodCalc`
 
-### 4. Split `InvoiceCalculator.tsx` (3,182 lines)
+When `periodStart` and `periodEnd` are both provided, generate the list of months between them (mirroring `getMonthsForPeriod` in `supportDocumentGenerator.ts`, including its local-date parsing to avoid timezone drift). Fall back to the current invoice-date-based walk-back only when period dates are missing.
 
-Not a today-only problem, but today's SPS + per-MW annual upfront + SharePoint persistence pushed it past a comfortable size. Minimum viable split:
+### 2. `src/lib/invoiceCalculations.ts` — flat Satellite Data API fallback (line 540–542)
 
-- `useInvoiceCalculation` hook — all the calculation `useMemo` blocks and dependent state.
-- `useSaveInvoice` hook — the save/upload/persist chain including SharePoint ref persistence and `ytd_invoiced_amount` update.
-- Component keeps only rendering + wiring.
+Replace the `getPeriodMonthsMultiplier(billingFrequency)` multiplier with the actual month count derived from `periodStart`/`periodEnd` when both are available (using the same month-counting logic). Keep the current nominal-quarter multiplier as fallback when period dates are missing.
 
-Same pattern already applied elsewhere; low risk if done as pure move-and-rename.
+### 3. `src/lib/supportDocumentGenerator.ts` — historical reconstruction (line 665–677)
 
-### 5. Deduplicate SPS / per-MW annual-upfront serialization
+This branch reconstructs a Solcast fee from `calculatedTieredPrice.totalPrice` × nominal quarter months for legacy invoices without a stored `cost`. Leave the fallback in place, but prefer the addon's own stored `cost` when present (already the first branch) so newly-created invoices are unaffected. No behavior change for current data — noted only so we don't accidentally regress the fix while touching adjacent code.
 
-`InvoiceCalculator.tsx` and `MergedInvoiceDialog.tsx` both build Xero line items for SPS credit lines and per-MW overage lines, and both compute `prepaid_balance_delta`. Extract to `src/lib/invoicePersistence.ts`:
+## Verification
 
-- `buildDualCadenceXeroLines(breakdown)`
-- `computePrepaidDelta(breakdown)` (returns scalar for single, map for merged)
+- Manually re-open the latest Forest Energy invoice in the calculator: Solcast line should equal `sites × price × (months in period)` instead of `sites × price × 3`.
+- The support document's Solcast Fee Breakdown table row count should match the calculator's month count.
+- Re-check a full-quarter invoice (e.g. the June 30 Forest Energy invoice with `cost: 279`) — number must remain `93 × 3 = 279`.
+- Typecheck.
 
-Guarantees the two entry points stay in sync — this is exactly where the recent "Xero shows different numbers than the calculator" bug came from.
+## Out of scope
 
-### 6. `ammp-scheduled-sync`: finish the plan-file's item 4
-
-`.lovable/plan.md` promised a scheduled-path failure notification. The current cron branch does per-user error notifications inside the loop, but a top-level `try/catch` failure (e.g. `getSharedAmmpConnection` throws) still returns 500 silently with no notification. Add one `notifications` insert in the outer `catch` before the 500 response, targeting the shared connection's `user_id` (fetched best-effort).
-
-### 7. Small dead-weight
-
-- `src/pages/InvoiceHistory.tsx` imports `deleteMultipleFromSharePoint` dynamically inside the handler — fine, but pair it with `deleteFromSharePoint` (unused now) audit; if nothing calls the single-file version, drop it.
-- `supabase/functions/ammp-scheduled-sync/index.ts` still has the `isServiceRoleRequest` variable set but only read once as a guard that can never fail on the cron branch (we set it to `true` ourselves). Simplify.
-
-### 8. Memory update
-
-Add one short memory file `mem://architecture/prepaid-balance-persistence` documenting: delta column on single invoices, per-contract map on merged, reversal on delete, legacy fallback. This is the piece most likely to trip up a future change.
-
-### Out of scope
-
-- No calculation logic changes.
-- No schema changes.
-- No UI changes visible to the user.
-
-### Order of work
-
-1, 3, 7, 8 first (mechanical, low risk). Then 2 and 5 (small refactors with shared helpers). Then 6 (edge function redeploy). Then 4 (bigger, do last so review is isolated).
+- Any change to the pro-rata onboarding-date logic itself.
+- Historical invoices already saved with the wrong amount (user can regenerate them).
+- Merged-invoice path (uses the same helpers; benefits automatically).
