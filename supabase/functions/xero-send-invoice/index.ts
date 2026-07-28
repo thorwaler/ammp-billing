@@ -175,15 +175,15 @@ Deno.serve(async (req) => {
 
     console.log('Attempting to send invoice to Xero for user:', user.id);
     
-    // Fetch customer's xero_tax_type from our database
+    // Fetch customer's Xero settings from our database
     const contactName = invoice.Contact?.Name;
     if (contactName) {
       const { data: customer } = await supabase
         .from('customers')
-        .select('xero_tax_type')
+        .select('xero_tax_type, xero_branding_theme_id, wht_gross_up_rate')
         .eq('name', contactName)
         .single();
-      
+
       // If customer has a tax type configured, apply it to all line items
       if (customer?.xero_tax_type && invoice.LineItems) {
         console.log(`Applying tax type "${customer.xero_tax_type}" to invoice for ${contactName}`);
@@ -191,8 +191,32 @@ Deno.serve(async (req) => {
           ...invoice,
           LineItems: invoice.LineItems.map((item: any) => ({
             ...item,
-            TaxType: customer.xero_tax_type
-          }))
+            TaxType: customer.xero_tax_type,
+          })),
+        };
+      }
+
+      // Apply per-customer Xero branding theme
+      if (customer?.xero_branding_theme_id) {
+        console.log(`Applying branding theme ${customer.xero_branding_theme_id} for ${contactName}`);
+        invoice = { ...invoice, BrandingThemeID: customer.xero_branding_theme_id };
+      }
+
+      // Apply withholding tax gross-up: gross = original / (1 - rate)
+      const whtRate = Number(customer?.wht_gross_up_rate ?? 0);
+      if (whtRate > 0 && whtRate < 1 && invoice.LineItems) {
+        const factor = 1 / (1 - whtRate);
+        console.log(`Grossing up invoice for ${contactName} by factor ${factor.toFixed(6)} (WHT ${(whtRate * 100).toFixed(2)}%)`);
+        const round2 = (n: number) => Math.round(n * 100) / 100;
+        invoice = {
+          ...invoice,
+          LineItems: invoice.LineItems.map((item: any) => {
+            const next = { ...item };
+            if (typeof next.UnitAmount === 'number') next.UnitAmount = round2(next.UnitAmount * factor);
+            else if (next.UnitAmount != null) next.UnitAmount = round2(Number(next.UnitAmount) * factor);
+            if (next.LineAmount != null) next.LineAmount = round2(Number(next.LineAmount) * factor);
+            return next;
+          }),
         };
       }
     }

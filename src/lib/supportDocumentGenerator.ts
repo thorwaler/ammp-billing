@@ -12,6 +12,9 @@ export interface SupportDocumentData {
   invoiceDate: Date;
   invoicePeriod: string;
   discountPercent: number;
+  whtGrossUpRate?: number; // Decimal e.g. 0.10; when > 0 Xero invoice is grossed up
+  
+
   
   // Year-to-date invoices
   yearInvoices: {
@@ -267,6 +270,20 @@ export async function generateSupportDocumentData(
   }
   
   const { data: yearInvoices, error } = await query;
+
+  // Fetch WHT rate for footnote (best-effort)
+  let whtGrossUpRate: number | undefined;
+  try {
+    const { data: cust } = await supabase
+      .from('customers')
+      .select('wht_gross_up_rate')
+      .eq('id', customerId)
+      .single();
+    const r = Number((cust as any)?.wht_gross_up_rate ?? 0);
+    if (r > 0 && r < 1) whtGrossUpRate = r;
+  } catch {
+    // ignore
+  }
 
   if (error) {
     console.error('Error fetching year invoices:', error);
@@ -530,6 +547,7 @@ export async function generateSupportDocumentData(
     invoiceDate,
     invoicePeriod: calculationResult.invoicePeriod || format(invoiceDate, 'MMM yyyy'),
     discountPercent,
+    whtGrossUpRate,
     yearInvoices: invoicesByPeriod,
     yearTotal,
     assetBreakdown,
