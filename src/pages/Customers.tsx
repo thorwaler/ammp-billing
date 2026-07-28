@@ -607,6 +607,10 @@ const Customers = () => {
               hasContract={!!customer.contractId}
               contractCount={customer.contractCount}
               contracts={customer.contracts}
+              xero_branding_theme_id={customer.xero_branding_theme_id}
+              wht_gross_up_rate={customer.wht_gross_up_rate}
+              xero_tax_type={customer.xero_tax_type}
+              manual_status_override={customer.manualStatusOverride}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)}
               onViewDetails={() => navigate(`/contracts/${customer.contractId}`)}
               onContractCreated={loadCustomers}
