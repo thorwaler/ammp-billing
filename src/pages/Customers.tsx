@@ -45,6 +45,9 @@ interface CustomerData {
   }>;
   package?: string;
   manualStatusOverride?: boolean;
+  xero_branding_theme_id?: string | null;
+  wht_gross_up_rate?: number | null;
+  xero_tax_type?: string | null;
 }
 
 
