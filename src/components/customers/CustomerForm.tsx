@@ -21,6 +21,11 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     location: existingCustomer?.location || "",
     mwpManaged: existingCustomer?.mwpManaged || "",
     status: existingCustomer?.status || "active",
+    xeroBrandingThemeId: existingCustomer?.xero_branding_theme_id || "",
+    whtRatePercent:
+      existingCustomer?.wht_gross_up_rate != null
+        ? String(Number(existingCustomer.wht_gross_up_rate) * 100)
+        : "",
   });
   
   // Track original status to detect manual changes
