@@ -91,6 +91,10 @@ interface CustomerCardProps {
     max_mw?: number;
     onboarding_fee_per_site?: number;
   }>;
+  xero_branding_theme_id?: string | null;
+  wht_gross_up_rate?: number | null;
+  xero_tax_type?: string | null;
+  manual_status_override?: boolean;
   onViewContract?: () => void;
   onViewDetails?: () => void;
   onContractCreated?: () => void;
