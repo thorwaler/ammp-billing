@@ -149,6 +149,13 @@ const contractFormSchema = z.object({
   annualMinimumFee: z.coerce.number().optional(),
   committedMinimumMW: z.coerce.number().optional(),
   annualBillingAnchorDate: z.string().optional(),
+  // Elum foundations (v1)
+  zeroPvAlertEnabled: z.boolean().optional(),
+  zeroPvEstimateMultiplier: z.coerce.number().optional(),
+  zeroPvGraceDays: z.coerce.number().int().optional(),
+  annualMinimumMode: z.enum(["quarterly_gap", "anniversary_trueup"]).optional(),
+  inflationCapEnabled: z.boolean().optional(),
+  anniversaryNoticeDays: z.coerce.number().int().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -234,6 +241,13 @@ interface ContractFormProps {
     annualMinimumFee?: number;
     committedMinimumMW?: number;
     annualBillingAnchorDate?: string;
+    // Elum foundations
+    zeroPvAlertEnabled?: boolean;
+    zeroPvEstimateMultiplier?: number;
+    zeroPvGraceDays?: number;
+    annualMinimumMode?: string;
+    inflationCapEnabled?: boolean;
+    anniversaryNoticeDays?: number;
     contractTypeId?: string;
   };
   onComplete?: () => void;
@@ -332,6 +346,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       annualMinimumFee: existingContract.annualMinimumFee ?? 0,
       committedMinimumMW: existingContract.committedMinimumMW ?? 0,
       annualBillingAnchorDate: existingContract.annualBillingAnchorDate?.toString().substring(0, 10) || "",
+      zeroPvAlertEnabled: existingContract.zeroPvAlertEnabled ?? false,
+      zeroPvEstimateMultiplier: existingContract.zeroPvEstimateMultiplier ?? 1.2,
+      zeroPvGraceDays: existingContract.zeroPvGraceDays ?? 30,
+      annualMinimumMode: (existingContract.annualMinimumMode as any) || "quarterly_gap",
+      inflationCapEnabled: existingContract.inflationCapEnabled ?? false,
+      anniversaryNoticeDays: existingContract.anniversaryNoticeDays ?? 200,
     } : {
       contractName: "",
       companyName: existingCustomer?.name || "",
@@ -1129,6 +1149,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         annual_minimum_fee: isAnnualUpfront ? (data.annualMinimumFee ?? 0) : null,
         committed_minimum_mw: isAnnualUpfront ? (data.committedMinimumMW ?? null) : null,
         annual_billing_anchor_date: (isAnnualUpfront || data.package === 'sps_monitoring') ? (data.annualBillingAnchorDate || null) : null,
+        // Elum foundations
+        zero_pv_alert_enabled: data.zeroPvAlertEnabled ?? false,
+        zero_pv_estimate_multiplier: data.zeroPvEstimateMultiplier ?? 1.2,
+        zero_pv_grace_days: data.zeroPvGraceDays ?? 30,
+        annual_minimum_mode: data.annualMinimumMode || 'quarterly_gap',
+        inflation_cap_enabled: data.inflationCapEnabled ?? false,
+        anniversary_notice_days: data.anniversaryNoticeDays ?? 200,
       };
 
       const contractMutation = existingContractId
