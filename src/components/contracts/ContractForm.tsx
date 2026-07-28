@@ -63,6 +63,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -149,6 +150,13 @@ const contractFormSchema = z.object({
   annualMinimumFee: z.coerce.number().optional(),
   committedMinimumMW: z.coerce.number().optional(),
   annualBillingAnchorDate: z.string().optional(),
+  // Elum foundations (v1)
+  zeroPvAlertEnabled: z.boolean().optional(),
+  zeroPvEstimateMultiplier: z.coerce.number().optional(),
+  zeroPvGraceDays: z.coerce.number().int().optional(),
+  annualMinimumMode: z.enum(["quarterly_gap", "anniversary_trueup"]).optional(),
+  inflationCapEnabled: z.boolean().optional(),
+  anniversaryNoticeDays: z.coerce.number().int().optional(),
   notes: z.string().optional(),
   contractStatus: z.enum(["active", "pending", "expired", "cancelled"]).optional(),
 });
@@ -234,6 +242,13 @@ interface ContractFormProps {
     annualMinimumFee?: number;
     committedMinimumMW?: number;
     annualBillingAnchorDate?: string;
+    // Elum foundations
+    zeroPvAlertEnabled?: boolean;
+    zeroPvEstimateMultiplier?: number;
+    zeroPvGraceDays?: number;
+    annualMinimumMode?: string;
+    inflationCapEnabled?: boolean;
+    anniversaryNoticeDays?: number;
     contractTypeId?: string;
   };
   onComplete?: () => void;
@@ -332,6 +347,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       annualMinimumFee: existingContract.annualMinimumFee ?? 0,
       committedMinimumMW: existingContract.committedMinimumMW ?? 0,
       annualBillingAnchorDate: existingContract.annualBillingAnchorDate?.toString().substring(0, 10) || "",
+      zeroPvAlertEnabled: existingContract.zeroPvAlertEnabled ?? false,
+      zeroPvEstimateMultiplier: existingContract.zeroPvEstimateMultiplier ?? 1.2,
+      zeroPvGraceDays: existingContract.zeroPvGraceDays ?? 30,
+      annualMinimumMode: (existingContract.annualMinimumMode as any) || "quarterly_gap",
+      inflationCapEnabled: existingContract.inflationCapEnabled ?? false,
+      anniversaryNoticeDays: existingContract.anniversaryNoticeDays ?? 200,
     } : {
       contractName: "",
       companyName: existingCustomer?.name || "",
@@ -1129,6 +1150,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         annual_minimum_fee: isAnnualUpfront ? (data.annualMinimumFee ?? 0) : null,
         committed_minimum_mw: isAnnualUpfront ? (data.committedMinimumMW ?? null) : null,
         annual_billing_anchor_date: (isAnnualUpfront || data.package === 'sps_monitoring') ? (data.annualBillingAnchorDate || null) : null,
+        // Elum foundations
+        zero_pv_alert_enabled: data.zeroPvAlertEnabled ?? false,
+        zero_pv_estimate_multiplier: data.zeroPvEstimateMultiplier ?? 1.2,
+        zero_pv_grace_days: data.zeroPvGraceDays ?? 30,
+        annual_minimum_mode: data.annualMinimumMode || 'quarterly_gap',
+        inflation_cap_enabled: data.inflationCapEnabled ?? false,
+        anniversary_notice_days: data.anniversaryNoticeDays ?? 200,
       };
 
       const contractMutation = existingContractId
@@ -2329,7 +2357,127 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </>
             )}
 
+            {/* Elum foundations */}
+            <div className="rounded-lg border p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">Elum foundations</h3>
+                <p className="text-xs text-muted-foreground">
+                  Zero-PV handling, annual-minimum mode, and inflation-cap notices. Safe to leave off for non-Elum contracts.
+                </p>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="zeroPvAlertEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <FormLabel>Zero-PV capacity alerts</FormLabel>
+                      <FormDescription>
+                        Mid-quarter (15th) scan; substitute estimated capacity after the grace window if unresolved.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {form.watch("zeroPvAlertEnabled") && (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="zeroPvGraceDays"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Grace days</FormLabel>
+                        <FormControl>
+                          <Input type="number" {...field} value={field.value ?? 30} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="zeroPvEstimateMultiplier"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Estimate multiplier</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="0.1" {...field} value={field.value ?? 1.2} />
+                        </FormControl>
+                        <FormDescription>Peak PV output × multiplier.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+
+              <FormField
+                control={form.control}
+                name="annualMinimumMode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Annual minimum mode</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || "quarterly_gap"}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="quarterly_gap">Quarterly gap-fill (default)</SelectItem>
+                        <SelectItem value="anniversary_trueup">Anniversary true-up (Elum)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      Anniversary true-up reconciles the annual minimum once per year on the first-invoice anniversary instead of quarterly.
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="inflationCapEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <FormLabel>Inflation cap & advance notice</FormLabel>
+                      <FormDescription>
+                        Cap price increases at the ECB HICP 6-month average and raise a notice alert before the anniversary.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={!!field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+
+              {form.watch("inflationCapEnabled") && (
+                <FormField
+                  control={form.control}
+                  name="anniversaryNoticeDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Notice lead time (days)</FormLabel>
+                      <FormControl>
+                        <Input type="number" {...field} value={field.value ?? 200} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
             {/* Contract-level dates */}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
