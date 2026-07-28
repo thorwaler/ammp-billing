@@ -271,6 +271,20 @@ export async function generateSupportDocumentData(
   
   const { data: yearInvoices, error } = await query;
 
+  // Fetch WHT rate for footnote (best-effort)
+  let whtGrossUpRate: number | undefined;
+  try {
+    const { data: cust } = await supabase
+      .from('customers')
+      .select('wht_gross_up_rate')
+      .eq('id', customerId)
+      .single();
+    const r = Number((cust as any)?.wht_gross_up_rate ?? 0);
+    if (r > 0 && r < 1) whtGrossUpRate = r;
+  } catch {
+    // ignore
+  }
+
   if (error) {
     console.error('Error fetching year invoices:', error);
   }
