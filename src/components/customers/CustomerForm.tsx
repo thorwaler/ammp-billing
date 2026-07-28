@@ -61,12 +61,17 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
       // Check if status was manually changed
       const statusChanged = existingCustomer && formData.status !== originalStatus;
       
+      const whtPct = formData.whtRatePercent ? parseFloat(formData.whtRatePercent) : NaN;
+      const whtRate = Number.isFinite(whtPct) && whtPct > 0 ? whtPct / 100 : null;
+
       const baseCustomerData = {
         name: formData.name,
         nickname: formData.nickname || null,
         location: formData.location,
         mwp_managed: formData.mwpManaged ? parseFloat(formData.mwpManaged) : 0,
         status: formData.status,
+        xero_branding_theme_id: formData.xeroBrandingThemeId.trim() || null,
+        wht_gross_up_rate: whtRate,
         // Set manual_status_override to true if status was manually changed
         manual_status_override: statusChanged ? true : (existingCustomer?.manual_status_override || false),
       };
