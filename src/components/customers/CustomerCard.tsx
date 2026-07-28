@@ -297,6 +297,10 @@ export function CustomerCard({
                         location,
                         mwpManaged,
                         status,
+                        xero_branding_theme_id,
+                        wht_gross_up_rate,
+                        xero_tax_type,
+                        manual_status_override,
                       }}
                     />
                   </DialogContent>
