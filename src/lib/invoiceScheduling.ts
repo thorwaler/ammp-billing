@@ -26,6 +26,10 @@ interface NextInvoiceContext {
   packageType?: string | null;
   billingFrequency?: string | null;
   annualBillingAnchorDate?: string | Date | null;
+  // Anniversary-true-up mode: schedule the annual minimum reconciliation
+  // on the first-invoice anniversary rather than as a quarterly gap-fill.
+  annualMinimumMode?: string | null;
+  firstInvoiceDate?: string | Date | null;
 }
 
 /**
@@ -35,6 +39,20 @@ interface NextInvoiceContext {
 export function getNextInvoiceDate(currentDate: string | Date, ctx: NextInvoiceContext): Date {
   const base = typeof currentDate === "string" ? new Date(currentDate) : new Date(currentDate);
   const freq = ctx.billingFrequency || "annual";
+
+  // Anniversary true-up: quarterly per-MW cadence, plus an annual minimum
+  // reconciliation on the first-invoice anniversary each year.
+  if (ctx.annualMinimumMode === "anniversary_trueup" && ctx.firstInvoiceDate) {
+    const nextQuarter = addMonths(base, 3);
+    const anchor = new Date(ctx.firstInvoiceDate);
+    const nextAnniv = new Date(base);
+    nextAnniv.setUTCMonth(anchor.getUTCMonth());
+    nextAnniv.setUTCDate(anchor.getUTCDate());
+    while (nextAnniv.getTime() <= base.getTime()) {
+      nextAnniv.setUTCFullYear(nextAnniv.getUTCFullYear() + 1);
+    }
+    return nextQuarter.getTime() < nextAnniv.getTime() ? nextQuarter : nextAnniv;
+  }
 
   if (ctx.packageType === "per_mw_annual_upfront") {
     // Quarterly cadence always advances by 3 months.
@@ -55,6 +73,24 @@ export function getNextInvoiceDate(currentDate: string | Date, ctx: NextInvoiceC
   }
 
   return advanceByFrequency(base, freq);
+}
+
+/**
+ * True when the given invoice date matches the first-invoice anniversary
+ * for an anniversary-true-up contract (annual minimum reconciliation cycle).
+ */
+export function isAnniversaryTrueupCycle(
+  invoiceDate: string | Date,
+  firstInvoiceDate?: string | Date | null
+): boolean {
+  if (!firstInvoiceDate) return false;
+  const inv = typeof invoiceDate === "string" ? new Date(invoiceDate) : invoiceDate;
+  const first = new Date(firstInvoiceDate);
+  return (
+    inv.getUTCMonth() === first.getUTCMonth() &&
+    inv.getUTCDate() === first.getUTCDate() &&
+    inv.getUTCFullYear() > first.getUTCFullYear()
+  );
 }
 
 /**
