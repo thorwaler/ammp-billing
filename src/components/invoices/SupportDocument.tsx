@@ -784,6 +784,13 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             )}
           </div>
         </div>
+        {data.whtGrossUpRate && data.whtGrossUpRate > 0 && (
+          <p className="mt-2 text-[10px] italic text-muted-foreground">
+            Note: Amounts sent to Xero are grossed up by {(data.whtGrossUpRate * 100).toFixed(2)}%
+            to offset withholding tax deducted by the customer at payment. The figures above show
+            the pre-gross-up economics.
+          </p>
+        )}
       </section>
     </div>
   );
