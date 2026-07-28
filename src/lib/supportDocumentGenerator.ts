@@ -547,6 +547,7 @@ export async function generateSupportDocumentData(
     invoiceDate,
     invoicePeriod: calculationResult.invoicePeriod || format(invoiceDate, 'MMM yyyy'),
     discountPercent,
+    whtGrossUpRate,
     yearInvoices: invoicesByPeriod,
     yearTotal,
     assetBreakdown,
