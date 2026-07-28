@@ -1,45 +1,37 @@
-## Goal
-Enable per-customer Xero branding theme selection (so Nigerian customers use the Nigeria template) plus a per-customer withholding-tax gross-up that inflates invoice line amounts by `1 / (1 - wht_rate)` (e.g. divide by 0.9 for 10% WHT). VAT is already handled via the existing `customers.xero_tax_type` — no change there.
+## Problem
 
-## Scope
+The Xero branding + WHT fields render in `CustomerForm`, but when opening **Edit Customer** they always show blank — and worse, saving wipes any stored values to `null`.
 
-### 1. Customer fields (DB)
-Add two columns to `public.customers`:
-- `xero_branding_theme_id text` — Xero BrandingThemeID to attach to invoices for this customer. Null = use org default.
-- `wht_gross_up_rate numeric` — e.g. `0.10` for 10%. Null/0 = no gross-up. Stored as the WHT rate the customer will deduct on payment; invoice amounts get divided by `(1 - rate)`.
+Root cause: the data never flows to the form on edit.
 
-Migration only, no data backfill.
+1. `src/pages/Customers.tsx` fetches customers but does not select `xero_branding_theme_id`, `wht_gross_up_rate`, `xero_tax_type` (and doesn't expose them on the mapped customer object).
+2. `src/components/customers/CustomerCard.tsx` `CustomerCardProps` has no props for these fields, and the edit dialog passes only `{ id, name, nickname, location, mwpManaged, status }` into `<CustomerForm existingCustomer={...}>`.
+3. `CustomerForm` therefore reads `existingCustomer?.xero_branding_theme_id` as `undefined` → inputs are blank → submit writes `null` back to the DB, silently clearing whatever was saved.
 
-### 2. Customer form UI
-In `src/components/customers/CustomerForm.tsx`, add a "Xero invoicing" section:
-- Text input: "Xero branding theme ID" (with helper text explaining where to find it in Xero → Settings → Invoice Settings).
-- Numeric input: "Withholding tax rate (%)" — displayed as percent, stored as decimal. Helper text: "Invoice amounts are grossed up so the customer's WHT deduction still nets the invoiced amount."
-- Both optional; leave blank for non-WHT customers.
+Invoice generation itself already reads the columns correctly in `xero-send-invoice` (by contact name), so once the edit path stops wiping them, invoices will pick up the theme + gross-up as intended.
 
-### 3. Invoice send: apply theme + gross-up
-In `supabase/functions/xero-send-invoice/index.ts`, extend the existing customer lookup that already reads `xero_tax_type`:
-- Also select `xero_branding_theme_id` and `wht_gross_up_rate`.
-- If `xero_branding_theme_id` is set, add `BrandingThemeID` to the invoice payload.
-- If `wht_gross_up_rate > 0`, multiply each `LineItem.UnitAmount` (and any pre-computed `LineAmount`) by `1 / (1 - rate)`, rounded to 2 decimals. Applies to all line items uniformly — user confirmed no separate WHT line.
+## Fix
 
-Nothing changes for merged invoices at the caller level; the gross-up runs on the final payload inside the edge function so both single and merged flows are covered.
+### 1. `src/pages/Customers.tsx`
+- Add `xero_branding_theme_id`, `wht_gross_up_rate`, `xero_tax_type` to the customers select.
+- Include them on the mapped customer object handed to `CustomerCard`.
 
-### 4. Support document
-Add a footnote on `SupportDocument.tsx` when `wht_gross_up_rate > 0`: "Amounts grossed up by X% to offset withholding tax deducted at payment." So the internal breakdown still shows the pre-gross-up economics while the Xero invoice shows the grossed-up amounts. (Read-only display, no calc change.)
+### 2. `src/components/customers/CustomerCard.tsx`
+- Extend `CustomerCardProps` with the three fields (optional).
+- Destructure them in the component signature.
+- Forward them into `<CustomerCard>` from `Customers.tsx`.
+- Pass them into `existingCustomer` on the edit `<CustomerForm>` using DB-shaped keys (`xero_branding_theme_id`, `wht_gross_up_rate`, `xero_tax_type`, plus `manual_status_override` which is already available in scope).
+
+### 3. `src/components/customers/CustomerForm.tsx` — safety
+- No visual change needed; the fields already read `existingCustomer?.xero_branding_theme_id` and `existingCustomer?.wht_gross_up_rate`. Once the props arrive, they populate correctly.
+- Optional hardening (recommended): if `existingCustomer` is provided, only include `xero_branding_theme_id` / `wht_gross_up_rate` in the update payload when the user actually touched the inputs, so any future forms that forget to pass them can't clear stored values. Simplest form: compare against the initial state snapshot and omit unchanged keys from the update object.
+
+### 4. Verify
+- Edit an existing customer that has values → fields prefilled.
+- Save without changes → values preserved in DB (spot-check via a quick read query).
+- Xero send path unchanged (already reads the columns).
 
 ## Out of scope
-- No automatic country detection — theme and WHT are per-customer overrides only, as chosen.
-- No changes to VAT handling (`xero_tax_type` already covers per-line tax rates).
-- No new tables; both fields live on `customers`.
-
-## Technical notes
-- Xero API: `BrandingThemeID` is a top-level field on the Invoice object. Retrieve IDs via `GET /BrandingThemes` if the user asks later; for now they paste the GUID.
-- Gross-up formula: `grossed = original / (1 - wht_rate)`. For `wht_rate = 0.10`, divisor is `0.9` — matches the user's stated behaviour.
-- Rounding: round each line to 2 decimals after gross-up to keep Xero totals stable.
-- The existing `tax_category` column on `customers` is left alone — WHT is orthogonal.
-
-## Files touched
-- New migration: add `xero_branding_theme_id`, `wht_gross_up_rate` to `customers`.
-- `src/components/customers/CustomerForm.tsx` — add the two fields.
-- `supabase/functions/xero-send-invoice/index.ts` — read new fields, apply theme + gross-up.
-- `src/components/invoices/SupportDocument.tsx` — footnote when WHT gross-up applies.
+- No DB migration; columns already exist.
+- No changes to `xero-send-invoice` — the lookup and gross-up are already correct.
+- VAT (`xero_tax_type`) UI selector — this plan only routes the existing value through so it stops getting wiped; a proper picker can be a separate ask.

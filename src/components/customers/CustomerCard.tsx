@@ -91,6 +91,10 @@ interface CustomerCardProps {
     max_mw?: number;
     onboarding_fee_per_site?: number;
   }>;
+  xero_branding_theme_id?: string | null;
+  wht_gross_up_rate?: number | null;
+  xero_tax_type?: string | null;
+  manual_status_override?: boolean;
   onViewContract?: () => void;
   onViewDetails?: () => void;
   onContractCreated?: () => void;
@@ -113,6 +117,10 @@ export function CustomerCard({
   hasContract,
   contractCount = 1,
   contracts = [],
+  xero_branding_theme_id,
+  wht_gross_up_rate,
+  xero_tax_type,
+  manual_status_override,
   onViewContract,
   onViewDetails,
   onContractCreated,
@@ -289,6 +297,10 @@ export function CustomerCard({
                         location,
                         mwpManaged,
                         status,
+                        xero_branding_theme_id,
+                        wht_gross_up_rate,
+                        xero_tax_type,
+                        manual_status_override,
                       }}
                     />
                   </DialogContent>

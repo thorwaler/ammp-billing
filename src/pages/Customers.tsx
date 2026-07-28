@@ -45,6 +45,9 @@ interface CustomerData {
   }>;
   package?: string;
   manualStatusOverride?: boolean;
+  xero_branding_theme_id?: string | null;
+  wht_gross_up_rate?: number | null;
+  xero_tax_type?: string | null;
 }
 
 
@@ -79,6 +82,9 @@ const Customers = () => {
           join_date,
           last_invoiced,
           manual_status_override,
+          xero_branding_theme_id,
+          wht_gross_up_rate,
+          xero_tax_type,
           contracts (
             id,
             contract_name,
@@ -229,6 +235,9 @@ const Customers = () => {
         })),
         package: firstActiveContract?.package || undefined,
         manualStatusOverride: c.manual_status_override || false,
+        xero_branding_theme_id: (c as any).xero_branding_theme_id ?? null,
+        wht_gross_up_rate: (c as any).wht_gross_up_rate ?? null,
+        xero_tax_type: (c as any).xero_tax_type ?? null,
       };
     });
 
@@ -598,6 +607,10 @@ const Customers = () => {
               hasContract={!!customer.contractId}
               contractCount={customer.contractCount}
               contracts={customer.contracts}
+              xero_branding_theme_id={customer.xero_branding_theme_id}
+              wht_gross_up_rate={customer.wht_gross_up_rate}
+              xero_tax_type={customer.xero_tax_type}
+              manual_status_override={customer.manualStatusOverride}
               onViewContract={() => navigate(`/contracts/${customer.contractId}`)}
               onViewDetails={() => navigate(`/contracts/${customer.contractId}`)}
               onContractCreated={loadCustomers}
