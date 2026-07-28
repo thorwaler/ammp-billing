@@ -204,8 +204,48 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
           </div>
         </div>
 
+        <div className="space-y-4 rounded-lg border p-4">
+          <div>
+            <h3 className="text-sm font-semibold">Xero invoicing</h3>
+            <p className="text-xs text-muted-foreground">
+              Optional overrides applied when invoices for this customer are sent to Xero.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="xeroBrandingThemeId">Xero branding theme ID</Label>
+            <Input
+              id="xeroBrandingThemeId"
+              name="xeroBrandingThemeId"
+              value={formData.xeroBrandingThemeId}
+              onChange={handleInputChange}
+              placeholder="e.g. 4c82c365-35cb-490e-93bd-2c3a0bf6f7c2"
+            />
+            <p className="text-xs text-muted-foreground">
+              Find in Xero → Settings → Invoice Settings. Leave blank to use the organisation default.
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="whtRatePercent">Withholding tax rate (%)</Label>
+            <Input
+              id="whtRatePercent"
+              name="whtRatePercent"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={formData.whtRatePercent}
+              onChange={handleInputChange}
+              placeholder="e.g. 10"
+            />
+            <p className="text-xs text-muted-foreground">
+              Invoice line amounts are grossed up by 1 / (1 − rate) so the customer's WHT
+              deduction on payment still nets the intended amount. Leave blank for none.
+            </p>
+          </div>
+        </div>
+
         <div className="pt-2">
-          <Button 
+          <Button
             className="w-full"
             type="submit"
             disabled={isSubmitting}
