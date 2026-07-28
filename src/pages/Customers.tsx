@@ -82,6 +82,9 @@ const Customers = () => {
           join_date,
           last_invoiced,
           manual_status_override,
+          xero_branding_theme_id,
+          wht_gross_up_rate,
+          xero_tax_type,
           contracts (
             id,
             contract_name,
