@@ -235,6 +235,9 @@ const Customers = () => {
         })),
         package: firstActiveContract?.package || undefined,
         manualStatusOverride: c.manual_status_override || false,
+        xero_branding_theme_id: (c as any).xero_branding_theme_id ?? null,
+        wht_gross_up_rate: (c as any).wht_gross_up_rate ?? null,
+        xero_tax_type: (c as any).xero_tax_type ?? null,
       };
     });
 
