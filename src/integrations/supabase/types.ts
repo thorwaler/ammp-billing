@@ -395,9 +395,11 @@ export type Database = {
           ammp_asset_ids: Json | null
           ammp_org_id: string | null
           ammp_sync_status: string | null
+          anniversary_notice_days: number
           annual_billing_anchor_date: string | null
           annual_fee_per_site: number | null
           annual_minimum_fee: number | null
+          annual_minimum_mode: string
           api_setup_fee: number | null
           base_monthly_price: number | null
           below_threshold_price_per_mwp: number | null
@@ -417,15 +419,18 @@ export type Database = {
           custom_asset_pricing: Json | null
           custom_pricing: Json | null
           customer_id: string
+          first_invoice_date: string | null
           graduated_mw_tiers: Json | null
           hourly_rate: number | null
           id: string
+          inflation_cap_enabled: boolean
           initial_mw: number
           invoice_lead_days: number
           invoicing_type: string | null
           irradiance_per_site_tiers: Json | null
           is_trial: boolean
           last_ammp_sync: string | null
+          last_anniversary_notice_sent_at: string | null
           last_annual_invoice_date: string | null
           max_mw: number | null
           minimum_annual_value: number | null
@@ -459,6 +464,9 @@ export type Database = {
           vendor_api_onboarding_fee: number | null
           volume_discounts: Json | null
           ytd_invoiced_amount: number
+          zero_pv_alert_enabled: boolean
+          zero_pv_estimate_multiplier: number
+          zero_pv_grace_days: number
         }
         Insert: {
           above_threshold_price_per_mwp?: number | null
@@ -472,9 +480,11 @@ export type Database = {
           ammp_asset_ids?: Json | null
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
+          anniversary_notice_days?: number
           annual_billing_anchor_date?: string | null
           annual_fee_per_site?: number | null
           annual_minimum_fee?: number | null
+          annual_minimum_mode?: string
           api_setup_fee?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
@@ -494,15 +504,18 @@ export type Database = {
           custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
           customer_id: string
+          first_invoice_date?: string | null
           graduated_mw_tiers?: Json | null
           hourly_rate?: number | null
           id?: string
+          inflation_cap_enabled?: boolean
           initial_mw: number
           invoice_lead_days?: number
           invoicing_type?: string | null
           irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
           last_ammp_sync?: string | null
+          last_anniversary_notice_sent_at?: string | null
           last_annual_invoice_date?: string | null
           max_mw?: number | null
           minimum_annual_value?: number | null
@@ -536,6 +549,9 @@ export type Database = {
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
           ytd_invoiced_amount?: number
+          zero_pv_alert_enabled?: boolean
+          zero_pv_estimate_multiplier?: number
+          zero_pv_grace_days?: number
         }
         Update: {
           above_threshold_price_per_mwp?: number | null
@@ -549,9 +565,11 @@ export type Database = {
           ammp_asset_ids?: Json | null
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
+          anniversary_notice_days?: number
           annual_billing_anchor_date?: string | null
           annual_fee_per_site?: number | null
           annual_minimum_fee?: number | null
+          annual_minimum_mode?: string
           api_setup_fee?: number | null
           base_monthly_price?: number | null
           below_threshold_price_per_mwp?: number | null
@@ -571,15 +589,18 @@ export type Database = {
           custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
           customer_id?: string
+          first_invoice_date?: string | null
           graduated_mw_tiers?: Json | null
           hourly_rate?: number | null
           id?: string
+          inflation_cap_enabled?: boolean
           initial_mw?: number
           invoice_lead_days?: number
           invoicing_type?: string | null
           irradiance_per_site_tiers?: Json | null
           is_trial?: boolean
           last_ammp_sync?: string | null
+          last_anniversary_notice_sent_at?: string | null
           last_annual_invoice_date?: string | null
           max_mw?: number | null
           minimum_annual_value?: number | null
@@ -613,6 +634,9 @@ export type Database = {
           vendor_api_onboarding_fee?: number | null
           volume_discounts?: Json | null
           ytd_invoiced_amount?: number
+          zero_pv_alert_enabled?: boolean
+          zero_pv_estimate_multiplier?: number
+          zero_pv_grace_days?: number
         }
         Relationships: [
           {
@@ -727,6 +751,33 @@ export type Database = {
         }
         Relationships: []
       }
+      inflation_reference_rates: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          rate_pct: number
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          rate_pct: number
+          source?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          rate_pct?: number
+          source?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       invoice_alerts: {
         Row: {
           acknowledged_at: string | null
@@ -817,6 +868,7 @@ export type Database = {
           currency: string | null
           customer_id: string
           id: string
+          input_snapshot: Json | null
           invoice_amount: number
           invoice_amount_eur: number | null
           invoice_date: string
@@ -828,9 +880,12 @@ export type Database = {
           nrr_amount_eur: number | null
           prepaid_balance_delta: number | null
           prepaid_balance_deltas_by_contract: Json | null
+          revised_from_invoice_id: string | null
+          revision_deadline: string | null
           sharepoint_drive_id: string | null
           sharepoint_file_id: string | null
           sharepoint_files: Json | null
+          snapshot_frozen_at: string | null
           source: string | null
           support_document_data: Json | null
           total_mw: number
@@ -855,6 +910,7 @@ export type Database = {
           currency?: string | null
           customer_id: string
           id?: string
+          input_snapshot?: Json | null
           invoice_amount: number
           invoice_amount_eur?: number | null
           invoice_date: string
@@ -866,9 +922,12 @@ export type Database = {
           nrr_amount_eur?: number | null
           prepaid_balance_delta?: number | null
           prepaid_balance_deltas_by_contract?: Json | null
+          revised_from_invoice_id?: string | null
+          revision_deadline?: string | null
           sharepoint_drive_id?: string | null
           sharepoint_file_id?: string | null
           sharepoint_files?: Json | null
+          snapshot_frozen_at?: string | null
           source?: string | null
           support_document_data?: Json | null
           total_mw: number
@@ -893,6 +952,7 @@ export type Database = {
           currency?: string | null
           customer_id?: string
           id?: string
+          input_snapshot?: Json | null
           invoice_amount?: number
           invoice_amount_eur?: number | null
           invoice_date?: string
@@ -904,9 +964,12 @@ export type Database = {
           nrr_amount_eur?: number | null
           prepaid_balance_delta?: number | null
           prepaid_balance_deltas_by_contract?: Json | null
+          revised_from_invoice_id?: string | null
+          revision_deadline?: string | null
           sharepoint_drive_id?: string | null
           sharepoint_file_id?: string | null
           sharepoint_files?: Json | null
+          snapshot_frozen_at?: string | null
           source?: string | null
           support_document_data?: Json | null
           total_mw?: number
@@ -934,6 +997,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_revised_from_invoice_id_fkey"
+            columns: ["revised_from_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
             referencedColumns: ["id"]
           },
         ]
@@ -1333,6 +1403,66 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      zero_pv_incidents: {
+        Row: {
+          applied_to_invoice_id: string | null
+          asset_id: string
+          asset_name: string
+          contract_id: string
+          created_at: string
+          detected_at: string
+          estimate_source: string | null
+          estimated_capacity_mw: number | null
+          id: string
+          resolved_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          applied_to_invoice_id?: string | null
+          asset_id: string
+          asset_name: string
+          contract_id: string
+          created_at?: string
+          detected_at?: string
+          estimate_source?: string | null
+          estimated_capacity_mw?: number | null
+          id?: string
+          resolved_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          applied_to_invoice_id?: string | null
+          asset_id?: string
+          asset_name?: string
+          contract_id?: string
+          created_at?: string
+          detected_at?: string
+          estimate_source?: string | null
+          estimated_capacity_mw?: number | null
+          id?: string
+          resolved_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "zero_pv_incidents_applied_to_invoice_id_fkey"
+            columns: ["applied_to_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "zero_pv_incidents_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
