@@ -12,6 +12,9 @@ export interface SupportDocumentData {
   invoiceDate: Date;
   invoicePeriod: string;
   discountPercent: number;
+  whtGrossUpRate?: number; // Decimal e.g. 0.10; when > 0 Xero invoice is grossed up
+  
+
   
   // Year-to-date invoices
   yearInvoices: {
