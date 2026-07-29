@@ -2,6 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CalculationResult, getFrequencyMultiplier, getPeriodMonthsMultiplier } from "./invoiceCalculations";
 import { monthsInPeriod } from "./invoiceScheduling";
 import { format, startOfYear, endOfYear } from "date-fns";
+import { isElumOrgTierPackage } from "@/data/pricingData";
 
 
 export interface SupportDocumentData {
