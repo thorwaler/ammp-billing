@@ -1126,31 +1126,27 @@ export function InvoiceCalculator({
       }
 
 
-      // Elum 2026 org-based tiers: one line per sub-organisation (plus eConf add-on line)
+      // Elum 2026 org-based tiers: one combined line per sub-organisation (base + eConf)
       if (result.elumOrgTierBreakdown) {
         const ob = result.elumOrgTierBreakdown;
         ob.orgs.forEach(org => {
-          if (org.baseCost > 0) {
+          if (org.totalCost > 0) {
             const rateNote = org.appliedRate != null
               ? ` @ ${currencySymbol}${org.appliedRate}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
               : ' (per-site size buckets)';
+            const econfNote = org.econfCost > 0
+              ? ` + Remote eConf @ ${currencySymbol}${org.econfRate}/MWp/yr`
+              : '';
             lineItems.push({
-              Description: `${ob.tierLabel} — ${org.orgName} (${org.siteCount} sites, ${org.totalMWp.toFixed(2)} MWp)${rateNote}`,
+              Description: `${ob.tierLabel} — ${org.orgName} (${org.siteCount} sites, ${org.totalMWp.toFixed(2)} MWp)${rateNote}${econfNote}`,
               Quantity: 1,
-              UnitAmount: org.baseCost,
-              AccountCode: ACCOUNT_PLATFORM_FEES,
-            });
-          }
-          if (org.econfCost > 0) {
-            lineItems.push({
-              Description: `Remote eConf — ${org.orgName} (org-wide, ${org.totalMWp.toFixed(2)} MWp @ ${currencySymbol}${org.econfRate}/MWp/yr)`,
-              Quantity: 1,
-              UnitAmount: org.econfCost,
+              UnitAmount: org.totalCost,
               AccountCode: ACCOUNT_PLATFORM_FEES,
             });
           }
         });
       }
+
 
       // Add hybrid tiered pricing line items (for hybrid_tiered packages like BLS)
       if (result.hybridTieredBreakdown) {

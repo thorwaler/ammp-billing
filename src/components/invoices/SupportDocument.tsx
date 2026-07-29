@@ -199,6 +199,15 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             </tbody>
           </table>
 
+          {data.elumOrgTierBreakdown.orgs.some(o => o.econfCost > 0) && (
+            <p className="text-xs text-muted-foreground mb-4">
+              Remote eConf is shown separately here for transparency, but it is invoiced within the
+              organisation's single line item (Total column).
+            </p>
+          )}
+
+
+
           {/* Per-organisation asset lists */}
           {data.elumOrgTierBreakdown.orgs.map(org => (
             <div key={`sites-${org.orgId}`} className="mb-4">

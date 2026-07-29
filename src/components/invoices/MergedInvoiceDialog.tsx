@@ -366,30 +366,24 @@ export function MergedInvoiceDialog({
         }
       }
       
-      // Elum 2026 org-based tiers: one line per sub-organisation
+      // Elum 2026 org-based tiers: one combined line per sub-organisation (base + eConf)
       if (result.elumOrgTierBreakdown) {
         result.elumOrgTierBreakdown.orgs.forEach(org => {
-          if (org.baseCost > 0) {
+          if (org.totalCost > 0) {
             const rateNote = org.appliedRate != null
               ? ` @ ${org.appliedRate}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
               : ' (per-site size buckets)';
+            const econfNote = org.econfCost > 0 ? ` + Remote eConf @ ${org.econfRate}/MWp/yr` : '';
             lineItems.push({
-              Description: `[${contractLabel}] ${result.elumOrgTierBreakdown!.tierLabel} — ${org.orgName} (${org.siteCount} sites, ${org.totalMWp.toFixed(2)} MWp)${rateNote}`,
+              Description: `[${contractLabel}] ${result.elumOrgTierBreakdown!.tierLabel} — ${org.orgName} (${org.siteCount} sites, ${org.totalMWp.toFixed(2)} MWp)${rateNote}${econfNote}`,
               Quantity: 1,
-              UnitAmount: org.baseCost,
-              AccountCode: ACCOUNT_PLATFORM_FEES
-            });
-          }
-          if (org.econfCost > 0) {
-            lineItems.push({
-              Description: `[${contractLabel}] Remote eConf — ${org.orgName} (org-wide, ${org.totalMWp.toFixed(2)} MWp)`,
-              Quantity: 1,
-              UnitAmount: org.econfCost,
+              UnitAmount: org.totalCost,
               AccountCode: ACCOUNT_PLATFORM_FEES
             });
           }
         });
       }
+
 
       // Add hybrid tiered breakdown
       if (result.hybridTieredBreakdown) {
