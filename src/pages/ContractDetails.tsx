@@ -68,6 +68,7 @@ const elumTierLabel = (tier?: string | null) => {
 
 // Helper function to format date in CET timezone
 import { formatDateCET } from "@/lib/dateUtils";
+import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
 const formatDate = (dateString: string) => {
   try {
     return formatDateCET(dateString, 'MMM d, yyyy');
@@ -573,62 +574,7 @@ const ContractDetails = () => {
                     location: customer.location,
                     mwpManaged: cachedCapabilities?.totalMW || customer.mwp_managed || 0,
                   } : undefined}
-                existingContract={{
-                    id: contract.id,
-                    contractName: contract.contract_name,
-                    package: contract.package,
-                    modules: contract.modules || [],
-                    addons: contract.addons || [],
-                    initialMW: contract.initial_mw,
-                    billingFrequency: contract.billing_frequency || 'annual',
-                    invoicingType: contract.invoicing_type,
-                    invoiceLeadDays: contract.invoice_lead_days ?? 0,
-                    nextInvoiceDate: contract.next_invoice_date,
-                    customPricing: contract.custom_pricing,
-                    volumeDiscounts: contract.volume_discounts,
-                    minimumCharge: contract.minimum_charge,
-                    minimumAnnualValue: contract.minimum_annual_value,
-                    baseMonthlyPrice: contract.base_monthly_price,
-                    maxMw: contract.max_mw,
-                    currency: contract.currency || 'EUR',
-                    signedDate: contract.signed_date,
-                    contractExpiryDate: contract.contract_expiry_date,
-                    periodStart: contract.period_start,
-                    periodEnd: contract.period_end,
-                    notes: contract.notes,
-                    contractStatus: contract.contract_status,
-                    portfolioDiscountTiers: contract.portfolio_discount_tiers,
-                    minimumChargeTiers: contract.minimum_charge_tiers,
-                    siteChargeFrequency: contract.site_charge_frequency,
-                    retainerHours: contract.retainer_hours,
-                    retainerHourlyRate: contract.retainer_hourly_rate,
-                    retainerMinimumValue: contract.retainer_minimum_value,
-                    ammpOrgId: contract.ammp_org_id,
-                    ammpAssetGroupId: contract.ammp_asset_group_id,
-                    ammpAssetGroupName: contract.ammp_asset_group_name,
-                    ammpAssetGroupIdAnd: contract.ammp_asset_group_id_and,
-                    ammpAssetGroupNameAnd: contract.ammp_asset_group_name_and,
-                    ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
-                    ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
-                    cachedCapabilities: contract.cached_capabilities,
-                    graduatedMWTiers: contract.graduated_mw_tiers,
-                    elumParentOrgId: (contract as any).elum_parent_org_id || undefined,
-                    elumLiteBaseRate: (contract as any).org_pricing_config?.liteBaseRate,
-                    elumLiteEconfRate: (contract as any).org_pricing_config?.liteEconfRate,
-                    siteSizeThresholdKwp: contract.site_size_threshold_kwp,
-                    belowThresholdPricePerMWp: contract.below_threshold_price_per_mwp,
-                    aboveThresholdPricePerMWp: contract.above_threshold_price_per_mwp,
-                    onboardingFeePerSite: contract.onboarding_fee_per_site,
-                    annualFeePerSite: contract.annual_fee_per_site,
-                    // AMMP OS 2026 trial fields
-                    isTrial: contract.is_trial,
-                    trialSetupFee: contract.trial_setup_fee,
-                    vendorApiOnboardingFee: contract.vendor_api_onboarding_fee,
-                    // SolarAfrica API fields
-                    municipalityCount: contract.municipality_count,
-                    apiSetupFee: contract.api_setup_fee,
-                    hourlyRate: contract.hourly_rate,
-                  }}
+                existingContract={mapContractRowToFormValues(contract)}
                   onComplete={() => {
                     setShowEditDialog(false);
                     loadContractData();
@@ -657,54 +603,7 @@ const ContractDetails = () => {
               name: contract.company_name,
               mwpManaged: cachedCapabilities?.totalMW || customer?.mwp_managed || contract.initial_mw,
             }}
-            existingContract={{
-              id: contract.id,
-              contractName: contract.contract_name,
-              package: contract.package,
-              modules: contract.modules || [],
-              addons: contract.addons || [],
-              initialMW: contract.initial_mw,
-              billingFrequency: contract.billing_frequency || 'annual',
-              invoicingType: contract.invoicing_type,
-              invoiceLeadDays: contract.invoice_lead_days ?? 0,
-              nextInvoiceDate: contract.next_invoice_date,
-              customPricing: contract.custom_pricing,
-              volumeDiscounts: contract.volume_discounts,
-              minimumCharge: contract.minimum_charge,
-              minimumAnnualValue: contract.minimum_annual_value,
-              baseMonthlyPrice: contract.base_monthly_price,
-              maxMw: contract.max_mw,
-              currency: contract.currency || 'EUR',
-              signedDate: contract.signed_date,
-              contractExpiryDate: contract.contract_expiry_date,
-              periodStart: contract.period_start,
-              periodEnd: contract.period_end,
-              notes: contract.notes,
-              contractStatus: contract.contract_status,
-              portfolioDiscountTiers: contract.portfolio_discount_tiers,
-              minimumChargeTiers: contract.minimum_charge_tiers,
-              siteChargeFrequency: contract.site_charge_frequency,
-              retainerHours: contract.retainer_hours,
-              retainerHourlyRate: contract.retainer_hourly_rate,
-              retainerMinimumValue: contract.retainer_minimum_value,
-              ammpOrgId: contract.ammp_org_id,
-              ammpAssetGroupId: contract.ammp_asset_group_id,
-              ammpAssetGroupName: contract.ammp_asset_group_name,
-              ammpAssetGroupIdAnd: contract.ammp_asset_group_id_and,
-              ammpAssetGroupNameAnd: contract.ammp_asset_group_name_and,
-              ammpAssetGroupIdNot: contract.ammp_asset_group_id_not,
-              ammpAssetGroupNameNot: contract.ammp_asset_group_name_not,
-              cachedCapabilities: contract.cached_capabilities,
-              graduatedMWTiers: contract.graduated_mw_tiers,
-              // AMMP OS 2026 trial fields
-              isTrial: contract.is_trial,
-              trialSetupFee: contract.trial_setup_fee,
-              vendorApiOnboardingFee: contract.vendor_api_onboarding_fee,
-              // SolarAfrica API fields
-              municipalityCount: contract.municipality_count,
-              apiSetupFee: contract.api_setup_fee,
-              hourlyRate: contract.hourly_rate,
-            }}
+            existingContract={mapContractRowToFormValues(contract)}
             isExtending={true}
             onComplete={() => {
               setShowExtendDialog(false);

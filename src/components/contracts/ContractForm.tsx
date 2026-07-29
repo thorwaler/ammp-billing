@@ -3002,10 +3002,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                     {isElumOrgTierPackage(watchPackage) && (
                       <p className="text-xs text-muted-foreground">
                         Optional. This contract is priced per Elum sub-org. Any asset group set here is
-                        merged in as a separate "legacy asset group" line; assets that also belong to a
+                        merged in as separate "legacy asset group" lines; assets that also belong to a
                         sub-org are counted once (the sub-org wins) and listed as de-duplication warnings.
+                        Legacy members that are also in the eConf add-on group below are billed with
+                        remote eConf, the rest at the standard tier rate — one contract covers both.
                       </p>
                     )}
+
                     <AssetGroupSelector
                       orgId={form.watch('contractAmmpOrgId') || form.watch('elumParentOrgId') || undefined}
                       value={form.watch('ammpAssetGroupId') || ''}
@@ -3029,7 +3032,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdAnd', id);
                         form.setValue('ammpAssetGroupNameAnd', name);
                       }}
-                      label="Secondary Asset Group (AND)"
+                      label={isElumOrgTierPackage(watchPackage) ? "eConf add-on group (AND)" : "Secondary Asset Group (AND)"}
                       optional
                       showClearButton
                       onClear={() => {
@@ -3045,7 +3048,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdNot', id);
                         form.setValue('ammpAssetGroupNameNot', name);
                       }}
-                      label="Exclusion Asset Group (NOT)"
+                      label={isElumOrgTierPackage(watchPackage) ? "Exclude group (NOT)" : "Exclusion Asset Group (NOT)"}
                       optional
                       showClearButton
                       onClear={() => {

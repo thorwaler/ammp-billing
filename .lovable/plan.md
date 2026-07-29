@@ -1,41 +1,33 @@
-## What's going on
+## What I verified
 
-Both gaps in the original request are real UI gating bugs — the backend logic exists, the front end just never shows it for the new 2026 packages. Two additions have been folded in: asset category on the breakdown, and Elum alerts in the Alerts page.
-
-**1. Hybrid legacy asset-group fallback**
-
-The sync function already supports it: when an Elum org-tier contract also has `ammp_asset_group_id`, the group's members are pulled in as an extra "legacy asset group" pseudo-org, and assets appearing in both an org and the group are counted once (`supabase/functions/ammp-sync-contract/index.ts:489-509`).
-
-But the Asset Group Filtering block in the contract form is gated to the old package list (`ContractForm.tsx:2997`) — the new `elum_ci_lite` / `elum_ci_pro` / `elum_utility` packages aren't in it, so the group can never be set and the hybrid path never triggers. The selectors also read `orgId` from `contractAmmpOrgId`, which org-tier contracts leave empty (they use `elumParentOrgId`).
-
-**2. Missing sync button**
-
-- Contract detail page: gated on `hasAMMPData = ammp_org_id || ammp_asset_group_id` (`ContractDetails.tsx:89`). An org-tier contract has neither, only `elum_parent_org_id` — button hidden.
-- Contract form: "Sync from AMMP" is `disabled` unless `contractAmmpOrgId` or `ammpAssetGroupId` is set (`ContractForm.tsx:2987`).
-
-**3. Asset category not shown**
-
-The asset table on the contract page (`ContractDetails.tsx:1618-1673`) shows name / MW / Hybrid / Solcast / Discount / Devices — nothing about which sub-org or tier an asset belongs to, even though `cached_capabilities.orgBreakdown` holds that mapping.
-
-**4. Elum alerts not in Alerts page**
-
-`zero_pv_capacity` alerts are already written to `invoice_alerts` by the `zero-pv-check` function, but the Alerts page has no label or filter entry for that type, so they render with a raw type string and can't be filtered. Other Elum conditions (unassigned sub-orgs, de-duplication, Utility sites below 2 MWp, missing org breakdown, combined-minimum shortfall) are surfaced only inside the invoice calculator / support document and never become alerts.
+- **Zero-PV toggle**: `zero_pv_alert_enabled` is `false` on **every** contract in the database — including the C&I Light one. The form saves the field correctly, but none of the three edit entry points (`ContractList.tsx:189`, `ContractDetails.tsx:576`, `CustomerCard.tsx:486`) map `zero_pv_alert_enabled` / `zero_pv_grace_days` / `zero_pv_estimate_multiplier` back into `existingContract`. So the form defaults them to `false`, and the next save writes `false` over whatever you enabled. Same gap for `inflation_cap_enabled`, `annual_minimum_mode`, `first_invoice_date`, `anniversary_notice_days`.
+- **The 0 MWp sites are real**: the C&I Light contract has 10 of 140 assets at `totalMW = 0`.
+- **Timing**: `zero-pv-check` only runs as a monthly cron on the 15th, so even with the flag on you would not see alerts right after a sync.
+- **eConf**: in the Elum org-tier branch of `ammp-sync-contract` the legacy asset group is merged as a single pseudo-org hard-coded to `hasEconf: false` (`index.ts:490-509`), and the AND / NOT group fields are ignored entirely on that path — which is why the split needs two contracts today.
 
 ## Changes
 
-**Form and sync access**
-1. `src/pages/ContractDetails.tsx` — include `elum_parent_org_id` and `contract_ammp_org_id` in `hasAMMPData` so "Sync AMMP" appears for org-tier contracts.
-2. `src/components/contracts/ContractForm.tsx`
-   - Show the Asset Group Filtering block for the new Elum org-tier packages (reuse `isElumOrgTierPackage` rather than extending the hard-coded list), labelled as the optional legacy/transition filter with a note that its assets are merged as a separate line and de-duplicated against the sub-orgs.
-   - Pass `orgId = contractAmmpOrgId || elumParentOrgId` to all three `AssetGroupSelector`s.
-   - Enable "Sync from AMMP" when `elumParentOrgId` is set.
+**1. Contract edit fields round-trip (the toggle bug)**
+- Add a single shared mapper, `src/lib/contractFormMapping.ts`, that converts a `contracts` DB row into the `existingContract` shape.
+- Use it in `ContractList.tsx`, `ContractDetails.tsx` and `CustomerCard.tsx`, replacing the three divergent hand-written maps. This fixes the zero-PV toggle and the other Elum-foundations fields silently resetting on save.
 
-**Asset category column**
-3. `src/pages/ContractDetails.tsx` — build an assetId → org lookup from `cached_capabilities.orgBreakdown` and add a "Category" column to the asset table showing the sub-org name plus its tier (C&I Light / C&I Pro / Utility / Internal), or "Legacy asset group" for assets resolved that way, and "Unassigned" when neither. Show the same badge in the asset detail dialog. Non-Elum contracts keep the column hidden.
+**2. Zero-PV check runs on every sync**
+- Move the detection body of `supabase/functions/zero-pv-check/index.ts` into `supabase/functions/_shared/zeroPvScan.ts` (open/resolve `zero_pv_incidents`, raise the `zero_pv_capacity` alert).
+- Call it at the end of `ammp-sync-contract` for the synced contract, so the 10 zero-MWp sites raise an alert as soon as the sync completes. The monthly cron keeps running as a backstop and reuses the same module.
+- Make the alert insert idempotent: skip if an unacknowledged `zero_pv_capacity` alert already exists for that contract with the same asset set, so repeated syncs don't pile up duplicates.
+- Backfill: set `zero_pv_alert_enabled = true` on existing Elum contracts so the current 0 MWp sites are picked up on the next sync (the toggle stays per-contract editable).
 
-**Elum alerts**
-4. `supabase/functions/ammp-sync-contract/index.ts` — after resolution, write `invoice_alerts` rows for: sub-orgs with no tier flag (`elum_org_unassigned`, warning), assets counted in both an org and the legacy group (`elum_asset_double_count`, warning), and Utility orgs containing sites below 2 MWp (`elum_utility_site_too_small`, critical — blocks Xero). Insert only when the condition is newly present for that contract, so repeated syncs don't duplicate alerts.
-5. `src/lib/elumCombinedMinimum.ts` (or its caller) — raise `elum_combined_minimum_shortfall` (info) when the €80k combined annual minimum will require a true-up on the next invoice.
-6. `src/components/alerts/AlertCard.tsx` and `src/components/alerts/AlertFilters.tsx` — add labels and filter entries for the new types plus the existing `zero_pv_capacity`.
+**3. Legacy asset group: eConf and non-eConf in one contract**
+- In the org-tier branch of `ammp-sync-contract`, replace the single legacy pseudo-org with two:
+  - `Legacy asset group — with eConf` (`hasEconf: true`) for members that are **also** in the AND group (`ammp_asset_group_id_and`, e.g. `[Add-on] Remote eConf`),
+  - `Legacy asset group — standard` (`hasEconf: false`) for the rest.
+- Honour `ammp_asset_group_id_not` on this path too, as a pure exclusion applied to legacy members.
+- Only emit a pseudo-org that actually has members, and keep the existing de-duplication against sub-orgs (sub-org wins, overlap recorded as a `elum_asset_double_count` warning).
+- No pricing-engine change needed: `calculateElumOrgTierBreakdown` already applies the eConf rate per org via `org.hasEconf`, so the two legacy lines price at €65/MWp and €65 + €335/MWp respectively, and flow through to the Xero line items and support document automatically.
+- `ContractForm.tsx`: for org-tier packages relabel the AND selector "eConf add-on group — legacy members in this group are billed with remote eConf" and the NOT selector "Exclude group", with a one-line note that one contract now covers both variants.
 
-No pricing-engine changes — resolution and de-duplication logic already handles the hybrid case.
+## Technical notes
+
+- The shared mapper is a pure function over the generated `contracts` row type, so any future column added to the form has one place to register.
+- `_shared/zeroPvScan.ts` takes a service-role client plus an optional contract-id filter; the cron passes no filter, the sync passes the one contract.
+- Legacy pseudo-org IDs become `legacy:<groupId>:econf` and `legacy:<groupId>:base` so the org breakdown, invoice lines and asset Category column stay stable across syncs.
