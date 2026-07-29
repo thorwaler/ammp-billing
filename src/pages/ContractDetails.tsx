@@ -85,8 +85,14 @@ const ContractDetails = () => {
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [isMoving, setIsMoving] = useState(false);
 
-  // All contracts now use contract-level sync via cached_capabilities
-  const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
+  // All contracts now use contract-level sync via cached_capabilities.
+  // Elum 2026 org-tier contracts only carry elum_parent_org_id, so include it here.
+  const hasAMMPData = contract && (
+    contract.ammp_org_id ||
+    contract.contract_ammp_org_id ||
+    contract.ammp_asset_group_id ||
+    contract.elum_parent_org_id
+  );
   const cachedCapabilities = contract?.cached_capabilities;
 
   const loadContractData = async () => {
