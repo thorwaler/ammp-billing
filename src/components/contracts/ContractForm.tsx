@@ -2984,7 +2984,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                             setIsSyncing(false);
                           }
                         }}
-                        disabled={isSyncing || (!form.watch('contractAmmpOrgId') && !form.watch('ammpAssetGroupId'))}
+                        disabled={isSyncing || (!form.watch('contractAmmpOrgId') && !form.watch('ammpAssetGroupId') && !form.watch('elumParentOrgId'))}
                       >
                         <RefreshCw className={cn("mr-2 h-4 w-4", isSyncing && "animate-spin")} />
                         {isSyncing ? 'Syncing...' : 'Sync from AMMP'}
