@@ -1655,6 +1655,7 @@ const ContractDetails = () => {
                   <tbody>
                     {cachedCapabilities.assetBreakdown.map((asset: any) => {
                       const discount = getAssetDiscount(asset.assetId);
+                      const category = assetCategoryMap.get(asset.assetId);
                       return (
                         <tr 
                           key={asset.assetId} 
@@ -1662,6 +1663,20 @@ const ContractDetails = () => {
                           onClick={() => setSelectedAsset(asset)}
                         >
                           <td className="p-2">{asset.assetName}</td>
+                          {showCategoryColumn && (
+                            <td className="p-2">
+                              {category ? (
+                                <div className="flex flex-col gap-0.5">
+                                  <span>{category.label}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {category.isLegacy ? 'Legacy asset group' : elumTierLabel(category.tier)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Unassigned</span>
+                              )}
+                            </td>
+                          )}
                           <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
                           <td className="p-2 text-center">
                             {asset.isHybrid ? <Badge variant="outline" className="bg-purple-50">Yes</Badge> : '-'}
