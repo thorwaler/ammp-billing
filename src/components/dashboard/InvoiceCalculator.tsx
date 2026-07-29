@@ -2760,6 +2760,17 @@ export function InvoiceCalculator({
               </div>
             )}
 
+            {/* Elum 2026 org tiers: cached org breakdown missing -> pricing silently falls back */}
+            {(selectedCustomer as any)?.elumTier && (selectedCustomer as any)?.elumParentOrgId && !result.elumOrgTierBreakdown && (
+              <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                <p className="font-medium">Org breakdown missing — re-sync required</p>
+                <p className="text-xs mt-1">
+                  This contract is priced per Elum sub-org, but no cached sub-org breakdown was found.
+                  Run an AMMP sync on the contract before invoicing; otherwise the flat portfolio pricing is used.
+                </p>
+              </div>
+            )}
+
             {/* Elum ePM breakdown */}
             {result.elumEpmBreakdown && (
               <div className="space-y-3 mb-4">
