@@ -825,6 +825,13 @@ function generateAssetBreakdown(
   if (packageType === 'elum_internal' && calculationResult.elumInternalBreakdown) {
     return { assetBreakdown: [] };
   }
+
+  // For Elum 2026 org-based tiers - pricing lives in the per-org tables, so the
+  // generic monitoring-fee breakdown would only render zero rates.
+  if (isElumOrgTierPackage(packageType) && calculationResult.elumOrgTierBreakdown) {
+    return { assetBreakdown: [] };
+  }
+
   
   // For Per-MW + Annual Upfront - use the synced per-MW rate so per-asset rows are non-zero
   if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
