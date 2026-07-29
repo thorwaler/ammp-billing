@@ -419,6 +419,8 @@ export type Database = {
           custom_asset_pricing: Json | null
           custom_pricing: Json | null
           customer_id: string
+          elum_parent_org_id: string | null
+          elum_tier: string | null
           first_invoice_date: string | null
           graduated_mw_tiers: Json | null
           hourly_rate: number | null
@@ -445,6 +447,7 @@ export type Database = {
           ocr_status: string | null
           onboarding_fee_per_site: number | null
           onboarding_setup_fee: number | null
+          org_pricing_config: Json
           package: string
           performance_per_mwp_tiers: Json | null
           period_end: string | null
@@ -504,6 +507,8 @@ export type Database = {
           custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
           customer_id: string
+          elum_parent_org_id?: string | null
+          elum_tier?: string | null
           first_invoice_date?: string | null
           graduated_mw_tiers?: Json | null
           hourly_rate?: number | null
@@ -530,6 +535,7 @@ export type Database = {
           ocr_status?: string | null
           onboarding_fee_per_site?: number | null
           onboarding_setup_fee?: number | null
+          org_pricing_config?: Json
           package: string
           performance_per_mwp_tiers?: Json | null
           period_end?: string | null
@@ -589,6 +595,8 @@ export type Database = {
           custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
           customer_id?: string
+          elum_parent_org_id?: string | null
+          elum_tier?: string | null
           first_invoice_date?: string | null
           graduated_mw_tiers?: Json | null
           hourly_rate?: number | null
@@ -615,6 +623,7 @@ export type Database = {
           ocr_status?: string | null
           onboarding_fee_per_site?: number | null
           onboarding_setup_fee?: number | null
+          org_pricing_config?: Json
           package?: string
           performance_per_mwp_tiers?: Json | null
           period_end?: string | null
@@ -688,11 +697,14 @@ export type Database = {
           ammp_capabilities: Json | null
           ammp_org_id: string | null
           ammp_sync_status: string | null
+          combined_minimum_anchor_date: string | null
+          combined_minimum_annual_value: number | null
           created_at: string
           id: string
           is_whitelabel_partner: boolean | null
           join_date: string | null
           last_ammp_sync: string | null
+          last_combined_minimum_reconciled_at: string | null
           last_invoiced: string | null
           location: string | null
           manual_status_override: boolean | null
@@ -712,11 +724,14 @@ export type Database = {
           ammp_capabilities?: Json | null
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
+          combined_minimum_anchor_date?: string | null
+          combined_minimum_annual_value?: number | null
           created_at?: string
           id?: string
           is_whitelabel_partner?: boolean | null
           join_date?: string | null
           last_ammp_sync?: string | null
+          last_combined_minimum_reconciled_at?: string | null
           last_invoiced?: string | null
           location?: string | null
           manual_status_override?: boolean | null
@@ -736,11 +751,14 @@ export type Database = {
           ammp_capabilities?: Json | null
           ammp_org_id?: string | null
           ammp_sync_status?: string | null
+          combined_minimum_anchor_date?: string | null
+          combined_minimum_annual_value?: number | null
           created_at?: string
           id?: string
           is_whitelabel_partner?: boolean | null
           join_date?: string | null
           last_ammp_sync?: string | null
+          last_combined_minimum_reconciled_at?: string | null
           last_invoiced?: string | null
           location?: string | null
           manual_status_override?: boolean | null

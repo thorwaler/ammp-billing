@@ -178,7 +178,10 @@ export type PackageType =
   | "solar_africa_api"
   | "sps_monitoring"
   | "matriarch_api"
-  | "per_mw_annual_upfront";
+  | "per_mw_annual_upfront"
+  | "elum_ci_lite"
+  | "elum_ci_pro"
+  | "elum_utility";
 
 // === SolarAfrica API Pricing ===
 
@@ -488,4 +491,95 @@ export const calculateTieredPrice = (
     totalPrice: appliedTier.pricePerUnit * quantity,
     appliedTier
   };
+};
+
+// === Elum 2026 org-based tiers ===
+// Contract: Elum <> AMMP 2026. Pricing is per Organisation (sub-org of the Elum
+// parent org), classified by AMMP feature flags:
+//   epm_lite -> C&I Lite, epm_pro -> C&I Pro, epm_utility -> Utility
+//   remote_econf -> org-wide eConf add-on (billable on Lite only; bundled in Pro/Utility)
+
+export type ElumOrgTier = "ci_lite" | "ci_pro" | "utility";
+
+export const ELUM_TIER_FLAGS: Record<ElumOrgTier, string> = {
+  ci_lite: "epm_lite",
+  ci_pro: "epm_pro",
+  utility: "epm_utility",
+};
+
+export const ELUM_TIER_LABELS: Record<ElumOrgTier, string> = {
+  ci_lite: "C&I Lite",
+  ci_pro: "C&I Pro",
+  utility: "Utility",
+};
+
+export const ELUM_ECONF_FLAG = "remote_econf";
+
+/** C&I Lite: €/MWp/year on the org portfolio. */
+export const ELUM_LITE_BASE_RATE = 65;
+/** C&I Lite: org-wide remote eConf add-on, €/MWp/year on ALL sites in the org. */
+export const ELUM_LITE_ECONF_RATE = 335;
+
+export interface ElumProSiteBucket {
+  /** inclusive lower bound in MWp */
+  minMWp: number;
+  /** exclusive upper bound in MWp, null = no limit */
+  maxMWp: number | null;
+  pricePerMWp: number;
+  label: string;
+}
+
+/** C&I Pro: price applied site by site, never aggregated. */
+export const ELUM_PRO_SITE_BUCKETS: ElumProSiteBucket[] = [
+  { minMWp: 0, maxMWp: 1, pricePerMWp: 650, label: "≤ 1 MWp" },
+  { minMWp: 1, maxMWp: 2, pricePerMWp: 450, label: "> 1 and < 2 MWp" },
+  { minMWp: 2, maxMWp: null, pricePerMWp: 300, label: "≥ 2 MWp" },
+];
+
+export function getElumProBucket(mwp: number): ElumProSiteBucket {
+  // ≤1 MWp inclusive, >1 and <2, then ≥2
+  if (mwp <= 1) return ELUM_PRO_SITE_BUCKETS[0];
+  if (mwp < 2) return ELUM_PRO_SITE_BUCKETS[1];
+  return ELUM_PRO_SITE_BUCKETS[2];
+}
+
+export interface ElumUtilityTier {
+  minMWp: number;
+  maxMWp: number | null;
+  discountPercent: number;
+  pricePerMWp: number;
+  label: string;
+}
+
+/** Utility: single blended rate determined by total org portfolio size. */
+export const ELUM_UTILITY_TIERS: ElumUtilityTier[] = [
+  { minMWp: 0, maxMWp: 10, discountPercent: 0, pricePerMWp: 300, label: "< 10 MWp" },
+  { minMWp: 10, maxMWp: 20, discountPercent: 5, pricePerMWp: 285, label: "10–20 MWp" },
+  { minMWp: 20, maxMWp: 30, discountPercent: 10, pricePerMWp: 270, label: "20–30 MWp" },
+  { minMWp: 30, maxMWp: 40, discountPercent: 15, pricePerMWp: 255, label: "30–40 MWp" },
+  { minMWp: 40, maxMWp: 50, discountPercent: 20, pricePerMWp: 240, label: "40–50 MWp" },
+  { minMWp: 50, maxMWp: null, discountPercent: 25, pricePerMWp: 225, label: "50–60 MWp" },
+];
+
+export function getElumUtilityTier(portfolioMWp: number): ElumUtilityTier {
+  return (
+    ELUM_UTILITY_TIERS.find(t => portfolioMWp < (t.maxMWp ?? Infinity) && portfolioMWp >= t.minMWp) ||
+    ELUM_UTILITY_TIERS[ELUM_UTILITY_TIERS.length - 1]
+  );
+}
+
+/** Utility tier requires every site in the org to be > 2 MWp. */
+export const ELUM_UTILITY_MIN_SITE_MWP = 2;
+
+/** Combined yearly minimum across all Elum contracts (contract clause). */
+export const ELUM_COMBINED_ANNUAL_MINIMUM = 80000;
+
+export const isElumOrgTierPackage = (packageType: string): boolean =>
+  packageType === "elum_ci_lite" || packageType === "elum_ci_pro" || packageType === "elum_utility";
+
+export const elumTierForPackage = (packageType: string): ElumOrgTier | null => {
+  if (packageType === "elum_ci_lite") return "ci_lite";
+  if (packageType === "elum_ci_pro") return "ci_pro";
+  if (packageType === "elum_utility") return "utility";
+  return null;
 };

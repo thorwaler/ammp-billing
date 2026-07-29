@@ -2,7 +2,19 @@ export type UUID = string & { __brand?: "uuid" }
 export type DateStr = string & { __brand?: "date" }
 export type DateTimeStr = string & { __brand?: "datetime" }
 
+// Organisation types (GET /v1/orgs)
+export interface OrgResponse {
+  org_id: UUID;
+  uid?: number;
+  org_name: string;
+  parent_org_id?: UUID | null;
+  feature_flags?: Record<string, unknown> | null;
+  created?: string | null;
+  last_updated?: string | null;
+}
+
 // Asset Group types
+
 export interface AssetGroupResponse {
   group_id: UUID;
   group_name: string;

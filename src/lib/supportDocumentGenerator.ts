@@ -163,6 +163,45 @@ export interface SupportDocumentData {
     excessAnnualAmount?: number;
   };
   
+  // Elum 2026 org-based tier breakdown (one section per sub-organisation)
+  elumOrgTierBreakdown?: {
+    tier: string;
+    tierLabel: string;
+    totalMWp: number;
+    totalCost: number;
+    blocked: boolean;
+    warnings: string[];
+    orgs: Array<{
+      orgId: string;
+      orgName: string;
+      uid?: number;
+      isLegacyAssetGroup?: boolean;
+      totalMWp: number;
+      siteCount: number;
+      appliedRate: number | null;
+      appliedTierLabel?: string;
+      baseCost: number;
+      econfApplied: boolean;
+      econfRate: number;
+      econfCost: number;
+      totalCost: number;
+      warnings: string[];
+      sites: Array<{
+        assetId: string;
+        assetName: string;
+        mwp: number;
+        bucketLabel?: string;
+        pricePerMWp: number;
+        cost: number;
+        isMwhOverride?: boolean;
+      }>;
+    }>;
+    /** assets found in both an org and a legacy asset group — counted once */
+    doubleCountWarnings?: Array<{ assetId: string; assetName: string; orgName: string }>;
+    /** sub-orgs under the parent org that carry no tier flag */
+    unassignedOrgs?: Array<{ orgId: string; orgName: string }>;
+  };
+
   // Matriarch API breakdown
   matriarchApiBreakdown?: {
     irradianceOnlySites: number;
@@ -489,6 +528,10 @@ export async function generateSupportDocumentData(
     assetBreakdownPeriodTotal = calculationResult.elumEpmBreakdown.smallSitesTotal + 
                                  calculationResult.elumEpmBreakdown.largeSitesTotal;
     minimumChargesForBreakdown = 0;
+  } else if (calculationResult.elumOrgTierBreakdown) {
+    // Elum 2026 org tiers: the per-org totals already carry the period adjustment
+    assetBreakdownPeriodTotal = calculationResult.elumOrgTierBreakdown.totalCost;
+    minimumChargesForBreakdown = 0;
   } else if (calculationResult.matriarchApiBreakdown) {
     // For Matriarch API, use the total annual cost adjusted by frequency
     assetBreakdownPeriodTotal = calculationResult.totalMWCost;
@@ -580,6 +623,18 @@ export async function generateSupportDocumentData(
       minimumQuarterlyValue: calculationResult.spsDiscountBreakdown.minimumQuarterlyValue,
       upfrontAnnualPayment: calculationResult.spsDiscountBreakdown.upfrontAnnualPayment,
       excessAnnualAmount: calculationResult.spsDiscountBreakdown.excessAnnualAmount,
+    } : undefined,
+    // Elum 2026 org-based tier breakdown
+    elumOrgTierBreakdown: calculationResult.elumOrgTierBreakdown ? {
+      tier: calculationResult.elumOrgTierBreakdown.tier,
+      tierLabel: calculationResult.elumOrgTierBreakdown.tierLabel,
+      totalMWp: calculationResult.elumOrgTierBreakdown.totalMWp,
+      totalCost: calculationResult.elumOrgTierBreakdown.totalCost,
+      blocked: calculationResult.elumOrgTierBreakdown.blocked,
+      warnings: calculationResult.elumOrgTierBreakdown.warnings,
+      orgs: calculationResult.elumOrgTierBreakdown.orgs,
+      doubleCountWarnings: (cachedCapabilities as any)?.doubleCountWarnings || undefined,
+      unassignedOrgs: (cachedCapabilities as any)?.unassignedOrgs || undefined,
     } : undefined,
     // Matriarch API breakdown
     matriarchApiBreakdown: calculationResult.matriarchApiBreakdown ? {

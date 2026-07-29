@@ -384,6 +384,8 @@ export function InvoiceCalculator({
             ammpAssetGroupIdNot: (contract as any).ammp_asset_group_id_not || undefined,
             cachedCapabilities: (contract as any).cached_capabilities || undefined,
             contractAmmpOrgId: (contract as any).contract_ammp_org_id || undefined,
+            // Elum 2026 org-based tier config
+            orgPricingConfig: (contract as any).org_pricing_config || undefined,
             // Elum Internal fields
             graduatedMWTiers: Array.isArray((contract as any).graduated_mw_tiers) 
               ? (contract as any).graduated_mw_tiers 
@@ -868,6 +870,12 @@ export function InvoiceCalculator({
       belowThresholdPricePerMWp: selectedCustomer.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: selectedCustomer.aboveThresholdPricePerMWp,
       graduatedMWTiers: selectedCustomer.graduatedMWTiers,
+      // Elum 2026 org-based tiers: sub-org grouping resolved by the AMMP sync
+      orgBreakdown: (effectiveCapabilities as any)?.orgBreakdown
+        || ((selectedCustomer as any).cachedCapabilities?.orgBreakdown)
+        || undefined,
+      elumLiteBaseRate: (selectedCustomer as any).orgPricingConfig?.liteBaseRate,
+      elumLiteEconfRate: (selectedCustomer as any).orgPricingConfig?.liteEconfRate,
       customAssetPricing: selectedCustomer.customAssetPricing,
       isTrial: selectedCustomer.isTrial,
       trialSetupFee: selectedCustomer.trialSetupFee,
@@ -985,6 +993,16 @@ export function InvoiceCalculator({
     (freshResult as any).invoicePeriod = built.invoicePeriod;
     // Update React state so the UI reflects the recalculated values
     setResult(freshResult as any);
+
+    // Utility tier: block invoicing while any site sits below the 2 MWp threshold
+    if (freshResult.elumOrgTierBreakdown?.blocked) {
+      toast({
+        title: "Utility tier validation failed",
+        description: freshResult.elumOrgTierBreakdown.warnings[0] || "Some sites are below the 2 MWp threshold.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsSending(true);
 
@@ -1105,7 +1123,33 @@ export function InvoiceCalculator({
         }
       }
 
-      
+
+      // Elum 2026 org-based tiers: one line per sub-organisation (plus eConf add-on line)
+      if (result.elumOrgTierBreakdown) {
+        const ob = result.elumOrgTierBreakdown;
+        ob.orgs.forEach(org => {
+          if (org.baseCost > 0) {
+            const rateNote = org.appliedRate != null
+              ? ` @ ${currencySymbol}${org.appliedRate}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
+              : ' (per-site size buckets)';
+            lineItems.push({
+              Description: `${ob.tierLabel} — ${org.orgName} (${org.siteCount} sites, ${org.totalMWp.toFixed(2)} MWp)${rateNote}`,
+              Quantity: 1,
+              UnitAmount: org.baseCost,
+              AccountCode: ACCOUNT_PLATFORM_FEES,
+            });
+          }
+          if (org.econfCost > 0) {
+            lineItems.push({
+              Description: `Remote eConf — ${org.orgName} (org-wide, ${org.totalMWp.toFixed(2)} MWp @ ${currencySymbol}${org.econfRate}/MWp/yr)`,
+              Quantity: 1,
+              UnitAmount: org.econfCost,
+              AccountCode: ACCOUNT_PLATFORM_FEES,
+            });
+          }
+        });
+      }
+
       // Add hybrid tiered pricing line items (for hybrid_tiered packages like BLS)
       if (result.hybridTieredBreakdown) {
         if (result.hybridTieredBreakdown.ongrid.cost > 0) {

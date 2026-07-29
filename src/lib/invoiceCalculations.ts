@@ -10,6 +10,14 @@ import {
   isSolarAfricaPackage,
   isSpsPackage,
   isMatriarchApiPackage,
+  isElumOrgTierPackage,
+  elumTierForPackage,
+  getElumProBucket,
+  getElumUtilityTier,
+  ELUM_LITE_BASE_RATE,
+  ELUM_LITE_ECONF_RATE,
+  ELUM_TIER_LABELS,
+  ELUM_UTILITY_MIN_SITE_MWP,
   getSolarAfricaTier,
   getAddonPrice, 
   calculateTieredPrice,
@@ -23,7 +31,8 @@ import {
   type ModuleDefinition,
   type AddonDefinition,
   type IrradianceSiteTier,
-  type PerformanceMWpTier
+  type PerformanceMWpTier,
+  type ElumOrgTier
 } from "@/data/pricingData";
 
 // Custom asset discount pricing interface
@@ -165,6 +174,30 @@ export interface CalculationParams {
   // true = annual upfront cycle, false = quarterly with prepaid-balance credit.
   // For SPS, `ytdInvoicedAmount` is repurposed as the remaining prepaid balance.
   spsIsAnnualCycle?: boolean;
+  // Elum 2026 org-based tiers: per-sub-org asset grouping resolved at sync time.
+  orgBreakdown?: OrgAssetGroup[];
+  // C&I Lite rates (editable defaults)
+  elumLiteBaseRate?: number;
+  elumLiteEconfRate?: number;
+  // Assets where MWh was entered in the PV capacity field (battery-only utility
+  // sites). Suppresses the utility >2 MWp guard for those assets.
+  mwhOverrideAssetIds?: string[];
+}
+
+/** A sub-organisation with its resolved assets, produced by the AMMP sync. */
+export interface OrgAssetGroup {
+  orgId: string;
+  orgName: string;
+  uid?: number;
+  tier?: ElumOrgTier | null;
+  hasEconf?: boolean;
+  /** true when these assets came from a legacy asset group, not org discovery */
+  isLegacyAssetGroup?: boolean;
+  assets: Array<{
+    assetId: string;
+    assetName: string;
+    totalMW: number;
+  }>;
 }
 
 export interface SiteMinimumPricingResult {
@@ -235,6 +268,48 @@ export interface ElumInternalBreakdown {
   totalCost: number;
 }
 
+export interface ElumOrgSiteLine {
+  assetId: string;
+  assetName: string;
+  mwp: number;
+  bucketLabel?: string;
+  pricePerMWp: number;
+  cost: number;
+  isMwhOverride?: boolean;
+}
+
+export interface ElumOrgLine {
+  orgId: string;
+  orgName: string;
+  uid?: number;
+  tier: ElumOrgTier;
+  tierLabel: string;
+  isLegacyAssetGroup?: boolean;
+  totalMWp: number;
+  siteCount: number;
+  /** applied rate: base rate (lite), blended rate (utility), null for per-site pro */
+  appliedRate: number | null;
+  appliedTierLabel?: string;
+  baseCost: number;
+  /** C&I Lite org-wide remote eConf add-on */
+  econfApplied: boolean;
+  econfRate: number;
+  econfCost: number;
+  totalCost: number;
+  sites: ElumOrgSiteLine[];
+  warnings: string[];
+}
+
+export interface ElumOrgTierBreakdown {
+  tier: ElumOrgTier;
+  tierLabel: string;
+  orgs: ElumOrgLine[];
+  totalMWp: number;
+  totalCost: number;
+  warnings: string[];
+  blocked: boolean;
+}
+
 export interface MatriarchApiBreakdown {
   irradianceOnlySites: number;
   irradiancePerSiteRate: number;
@@ -291,6 +366,8 @@ export interface CalculationResult {
   elumInternalBreakdown?: ElumInternalBreakdown;
   // Matriarch API breakdown
   matriarchApiBreakdown?: MatriarchApiBreakdown;
+  // Elum 2026 org-based tier breakdown
+  elumOrgTierBreakdown?: ElumOrgTierBreakdown;
   // Discounted assets results
   discountedAssets?: DiscountedAssetResult[];
   discountedAssetsTotal?: number;
@@ -766,6 +843,152 @@ export function calculateElumJubailiBreakdown(
 }
 
 /**
+ * Elum 2026 org-based tier pricing.
+ *
+ * Each sub-organisation is priced on its own full portfolio and produces one
+ * invoice line:
+ *   C&I Lite  — base €/MWp on the org portfolio + org-wide remote eConf add-on
+ *               charged on ALL sites when the org carries the flag
+ *   C&I Pro   — site by site, by size bucket (never aggregated)
+ *   Utility   — single blended rate determined by the org portfolio size,
+ *               applied uniformly to every MWp. Only available when every site
+ *               exceeds 2 MWp; otherwise the org is blocked.
+ */
+export function calculateElumOrgTierBreakdown(
+  tier: ElumOrgTier,
+  orgs: OrgAssetGroup[],
+  frequencyMultiplier: number,
+  options: {
+    liteBaseRate?: number;
+    liteEconfRate?: number;
+    mwhOverrideAssetIds?: string[];
+  } = {}
+): ElumOrgTierBreakdown {
+  const liteBaseRate = options.liteBaseRate ?? ELUM_LITE_BASE_RATE;
+  const liteEconfRate = options.liteEconfRate ?? ELUM_LITE_ECONF_RATE;
+  const mwhOverrides = new Set(options.mwhOverrideAssetIds || []);
+  const tierLabel = ELUM_TIER_LABELS[tier];
+
+  const orgLines: ElumOrgLine[] = [];
+  const globalWarnings: string[] = [];
+  let blocked = false;
+
+  for (const org of orgs) {
+    const assets = org.assets || [];
+    const totalMWp = assets.reduce((sum, a) => sum + (a.totalMW || 0), 0);
+    const warnings: string[] = [];
+    const sites: ElumOrgSiteLine[] = [];
+
+    let baseCost = 0;
+    let appliedRate: number | null = null;
+    let appliedTierLabel: string | undefined;
+
+    if (tier === "ci_pro") {
+      for (const asset of assets) {
+        const bucket = getElumProBucket(asset.totalMW || 0);
+        const cost = (asset.totalMW || 0) * bucket.pricePerMWp * frequencyMultiplier;
+        baseCost += cost;
+        sites.push({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          mwp: asset.totalMW || 0,
+          bucketLabel: bucket.label,
+          pricePerMWp: bucket.pricePerMWp,
+          cost,
+        });
+      }
+    } else if (tier === "utility") {
+      const utilityTier = getElumUtilityTier(totalMWp);
+      appliedRate = utilityTier.pricePerMWp;
+      appliedTierLabel = utilityTier.label;
+
+      const offending = assets.filter(
+        a => (a.totalMW || 0) <= ELUM_UTILITY_MIN_SITE_MWP && !mwhOverrides.has(a.assetId)
+      );
+      if (offending.length > 0) {
+        blocked = true;
+        warnings.push(
+          `Utility tier requires every site above ${ELUM_UTILITY_MIN_SITE_MWP} MWp. ` +
+          `${offending.length} site(s) below threshold: ${offending.map(a => `${a.assetName} (${(a.totalMW || 0).toFixed(3)} MWp)`).join(", ")}. ` +
+          `Fix the PV capacity in ePM, or mark battery-only sites as MWh entries.`
+        );
+      }
+
+      for (const asset of assets) {
+        const cost = (asset.totalMW || 0) * utilityTier.pricePerMWp * frequencyMultiplier;
+        baseCost += cost;
+        sites.push({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          mwp: asset.totalMW || 0,
+          bucketLabel: utilityTier.label,
+          pricePerMWp: utilityTier.pricePerMWp,
+          cost,
+          isMwhOverride: mwhOverrides.has(asset.assetId),
+        });
+      }
+    } else {
+      // C&I Lite
+      appliedRate = liteBaseRate;
+      baseCost = totalMWp * liteBaseRate * frequencyMultiplier;
+      for (const asset of assets) {
+        sites.push({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          mwp: asset.totalMW || 0,
+          pricePerMWp: liteBaseRate,
+          cost: (asset.totalMW || 0) * liteBaseRate * frequencyMultiplier,
+        });
+      }
+    }
+
+    // Remote eConf: billable org-wide add-on on C&I Lite only (bundled elsewhere)
+    const econfApplied = tier === "ci_lite" && !!org.hasEconf;
+    const econfCost = econfApplied ? totalMWp * liteEconfRate * frequencyMultiplier : 0;
+
+    if (assets.length === 0) {
+      warnings.push("No assets resolved for this organisation.");
+    }
+
+    orgLines.push({
+      orgId: org.orgId,
+      orgName: org.orgName,
+      uid: org.uid,
+      tier,
+      tierLabel,
+      isLegacyAssetGroup: org.isLegacyAssetGroup,
+      totalMWp,
+      siteCount: assets.length,
+      appliedRate,
+      appliedTierLabel,
+      baseCost,
+      econfApplied,
+      econfRate: liteEconfRate,
+      econfCost,
+      totalCost: baseCost + econfCost,
+      sites,
+      warnings,
+    });
+  }
+
+  if (orgLines.length === 0) {
+    globalWarnings.push(
+      `No ${tierLabel} organisations resolved. Re-sync the contract to discover sub-orgs.`
+    );
+  }
+
+  return {
+    tier,
+    tierLabel,
+    orgs: orgLines,
+    totalMWp: orgLines.reduce((sum, o) => sum + o.totalMWp, 0),
+    totalCost: orgLines.reduce((sum, o) => sum + o.totalCost, 0),
+    warnings: [...globalWarnings, ...orgLines.flatMap(o => o.warnings)],
+    blocked,
+  };
+}
+
+/**
  * Calculate Elum Internal Assets graduated MW pricing
  * Each tier applies to a specific MW range with its own price per MW
  */
@@ -1034,6 +1257,21 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     const { moduleCosts, totalMWCost } = calculateModuleCosts(adjustedParams);
     result.moduleCosts = moduleCosts;
     result.totalMWCost = totalMWCost;
+  } else if (isElumOrgTierPackage(packageType)) {
+    // Elum 2026 org-based tiers (C&I Lite / C&I Pro / Utility)
+    const tier = elumTierForPackage(packageType)!;
+    const breakdown = calculateElumOrgTierBreakdown(
+      tier,
+      params.orgBreakdown || [],
+      frequencyMultiplier,
+      {
+        liteBaseRate: params.elumLiteBaseRate,
+        liteEconfRate: params.elumLiteEconfRate,
+        mwhOverrideAssetIds: params.mwhOverrideAssetIds,
+      }
+    );
+    result.elumOrgTierBreakdown = breakdown;
+    result.totalMWCost = breakdown.totalCost;
   } else if (packageType === 'elum_internal') {
     // Elum Internal Assets - graduated MW pricing
     const tiers = params.graduatedMWTiers || [];
