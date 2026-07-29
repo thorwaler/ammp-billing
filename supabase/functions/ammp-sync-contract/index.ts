@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { runZeroPvScan } from '../_shared/zeroPvScan.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
