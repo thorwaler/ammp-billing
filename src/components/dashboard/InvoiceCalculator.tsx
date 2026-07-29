@@ -386,6 +386,8 @@ export function InvoiceCalculator({
             contractAmmpOrgId: (contract as any).contract_ammp_org_id || undefined,
             // Elum 2026 org-based tier config
             orgPricingConfig: (contract as any).org_pricing_config || undefined,
+            elumTier: (contract as any).elum_tier || undefined,
+            elumParentOrgId: (contract as any).elum_parent_org_id || undefined,
             // Elum Internal fields
             graduatedMWTiers: Array.isArray((contract as any).graduated_mw_tiers) 
               ? (contract as any).graduated_mw_tiers 
