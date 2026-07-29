@@ -1,22 +1,41 @@
-## Goal
+## What's going on
 
-Make the sub-org asset resolution that now works for the C&I Light contract reliable for every 2026 Elum tier (Light, Pro, Utility), and fix the bug that silently discards the org data after sync.
+Both gaps in the original request are real UI gating bugs — the backend logic exists, the front end just never shows it for the new 2026 packages. Two additions have been folded in: asset category on the breakdown, and Elum alerts in the Alerts page.
 
-## Confirmed findings
+**1. Hybrid legacy asset-group fallback**
 
-- The sync itself is already tier-generic: `ammp-sync-contract/index.ts:349-352` maps `ci_lite/ci_pro/utility` to `epm_lite/epm_pro/epm_utility`, and the per-sub-org `/assets?org_ids=…` resolution at lines 465-517 runs for whichever tier the contract carries. Logs confirm the last run resolved 11 tier orgs / 33 assets for the Light contract.
-- **Bug: org data is wiped right after sync.** `ammp-device-enrichment/index.ts` (~line 466) rebuilds `cached_capabilities` field-by-field instead of spreading the existing object, so `orgBreakdown`, `doubleCountWarnings` and `unassignedOrgs` are dropped. Verified in the database: the Light contract synced at 13:59:52 with 33 assets / 13.15 MW, then enrichment ran at 14:01:05 and the stored `cached_capabilities` now has **no `orgBreakdown` key at all**. Pricing, Xero per-org lines and the support-document org tables therefore fall back to the non-org path for every org-based Elum contract.
-- **Bug: `zero-pv-check/index.ts:38` reads `cached_capabilities.assets`**, a key that does not exist (the array is `assetBreakdown`), so zero-PV detection never fires for any contract.
-- Only one 2026 org contract exists today (`elum_ci_lite`); no Pro or Utility contract exists yet, so those paths have never executed against real data.
+The sync function already supports it: when an Elum org-tier contract also has `ammp_asset_group_id`, the group's members are pulled in as an extra "legacy asset group" pseudo-org, and assets appearing in both an org and the group are counted once (`supabase/functions/ammp-sync-contract/index.ts:489-509`).
+
+But the Asset Group Filtering block in the contract form is gated to the old package list (`ContractForm.tsx:2997`) — the new `elum_ci_lite` / `elum_ci_pro` / `elum_utility` packages aren't in it, so the group can never be set and the hybrid path never triggers. The selectors also read `orgId` from `contractAmmpOrgId`, which org-tier contracts leave empty (they use `elumParentOrgId`).
+
+**2. Missing sync button**
+
+- Contract detail page: gated on `hasAMMPData = ammp_org_id || ammp_asset_group_id` (`ContractDetails.tsx:89`). An org-tier contract has neither, only `elum_parent_org_id` — button hidden.
+- Contract form: "Sync from AMMP" is `disabled` unless `contractAmmpOrgId` or `ammpAssetGroupId` is set (`ContractForm.tsx:2987`).
+
+**3. Asset category not shown**
+
+The asset table on the contract page (`ContractDetails.tsx:1618-1673`) shows name / MW / Hybrid / Solcast / Discount / Devices — nothing about which sub-org or tier an asset belongs to, even though `cached_capabilities.orgBreakdown` holds that mapping.
+
+**4. Elum alerts not in Alerts page**
+
+`zero_pv_capacity` alerts are already written to `invoice_alerts` by the `zero-pv-check` function, but the Alerts page has no label or filter entry for that type, so they render with a raw type string and can't be filtered. Other Elum conditions (unassigned sub-orgs, de-duplication, Utility sites below 2 MWp, missing org breakdown, combined-minimum shortfall) are surfaced only inside the invoice calculator / support document and never become alerts.
 
 ## Changes
 
-1. **Preserve org data through enrichment** — in `ammp-device-enrichment/index.ts`, build the updated capabilities by spreading `cachedCapabilities` first (as the other branch at ~line 320 already does), so `orgBreakdown`, `doubleCountWarnings`, `unassignedOrgs` and any future fields survive. Redeploy.
-2. **Repair the existing Light contract** — re-run the contract sync so `orgBreakdown` is written back, then confirm the key persists after enrichment completes.
-3. **Fix zero-PV asset lookup** — point `zero-pv-check` at `cached_capabilities.assetBreakdown` (keeping `.assets` as a fallback). Redeploy.
-4. **Verify Pro and Utility end to end** — temporarily point a scratch contract at each tier (or run the sync with the tier switched) to confirm `epm_pro` / `epm_utility` sub-orgs resolve assets via the org-scoped endpoint, log the org and asset counts, and confirm the Utility >2 MWp guard behaves on real site sizes. Fix whatever the runs surface.
-5. **Guard against silent regressions** — when a contract has `elum_tier` + `elum_parent_org_id` but the cached capabilities carry no `orgBreakdown`, surface a clear "org breakdown missing — re-sync required" warning in the invoice calculator instead of silently pricing on the flat path.
+**Form and sync access**
+1. `src/pages/ContractDetails.tsx` — include `elum_parent_org_id` and `contract_ammp_org_id` in `hasAMMPData` so "Sync AMMP" appears for org-tier contracts.
+2. `src/components/contracts/ContractForm.tsx`
+   - Show the Asset Group Filtering block for the new Elum org-tier packages (reuse `isElumOrgTierPackage` rather than extending the hard-coded list), labelled as the optional legacy/transition filter with a note that its assets are merged as a separate line and de-duplicated against the sub-orgs.
+   - Pass `orgId = contractAmmpOrgId || elumParentOrgId` to all three `AssetGroupSelector`s.
+   - Enable "Sync from AMMP" when `elumParentOrgId` is set.
 
-## Technical notes
+**Asset category column**
+3. `src/pages/ContractDetails.tsx` — build an assetId → org lookup from `cached_capabilities.orgBreakdown` and add a "Category" column to the asset table showing the sub-org name plus its tier (C&I Light / C&I Pro / Utility / Internal), or "Legacy asset group" for assets resolved that way, and "Unassigned" when neither. Show the same badge in the asset detail dialog. Non-Elum contracts keep the column hidden.
 
-Files touched: `supabase/functions/ammp-device-enrichment/index.ts`, `supabase/functions/zero-pv-check/index.ts`, `src/components/dashboard/InvoiceCalculator.tsx`. No schema or migration changes. Both edge functions get redeployed and re-checked against logs.
+**Elum alerts**
+4. `supabase/functions/ammp-sync-contract/index.ts` — after resolution, write `invoice_alerts` rows for: sub-orgs with no tier flag (`elum_org_unassigned`, warning), assets counted in both an org and the legacy group (`elum_asset_double_count`, warning), and Utility orgs containing sites below 2 MWp (`elum_utility_site_too_small`, critical — blocks Xero). Insert only when the condition is newly present for that contract, so repeated syncs don't duplicate alerts.
+5. `src/lib/elumCombinedMinimum.ts` (or its caller) — raise `elum_combined_minimum_shortfall` (info) when the €80k combined annual minimum will require a true-up on the next invoice.
+6. `src/components/alerts/AlertCard.tsx` and `src/components/alerts/AlertFilters.tsx` — add labels and filter entries for the new types plus the existing `zero_pv_capacity`.
+
+No pricing-engine changes — resolution and de-duplication logic already handles the hybrid case.
