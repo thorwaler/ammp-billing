@@ -1,33 +1,31 @@
-## What I verified
+## 1. Merge the eConf line into the org line
 
-- **Zero-PV toggle**: `zero_pv_alert_enabled` is `false` on **every** contract in the database — including the C&I Light one. The form saves the field correctly, but none of the three edit entry points (`ContractList.tsx:189`, `ContractDetails.tsx:576`, `CustomerCard.tsx:486`) map `zero_pv_alert_enabled` / `zero_pv_grace_days` / `zero_pv_estimate_multiplier` back into `existingContract`. So the form defaults them to `false`, and the next save writes `false` over whatever you enabled. Same gap for `inflation_cap_enabled`, `annual_minimum_mode`, `first_invoice_date`, `anniversary_notice_days`.
-- **The 0 MWp sites are real**: the C&I Light contract has 10 of 140 assets at `totalMW = 0`.
-- **Timing**: `zero-pv-check` only runs as a monthly cron on the 15th, so even with the flag on you would not see alerts right after a sync.
-- **eConf**: in the Elum org-tier branch of `ammp-sync-contract` the legacy asset group is merged as a single pseudo-org hard-coded to `hasEconf: false` (`index.ts:490-509`), and the AND / NOT group fields are ignored entirely on that path — which is why the split needs two contracts today.
+Today each C&I Lite org with the eConf add-on produces two Xero lines (base + "Remote eConf"), which is why the €165.21 line looked like an extra pass — it's the eConf add-on for the "Legacy asset group — with eConf" pseudo-org (6 sites, 1.973 MWp @ €335/MWp/yr), already shown in the support doc as a column on that same row.
 
-## Changes
+Change: emit **one line per org**, with the combined amount.
 
-**1. Contract edit fields round-trip (the toggle bug)**
-- Add a single shared mapper, `src/lib/contractFormMapping.ts`, that converts a `contracts` DB row into the `existingContract` shape.
-- Use it in `ContractList.tsx`, `ContractDetails.tsx` and `CustomerCard.tsx`, replacing the three divergent hand-written maps. This fixes the zero-PV toggle and the other Elum-foundations fields silently resetting on save.
+- `src/components/dashboard/InvoiceCalculator.tsx` (lines 1129-1153): replace the two-line emit with a single line using `org.totalCost` (= `baseCost + econfCost`). Description carries both rates when eConf applies, e.g.
+  `C&I Lite — Green Yellow France (8 sites, 0.60 MWp) @ €65/MWp/yr + Remote eConf @ €335/MWp/yr`
+  and stays as-is (base rate only) when `econfCost === 0`. Guard on `org.totalCost > 0`.
+- `src/components/invoices/MergedInvoiceDialog.tsx` (around line 385): apply the same merge, keeping the `[contractLabel]` prefix.
+- Account code stays `ACCOUNT_PLATFORM_FEES` for both components, so ARR/NRR classification is unchanged.
 
-**2. Zero-PV check runs on every sync**
-- Move the detection body of `supabase/functions/zero-pv-check/index.ts` into `supabase/functions/_shared/zeroPvScan.ts` (open/resolve `zero_pv_incidents`, raise the `zero_pv_capacity` alert).
-- Call it at the end of `ammp-sync-contract` for the synced contract, so the 10 zero-MWp sites raise an alert as soon as the sync completes. The monthly cron keeps running as a backstop and reuses the same module.
-- Make the alert insert idempotent: skip if an unacknowledged `zero_pv_capacity` alert already exists for that contract with the same asset set, so repeated syncs don't pile up duplicates.
-- Backfill: set `zero_pv_alert_enabled = true` on existing Elum contracts so the current 0 MWp sites are picked up on the next sync (the toggle stays per-contract editable).
+Support doc keeps the Base / eConf / Total columns so the split is still auditable; a footnote will note that eConf is invoiced within the org's single line.
 
-**3. Legacy asset group: eConf and non-eConf in one contract**
-- In the org-tier branch of `ammp-sync-contract`, replace the single legacy pseudo-org with two:
-  - `Legacy asset group — with eConf` (`hasEconf: true`) for members that are **also** in the AND group (`ammp_asset_group_id_and`, e.g. `[Add-on] Remote eConf`),
-  - `Legacy asset group — standard` (`hasEconf: false`) for the rest.
-- Honour `ammp_asset_group_id_not` on this path too, as a pure exclusion applied to legacy members.
-- Only emit a pseudo-org that actually has members, and keep the existing de-duplication against sub-orgs (sub-org wins, overlap recorded as a `elum_asset_double_count` warning).
-- No pricing-engine change needed: `calculateElumOrgTierBreakdown` already applies the eConf rate per org via `org.hasEconf`, so the two legacy lines price at €65/MWp and €65 + €335/MWp respectively, and flow through to the Xero line items and support document automatically.
-- `ContractForm.tsx`: for org-tier packages relabel the AND selector "eConf add-on group — legacy members in this group are billed with remote eConf" and the NOT selector "Exclude group", with a one-line note that one contract now covers both variants.
+## 2. Scope "No assets resolved for this organisation." to the org row
 
-## Technical notes
+In `src/lib/invoiceCalculations.ts`, `calculateElumOrgTierBreakdown` returns `warnings: [...globalWarnings, ...orgLines.flatMap(o => o.warnings)]`, so every per-org notice is duplicated as a contract-wide banner (`SupportDocument.tsx:145`, `PdfRenderer.tsx:149`) — hence the "No assets resolved" text under the C&I Lite heading despite 140 resolved sites. Per-org rendering already exists at `SupportDocument.tsx:208`.
 
-- The shared mapper is a pure function over the generated `contracts` row type, so any future column added to the form has one place to register.
-- `_shared/zeroPvScan.ts` takes a service-role client plus an optional contract-id filter; the cron passes no filter, the sync passes the one contract.
-- Legacy pseudo-org IDs become `legacy:<groupId>:econf` and `legacy:<groupId>:base` so the org breakdown, invoice lines and asset Category column stay stable across syncs.
+Fix: return only `globalWarnings` plus any warning that set `blocked` (the Utility "<2 MWp sites" warning), leaving informational per-org notices on `org.warnings`. `blocked` itself is unchanged, so the Xero submission gate in `InvoiceCalculator.tsx` still works.
+
+## 3. Hide the all-zero "Monitoring Fee Price Breakdown"
+
+`generateAssetBreakdown()` in `src/lib/supportDocumentGenerator.ts` has no branch for Elum 2026 org-tier packages, so it falls to the default path where `baseRatePerMWp` stays `0` and every row prints €0.00. Add an early return `{ assetBreakdown: [] }` for `isElumOrgTierPackage(packageType) && calculationResult.elumOrgTierBreakdown` (same treatment as `elum_internal` / `per_site`). Both renderers already skip the section when empty, and the period total comes from `elumOrgTierBreakdown.totalCost`, so no amounts change.
+
+## Files touched
+
+- `src/lib/invoiceCalculations.ts` — warning scoping
+- `src/lib/supportDocumentGenerator.ts` — suppress the zero asset table for org tiers
+- `src/components/dashboard/InvoiceCalculator.tsx` — single combined Xero line per org
+- `src/components/invoices/MergedInvoiceDialog.tsx` — same merge for merged invoices
+- `src/components/invoices/SupportDocument.tsx` — eConf footnote
