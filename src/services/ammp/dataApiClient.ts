@@ -88,11 +88,17 @@ export const dataApiClient = {
   },
 
   /**
-   * List all assets
+   * List assets, optionally scoped to one or more (sub-)org IDs.
+   * GET /v1/assets?org_ids=<id>[,<id>]
    */
-  async listAssets(): Promise<AssetResponse[]> {
-    return request<AssetResponse[]>('/assets');
+  async listAssets(orgIds?: string[]): Promise<AssetResponse[]> {
+    const path = orgIds && orgIds.length > 0
+      ? `/assets?org_ids=${orgIds.map(encodeURIComponent).join(',')}`
+      : '/assets';
+    const response = await request<AssetResponse[] | { assets: AssetResponse[] }>(path);
+    return Array.isArray(response) ? response : (response?.assets ?? []);
   },
+
 
 
   /**
