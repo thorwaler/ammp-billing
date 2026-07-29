@@ -95,6 +95,23 @@ const ContractDetails = () => {
   );
   const cachedCapabilities = contract?.cached_capabilities;
 
+  // Elum 2026: map each asset to the sub-org (and tier) it was resolved from
+  const orgBreakdown: any[] = cachedCapabilities?.orgBreakdown || [];
+  const assetCategoryMap = useMemo(() => {
+    const map = new Map<string, { label: string; tier: string | null; isLegacy: boolean }>();
+    orgBreakdown.forEach((org: any) => {
+      (org.assets || []).forEach((a: any) => {
+        map.set(a.assetId, {
+          label: org.isLegacyAssetGroup ? (org.orgName || 'Legacy asset group') : (org.orgName || org.orgId),
+          tier: org.tier || null,
+          isLegacy: org.isLegacyAssetGroup === true,
+        });
+      });
+    });
+    return map;
+  }, [cachedCapabilities]);
+  const showCategoryColumn = orgBreakdown.length > 0;
+
   const loadContractData = async () => {
       setLoading(true);
       setError(null);
