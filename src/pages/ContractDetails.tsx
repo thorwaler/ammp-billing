@@ -1644,6 +1644,7 @@ const ContractDetails = () => {
                   <thead className="bg-muted sticky top-0">
                     <tr>
                       <th className="text-left p-2 font-medium">Asset Name</th>
+                      {showCategoryColumn && <th className="text-left p-2 font-medium">Category</th>}
                       <th className="text-right p-2 font-medium">MW</th>
                       <th className="text-center p-2 font-medium">Hybrid</th>
                       <th className="text-center p-2 font-medium">Solcast</th>
