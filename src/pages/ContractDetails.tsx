@@ -95,6 +95,7 @@ const ContractDetails = () => {
   );
   const cachedCapabilities = contract?.cached_capabilities;
 
+
   // Elum 2026: map each asset to the sub-org (and tier) it was resolved from
   const orgBreakdown: any[] = cachedCapabilities?.orgBreakdown || [];
   const assetCategoryMap = useMemo(() => {
