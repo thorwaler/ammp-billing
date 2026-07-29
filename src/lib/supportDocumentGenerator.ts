@@ -633,8 +633,8 @@ export async function generateSupportDocumentData(
       blocked: calculationResult.elumOrgTierBreakdown.blocked,
       warnings: calculationResult.elumOrgTierBreakdown.warnings,
       orgs: calculationResult.elumOrgTierBreakdown.orgs,
-      doubleCountWarnings: (cachedCapabilities as any)?.doubleCountWarnings || undefined,
-      unassignedOrgs: (cachedCapabilities as any)?.unassignedOrgs || undefined,
+      doubleCountWarnings: ammpCapabilities?.doubleCountWarnings || undefined,
+      unassignedOrgs: ammpCapabilities?.unassignedOrgs || undefined,
     } : undefined,
     // Matriarch API breakdown
     matriarchApiBreakdown: calculationResult.matriarchApiBreakdown ? {
