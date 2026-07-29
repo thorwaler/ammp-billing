@@ -1322,6 +1322,16 @@ Deno.serve(async (req) => {
       cachedCapabilities
     );
 
+    // Zero-PV scan for this contract (monthly cron is the backstop)
+    try {
+      const zeroPv = await runZeroPvScan(supabase, { contractId });
+      console.log(`[Zero PV] Scan for ${contractId}:`, JSON.stringify(zeroPv));
+    } catch (zeroPvErr) {
+      console.error('[Zero PV] Scan failed:', zeroPvErr);
+    }
+
+
+
 
     // Populate site billing status for per_site contracts
     await populateSiteBillingStatus(
