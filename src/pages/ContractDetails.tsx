@@ -55,6 +55,17 @@ const addonNames: {[key: string]: string} = {
   customAPIDevelopment: "Custom API Development",
 };
 
+// Elum 2026 sub-org tier labels
+const elumTierLabel = (tier?: string | null) => {
+  switch (tier) {
+    case 'ci_lite': return 'C&I Light';
+    case 'ci_pro': return 'C&I Pro';
+    case 'utility': return 'Utility';
+    case 'internal': return 'Internal';
+    default: return 'No tier flag';
+  }
+};
+
 // Helper function to format date in CET timezone
 import { formatDateCET } from "@/lib/dateUtils";
 const formatDate = (dateString: string) => {
