@@ -1178,6 +1178,17 @@ Deno.serve(async (req) => {
       console.log(`[Asset Change Detection] Skipping - previous sync was partial, no reliable baseline`);
     }
 
+    // Elum 2026: raise alerts for org-resolution problems
+    await generateElumAlerts(
+      supabase,
+      contractId,
+      contract.customer_id,
+      effectiveUserId,
+      contract.company_name || 'Contract',
+      cachedCapabilities
+    );
+
+
     // Populate site billing status for per_site contracts
     await populateSiteBillingStatus(
       supabase,
