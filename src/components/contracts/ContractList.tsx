@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
 import { format } from "date-fns";
 import {
   Table,
@@ -186,61 +187,7 @@ export function ContractList() {
       }
 
       // Transform to expected format for ContractForm
-      setSelectedContract({
-        id: data.id,
-        contractName: data.contract_name || undefined,
-        package: data.package,
-        modules: data.modules || [],
-        addons: data.addons || [],
-        initialMW: data.initial_mw,
-        billingFrequency: data.billing_frequency || 'annual',
-        invoicingType: data.invoicing_type,
-        invoiceLeadDays: data.invoice_lead_days,
-        nextInvoiceDate: data.next_invoice_date,
-        customPricing: data.custom_pricing,
-        volumeDiscounts: data.volume_discounts,
-        minimumCharge: data.minimum_charge,
-        minimumAnnualValue: data.minimum_annual_value,
-        baseMonthlyPrice: data.base_monthly_price,
-        retainerHours: data.retainer_hours,
-        retainerHourlyRate: data.retainer_hourly_rate,
-        retainerMinimumValue: data.retainer_minimum_value,
-        onboardingFeePerSite: data.onboarding_fee_per_site,
-        annualFeePerSite: data.annual_fee_per_site,
-        maxMw: data.max_mw,
-        currency: data.currency || 'EUR',
-        signedDate: data.signed_date,
-        periodStart: data.period_start,
-        periodEnd: data.period_end,
-        notes: data.notes,
-        contractStatus: data.contract_status,
-        portfolioDiscountTiers: data.portfolio_discount_tiers,
-        minimumChargeTiers: data.minimum_charge_tiers,
-        siteChargeFrequency: data.site_charge_frequency,
-        contractExpiryDate: data.contract_expiry_date,
-        ammpAssetGroupId: data.ammp_asset_group_id,
-        ammpAssetGroupName: data.ammp_asset_group_name,
-        ammpAssetGroupIdAnd: data.ammp_asset_group_id_and,
-        ammpAssetGroupNameAnd: data.ammp_asset_group_name_and,
-        ammpAssetGroupIdNot: data.ammp_asset_group_id_not,
-        ammpAssetGroupNameNot: data.ammp_asset_group_name_not,
-        contractAmmpOrgId: data.contract_ammp_org_id,
-        siteSizeThresholdKwp: data.site_size_threshold_kwp,
-        belowThresholdPricePerMWp: data.below_threshold_price_per_mwp,
-        aboveThresholdPricePerMWp: data.above_threshold_price_per_mwp,
-        ammpOrgId: data.ammp_org_id,
-        ammpSyncStatus: data.ammp_sync_status,
-        lastAmmpSync: data.last_ammp_sync,
-        cachedCapabilities: data.cached_capabilities,
-        graduatedMWTiers: data.graduated_mw_tiers,
-        elumParentOrgId: (data as any).elum_parent_org_id || undefined,
-        elumLiteBaseRate: (data as any).org_pricing_config?.liteBaseRate,
-        elumLiteEconfRate: (data as any).org_pricing_config?.liteEconfRate,
-        annualMinimumFee: data.annual_minimum_fee ?? undefined,
-        committedMinimumMW: data.committed_minimum_mw ?? undefined,
-        annualBillingAnchorDate: data.annual_billing_anchor_date ?? undefined,
-        contractTypeId: data.contract_type_id ?? undefined,
-      });
+      setSelectedContract(mapContractRowToFormValues(data));
       setShowEditForm(true);
     } catch (error: any) {
       toast({ title: "Error loading contract", description: error.message, variant: "destructive" });

@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import CustomerForm from "./CustomerForm";
 import ContractForm from "../contracts/ContractForm";
 import { supabase } from "@/integrations/supabase/client";
+import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
 import { toast } from "@/hooks/use-toast";
 import { getModuleById, getAddonById } from "@/data/pricingData";
 import { getCustomerDisplayName } from "@/utils/customerUtils";
@@ -483,50 +484,7 @@ export function CustomerCard({
                     {selectedContractForEdit && (
                       <ContractForm 
                         existingCustomer={{ id, name, nickname, location, mwpManaged }}
-                        existingContract={{
-                          id: selectedContractForEdit.id,
-                          contractName: selectedContractForEdit.contract_name,
-                          package: selectedContractForEdit.package,
-                          signedDate: selectedContractForEdit.signed_date,
-                          periodStart: selectedContractForEdit.period_start,
-                          periodEnd: selectedContractForEdit.period_end,
-                          cachedCapabilities: selectedContractForEdit.cached_capabilities,
-                          // AMMP fields
-                          ammpOrgId: selectedContractForEdit.ammp_org_id,
-                          ammpAssetGroupId: selectedContractForEdit.ammp_asset_group_id,
-                          ammpAssetGroupName: selectedContractForEdit.ammp_asset_group_name,
-                          ammpAssetGroupIdAnd: selectedContractForEdit.ammp_asset_group_id_and,
-                          ammpAssetGroupNameAnd: selectedContractForEdit.ammp_asset_group_name_and,
-                          ammpAssetGroupIdNot: selectedContractForEdit.ammp_asset_group_id_not,
-                          ammpAssetGroupNameNot: selectedContractForEdit.ammp_asset_group_name_not,
-                          // Other contract fields
-                          modules: selectedContractForEdit.modules,
-                          addons: selectedContractForEdit.addons,
-                          customPricing: selectedContractForEdit.custom_pricing,
-                          minimumAnnualValue: selectedContractForEdit.minimum_annual_value,
-                          minimumCharge: selectedContractForEdit.minimum_charge,
-                          minimumChargeTiers: selectedContractForEdit.minimum_charge_tiers,
-                          portfolioDiscountTiers: selectedContractForEdit.portfolio_discount_tiers,
-                          siteChargeFrequency: selectedContractForEdit.site_charge_frequency,
-                          volumeDiscounts: selectedContractForEdit.volume_discounts,
-                          currency: selectedContractForEdit.currency,
-                          billingFrequency: selectedContractForEdit.billing_frequency,
-                          baseMonthlyPrice: selectedContractForEdit.base_monthly_price,
-                          initialMW: selectedContractForEdit.initial_mw,
-                          annualFeePerSite: selectedContractForEdit.annual_fee_per_site,
-                          retainerHours: selectedContractForEdit.retainer_hours,
-                          retainerHourlyRate: selectedContractForEdit.retainer_hourly_rate,
-                          retainerMinimumValue: selectedContractForEdit.retainer_minimum_value,
-                          siteSizeThresholdKwp: selectedContractForEdit.site_size_threshold_kwp,
-                          belowThresholdPricePerMWp: selectedContractForEdit.below_threshold_price_per_mwp,
-                          aboveThresholdPricePerMWp: selectedContractForEdit.above_threshold_price_per_mwp,
-                          contractExpiryDate: selectedContractForEdit.contract_expiry_date,
-                          notes: selectedContractForEdit.notes,
-                          maxMw: selectedContractForEdit.max_mw,
-                          onboardingFeePerSite: selectedContractForEdit.onboarding_fee_per_site,
-                          invoicingType: selectedContractForEdit.invoicing_type,
-                          invoiceLeadDays: selectedContractForEdit.invoice_lead_days,
-                        }}
+                        existingContract={mapContractRowToFormValues(selectedContractForEdit)}
                         onComplete={() => {
                           setShowContractForm(false);
                           setSelectedContractForEdit(null);
