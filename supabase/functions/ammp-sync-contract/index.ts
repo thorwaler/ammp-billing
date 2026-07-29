@@ -385,6 +385,25 @@ async function getClassifiedSubOrgs(token: string, parentOrgId: string): Promise
 }
 
 /**
+ * Fetch assets belonging to a specific (sub-)org.
+ * GET /v1/assets?org_ids=<orgId>
+ */
+async function getAssetsForOrg(token: string, orgId: string): Promise<any[]> {
+  try {
+    const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
+    const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
+    return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
+      ...a,
+      asset_name: a.asset_name || 'Unknown',
+      org_id: a.org_id || orgId,
+    }));
+  } catch (error) {
+    console.error(`[AMMP Sync Contract] Failed to fetch assets for org ${orgId}:`, error);
+    return [];
+  }
+}
+
+/**
  * Process contract sync - handles ALL contract types
  * For asset group contracts: uses asset group filtering
  * For org-scoped contracts: uses org_id filtering  
