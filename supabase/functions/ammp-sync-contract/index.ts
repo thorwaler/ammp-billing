@@ -450,14 +450,23 @@ async function processContractSync(
     unassignedOrgs = subOrgs.filter(o => o.tier === null).map(o => ({ orgId: o.orgId, orgName: o.orgName }));
     console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned)`);
     
-    const orgById = new Map(tierOrgs.map(o => [o.orgId, o]));
-    const orgAssets = allAssets.filter((a: any) => orgById.has(a.org_id));
-    assetsToProcess = orgAssets.map((a: any) => {
-      assetOrgMap.set(a.asset_id, orgById.get(a.org_id)!);
-      return { asset_id: a.asset_id, asset_name: a.asset_name };
-    });
-    
-    // Hybrid transition: legacy asset group assets not already covered by an org
+    // Resolve assets per sub-org via the org-scoped assets endpoint
+    for (const org of tierOrgs) {
+      let orgAssets = await getAssetsForOrg(token, org.orgId);
+      let path = 'org-scoped';
+      if (orgAssets.length === 0) {
+        orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
+        path = 'global-fallback';
+      }
+      for (const a of orgAssets) {
+        if (assetOrgMap.has(a.asset_id)) continue;
+        assetOrgMap.set(a.asset_id, org);
+        assetsToProcess.push({ asset_id: a.asset_id, asset_name: a.asset_name });
+        if (!assetLookup.has(a.asset_id)) assetLookup.set(a.asset_id, a);
+      }
+      console.log(`[AMMP Sync Contract] Sub-org ${org.orgName} (${org.tier}): ${orgAssets.length} assets via ${path}`);
+    }
+
     if (contract.ammp_asset_group_id) {
       const legacyOrg: ClassifiedOrg = {
         orgId: `legacy:${contract.ammp_asset_group_id}`,
