@@ -27,6 +27,12 @@ const alertTypes = [
   { value: "site_decrease", label: "Site Decrease" },
   { value: "asset_disappeared", label: "Asset Disappeared" },
   { value: "asset_reappeared", label: "Asset Reappeared" },
+  { value: "asset_reappeared_suspicious", label: "Suspicious Asset Return" },
+  { value: "zero_pv_capacity", label: "Zero PV Capacity" },
+  { value: "elum_org_unassigned", label: "Elum Sub-org Without Tier" },
+  { value: "elum_asset_double_count", label: "Elum Asset Double Count" },
+  { value: "elum_utility_site_too_small", label: "Elum Utility Site < 2 MWp" },
+  { value: "elum_combined_minimum_shortfall", label: "Elum Combined Minimum Shortfall" },
 ];
 
 export function AlertFilters({
