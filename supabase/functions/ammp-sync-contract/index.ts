@@ -385,6 +385,25 @@ async function getClassifiedSubOrgs(token: string, parentOrgId: string): Promise
 }
 
 /**
+ * Fetch assets belonging to a specific (sub-)org.
+ * GET /v1/assets?org_ids=<orgId>
+ */
+async function getAssetsForOrg(token: string, orgId: string): Promise<any[]> {
+  try {
+    const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
+    const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
+    return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
+      ...a,
+      asset_name: a.asset_name || 'Unknown',
+      org_id: a.org_id || orgId,
+    }));
+  } catch (error) {
+    console.error(`[AMMP Sync Contract] Failed to fetch assets for org ${orgId}:`, error);
+    return [];
+  }
+}
+
+/**
  * Process contract sync - handles ALL contract types
  * For asset group contracts: uses asset group filtering
  * For org-scoped contracts: uses org_id filtering  
@@ -450,14 +469,23 @@ async function processContractSync(
     unassignedOrgs = subOrgs.filter(o => o.tier === null).map(o => ({ orgId: o.orgId, orgName: o.orgName }));
     console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned)`);
     
-    const orgById = new Map(tierOrgs.map(o => [o.orgId, o]));
-    const orgAssets = allAssets.filter((a: any) => orgById.has(a.org_id));
-    assetsToProcess = orgAssets.map((a: any) => {
-      assetOrgMap.set(a.asset_id, orgById.get(a.org_id)!);
-      return { asset_id: a.asset_id, asset_name: a.asset_name };
-    });
-    
-    // Hybrid transition: legacy asset group assets not already covered by an org
+    // Resolve assets per sub-org via the org-scoped assets endpoint
+    for (const org of tierOrgs) {
+      let orgAssets = await getAssetsForOrg(token, org.orgId);
+      let path = 'org-scoped';
+      if (orgAssets.length === 0) {
+        orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
+        path = 'global-fallback';
+      }
+      for (const a of orgAssets) {
+        if (assetOrgMap.has(a.asset_id)) continue;
+        assetOrgMap.set(a.asset_id, org);
+        assetsToProcess.push({ asset_id: a.asset_id, asset_name: a.asset_name });
+        if (!assetLookup.has(a.asset_id)) assetLookup.set(a.asset_id, a);
+      }
+      console.log(`[AMMP Sync Contract] Sub-org ${org.orgName} (${org.tier}): ${orgAssets.length} assets via ${path}`);
+    }
+
     if (contract.ammp_asset_group_id) {
       const legacyOrg: ClassifiedOrg = {
         orgId: `legacy:${contract.ammp_asset_group_id}`,
@@ -483,7 +511,11 @@ async function processContractSync(
       console.log(`[AMMP Sync Contract] Legacy asset group merged: ${members.length} members, ${doubleCountWarnings.length} overlaps de-duplicated`);
     }
     
+    if (tierOrgs.length > 0 && assetsToProcess.length === 0) {
+      console.warn(`[AMMP Sync Contract] No assets found for ${tierOrgs.length} ${elumTier} sub-orgs`);
+    }
     console.log(`[AMMP Sync Contract] Elum org-based resolution: ${assetsToProcess.length} assets`);
+
   } else if (contract.ammp_asset_group_id) {
     // Asset group filtering (for elum_epm, elum_jubaili, or any contract with asset group)
     const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
