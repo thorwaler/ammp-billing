@@ -487,28 +487,66 @@ async function processContractSync(
     }
 
     if (contract.ammp_asset_group_id) {
-      const legacyOrg: ClassifiedOrg = {
-        orgId: `legacy:${contract.ammp_asset_group_id}`,
-        orgName: 'Legacy asset group (transition)',
+      // Legacy asset group members are split into two pseudo-orgs so a single
+      // contract can carry both the standard tier rate and the eConf add-on
+      // rate. The AND group (e.g. "[Add-on] Remote eConf") marks eConf members;
+      // the NOT group excludes members outright.
+      const baseOrg: ClassifiedOrg = {
+        orgId: `legacy:${contract.ammp_asset_group_id}:base`,
+        orgName: 'Legacy asset group — standard',
         tier: elumTier,
         hasEconf: false,
       };
+      const econfOrg: ClassifiedOrg = {
+        orgId: `legacy:${contract.ammp_asset_group_id}:econf`,
+        orgName: 'Legacy asset group — with eConf',
+        tier: elumTier,
+        hasEconf: true,
+      };
+
       const members = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
+
+      let econfIds = new Set<string>();
+      if (contract.ammp_asset_group_id_and) {
+        const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
+        econfIds = new Set(andMembers.map((m) => m.asset_id));
+      }
+      let excludedIds = new Set<string>();
+      if (contract.ammp_asset_group_id_not) {
+        const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
+        excludedIds = new Set(notMembers.map((m) => m.asset_id));
+      }
+
+      let baseCount = 0;
+      let econfCount = 0;
+      let excludedCount = 0;
       for (const m of members) {
+        if (excludedIds.has(m.asset_id)) {
+          excludedCount++;
+          continue;
+        }
         const existing = assetOrgMap.get(m.asset_id);
         if (existing) {
           // Asset resolved from both sources — counted once (org side wins)
           doubleCountWarnings.push({ assetId: m.asset_id, assetName: m.asset_name, orgName: existing.orgName });
           continue;
         }
-        assetOrgMap.set(m.asset_id, legacyOrg);
+        const target = econfIds.has(m.asset_id) ? econfOrg : baseOrg;
+        if (target === econfOrg) econfCount++; else baseCount++;
+        assetOrgMap.set(m.asset_id, target);
         assetsToProcess.push({ asset_id: m.asset_id, asset_name: m.asset_name });
       }
-      if (members.length > 0) {
-        (legacyOrg as any).isLegacyAssetGroup = true;
-        tierOrgs = [...tierOrgs, legacyOrg];
-      }
-      console.log(`[AMMP Sync Contract] Legacy asset group merged: ${members.length} members, ${doubleCountWarnings.length} overlaps de-duplicated`);
+
+      const legacySegments: ClassifiedOrg[] = [];
+      if (baseCount > 0) legacySegments.push(baseOrg);
+      if (econfCount > 0) legacySegments.push(econfOrg);
+      for (const seg of legacySegments) (seg as any).isLegacyAssetGroup = true;
+      if (legacySegments.length > 0) tierOrgs = [...tierOrgs, ...legacySegments];
+
+      console.log(
+        `[AMMP Sync Contract] Legacy asset group merged: ${members.length} members -> ${baseCount} standard, ${econfCount} eConf, ${excludedCount} excluded, ${doubleCountWarnings.length} overlaps de-duplicated`
+      );
+
     }
     
     if (tierOrgs.length > 0 && assetsToProcess.length === 0) {
