@@ -492,7 +492,11 @@ async function processContractSync(
       console.log(`[AMMP Sync Contract] Legacy asset group merged: ${members.length} members, ${doubleCountWarnings.length} overlaps de-duplicated`);
     }
     
+    if (tierOrgs.length > 0 && assetsToProcess.length === 0) {
+      console.warn(`[AMMP Sync Contract] No assets found for ${tierOrgs.length} ${elumTier} sub-orgs`);
+    }
     console.log(`[AMMP Sync Contract] Elum org-based resolution: ${assetsToProcess.length} assets`);
+
   } else if (contract.ammp_asset_group_id) {
     // Asset group filtering (for elum_epm, elum_jubaili, or any contract with asset group)
     const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
