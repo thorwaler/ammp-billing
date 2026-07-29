@@ -1744,6 +1744,15 @@ const ContractDetails = () => {
                         {selectedAsset?.totalMW?.toFixed(4)} MW • {selectedAsset?.deviceCount || 0} devices
                         {selectedAsset?.isHybrid && <Badge variant="outline" className="ml-2 bg-purple-50">Hybrid</Badge>}
                         {selectedAsset?.hasSolcast && <Badge variant="outline" className="ml-2 bg-blue-50">Solcast</Badge>}
+                        {selectedAsset && assetCategoryMap.get(selectedAsset.assetId) && (
+                          <Badge variant="outline" className="ml-2">
+                            {assetCategoryMap.get(selectedAsset.assetId)!.label}
+                            {' · '}
+                            {assetCategoryMap.get(selectedAsset.assetId)!.isLegacy
+                              ? 'Legacy asset group'
+                              : elumTierLabel(assetCategoryMap.get(selectedAsset.assetId)!.tier)}
+                          </Badge>
+                        )}
                       </div>
                     </DialogDescription>
                   </DialogHeader>
