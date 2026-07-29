@@ -1,0 +1,2 @@
+UPDATE public.contracts SET elum_tier = 'ci_lite' WHERE id = '0d4d9e8d-816d-4e16-874c-2cae9cbda122';
+DELETE FROM public.asset_status_history WHERE contract_id = '0d4d9e8d-816d-4e16-874c-2cae9cbda122' AND detected_at >= '2026-07-29T14:05:00Z';

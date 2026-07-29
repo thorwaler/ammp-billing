@@ -464,6 +464,9 @@ Deno.serve(async (req) => {
     ).length;
     
     const updatedCapabilities: CachedCapabilities = {
+      // Spread first so fields written by the contract sync (orgBreakdown,
+      // doubleCountWarnings, unassignedOrgs, …) survive enrichment.
+      ...cachedCapabilities,
       totalMW: updatedBreakdown.reduce((sum, a) => sum + a.totalMW, 0),
       ongridMW: ongridSites.reduce((sum, a) => sum + a.totalMW, 0),
       hybridMW: hybridSites.reduce((sum, a) => sum + a.totalMW, 0),

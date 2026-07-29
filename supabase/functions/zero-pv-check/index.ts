@@ -35,7 +35,8 @@ Deno.serve(async (req) => {
     let alertsRaised = 0;
 
     for (const c of contracts ?? []) {
-      const assets: any[] = c.cached_capabilities?.assets ?? [];
+      const assets: any[] =
+        c.cached_capabilities?.assetBreakdown ?? c.cached_capabilities?.assets ?? [];
       const zeroAssets = assets.filter((a) => Number(a?.totalMW ?? 0) === 0 && a?.assetId);
       const nonZeroIds = new Set(
         assets.filter((a) => Number(a?.totalMW ?? 0) > 0 && a?.assetId).map((a) => a.assetId)

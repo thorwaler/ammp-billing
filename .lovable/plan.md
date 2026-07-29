@@ -1,41 +1,22 @@
-## Problem
+## Goal
 
-The new C&I Light contract (`elum_tier = ci_lite`, parent org `06a3…65ac`, no asset group, no `ammp_org_id`) sits at `never_synced` with 0 cached assets.
+Make the sub-org asset resolution that now works for the C&I Light contract reliable for every 2026 Elum tier (Light, Pro, Utility), and fix the bug that silently discards the org data after sync.
 
-Today the sync (`supabase/functions/ammp-sync-contract/index.ts`) resolves Elum org-tier assets by fetching one global `/assets` list and filtering in memory on `a.org_id`. That only works if the global list contains every sub-org's assets *and* carries a populated `org_id`. Instead we should do what you describe: discover tier-flagged sub-orgs, then ask the assets endpoint scoped to those org IDs.
+## Confirmed findings
 
-## API calls used
+- The sync itself is already tier-generic: `ammp-sync-contract/index.ts:349-352` maps `ci_lite/ci_pro/utility` to `epm_lite/epm_pro/epm_utility`, and the per-sub-org `/assets?org_ids=…` resolution at lines 465-517 runs for whichever tier the contract carries. Logs confirm the last run resolved 11 tier orgs / 33 assets for the Light contract.
+- **Bug: org data is wiped right after sync.** `ammp-device-enrichment/index.ts` (~line 466) rebuilds `cached_capabilities` field-by-field instead of spreading the existing object, so `orgBreakdown`, `doubleCountWarnings` and `unassignedOrgs` are dropped. Verified in the database: the Light contract synced at 13:59:52 with 33 assets / 13.15 MW, then enrichment ran at 14:01:05 and the stored `cached_capabilities` now has **no `orgBreakdown` key at all**. Pricing, Xero per-org lines and the support-document org tables therefore fall back to the non-org path for every org-based Elum contract.
+- **Bug: `zero-pv-check/index.ts:38` reads `cached_capabilities.assets`**, a key that does not exist (the array is `assetBreakdown`), so zero-PV detection never fires for any contract.
+- Only one 2026 org contract exists today (`elum_ci_lite`); no Pro or Utility contract exists yet, so those paths have never executed against real data.
 
-```text
-GET /v1/orgs?parent_org_id=<PARENT_ORG_ID>          # sub-org discovery + feature_flags
-GET /v1/assets?org_ids=<SUB_ORG_ID>                 # assets for a tier-flagged sub-org
-GET /v1/assets/<ASSET_ID>/devices?include_virtual=true   # per-asset device enrichment
-```
+## Changes
 
-All go through the existing `ammp-data-proxy` (base `https://data-api.ammp.io/v1`), so no new proxy work beyond confirming the query string passes through untouched.
+1. **Preserve org data through enrichment** — in `ammp-device-enrichment/index.ts`, build the updated capabilities by spreading `cachedCapabilities` first (as the other branch at ~line 320 already does), so `orgBreakdown`, `doubleCountWarnings`, `unassignedOrgs` and any future fields survive. Redeploy.
+2. **Repair the existing Light contract** — re-run the contract sync so `orgBreakdown` is written back, then confirm the key persists after enrichment completes.
+3. **Fix zero-PV asset lookup** — point `zero-pv-check` at `cached_capabilities.assetBreakdown` (keeping `.assets` as a fallback). Redeploy.
+4. **Verify Pro and Utility end to end** — temporarily point a scratch contract at each tier (or run the sync with the tier switched) to confirm `epm_pro` / `epm_utility` sub-orgs resolve assets via the org-scoped endpoint, log the org and asset counts, and confirm the Utility >2 MWp guard behaves on real site sizes. Fix whatever the runs surface.
+5. **Guard against silent regressions** — when a contract has `elum_tier` + `elum_parent_org_id` but the cached capabilities carry no `orgBreakdown`, surface a clear "org breakdown missing — re-sync required" warning in the invoice calculator instead of silently pricing on the flat path.
 
-## What to change
+## Technical notes
 
-**1. Per-sub-org asset fetching (edge function)**
-
-Add `getAssetsForOrgs(token, orgIds)` calling `/assets?org_ids=<id>` (one call per sub-org; batch comma-separated only if the endpoint accepts it, otherwise sequential with small concurrency). Normalise array or `{assets: []}` responses to `{asset_id, asset_name, org_id}`.
-
-In the Elum org-tier branch of `processContractSync`:
-- fetch assets per tier-matched sub-org and merge, de-duplicating by `asset_id`;
-- build `assetOrgMap` from the org the asset was fetched under, not from `a.org_id`;
-- merge fetched rows into `assetLookup` so device enrichment keeps using `/assets/<id>/devices?include_virtual=true` and skips redundant metadata calls;
-- if a scoped call errors or returns nothing, fall back to filtering the global `/assets` list by `org_id` for that org, and log which path was used.
-
-Legacy asset-group merge, double-count warnings and `unassignedOrgs` behaviour stay unchanged.
-
-**2. Diagnostics**
-
-Log per sub-org: name, tier, asset count, resolution path. When a tier has sub-orgs but resolves zero assets, fail loudly with `"No assets found for N C&I Light sub-orgs"` rather than writing a silent empty sync.
-
-**3. Client parity**
-
-`src/services/ammp/dataApiClient.ts`: `listAssets(orgIds?: string[])` → `/assets?org_ids=…`, so form-side discovery/preview uses the same call.
-
-**4. Verify**
-
-Redeploy, sync this contract, confirm `cached_capabilities.assetBreakdown` and `orgBreakdown` populate per sub-org and the C&I Light €65/MWp calculation yields a non-zero preview.
+Files touched: `supabase/functions/ammp-device-enrichment/index.ts`, `supabase/functions/zero-pv-check/index.ts`, `src/components/dashboard/InvoiceCalculator.tsx`. No schema or migration changes. Both edge functions get redeployed and re-checked against logs.

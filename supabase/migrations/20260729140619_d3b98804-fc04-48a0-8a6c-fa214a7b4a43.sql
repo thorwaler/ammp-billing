@@ -1,0 +1,1 @@
+UPDATE public.contracts SET elum_tier = 'utility' WHERE id = '0d4d9e8d-816d-4e16-874c-2cae9cbda122';

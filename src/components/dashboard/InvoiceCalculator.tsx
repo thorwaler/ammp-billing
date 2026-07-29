@@ -386,6 +386,8 @@ export function InvoiceCalculator({
             contractAmmpOrgId: (contract as any).contract_ammp_org_id || undefined,
             // Elum 2026 org-based tier config
             orgPricingConfig: (contract as any).org_pricing_config || undefined,
+            elumTier: (contract as any).elum_tier || undefined,
+            elumParentOrgId: (contract as any).elum_parent_org_id || undefined,
             // Elum Internal fields
             graduatedMWTiers: Array.isArray((contract as any).graduated_mw_tiers) 
               ? (contract as any).graduated_mw_tiers 
@@ -2755,6 +2757,17 @@ export function InvoiceCalculator({
                     <span>{formatContractCurrency(result.hybridTieredBreakdown.hybrid.cost)}</span>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Elum 2026 org tiers: cached org breakdown missing -> pricing silently falls back */}
+            {(selectedCustomer as any)?.elumTier && (selectedCustomer as any)?.elumParentOrgId && !result.elumOrgTierBreakdown && (
+              <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+                <p className="font-medium">Org breakdown missing — re-sync required</p>
+                <p className="text-xs mt-1">
+                  This contract is priced per Elum sub-org, but no cached sub-org breakdown was found.
+                  Run an AMMP sync on the contract before invoicing; otherwise the flat portfolio pricing is used.
+                </p>
               </div>
             )}
 

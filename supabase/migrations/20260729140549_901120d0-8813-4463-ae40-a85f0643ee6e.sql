@@ -1,0 +1,1 @@
+UPDATE public.contracts SET elum_tier = 'ci_pro' WHERE id = '0d4d9e8d-816d-4e16-874c-2cae9cbda122';
