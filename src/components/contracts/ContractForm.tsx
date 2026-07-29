@@ -3039,7 +3039,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                     />
                     
                     <AssetGroupSelector
-                      orgId={form.watch('contractAmmpOrgId') || undefined}
+                      orgId={form.watch('contractAmmpOrgId') || form.watch('elumParentOrgId') || undefined}
                       value={form.watch('ammpAssetGroupIdNot') || ''}
                       onSelect={(id, name) => {
                         form.setValue('ammpAssetGroupIdNot', id);
