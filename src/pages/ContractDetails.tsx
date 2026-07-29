@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import Layout from "@/components/layout/Layout";
 import { Button } from "@/components/ui/button";
@@ -55,6 +55,17 @@ const addonNames: {[key: string]: string} = {
   customAPIDevelopment: "Custom API Development",
 };
 
+// Elum 2026 sub-org tier labels
+const elumTierLabel = (tier?: string | null) => {
+  switch (tier) {
+    case 'ci_lite': return 'C&I Light';
+    case 'ci_pro': return 'C&I Pro';
+    case 'utility': return 'Utility';
+    case 'internal': return 'Internal';
+    default: return 'No tier flag';
+  }
+};
+
 // Helper function to format date in CET timezone
 import { formatDateCET } from "@/lib/dateUtils";
 const formatDate = (dateString: string) => {
@@ -85,9 +96,33 @@ const ContractDetails = () => {
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [isMoving, setIsMoving] = useState(false);
 
-  // All contracts now use contract-level sync via cached_capabilities
-  const hasAMMPData = contract && (contract.ammp_org_id || contract.ammp_asset_group_id);
+  // All contracts now use contract-level sync via cached_capabilities.
+  // Elum 2026 org-tier contracts only carry elum_parent_org_id, so include it here.
+  const hasAMMPData = contract && (
+    contract.ammp_org_id ||
+    contract.contract_ammp_org_id ||
+    contract.ammp_asset_group_id ||
+    contract.elum_parent_org_id
+  );
   const cachedCapabilities = contract?.cached_capabilities;
+
+
+  // Elum 2026: map each asset to the sub-org (and tier) it was resolved from
+  const orgBreakdown: any[] = cachedCapabilities?.orgBreakdown || [];
+  const assetCategoryMap = useMemo(() => {
+    const map = new Map<string, { label: string; tier: string | null; isLegacy: boolean }>();
+    orgBreakdown.forEach((org: any) => {
+      (org.assets || []).forEach((a: any) => {
+        map.set(a.assetId, {
+          label: org.isLegacyAssetGroup ? (org.orgName || 'Legacy asset group') : (org.orgName || org.orgId),
+          tier: org.tier || null,
+          isLegacy: org.isLegacyAssetGroup === true,
+        });
+      });
+    });
+    return map;
+  }, [cachedCapabilities]);
+  const showCategoryColumn = orgBreakdown.length > 0;
 
   const loadContractData = async () => {
       setLoading(true);
@@ -1621,6 +1656,7 @@ const ContractDetails = () => {
                   <thead className="bg-muted sticky top-0">
                     <tr>
                       <th className="text-left p-2 font-medium">Asset Name</th>
+                      {showCategoryColumn && <th className="text-left p-2 font-medium">Category</th>}
                       <th className="text-right p-2 font-medium">MW</th>
                       <th className="text-center p-2 font-medium">Hybrid</th>
                       <th className="text-center p-2 font-medium">Solcast</th>
@@ -1631,6 +1667,7 @@ const ContractDetails = () => {
                   <tbody>
                     {cachedCapabilities.assetBreakdown.map((asset: any) => {
                       const discount = getAssetDiscount(asset.assetId);
+                      const category = assetCategoryMap.get(asset.assetId);
                       return (
                         <tr 
                           key={asset.assetId} 
@@ -1638,6 +1675,20 @@ const ContractDetails = () => {
                           onClick={() => setSelectedAsset(asset)}
                         >
                           <td className="p-2">{asset.assetName}</td>
+                          {showCategoryColumn && (
+                            <td className="p-2">
+                              {category ? (
+                                <div className="flex flex-col gap-0.5">
+                                  <span>{category.label}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {category.isLegacy ? 'Legacy asset group' : elumTierLabel(category.tier)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Unassigned</span>
+                              )}
+                            </td>
+                          )}
                           <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
                           <td className="p-2 text-center">
                             {asset.isHybrid ? <Badge variant="outline" className="bg-purple-50">Yes</Badge> : '-'}
@@ -1693,6 +1744,15 @@ const ContractDetails = () => {
                         {selectedAsset?.totalMW?.toFixed(4)} MW • {selectedAsset?.deviceCount || 0} devices
                         {selectedAsset?.isHybrid && <Badge variant="outline" className="ml-2 bg-purple-50">Hybrid</Badge>}
                         {selectedAsset?.hasSolcast && <Badge variant="outline" className="ml-2 bg-blue-50">Solcast</Badge>}
+                        {selectedAsset && assetCategoryMap.get(selectedAsset.assetId) && (
+                          <Badge variant="outline" className="ml-2">
+                            {assetCategoryMap.get(selectedAsset.assetId)!.label}
+                            {' · '}
+                            {assetCategoryMap.get(selectedAsset.assetId)!.isLegacy
+                              ? 'Legacy asset group'
+                              : elumTierLabel(assetCategoryMap.get(selectedAsset.assetId)!.tier)}
+                          </Badge>
+                        )}
                       </div>
                     </DialogDescription>
                   </DialogHeader>

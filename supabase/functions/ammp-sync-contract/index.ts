@@ -1024,6 +1024,102 @@ async function populateSiteBillingStatus(
   }
 }
 
+/**
+ * Elum 2026: surface org-resolution problems as alerts on the Alerts page.
+ * Each condition is inserted only when no matching unacknowledged alert already
+ * exists for this contract, so repeated syncs don't pile up duplicates.
+ */
+async function generateElumAlerts(
+  supabase: any,
+  contractId: string,
+  customerId: string,
+  userId: string,
+  contractLabel: string,
+  cached: CachedCapabilities
+) {
+  const orgBreakdown = cached.orgBreakdown || [];
+  if (orgBreakdown.length === 0 && !(cached.unassignedOrgs?.length)) return;
+
+  type PendingAlert = {
+    alert_type: string;
+    severity: 'critical' | 'warning' | 'info';
+    title: string;
+    description: string;
+    metadata: Record<string, unknown>;
+  };
+  const pending: PendingAlert[] = [];
+
+  // 1. Sub-orgs with no tier flag -> their assets are not priced
+  const unassigned = cached.unassignedOrgs || [];
+  if (unassigned.length > 0) {
+    pending.push({
+      alert_type: 'elum_org_unassigned',
+      severity: 'warning',
+      title: `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag`,
+      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => o.orgName || o.orgId).join(', ')}.`,
+      metadata: { contract: contractLabel, orgs: unassigned },
+    });
+  }
+
+  // 2. Assets present in both a sub-org and the legacy asset group
+  const doubleCounted = cached.doubleCountWarnings || [];
+  if (doubleCounted.length > 0) {
+    pending.push({
+      alert_type: 'elum_asset_double_count',
+      severity: 'warning',
+      title: `${doubleCounted.length} asset${doubleCounted.length === 1 ? '' : 's'} in both a sub-org and the legacy asset group`,
+      description: `These assets were counted once (sub-org wins) during the transition: ${doubleCounted.slice(0, 10).map((a: any) => a.assetName).join(', ')}${doubleCounted.length > 10 ? ', …' : ''}. Remove them from the legacy asset group once the migration is complete.`,
+      metadata: { contract: contractLabel, assets: doubleCounted },
+    });
+  }
+
+  // 3. Utility orgs containing sites below 2 MWp -> blended rate is invalid
+  const utilityViolations: Array<{ orgName: string; assetName: string; totalMW: number }> = [];
+  orgBreakdown
+    .filter((o: any) => o.tier === 'utility')
+    .forEach((org: any) => {
+      (org.assets || []).forEach((a: any) => {
+        if ((a.totalMW || 0) < 2) {
+          utilityViolations.push({ orgName: org.orgName, assetName: a.assetName, totalMW: a.totalMW });
+        }
+      });
+    });
+  if (utilityViolations.length > 0) {
+    pending.push({
+      alert_type: 'elum_utility_site_too_small',
+      severity: 'critical',
+      title: `${utilityViolations.length} Utility site${utilityViolations.length === 1 ? '' : 's'} below 2 MWp`,
+      description: `Utility pricing requires every site above 2 MWp. Invoicing is blocked until these are re-tiered or flagged as MWh overrides: ${utilityViolations.slice(0, 10).map((v) => `${v.assetName} (${v.totalMW?.toFixed(2)} MW, ${v.orgName})`).join(', ')}${utilityViolations.length > 10 ? ', …' : ''}.`,
+      metadata: { contract: contractLabel, sites: utilityViolations },
+    });
+  }
+
+  for (const alert of pending) {
+    const { data: existing } = await supabase
+      .from('invoice_alerts')
+      .select('id')
+      .eq('contract_id', contractId)
+      .eq('alert_type', alert.alert_type)
+      .eq('is_acknowledged', false)
+      .limit(1);
+
+    if (existing && existing.length > 0) continue;
+
+    const { error } = await supabase.from('invoice_alerts').insert({
+      user_id: userId,
+      contract_id: contractId,
+      customer_id: customerId,
+      ...alert,
+    });
+    if (error) {
+      console.error(`[Elum Alerts] Failed to insert ${alert.alert_type}: ${error.message}`);
+    } else {
+      console.log(`[Elum Alerts] Created ${alert.alert_type} for contract ${contractId}`);
+    }
+  }
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -1177,6 +1273,17 @@ Deno.serve(async (req) => {
     } else {
       console.log(`[Asset Change Detection] Skipping - previous sync was partial, no reliable baseline`);
     }
+
+    // Elum 2026: raise alerts for org-resolution problems
+    await generateElumAlerts(
+      supabase,
+      contractId,
+      contract.customer_id,
+      effectiveUserId,
+      contract.company_name || 'Contract',
+      cachedCapabilities
+    );
+
 
     // Populate site billing status for per_site contracts
     await populateSiteBillingStatus(
