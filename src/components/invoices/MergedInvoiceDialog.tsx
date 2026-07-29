@@ -179,6 +179,10 @@ export function MergedInvoiceDialog({
       belowThresholdPricePerMWp: contract.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: contract.aboveThresholdPricePerMWp,
       graduatedMWTiers: contract.graduatedMWTiers,
+      // Elum 2026 org-based tiers
+      orgBreakdown: contract.cachedCapabilities?.orgBreakdown,
+      elumLiteBaseRate: (contract as any).orgPricingConfig?.liteBaseRate,
+      elumLiteEconfRate: (contract as any).orgPricingConfig?.liteEconfRate,
       annualFeePerSite: contract.annualFeePerSite,
       // AMMP OS 2026 trial fields
       isTrial: contract.isTrial,
@@ -362,6 +366,31 @@ export function MergedInvoiceDialog({
         }
       }
       
+      // Elum 2026 org-based tiers: one line per sub-organisation
+      if (result.elumOrgTierBreakdown) {
+        result.elumOrgTierBreakdown.orgs.forEach(org => {
+          if (org.baseCost > 0) {
+            const rateNote = org.appliedRate != null
+              ? ` @ ${org.appliedRate}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
+              : ' (per-site size buckets)';
+            lineItems.push({
+              Description: `[${contractLabel}] ${result.elumOrgTierBreakdown!.tierLabel} — ${org.orgName} (${org.siteCount} sites, ${org.totalMWp.toFixed(2)} MWp)${rateNote}`,
+              Quantity: 1,
+              UnitAmount: org.baseCost,
+              AccountCode: ACCOUNT_PLATFORM_FEES
+            });
+          }
+          if (org.econfCost > 0) {
+            lineItems.push({
+              Description: `[${contractLabel}] Remote eConf — ${org.orgName} (org-wide, ${org.totalMWp.toFixed(2)} MWp)`,
+              Quantity: 1,
+              UnitAmount: org.econfCost,
+              AccountCode: ACCOUNT_PLATFORM_FEES
+            });
+          }
+        });
+      }
+
       // Add hybrid tiered breakdown
       if (result.hybridTieredBreakdown) {
         if (result.hybridTieredBreakdown.ongrid.cost > 0) {
@@ -535,6 +564,7 @@ export function MergedInvoiceDialog({
           (result.hybridTieredBreakdown?.ongrid.cost || 0) +
           (result.hybridTieredBreakdown?.hybrid.cost || 0) +
           (result.elumInternalBreakdown?.totalCost || 0) +
+          (result.elumOrgTierBreakdown?.totalCost || 0) +
           (result.elumEpmBreakdown?.totalCost || 0) +
           (result.elumJubailiBreakdown?.totalCost || 0) +
           (result.minimumContractAdjustment || 0) +

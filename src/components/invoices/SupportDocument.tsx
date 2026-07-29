@@ -135,6 +135,138 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* Elum 2026 Org-Based Tier Breakdown */}
+      {data.elumOrgTierBreakdown && (
+        <section className="mb-6">
+          <h2 className="text-base font-bold mb-3">
+            {data.elumOrgTierBreakdown.tierLabel} — Organisation Breakdown
+          </h2>
+
+          {data.elumOrgTierBreakdown.warnings.length > 0 && (
+            <div className="mb-3 rounded border border-destructive/40 bg-destructive/5 p-2 text-xs">
+              {data.elumOrgTierBreakdown.warnings.map((w, i) => (
+                <p key={i}>{w}</p>
+              ))}
+            </div>
+          )}
+
+          {/* Summary: one row per sub-organisation */}
+          <table className="w-full border-collapse text-xs mb-4">
+            <thead>
+              <tr className="bg-muted">
+                <th className="border border-border p-1 text-left">Organisation</th>
+                <th className="border border-border p-1 text-right">Sites</th>
+                <th className="border border-border p-1 text-right">MWp</th>
+                <th className="border border-border p-1 text-left">Rate</th>
+                <th className="border border-border p-1 text-right">Base</th>
+                <th className="border border-border p-1 text-right">Remote eConf</th>
+                <th className="border border-border p-1 text-right">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.elumOrgTierBreakdown.orgs.map(org => (
+                <tr key={org.orgId}>
+                  <td className="border border-border p-1">
+                    {org.orgName}
+                    {org.uid ? ` (#${org.uid})` : ''}
+                    {org.isLegacyAssetGroup ? ' — legacy asset group' : ''}
+                  </td>
+                  <td className="border border-border p-1 text-right">{org.siteCount}</td>
+                  <td className="border border-border p-1 text-right">{org.totalMWp.toFixed(3)}</td>
+                  <td className="border border-border p-1">
+                    {org.appliedRate != null
+                      ? `${formatCurrency(org.appliedRate)}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
+                      : 'Per-site size buckets'}
+                  </td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(org.baseCost)}</td>
+                  <td className="border border-border p-1 text-right">
+                    {org.econfApplied ? formatCurrency(org.econfCost) : '—'}
+                  </td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(org.totalCost)}</td>
+                </tr>
+              ))}
+              <tr className="font-bold bg-muted/50">
+                <td className="border border-border p-1">Total</td>
+                <td className="border border-border p-1 text-right">
+                  {data.elumOrgTierBreakdown.orgs.reduce((n, o) => n + o.siteCount, 0)}
+                </td>
+                <td className="border border-border p-1 text-right">{data.elumOrgTierBreakdown.totalMWp.toFixed(3)}</td>
+                <td className="border border-border p-1"></td>
+                <td className="border border-border p-1"></td>
+                <td className="border border-border p-1"></td>
+                <td className="border border-border p-1 text-right">{formatCurrency(data.elumOrgTierBreakdown.totalCost)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* Per-organisation asset lists */}
+          {data.elumOrgTierBreakdown.orgs.map(org => (
+            <div key={`sites-${org.orgId}`} className="mb-4">
+              <h3 className="text-sm font-semibold mb-1">
+                {org.orgName} — {org.siteCount} sites, {org.totalMWp.toFixed(3)} MWp
+              </h3>
+              {org.warnings.map((w, i) => (
+                <p key={i} className="text-xs text-destructive mb-1">{w}</p>
+              ))}
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-muted">
+                    <th className="border border-border p-1 text-left">Site</th>
+                    <th className="border border-border p-1 text-left">Asset ID</th>
+                    <th className="border border-border p-1 text-right">MWp</th>
+                    <th className="border border-border p-1 text-left">Band</th>
+                    <th className="border border-border p-1 text-right">Rate/MWp/yr</th>
+                    <th className="border border-border p-1 text-right">Cost</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {org.sites.map(site => (
+                    <tr key={site.assetId}>
+                      <td className="border border-border p-1">
+                        {site.assetName}
+                        {site.isMwhOverride ? ' (battery-only, MWh entered as capacity)' : ''}
+                      </td>
+                      <td className="border border-border p-1">{site.assetId}</td>
+                      <td className="border border-border p-1 text-right">{site.mwp.toFixed(3)}</td>
+                      <td className="border border-border p-1">{site.bucketLabel || '—'}</td>
+                      <td className="border border-border p-1 text-right">{formatCurrency(site.pricePerMWp)}</td>
+                      <td className="border border-border p-1 text-right">{formatCurrency(site.cost)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+          {data.elumOrgTierBreakdown.doubleCountWarnings && data.elumOrgTierBreakdown.doubleCountWarnings.length > 0 && (
+            <div className="mb-3 text-xs">
+              <h3 className="text-sm font-semibold mb-1">Assets de-duplicated across org and asset group</h3>
+              <p className="mb-1">
+                These assets were resolved from both an organisation and the legacy asset group. They are billed
+                once, under the organisation.
+              </p>
+              <ul className="list-disc pl-5">
+                {data.elumOrgTierBreakdown.doubleCountWarnings.map(d => (
+                  <li key={d.assetId}>{d.assetName} — counted under {d.orgName}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {data.elumOrgTierBreakdown.unassignedOrgs && data.elumOrgTierBreakdown.unassignedOrgs.length > 0 && (
+            <div className="text-xs">
+              <h3 className="text-sm font-semibold mb-1">Sub-organisations without a tier flag</h3>
+              <p className="mb-1">Not invoiced. Set a tier feature flag in ePM to include them.</p>
+              <ul className="list-disc pl-5">
+                {data.elumOrgTierBreakdown.unassignedOrgs.map(o => (
+                  <li key={o.orgId}>{o.orgName}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Matriarch API Dual-Stream Breakdown */}
       {data.matriarchApiBreakdown && (
         <section className="mb-6">

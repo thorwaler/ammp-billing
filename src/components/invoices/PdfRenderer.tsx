@@ -141,6 +141,96 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     y = (doc as any).lastAutoTable.finalY + 6;
   }
 
+  // === ELUM 2026 ORG-BASED TIERS ===
+  if (data.elumOrgTierBreakdown) {
+    const ob = data.elumOrgTierBreakdown;
+    y = addSectionTitle(doc, `${ob.tierLabel} — Organisation Breakdown`, y);
+
+    if (ob.warnings.length > 0) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      ob.warnings.forEach(w => {
+        const lines = doc.splitTextToSize(w, 180) as string[];
+        lines.forEach(l => { y = ensureSpace(doc, 4, y); doc.text(l, MARGIN, y); y += 3.5; });
+      });
+      y += 2;
+    }
+
+    autoTable(doc, {
+      startY: y, margin: { left: MARGIN, right: MARGIN },
+      head: [['Organisation', 'Sites', 'MWp', 'Rate', `Base (${cur})`, `eConf (${cur})`, `Total (${cur})`]],
+      body: [
+        ...ob.orgs.map(org => [
+          `${org.orgName}${org.isLegacyAssetGroup ? ' (legacy asset group)' : ''}`,
+          String(org.siteCount),
+          org.totalMWp.toFixed(3),
+          org.appliedRate != null
+            ? `${fmt(org.appliedRate, cur)}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
+            : 'Per-site buckets',
+          fmt(org.baseCost, cur),
+          org.econfApplied ? fmt(org.econfCost, cur) : '-',
+          fmt(org.totalCost, cur),
+        ]),
+        [
+          { content: 'Total', styles: { fontStyle: 'bold' } },
+          String(ob.orgs.reduce((n, o) => n + o.siteCount, 0)),
+          ob.totalMWp.toFixed(3), '', '', '',
+          { content: fmt(ob.totalCost, cur), styles: { fontStyle: 'bold' } },
+        ],
+      ],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [244, 244, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+    });
+    y = (doc as any).lastAutoTable.finalY + 5;
+
+    ob.orgs.forEach(org => {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+      y = ensureSpace(doc, 6, y);
+      doc.text(`${org.orgName} — ${org.siteCount} sites, ${org.totalMWp.toFixed(3)} MWp`, MARGIN, y);
+      y += 4;
+      autoTable(doc, {
+        startY: y, margin: { left: MARGIN, right: MARGIN },
+        head: [['Site', 'Asset ID', 'MWp', 'Band', `Rate/MWp/yr (${cur})`, `Cost (${cur})`]],
+        body: org.sites.map(site => [
+          `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}`,
+          site.assetId,
+          site.mwp.toFixed(3),
+          site.bucketLabel || '-',
+          fmt(site.pricePerMWp, cur),
+          fmt(site.cost, cur),
+        ]),
+        styles: { fontSize: 6.5, cellPadding: 1.2 },
+        headStyles: { fillColor: [244, 244, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
+        columnStyles: { 2: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
+      });
+      y = (doc as any).lastAutoTable.finalY + 4;
+    });
+
+    if (ob.doubleCountWarnings && ob.doubleCountWarnings.length > 0) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+      y = ensureSpace(doc, 6, y);
+      doc.text('Assets de-duplicated across org and asset group (billed once)', MARGIN, y); y += 4;
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      ob.doubleCountWarnings.forEach(d => {
+        y = ensureSpace(doc, 4, y);
+        doc.text(`${d.assetName} — counted under ${d.orgName}`, MARGIN, y); y += 3.5;
+      });
+      y += 3;
+    }
+
+    if (ob.unassignedOrgs && ob.unassignedOrgs.length > 0) {
+      doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+      y = ensureSpace(doc, 6, y);
+      doc.text('Sub-organisations without a tier flag (not invoiced)', MARGIN, y); y += 4;
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      ob.unassignedOrgs.forEach(o => {
+        y = ensureSpace(doc, 4, y);
+        doc.text(o.orgName, MARGIN, y); y += 3.5;
+      });
+      y += 3;
+    }
+  }
+
   // === MATRIARCH API ===
   if (data.matriarchApiBreakdown) {
     const mat = data.matriarchApiBreakdown;

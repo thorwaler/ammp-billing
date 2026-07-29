@@ -57,6 +57,20 @@ interface CachedCapabilities {
     deviceEnrichmentAttempted?: boolean;
   }>;
   lastSynced: string;
+  /** Elum 2026: per-sub-organisation grouping of the resolved assets */
+  orgBreakdown?: Array<{
+    orgId: string;
+    orgName: string;
+    uid?: number;
+    tier?: string | null;
+    hasEconf?: boolean;
+    isLegacyAssetGroup?: boolean;
+    assets: Array<{ assetId: string; assetName: string; totalMW: number }>;
+  }>;
+  /** Assets resolved from both an org and a legacy asset group (counted once) */
+  doubleCountWarnings?: Array<{ assetId: string; assetName: string; orgName: string }>;
+  /** Sub-orgs under the parent org with no tier flag set */
+  unassignedOrgs?: Array<{ orgId: string; orgName: string }>;
   needsDeviceEnrichment?: boolean;
   lastDeviceEnrichment?: string;
   deviceEnrichmentProgress?: {
@@ -332,6 +346,44 @@ interface AssetGroupMember {
   asset_name: string;
 }
 
+const ELUM_TIER_FLAGS: Record<string, string> = {
+  ci_lite: 'epm_lite',
+  ci_pro: 'epm_pro',
+  utility: 'epm_utility',
+};
+
+interface ClassifiedOrg {
+  orgId: string;
+  orgName: string;
+  uid?: number;
+  tier: string | null;
+  hasEconf: boolean;
+}
+
+/**
+ * Fetch sub-orgs of a parent org and classify them by AMMP feature flags.
+ */
+async function getClassifiedSubOrgs(token: string, parentOrgId: string): Promise<ClassifiedOrg[]> {
+  const response = await fetchAMMPData(token, `/orgs?parent_org_id=${encodeURIComponent(parentOrgId)}`);
+  const orgs: any[] = Array.isArray(response) ? response : (response?.orgs || []);
+  return orgs
+    .filter((o: any) => o.org_id && o.org_id !== parentOrgId)
+    .map((o: any) => {
+      const flags = o.feature_flags || {};
+      let tier: string | null = null;
+      for (const [t, flag] of Object.entries(ELUM_TIER_FLAGS)) {
+        if (flags[flag] === true && !tier) tier = t;
+      }
+      return {
+        orgId: o.org_id,
+        orgName: o.org_name || o.org_id,
+        uid: o.uid,
+        tier,
+        hasEconf: flags['remote_econf'] === true,
+      };
+    });
+}
+
 /**
  * Process contract sync - handles ALL contract types
  * For asset group contracts: uses asset group filtering
@@ -382,9 +434,57 @@ async function processContractSync(
   }
   
   let assetsToProcess: AssetGroupMember[] = [];
+  // Elum 2026 org-based tiers: asset -> sub-org assignment built during resolution
+  const assetOrgMap = new Map<string, ClassifiedOrg>();
+  let tierOrgs: ClassifiedOrg[] = [];
+  let unassignedOrgs: Array<{ orgId: string; orgName: string }> = [];
+  const doubleCountWarnings: Array<{ assetId: string; assetName: string; orgName: string }> = [];
+  const elumTier: string | null = contract.elum_tier || null;
+  const elumParentOrgId: string | null = contract.elum_parent_org_id || null;
   
   // Determine which assets to process based on contract configuration
-  if (contract.ammp_asset_group_id) {
+  if (elumTier && elumParentOrgId) {
+    // Discover sub-orgs under the Elum parent org and keep those on this tier
+    const subOrgs = await getClassifiedSubOrgs(token, elumParentOrgId);
+    tierOrgs = subOrgs.filter(o => o.tier === elumTier);
+    unassignedOrgs = subOrgs.filter(o => o.tier === null).map(o => ({ orgId: o.orgId, orgName: o.orgName }));
+    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned)`);
+    
+    const orgById = new Map(tierOrgs.map(o => [o.orgId, o]));
+    const orgAssets = allAssets.filter((a: any) => orgById.has(a.org_id));
+    assetsToProcess = orgAssets.map((a: any) => {
+      assetOrgMap.set(a.asset_id, orgById.get(a.org_id)!);
+      return { asset_id: a.asset_id, asset_name: a.asset_name };
+    });
+    
+    // Hybrid transition: legacy asset group assets not already covered by an org
+    if (contract.ammp_asset_group_id) {
+      const legacyOrg: ClassifiedOrg = {
+        orgId: `legacy:${contract.ammp_asset_group_id}`,
+        orgName: 'Legacy asset group (transition)',
+        tier: elumTier,
+        hasEconf: false,
+      };
+      const members = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
+      for (const m of members) {
+        const existing = assetOrgMap.get(m.asset_id);
+        if (existing) {
+          // Asset resolved from both sources — counted once (org side wins)
+          doubleCountWarnings.push({ assetId: m.asset_id, assetName: m.asset_name, orgName: existing.orgName });
+          continue;
+        }
+        assetOrgMap.set(m.asset_id, legacyOrg);
+        assetsToProcess.push({ asset_id: m.asset_id, asset_name: m.asset_name });
+      }
+      if (members.length > 0) {
+        (legacyOrg as any).isLegacyAssetGroup = true;
+        tierOrgs = [...tierOrgs, legacyOrg];
+      }
+      console.log(`[AMMP Sync Contract] Legacy asset group merged: ${members.length} members, ${doubleCountWarnings.length} overlaps de-duplicated`);
+    }
+    
+    console.log(`[AMMP Sync Contract] Elum org-based resolution: ${assetsToProcess.length} assets`);
+  } else if (contract.ammp_asset_group_id) {
     // Asset group filtering (for elum_epm, elum_jubaili, or any contract with asset group)
     const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
     assetsToProcess = [...primaryMembers];
@@ -640,6 +740,21 @@ async function processContractSync(
     // Flag for device enrichment if:
     // 1. This is a large portfolio (>200 assets total), OR
     // 2. We have assets without devices that haven't been enrichment-attempted
+    orgBreakdown: assetOrgMap.size > 0
+      ? tierOrgs.map(org => ({
+          orgId: org.orgId,
+          orgName: org.orgName,
+          uid: org.uid,
+          tier: org.tier,
+          hasEconf: org.hasEconf,
+          isLegacyAssetGroup: (org as any).isLegacyAssetGroup === true,
+          assets: finalCapabilities
+            .filter(c => assetOrgMap.get(c.assetId)?.orgId === org.orgId)
+            .map(c => ({ assetId: c.assetId, assetName: c.assetName, totalMW: c.totalMW })),
+        }))
+      : undefined,
+    doubleCountWarnings: doubleCountWarnings.length > 0 ? doubleCountWarnings : undefined,
+    unassignedOrgs: unassignedOrgs.length > 0 ? unassignedOrgs : undefined,
     needsDeviceEnrichment: totalExpected > 200 || 
       finalCapabilities.some(c => c.deviceCount === 0 && !existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId)?.deviceEnrichmentAttempted),
   };
@@ -911,6 +1026,9 @@ Deno.serve(async (req) => {
         ammp_asset_group_id,
         ammp_asset_group_id_and,
         ammp_asset_group_id_not,
+        elum_tier,
+        elum_parent_org_id,
+        org_pricing_config,
         cached_capabilities,
         ammp_sync_status,
         customers!inner (
@@ -941,7 +1059,9 @@ Deno.serve(async (req) => {
     // Check if contract has org ID (either on contract or customer)
     const orgId = contract.ammp_org_id || (contract.customers as any)?.ammp_org_id;
     
-    if (!orgId && !contract.ammp_asset_group_id) {
+    const hasElumOrgTier = !!(contract as any).elum_tier && !!(contract as any).elum_parent_org_id;
+    if (!orgId && !contract.ammp_asset_group_id && !hasElumOrgTier) {
+
       return new Response(
         JSON.stringify({ 
           success: false, 

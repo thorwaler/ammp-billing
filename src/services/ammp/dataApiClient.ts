@@ -4,7 +4,7 @@
 
 import { authService } from './authService';
 import { supabase } from '@/integrations/supabase/client';
-import { AssetResponse, DeviceResponse, DataApiRequestError, AssetGroupResponse, AssetGroupMemberResponse } from '@/types/ammp-api';
+import { AssetResponse, DeviceResponse, DataApiRequestError, AssetGroupResponse, AssetGroupMemberResponse, OrgResponse } from '@/types/ammp-api';
 
 /**
  * Generic request method with Bearer token authentication and automatic retry on 401
@@ -77,11 +77,23 @@ async function request<T>(path: string, options: RequestInit = {}, retryCount = 
 
 export const dataApiClient = {
   /**
+   * List organisations. Optionally restricted to children of `parentOrgId`.
+   */
+  async listOrgs(parentOrgId?: string): Promise<OrgResponse[]> {
+    const path = parentOrgId
+      ? `/orgs?parent_org_id=${encodeURIComponent(parentOrgId)}`
+      : '/orgs';
+    const response = await request<OrgResponse[] | { orgs: OrgResponse[] }>(path);
+    return Array.isArray(response) ? response : (response?.orgs ?? []);
+  },
+
+  /**
    * List all assets
    */
   async listAssets(): Promise<AssetResponse[]> {
     return request<AssetResponse[]>('/assets');
   },
+
 
   /**
    * Get single asset by ID with devices (uses /devices endpoint for efficiency)
