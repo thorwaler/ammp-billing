@@ -983,7 +983,12 @@ export function calculateElumOrgTierBreakdown(
     orgs: orgLines,
     totalMWp: orgLines.reduce((sum, o) => sum + o.totalMWp, 0),
     totalCost: orgLines.reduce((sum, o) => sum + o.totalCost, 0),
-    warnings: [...globalWarnings, ...orgLines.flatMap(o => o.warnings)],
+    // Only blocking per-org warnings are surfaced contract-wide; informational
+    // per-org notices stay scoped to their own org row.
+    warnings: [
+      ...globalWarnings,
+      ...orgLines.flatMap(o => o.warnings.filter(w => w.startsWith("Utility tier requires"))),
+    ],
     blocked,
   };
 }
