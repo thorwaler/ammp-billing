@@ -1126,6 +1126,22 @@ Deno.serve(async (req) => {
     const syncResult = await processContractSync(supabase, contract, token, allAssets, assetLookup);
     const { cachedCapabilities, syncStatus, timedOut, totalExpected, previouslySynced, newlySynced, previousSyncStatus } = syncResult;
 
+    // Safety guard: never wipe a previously populated cache with an empty result.
+    // A transient AMMP/org-endpoint failure would otherwise zero out the portfolio.
+    const previousAssetCount = previousCached?.assetBreakdown?.length || 0;
+    if (cachedCapabilities.assetBreakdown.length === 0 && previousAssetCount > 0) {
+      console.error(`[AMMP Sync Contract] Aborting update: sync returned 0 assets but ${previousAssetCount} were cached. Keeping previous cache.`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Sync resolved 0 assets while previous cache had assets — cache preserved. Check the AMMP org/asset-group configuration.',
+          contractId,
+          previousAssetCount,
+        }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Update the contract with cached capabilities and sync status
     const { error: updateError } = await supabase
       .from('contracts')
