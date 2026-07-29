@@ -3032,7 +3032,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdAnd', id);
                         form.setValue('ammpAssetGroupNameAnd', name);
                       }}
-                      label="Secondary Asset Group (AND)"
+                      label={isElumOrgTierPackage(watchPackage) ? "eConf add-on group (AND)" : "Secondary Asset Group (AND)"}
                       optional
                       showClearButton
                       onClear={() => {
@@ -3048,7 +3048,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdNot', id);
                         form.setValue('ammpAssetGroupNameNot', name);
                       }}
-                      label="Exclusion Asset Group (NOT)"
+                      label={isElumOrgTierPackage(watchPackage) ? "Exclude group (NOT)" : "Exclusion Asset Group (NOT)"}
                       optional
                       showClearButton
                       onClear={() => {
