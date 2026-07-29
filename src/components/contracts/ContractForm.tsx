@@ -2994,11 +2994,20 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </div>
 
                 {/* Asset Group Selectors - for Elum-style filtering */}
-                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || watchPackage === "elum_internal" || watchPackage === "hybrid_tiered_assetgroups" || form.watch('ammpAssetGroupId')) && (
+                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || watchPackage === "elum_internal" || watchPackage === "hybrid_tiered_assetgroups" || isElumOrgTierPackage(watchPackage) || form.watch('ammpAssetGroupId')) && (
                   <div className="space-y-4 mt-4 pt-4 border-t">
-                    <h4 className="text-sm font-medium">Asset Group Filtering</h4>
+                    <h4 className="text-sm font-medium">
+                      {isElumOrgTierPackage(watchPackage) ? 'Legacy Asset Group Filtering (transition)' : 'Asset Group Filtering'}
+                    </h4>
+                    {isElumOrgTierPackage(watchPackage) && (
+                      <p className="text-xs text-muted-foreground">
+                        Optional. This contract is priced per Elum sub-org. Any asset group set here is
+                        merged in as a separate "legacy asset group" line; assets that also belong to a
+                        sub-org are counted once (the sub-org wins) and listed as de-duplication warnings.
+                      </p>
+                    )}
                     <AssetGroupSelector
-                      orgId={form.watch('contractAmmpOrgId') || undefined}
+                      orgId={form.watch('contractAmmpOrgId') || form.watch('elumParentOrgId') || undefined}
                       value={form.watch('ammpAssetGroupId') || ''}
                       onSelect={(id, name) => {
                         form.setValue('ammpAssetGroupId', id);
