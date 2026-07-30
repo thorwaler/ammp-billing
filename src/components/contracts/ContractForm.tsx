@@ -50,6 +50,8 @@ import {
   ELUM_PRO_SITE_BUCKETS,
   ELUM_UTILITY_TIERS,
   ELUM_UTILITY_MIN_SITE_MWP,
+  ELUM_INTERNAL_2026_BRACKETS,
+  ELUM_INTERNAL_2026_ECONF_RATE,
   isElumOrgTierPackage,
   elumTierForPackage
 } from "@/data/pricingData";
@@ -152,6 +154,7 @@ const contractFormSchema = z.object({
   elumParentOrgId: z.string().optional(),
   elumLiteBaseRate: z.coerce.number().min(0).optional(),
   elumLiteEconfRate: z.coerce.number().min(0).optional(),
+  elumInternalEconfRate: z.coerce.number().min(0).optional(),
   // Matriarch API fields
   irradiancePerSiteTiers: z.array(z.any()).optional(),
   performancePerMwpTiers: z.array(z.any()).optional(),
@@ -238,6 +241,7 @@ interface ContractFormProps {
     elumParentOrgId?: string;
     elumLiteBaseRate?: number;
     elumLiteEconfRate?: number;
+    elumInternalEconfRate?: number;
     // AMMP OS 2026 trial fields
     isTrial?: boolean;
     trialSetupFee?: number;
@@ -340,6 +344,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       elumParentOrgId: existingContract.elumParentOrgId || "",
       elumLiteBaseRate: existingContract.elumLiteBaseRate ?? ELUM_LITE_BASE_RATE,
       elumLiteEconfRate: existingContract.elumLiteEconfRate ?? ELUM_LITE_ECONF_RATE,
+      elumInternalEconfRate: existingContract.elumInternalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE,
       maxMw: existingContract.maxMw,
       modules: existingContract.modules || [],
       addons: (existingContract.addons || []).map((a: any) => typeof a === 'string' ? a : a.id),
@@ -393,6 +398,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       elumParentOrgId: "",
       elumLiteBaseRate: ELUM_LITE_BASE_RATE,
       elumLiteEconfRate: ELUM_LITE_ECONF_RATE,
+      elumInternalEconfRate: ELUM_INTERNAL_2026_ECONF_RATE,
       modules: ["technicalMonitoring"],
       addons: [],
       customPricing: {
@@ -1153,6 +1159,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           ? {
               liteBaseRate: data.elumLiteBaseRate ?? ELUM_LITE_BASE_RATE,
               liteEconfRate: data.elumLiteEconfRate ?? ELUM_LITE_ECONF_RATE,
+            }
+          : data.package === 'elum_internal_2026'
+          ? {
+              internalBrackets: ELUM_INTERNAL_2026_BRACKETS,
+              internalEconfRate: data.elumInternalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE,
             }
           : {},
         site_size_threshold_kwp: data.package === 'elum_epm' 
