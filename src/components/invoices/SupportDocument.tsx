@@ -244,6 +244,15 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-muted font-semibold">
+                    <td className="border border-border p-1" colSpan={2}>Total</td>
+                    <td className="border border-border p-1 text-right">{org.totalMWp.toFixed(3)}</td>
+                    <td className="border border-border p-1"></td>
+                    <td className="border border-border p-1"></td>
+                    <td className="border border-border p-1 text-right">{formatCurrency(org.totalCost)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           ))}
