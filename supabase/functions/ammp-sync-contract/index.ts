@@ -71,8 +71,10 @@ interface CachedCapabilities {
   }>;
   /** Assets resolved from both an org and a legacy asset group (counted once) */
   doubleCountWarnings?: Array<{ assetId: string; assetName: string; orgName: string }>;
-  /** Sub-orgs under the parent org with no tier flag set */
-  unassignedOrgs?: Array<{ orgId: string; orgName: string }>;
+  /** Sub-orgs under the parent org with no tier flag set (with their impact) */
+  unassignedOrgs?: Array<{ orgId: string; orgName: string; assetCount?: number; totalMW?: number }>;
+  /** Per-org audit trail of how each org's assets were resolved during the last sync */
+  orgResolution?: Array<{ orgId: string; orgName: string; assetCount: number; source: string }>;
   needsDeviceEnrichment?: boolean;
   lastDeviceEnrichment?: string;
   deviceEnrichmentProgress?: {
