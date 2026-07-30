@@ -396,20 +396,26 @@ Deno.serve(async (req) => {
     // Process a batch of assets
     const batch = assetsNeedingEnrichment.slice(0, batchSize);
     const enrichedAssets: Map<string, AssetBreakdown> = new Map();
-    
-    const BATCH_PARALLEL = 10; // Parallel requests within the batch
+
+    // Keep concurrency low: the edge gateway rate-limits internal invocations
+    // per trace, and a throttled run used to be persisted as "no devices".
+    const BATCH_PARALLEL = 4;
+    const WAVE_PAUSE_MS = 250;
     const startTime = Date.now();
     const MAX_TIME_MS = 25000; // 25 seconds safety margin
-    
+
+    let failedCount = 0;
+    let rateLimited = false;
+
     for (let i = 0; i < batch.length; i += BATCH_PARALLEL) {
       // Check timeout
       if (Date.now() - startTime > MAX_TIME_MS) {
         console.log(`[AMMP Device Enrichment] Timeout approaching, stopping at ${enrichedAssets.size} assets`);
         break;
       }
-      
+
       const parallelBatch = batch.slice(i, i + BATCH_PARALLEL);
-      
+
       const results = await Promise.allSettled(
         parallelBatch.map(async (asset) => {
           try {
@@ -418,27 +424,69 @@ Deno.serve(async (req) => {
               `/assets/${asset.assetId}/devices?include_virtual=true`
             );
             const devices = devicesResponse.devices || devicesResponse || [];
-            return { assetId: asset.assetId, devices: Array.isArray(devices) ? devices : [] };
+            return { assetId: asset.assetId, devices: Array.isArray(devices) ? devices : [], failed: false };
           } catch (error) {
-            console.warn(`[AMMP Device Enrichment] Failed to fetch devices for ${asset.assetId}:`, error);
-            return { assetId: asset.assetId, devices: [] };
+            const message = error instanceof Error ? error.message : String(error);
+            console.warn(`[AMMP Device Enrichment] Failed to fetch devices for ${asset.assetId}: ${message}`);
+            // Never treat a failed fetch as an empty device list — that would be
+            // written back to the cache and permanently mark the asset empty.
+            return { assetId: asset.assetId, devices: [], failed: true, message };
           }
         })
       );
-      
+
       for (const result of results) {
-        if (result.status === 'fulfilled') {
-          const { assetId, devices } = result.value;
-          const originalAsset = cachedCapabilities.assetBreakdown.find(a => a.assetId === assetId);
-          if (originalAsset) {
-            const enriched = calculateCapabilitiesFromDevices(originalAsset, devices);
-            enrichedAssets.set(assetId, enriched);
-          }
+        if (result.status !== 'fulfilled') {
+          failedCount++;
+          continue;
+        }
+        const { assetId, devices, failed, message } = result.value as {
+          assetId: string; devices: any[]; failed: boolean; message?: string;
+        };
+        if (failed) {
+          failedCount++;
+          if (message && isRateLimited(message)) rateLimited = true;
+          continue;
+        }
+        const originalAsset = cachedCapabilities.assetBreakdown.find(a => a.assetId === assetId);
+        if (originalAsset) {
+          const enriched = calculateCapabilitiesFromDevices(originalAsset, devices);
+          enrichedAssets.set(assetId, enriched);
         }
       }
-      
-      console.log(`[AMMP Device Enrichment] Progress: ${enrichedAssets.size}/${batch.length}`);
+
+      console.log(`[AMMP Device Enrichment] Progress: ${enrichedAssets.size}/${batch.length} (${failedCount} failed)`);
+
+      if (rateLimited) {
+        console.warn('[AMMP Device Enrichment] Rate limited — stopping early, remaining assets will retry next run');
+        break;
+      }
+
+      if (i + BATCH_PARALLEL < batch.length) {
+        await new Promise((r) => setTimeout(r, WAVE_PAUSE_MS));
+      }
     }
+
+    // Nothing was fetched successfully — do not write anything, and report failure.
+    if (enrichedAssets.size === 0 && failedCount > 0) {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      console.error(`[AMMP Device Enrichment] All ${failedCount} device fetches failed (${elapsed}s)`);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: rateLimited
+            ? 'AMMP API rate limit reached — no assets could be enriched. Try again in a minute.'
+            : 'All device fetches failed — no assets could be enriched.',
+          enriched: 0,
+          failed: failedCount,
+          rateLimited,
+          remaining: assetsNeedingEnrichment.length,
+          complete: false,
+        }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     
     // Merge enriched assets back into the breakdown
     const updatedBreakdown = cachedCapabilities.assetBreakdown.map(asset => {
