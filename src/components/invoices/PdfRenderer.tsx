@@ -186,19 +186,29 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     ob.orgs.forEach(org => {
       doc.setFontSize(9); doc.setFont('helvetica', 'bold');
       y = ensureSpace(doc, 6, y);
-      doc.text(`${org.orgName} — ${org.siteCount} sites, ${org.totalMWp.toFixed(3)} MWp`, MARGIN, y);
+      doc.text(`${org.orgName} - ${org.siteCount} sites, ${org.totalMWp.toFixed(3)} MWp, ${fmt(org.totalCost, cur)}`, MARGIN, y);
       y += 4;
       autoTable(doc, {
         startY: y, margin: { left: MARGIN, right: MARGIN },
         head: [['Site', 'Asset ID', 'MWp', 'Band', `Rate/MWp/yr (${cur})`, `Cost (${cur})`]],
-        body: org.sites.map(site => [
-          `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}`,
-          site.assetId,
-          site.mwp.toFixed(3),
-          site.bucketLabel || '-',
-          fmt(site.pricePerMWp, cur),
-          fmt(site.cost, cur),
-        ]),
+        body: [
+          ...org.sites.map(site => [
+            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}`,
+            site.assetId,
+            site.mwp.toFixed(3),
+            site.bucketLabel || '-',
+            fmt(site.pricePerMWp, cur),
+            fmt(site.cost, cur),
+          ]),
+          [
+            { content: 'Total', styles: { fontStyle: 'bold' } },
+            '',
+            org.totalMWp.toFixed(3),
+            '',
+            '',
+            { content: fmt(org.totalCost, cur), styles: { fontStyle: 'bold' } },
+          ],
+        ],
         styles: { fontSize: 6.5, cellPadding: 1.2 },
         headStyles: { fillColor: [244, 244, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
         columnStyles: { 2: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
