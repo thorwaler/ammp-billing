@@ -1,28 +1,42 @@
-## 1. eConf sites show the wrong rate per MWp
+## What happened
 
-In the "Legacy asset group — with eConf" table, each site shows €65.00/MWp/yr (the C&I Lite base rate) and a cost computed from €65 only. The eConf uplift is computed once at org level (`econfCost = totalMWp × econfRate`) and never reflected in the per-site rows, so the detail table doesn't reconcile with the org's Total column.
+The C&I Lite contract (`ammp_asset_group_id` = "[Tier] Lite") did not lose sites in AMMP — the last sync silently dropped them.
 
-Fix in `src/lib/invoiceCalculations.ts` (Elum org-tier block, ~line 930-970): when eConf applies to an org, build the site rows with the combined rate (`liteBaseRate + liteEconfRate`) and cost (`mwp × combined rate × frequencyMultiplier`). The org-level `baseCost` / `econfCost` split stays as-is for the summary table and Xero line; only the per-site detail changes, so the site rows now add up to the org's Total.
+Evidence from the 07:21 sync logs:
 
-Also adjust the footnote in `src/components/invoices/SupportDocument.tsx` to say the per-site table shows the combined rate (base + eConf), matching the single invoiced line.
+```text
+07:20:51 Fetching members for group d1ac54d1... ([Tier] Lite)
+07:20:55 ERROR Failed to fetch group d1ac54d1... members:
+         Rate limit exceeded for trace 019fb1e4... Retry after 3550ms.
+07:21:00 Found 88 members in group 88517d88... ([Add-on] Remote eConf)
+07:21:00 Legacy asset group merged: 0 members -> 0 standard, 0 eConf, 0 excluded
+```
 
-## 2. Nightly sync failures ("Unexpected token '<', \"<html>\"")
+`getAssetGroupMembers` catches any error and returns an empty array. So the primary group came back empty, both legacy pseudo-orgs ("Legacy asset group — standard" / "— with eConf") were skipped, and the cached capabilities were written with only the 67 org-flag-resolved sites and no legacy rows. Nothing warned the user: `doubleCountWarnings` is empty, sync status is `synced`.
 
-What the data shows: every contract failed at 2026-07-30 02:00:34 — all within ~0.4s of the cron start, so the failures are instant, not timeouts. 26 contracts are now in `error` state; the last successful scheduled sync was 2026-07-07.
+Two defects:
 
-Where the message comes from: `ammp-scheduled-sync` calls `ammp-sync-contract` with the service-role key and does `await response.json()` unconditionally (`syncContract`, line ~150). The gateway returned an HTML error page, so JSON parsing threw and the raw parse error was pushed straight into the Slack notification.
+1. The retry helper does not honour AMMP's rate-limit response (`Retry after 3550ms`) for this call path, so the group fetch gives up.
+2. A failed group fetch is indistinguishable from a genuinely empty group, and the sync happily overwrites a previously populated cache.
 
-Likely cause (to be confirmed in step 1): `ammp-sync-contract`, `ammp-data-proxy`, `ammp-token-exchange` and `ammp-device-enrichment` all have `verify_jwt = true`, and are called server-to-server with `SUPABASE_SERVICE_ROLE_KEY`. This project has moved to the signing-keys system, where the secret key is no longer a JWT — the gateway rejects those internal calls before the function ever runs (which also explains why there are no function logs at all). Manual syncs from the browser still work because they carry a real user JWT, which matches the last manual sync on 29 July.
+## Fix
 
-Steps:
+**1. Distinguish failure from empty (`supabase/functions/ammp-sync-contract/index.ts`)**
+- Change `getAssetGroupMembers` to rethrow instead of returning `[]` on error (or return a `{ ok, members }` result).
+- In the legacy-asset-group block and the non-Elum asset-group branches, treat a failed member fetch as a hard sync failure: mark the contract `error`, keep the existing `cached_capabilities` untouched, and return the real reason. This matches the existing guard that prevents empty syncs from wiping caches.
 
-1. **Confirm the diagnosis** — invoke `ammp-sync-contract` with the service key and inspect the raw status/body. If it's not a gateway auth rejection, follow the actual status before changing config.
-2. **Allow internal calls** — set `verify_jwt = false` for `ammp-sync-contract`, `ammp-data-proxy`, `ammp-token-exchange`, and `ammp-device-enrichment` in `supabase/config.toml`. Authorization is already enforced in code: `ammp-sync-contract` validates the caller (user JWT or service key) and checks the `can_write` role; add the same explicit check to the three helper functions so they reject unauthenticated callers.
-3. **Make failures readable** — in `ammp-scheduled-sync` (`syncContract`) and in `ammp-sync-contract`'s `fetchAMMPData` / `getToken`, read the response as text first and only parse when it looks like JSON; otherwise surface `HTTP <status>: <first 200 chars>`. Slack then reports the real failure instead of a JSON parse error.
-4. **Re-run and clear state** — trigger one scheduled-sync run, confirm contracts move from `error` back to `synced`, and check that no failure notifications are raised.
+**2. Respect the rate limit**
+- In `postJsonWithRetry` / `fetchAMMPData`, detect AMMP's rate-limit response (429 or the "Retry after Nms" message), parse the delay, wait it out and retry (a few attempts, capped) instead of failing.
+- Add a small delay/serialisation between consecutive `/asset_groups/*/members` calls so the tier group and the eConf add-on group don't trip the limiter back-to-back.
+
+**3. Make the loss visible**
+- If a sync completes with fewer sites than the previous cache by a meaningful margin, raise the existing Elum alert channel with a "site count dropped from X to Y" notice, so a partial result is never silently accepted.
+
+**4. Re-sync**
+- Re-run the sync for this contract and confirm the legacy standard / eConf rows and their sites reappear in the support document.
 
 ## Technical notes
 
-- No database migration needed.
-- Files touched: `src/lib/invoiceCalculations.ts`, `src/components/invoices/SupportDocument.tsx`, `supabase/config.toml`, `supabase/functions/ammp-scheduled-sync/index.ts`, `supabase/functions/ammp-sync-contract/index.ts`, `supabase/functions/ammp-data-proxy/index.ts`, `supabase/functions/ammp-token-exchange/index.ts`, `supabase/functions/ammp-device-enrichment/index.ts`.
-- Invoice totals do not change from part 1 — only the per-site rate/cost presentation.
+- No database migration.
+- Files touched: `supabase/functions/ammp-sync-contract/index.ts` only (plus a redeploy).
+- Invoice logic is unchanged; this restores the input data.

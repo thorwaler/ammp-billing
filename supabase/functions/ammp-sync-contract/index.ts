@@ -135,16 +135,32 @@ async function getToken(apiKey: string): Promise<string> {
  * hides the real status. Read as text, report `HTTP <status>: <snippet>` on
  * non-JSON, and retry transient failures with backoff.
  */
+/** Extract "Retry after 3550ms" / "retry-after: 2" hints from an error text. */
+function parseRetryAfterMs(text: string, header?: string | null): number | null {
+  const ms = text.match(/retry[\s-]?after[:\s]+(\d+)\s*ms/i);
+  if (ms) return Number(ms[1]);
+  const secs = text.match(/retry[\s-]?after[:\s]+(\d+)\s*s/i);
+  if (secs) return Number(secs[1]) * 1000;
+  if (header) {
+    const h = Number(header);
+    if (!Number.isNaN(h) && h > 0) return h * 1000;
+  }
+  return null;
+}
+
+const isRateLimited = (text: string) => /rate limit/i.test(text);
+
 async function postJsonWithRetry(
   url: string,
   serviceKey: string,
   body: unknown,
   label: string,
-  maxAttempts = 3
+  maxAttempts = 5
 ): Promise<any> {
   let lastError = `${label} failed`;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const backoff = 1500 * attempt;
     let response: Response;
     try {
       response = await fetch(url, {
@@ -156,9 +172,15 @@ async function postJsonWithRetry(
         body: JSON.stringify(body),
       });
     } catch (err: any) {
-      lastError = `${label} failed: ${err?.message ?? String(err)}`;
+      const message = err?.message ?? String(err);
+      lastError = `${label} failed: ${message}`;
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        // The edge gateway rate-limits internal invocations and tells us how
+        // long to wait — honour it instead of retrying too early.
+        const retryAfter = parseRetryAfterMs(message);
+        const wait = retryAfter !== null ? retryAfter + 500 : backoff;
+        console.warn(`[ammp-sync-contract] ${lastError} — retrying in ${wait}ms (attempt ${attempt})`);
+        await new Promise((r) => setTimeout(r, wait));
         continue;
       }
       throw new Error(lastError);
@@ -169,8 +191,12 @@ async function postJsonWithRetry(
 
     if (!response.ok) {
       lastError = `${label} failed: HTTP ${response.status}: ${snippet}`;
-      if (attempt < maxAttempts && (response.status === 429 || response.status >= 500)) {
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+      const retryable = response.status === 429 || response.status >= 500 || isRateLimited(text);
+      if (attempt < maxAttempts && retryable) {
+        const retryAfter = parseRetryAfterMs(text, response.headers.get('retry-after'));
+        const wait = retryAfter !== null ? retryAfter + 500 : backoff;
+        console.warn(`[ammp-sync-contract] ${lastError} — retrying in ${wait}ms (attempt ${attempt})`);
+        await new Promise((r) => setTimeout(r, wait));
         continue;
       }
       throw new Error(lastError);
@@ -182,7 +208,7 @@ async function postJsonWithRetry(
       lastError = `${label} returned a non-JSON response (HTTP ${response.status}): ${snippet}`;
       console.error(`[ammp-sync-contract] ${lastError} (attempt ${attempt})`);
       if (attempt < maxAttempts) {
-        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        await new Promise((r) => setTimeout(r, backoff));
         continue;
       }
       throw new Error(lastError);
@@ -191,6 +217,7 @@ async function postJsonWithRetry(
 
   throw new Error(lastError);
 }
+
 
 
 /**
@@ -363,32 +390,46 @@ function calculateCapabilities(
 }
 
 /**
- * Fetch asset group members from AMMP API
- * Returns array of { asset_id, asset_name } for each member
+ * Fetch asset group members from AMMP API.
+ * Throws on failure — an empty array must only ever mean "the group is empty",
+ * never "the call failed", otherwise a transient error silently drops sites
+ * from the cached capabilities.
  */
+let lastGroupFetchAt = 0;
+const GROUP_FETCH_MIN_GAP_MS = 1200;
+
 async function getAssetGroupMembers(token: string, groupId: string): Promise<{asset_id: string, asset_name: string}[]> {
-  try {
-    console.log(`[AMMP Sync Contract] Fetching members for group ${groupId}`);
-    const response = await fetchAMMPData(token, `/asset_groups/${groupId}/members`);
-    
-    // API returns: { group_id, group_name, members: [...] }
-    const members = response?.members || [];
-    
-    if (!Array.isArray(members)) {
-      console.warn(`[AMMP Sync Contract] Unexpected members format for group ${groupId}:`, typeof response);
-      return [];
-    }
-    
-    console.log(`[AMMP Sync Contract] Found ${members.length} members in group ${groupId}`);
-    return members.map((m: any) => ({ 
-      asset_id: m.asset_id, 
-      asset_name: m.asset_name || 'Unknown'
-    }));
-  } catch (error) {
-    console.error(`[AMMP Sync Contract] Failed to fetch group ${groupId} members:`, error);
-    return [];
+  // Space consecutive group calls so back-to-back fetches don't trip the limiter
+  const sinceLast = Date.now() - lastGroupFetchAt;
+  if (lastGroupFetchAt > 0 && sinceLast < GROUP_FETCH_MIN_GAP_MS) {
+    await new Promise((r) => setTimeout(r, GROUP_FETCH_MIN_GAP_MS - sinceLast));
   }
+  lastGroupFetchAt = Date.now();
+  console.log(`[AMMP Sync Contract] Fetching members for group ${groupId}`);
+
+  let response: any;
+  try {
+    response = await fetchAMMPData(token, `/asset_groups/${groupId}/members`);
+  } catch (error: any) {
+    const message = error?.message ?? String(error);
+    console.error(`[AMMP Sync Contract] Failed to fetch group ${groupId} members: ${message}`);
+    throw new Error(`Failed to fetch asset group ${groupId} members: ${message}`);
+  }
+
+  // API returns: { group_id, group_name, members: [...] }
+  const members = response?.members || [];
+
+  if (!Array.isArray(members)) {
+    throw new Error(`Unexpected members payload for asset group ${groupId} (${typeof response})`);
+  }
+
+  console.log(`[AMMP Sync Contract] Found ${members.length} members in group ${groupId}`);
+  return members.map((m: any) => ({
+    asset_id: m.asset_id,
+    asset_name: m.asset_name || 'Unknown'
+  }));
 }
+
 
 interface AssetGroupMember {
   asset_id: string;
@@ -1122,10 +1163,17 @@ async function generateElumAlerts(
   customerId: string,
   userId: string,
   contractLabel: string,
-  cached: CachedCapabilities
+  cached: CachedCapabilities,
+  previous?: CachedCapabilities | null
 ) {
   const orgBreakdown = cached.orgBreakdown || [];
-  if (orgBreakdown.length === 0 && !(cached.unassignedOrgs?.length)) return;
+  const previousSites = previous?.totalSites || 0;
+  const currentSites = cached.totalSites || 0;
+  const siteDrop = previousSites - currentSites;
+  const significantDrop = previousSites >= 5 && siteDrop > 0 && siteDrop / previousSites >= 0.1;
+
+  if (orgBreakdown.length === 0 && !(cached.unassignedOrgs?.length) && !significantDrop) return;
+
 
   type PendingAlert = {
     alert_type: string;
@@ -1135,6 +1183,18 @@ async function generateElumAlerts(
     metadata: Record<string, unknown>;
   };
   const pending: PendingAlert[] = [];
+
+  // 0. Site count dropped materially since the previous sync
+  if (significantDrop) {
+    pending.push({
+      alert_type: 'ammp_site_count_drop',
+      severity: 'critical',
+      title: `Site count dropped from ${previousSites} to ${currentSites}`,
+      description: `The last AMMP sync resolved ${siteDrop} fewer site${siteDrop === 1 ? '' : 's'} than the previous sync. Verify the org tier flags and asset group membership before invoicing.`,
+      metadata: { contract: contractLabel, previousSites, currentSites, drop: siteDrop },
+    });
+  }
+
 
   // 1. Sub-orgs with no tier flag -> their assets are not priced
   const unassigned = cached.unassignedOrgs || [];
@@ -1212,15 +1272,19 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let contractIdForError: string | null = null;
+
   try {
     const { contractId, apiKey, userId } = await req.json();
-    
+    contractIdForError = contractId ?? null;
+
     if (!contractId) {
       return new Response(
         JSON.stringify({ error: 'contractId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -1368,8 +1432,10 @@ Deno.serve(async (req) => {
       contract.customer_id,
       effectiveUserId,
       contract.company_name || 'Contract',
-      cachedCapabilities
+      cachedCapabilities,
+      previousCached
     );
+
 
     // Zero-PV scan for this contract (monthly cron is the backstop)
     try {
@@ -1577,9 +1643,28 @@ Deno.serve(async (req) => {
 
   } catch (error: any) {
     console.error('[AMMP Sync Contract] Error:', error);
+
+    // Mark the contract as errored, leaving cached_capabilities untouched so a
+    // failed lookup never silently drops previously resolved sites.
+    if (contractIdForError) {
+      try {
+        const supabaseAdmin = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        );
+        await supabaseAdmin
+          .from('contracts')
+          .update({ ammp_sync_status: 'error' })
+          .eq('id', contractIdForError);
+      } catch (statusErr) {
+        console.error('[AMMP Sync Contract] Failed to mark contract as errored:', statusErr);
+      }
+    }
+
     return new Response(
       JSON.stringify({ error: error.message || 'Internal server error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
+
 });
