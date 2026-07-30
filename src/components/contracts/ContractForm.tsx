@@ -161,6 +161,8 @@ const contractFormSchema = z.object({
   annualMinimumFee: z.coerce.number().optional(),
   committedMinimumMW: z.coerce.number().optional(),
   annualBillingAnchorDate: z.string().optional(),
+  // Invoice input freezing
+  invoiceFreezeEnabled: z.boolean().optional(),
   // Elum foundations (v1)
   zeroPvAlertEnabled: z.boolean().optional(),
   zeroPvEstimateMultiplier: z.coerce.number().optional(),
