@@ -378,47 +378,75 @@ interface ClassifiedOrg {
   hasEconf: boolean;
 }
 
+function classifyOrgRow(o: any): ClassifiedOrg {
+  const flags = o.feature_flags || {};
+  let tier: string | null = null;
+  for (const [t, flag] of Object.entries(ELUM_TIER_FLAGS)) {
+    if (flags[flag] === true && !tier) tier = t;
+  }
+  return {
+    orgId: o.org_id,
+    orgName: o.org_name || o.org_id,
+    uid: o.uid,
+    tier,
+    hasEconf: flags['remote_econf'] === true,
+  };
+}
+
 /**
  * Fetch sub-orgs of a parent org and classify them by AMMP feature flags.
+ * Recurses one level into child orgs so nested organisations are not missed.
+ * Throws on API failure so a partial org list can never silently shrink a tier.
  */
-async function getClassifiedSubOrgs(token: string, parentOrgId: string): Promise<ClassifiedOrg[]> {
+async function getClassifiedSubOrgs(
+  token: string,
+  parentOrgId: string,
+  depth = 0,
+  seen: Set<string> = new Set()
+): Promise<ClassifiedOrg[]> {
   const response = await fetchAMMPData(token, `/orgs?parent_org_id=${encodeURIComponent(parentOrgId)}`);
   const orgs: any[] = Array.isArray(response) ? response : (response?.orgs || []);
-  return orgs
-    .filter((o: any) => o.org_id && o.org_id !== parentOrgId)
-    .map((o: any) => {
-      const flags = o.feature_flags || {};
-      let tier: string | null = null;
-      for (const [t, flag] of Object.entries(ELUM_TIER_FLAGS)) {
-        if (flags[flag] === true && !tier) tier = t;
+  if (!Array.isArray(orgs)) {
+    throw new Error(`Unexpected /orgs payload for parent ${parentOrgId}`);
+  }
+
+  const direct = orgs
+    .filter((o: any) => o?.org_id && o.org_id !== parentOrgId && !seen.has(o.org_id))
+    .map(classifyOrgRow);
+
+  for (const o of direct) seen.add(o.orgId);
+
+  // One level of nesting: grandchild orgs also carry tier flags
+  if (depth < 1) {
+    for (const child of [...direct]) {
+      const nested = await getClassifiedSubOrgs(token, child.orgId, depth + 1, seen);
+      if (nested.length > 0) {
+        console.log(`[AMMP Sync Contract] ${nested.length} nested sub-orgs under ${child.orgName}`);
+        direct.push(...nested);
       }
-      return {
-        orgId: o.org_id,
-        orgName: o.org_name || o.org_id,
-        uid: o.uid,
-        tier,
-        hasEconf: flags['remote_econf'] === true,
-      };
-    });
+    }
+  }
+
+  return direct;
 }
 
 /**
  * Fetch assets belonging to a specific (sub-)org.
  * GET /v1/assets?org_ids=<orgId>
+ * Throws on API failure — the caller must preserve the existing cache rather
+ * than treating a failed fetch as "this org has no assets".
  */
 async function getAssetsForOrg(token: string, orgId: string): Promise<any[]> {
-  try {
-    const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
-    const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
-    return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
-      ...a,
-      asset_name: a.asset_name || 'Unknown',
-      org_id: a.org_id || orgId,
-    }));
-  } catch (error) {
-    console.error(`[AMMP Sync Contract] Failed to fetch assets for org ${orgId}:`, error);
-    return [];
+  const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
+  const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
+  if (!Array.isArray(assets)) {
+    throw new Error(`Unexpected /assets payload for org ${orgId} (${typeof response})`);
   }
+  return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
+    ...a,
+    asset_name: a.asset_name || 'Unknown',
+    org_id: a.org_id || orgId,
+  }));
 }
 
 /**
