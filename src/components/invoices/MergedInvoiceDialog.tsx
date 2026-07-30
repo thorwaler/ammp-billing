@@ -17,6 +17,7 @@ import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pr
 import { isPackage2026 } from "@/data/pricingData";
 import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { buildSnapshotFields } from "@/lib/invoiceSnapshot";
 
 interface ContractForMerge {
   contractId: string;
