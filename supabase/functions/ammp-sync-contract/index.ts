@@ -269,22 +269,13 @@ async function getSharedAmmpApiKey(supabase: any): Promise<string> {
 async function fetchAMMPData(token: string, path: string, method: string = 'GET'): Promise<any> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  
-  const response = await fetch(`${supabaseUrl}/functions/v1/ammp-data-proxy`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${serviceKey}`,
-    },
-    body: JSON.stringify({ path, method, token }),
-  });
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`AMMP API call failed for ${path}: ${error}`);
-  }
-  
-  return response.json();
+
+  return postJsonWithRetry(
+    `${supabaseUrl}/functions/v1/ammp-data-proxy`,
+    serviceKey,
+    { path, method, token },
+    `AMMP API call for ${path}`
+  );
 }
 
 /**
