@@ -367,6 +367,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       annualMinimumFee: existingContract.annualMinimumFee ?? 0,
       committedMinimumMW: existingContract.committedMinimumMW ?? 0,
       annualBillingAnchorDate: existingContract.annualBillingAnchorDate?.toString().substring(0, 10) || "",
+      invoiceFreezeEnabled: existingContract.invoiceFreezeEnabled !== false,
       zeroPvAlertEnabled: existingContract.zeroPvAlertEnabled ?? false,
       zeroPvEstimateMultiplier: existingContract.zeroPvEstimateMultiplier ?? 1.2,
       zeroPvGraceDays: existingContract.zeroPvGraceDays ?? 30,
