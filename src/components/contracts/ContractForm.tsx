@@ -272,6 +272,10 @@ interface ContractFormProps {
   onCancel?: () => void;
   isExtending?: boolean;
   isNewContract?: boolean;
+  /** Prefill from an existing contract but always insert a new row. */
+  isDuplicating?: boolean;
+}
+
 }
 
 // Module and addon definitions now imported from shared data file
