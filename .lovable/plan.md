@@ -1,42 +1,42 @@
-## What happened
+## Context
 
-The C&I Lite contract (`ammp_asset_group_id` = "[Tier] Lite") did not lose sites in AMMP — the last sync silently dropped them.
+- Item 2 (the lower invoice) is explained and accepted — no change.
+- Item 1: freezing at invoice date is the intended behaviour, but it is not currently wired up. `src/lib/invoiceSnapshot.ts` defines the snapshot shape, `buildSnapshot()` and the 30-day revision window, and the `invoices` table already has `input_snapshot`, `snapshot_frozen_at`, `revision_deadline`, `revised_from_invoice_id` — yet `buildSnapshot()` is never called and existing invoices have null snapshots.
+- New: freezing must be switchable off per contract so you can re-run test invoices against live data.
 
-Evidence from the 07:21 sync logs:
+## Plan
 
-```text
-07:20:51 Fetching members for group d1ac54d1... ([Tier] Lite)
-07:20:55 ERROR Failed to fetch group d1ac54d1... members:
-         Rate limit exceeded for trace 019fb1e4... Retry after 3550ms.
-07:21:00 Found 88 members in group 88517d88... ([Add-on] Remote eConf)
-07:21:00 Legacy asset group merged: 0 members -> 0 standard, 0 eConf, 0 excluded
-```
+### 1. Freeze on invoice creation
+In `InvoiceCalculator.tsx` and `MergedInvoiceDialog.tsx`, build and store the snapshot when the invoice row is inserted (unless freezing is disabled for the contract):
+- resolved asset list (id, name, MWp, zero-PV substitution info)
+- per-org tier, rate and eConf status for Elum org-tier contracts
+- contract rate configuration at freeze time
+- period start/end, currency, EUR exchange rate
+- final totals and the Xero line items sent
+- `snapshot_frozen_at = now`, `revision_deadline = now + 30 days`
 
-`getAssetGroupMembers` catches any error and returns an empty array. So the primary group came back empty, both legacy pseudo-orgs ("Legacy asset group — standard" / "— with eConf") were skipped, and the cached capabilities were written with only the 67 org-flag-resolved sites and no legacy rows. Nothing warned the user: `doubleCountWarnings` is empty, sync status is `synced`.
+### 2. Freeze toggle (the testing switch)
+- New boolean column `invoice_freeze_enabled` on `contracts`, default `true`.
+- Switch in `ContractForm.tsx` ("Freeze invoice inputs at creation") with helper text explaining that turning it off means support documents always regenerate from live data — intended for testing. Wire it through `src/lib/contractFormMapping.ts` so editing a contract never silently resets it.
+- When off: no snapshot is written, and the invoice shows a "Live data" badge instead of a freeze badge.
+- Per-invoice escape hatch: a "Freeze this invoice" checkbox in the calculator, pre-set from the contract setting, so you can override for one run without editing the contract.
 
-Two defects:
+### 3. Support document reads the snapshot
+`supportDocumentGenerator.ts` / `SupportDocument.tsx`: when a saved invoice has `input_snapshot`, render from it instead of live `cached_capabilities`. Invoices without a snapshot keep today's behaviour and show a "regenerated from live data — not frozen" note.
 
-1. The retry helper does not honour AMMP's rate-limit response (`Retry after 3550ms`) for this call path, so the group fetch gives up.
-2. A failed group fetch is indistinguishable from a genuinely empty group, and the sync happily overwrites a previously populated cache.
+### 4. Make it verifiable
+In Invoice History, per invoice:
+- badge: "Frozen 30 Sep 2026 · revisable for N days", or "Live data (not frozen)"
+- a snapshot detail panel with frozen site count, total MWp, per-org rates and totals, to compare against Xero
 
-## Fix
+### 5. Revision within the window
+For frozen invoices still inside 30 days, a "Revise" action creates a new invoice with `revised_from_invoice_id` set, showing a diff (MWp, site count, org membership, total) before confirming.
 
-**1. Distinguish failure from empty (`supabase/functions/ammp-sync-contract/index.ts`)**
-- Change `getAssetGroupMembers` to rethrow instead of returning `[]` on error (or return a `{ ok, members }` result).
-- In the legacy-asset-group block and the non-Elum asset-group branches, treat a failed member fetch as a hard sync failure: mark the contract `error`, keep the existing `cached_capabilities` untouched, and return the real reason. This matches the existing guard that prevents empty syncs from wiping caches.
+### How to check it
+1. Generate an invoice with freezing on — badge and snapshot panel appear and match Xero.
+2. Re-sync the contract, regenerate the support document: numbers unchanged.
+3. Turn the toggle off on a test contract, repeat: numbers now follow live data.
 
-**2. Respect the rate limit**
-- In `postJsonWithRetry` / `fetchAMMPData`, detect AMMP's rate-limit response (429 or the "Retry after Nms" message), parse the delay, wait it out and retry (a few attempts, capped) instead of failing.
-- Add a small delay/serialisation between consecutive `/asset_groups/*/members` calls so the tier group and the eConf add-on group don't trip the limiter back-to-back.
-
-**3. Make the loss visible**
-- If a sync completes with fewer sites than the previous cache by a meaningful margin, raise the existing Elum alert channel with a "site count dropped from X to Y" notice, so a partial result is never silently accepted.
-
-**4. Re-sync**
-- Re-run the sync for this contract and confirm the legacy standard / eConf rows and their sites reappear in the support document.
-
-## Technical notes
-
-- No database migration.
-- Files touched: `supabase/functions/ammp-sync-contract/index.ts` only (plus a redeploy).
-- Invoice logic is unchanged; this restores the input data.
+### Technical notes
+- One migration: `ALTER TABLE public.contracts ADD COLUMN invoice_freeze_enabled boolean NOT NULL DEFAULT true;` (no new table, so no new grants needed).
+- Files: `src/components/dashboard/InvoiceCalculator.tsx`, `src/components/invoices/MergedInvoiceDialog.tsx`, `src/components/contracts/ContractForm.tsx`, `src/lib/contractFormMapping.ts`, `src/lib/supportDocumentGenerator.ts`, `src/components/invoices/SupportDocument.tsx`, `src/pages/InvoiceHistory.tsx`, `src/lib/invoiceSnapshot.ts`.
