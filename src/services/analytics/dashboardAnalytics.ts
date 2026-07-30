@@ -284,6 +284,10 @@ export function calculateSingleContractARR(
       ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
       : contract.initial_mw || 0);
   const totalSites = cachedCapabilities?.totalSites || assetBreakdown.length || 0;
+  // Elum 2026 org-tier packages price per sub-organisation, not from totalMW
+  const orgBreakdown = cachedCapabilities?.orgBreakdown || [];
+  const orgPricingConfig = (contract.org_pricing_config || {}) as { liteBaseRate?: number; liteEconfRate?: number };
+
 
   let annualValue = 0;
 
