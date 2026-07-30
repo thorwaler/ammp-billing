@@ -897,6 +897,7 @@ export function calculateElumOrgTierBreakdown(
     let baseCost = 0;
     let appliedRate: number | null = null;
     let appliedTierLabel: string | undefined;
+    let bracketBreakdown: ElumOrgLine["bracketBreakdown"];
 
     if (tier === "ci_pro") {
       for (const asset of assets) {
