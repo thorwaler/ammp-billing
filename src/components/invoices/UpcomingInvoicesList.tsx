@@ -63,6 +63,8 @@ export interface UpcomingInvoice {
   committedMinimumMW?: number;
   annualBillingAnchorDate?: string;
   ytdInvoicedAmount?: number;
+  // Elum 2026 org-based tiers
+  orgPricingConfig?: { liteBaseRate?: number; liteEconfRate?: number };
 }
 
 interface CustomerGroup {
