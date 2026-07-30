@@ -304,7 +304,7 @@ export function calculateSingleContractARR(
       annualValue = annualFeePerSite * totalSites;
     }
     // For pro/custom/hybrid_tiered/elum packages - use calculateInvoice with frequencyMultiplier=1
-    else if (totalMW > 0 || contract.base_monthly_price || ((contract.minimum_charge_tiers as any[])?.length > 0 && totalSites > 0)) {
+    else if (totalMW > 0 || contract.base_monthly_price || orgBreakdown.length > 0 || ((contract.minimum_charge_tiers as any[])?.length > 0 && totalSites > 0)) {
       const result = calculateInvoice({
         packageType: contract.package as any,
         totalMW,
