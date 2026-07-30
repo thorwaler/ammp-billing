@@ -1366,6 +1366,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="elum_ci_lite">Elum C&amp;I Light 2026 (Org-based, €65/MWp + org-wide eConf)</SelectItem>
                       <SelectItem value="elum_ci_pro">Elum C&amp;I Pro 2026 (Org-based, per-site size buckets, eConf bundled)</SelectItem>
                       <SelectItem value="elum_utility">Elum Utility 2026 (Org-based blended rate, all sites &gt; 2 MWp)</SelectItem>
+                      <SelectItem value="elum_internal_2026">Elum Internal 2026 (Org-based, stepped MWp brackets)</SelectItem>
                       <SelectItem value="ammp_os_2026">AMMP OS 2026 (New pricing: 5 modules, trial option)</SelectItem>
                       <SelectItem value="sps_monitoring">SPS Monitoring (3 stacking discounts, quarterly billing, €100k min)</SelectItem>
                       <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
@@ -1412,6 +1413,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "Elum C&I Pro 2026: Sub-orgs with the epm_pro flag. Priced site by site using size buckets (≤1 MWp / 1-2 MWp / ≥2 MWp). Remote eConf is bundled at no extra charge." :
                       watchPackage === "elum_utility" ?
                       "Elum Utility 2026: Sub-orgs with the epm_utility flag. A single blended rate based on the org portfolio size, applied to every MWp. Only valid when every site exceeds 2 MWp." :
+                      watchPackage === "elum_internal_2026" ?
+                      "Elum Internal 2026: Sub-orgs with the elum_internal flag. Stepped MWp brackets on the org portfolio (€150 / €75 / €37.50), each rate applied only to the MWp inside its bracket. eConf supported." :
                       watchPackage === "ammp_os_2026" ?
                       "AMMP OS 2026: 5 modules with per-MWp pricing, optional trial toggle (50% off modules + setup fees), and updated add-ons." :
                       watchPackage === "solar_africa_api" ?
@@ -1961,6 +1964,38 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       as MWh in the PV capacity field and flagged with a note.
                     </p>
                   </div>
+                )}
+
+                {watchPackage === "elum_internal_2026" && (
+                  <>
+                    <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground space-y-1">
+                      <p className="font-medium text-foreground">Stepped portfolio brackets</p>
+                      {ELUM_INTERNAL_2026_BRACKETS.map(b => (
+                        <p key={b.label}>{b.label}: €{b.pricePerMWp}/MWp/year</p>
+                      ))}
+                      <p>
+                        Each bracket's rate applies only to the MWp inside it. A 600 MWp org is charged
+                        €150 on the first 100, €75 on the next 400 and €37.50 on the remaining 100.
+                      </p>
+                    </div>
+                    <FormField
+                      control={form.control}
+                      name="elumInternalEconfRate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Remote eConf add-on (€/MWp/year)</FormLabel>
+                          <FormControl>
+                            <Input type="number" step="1" {...field} />
+                          </FormControl>
+                          <FormDescription>
+                            Internal supports eConf. Leave at 0 to include it in the stepped rate; any value
+                            above 0 is charged org-wide on sub-orgs carrying the eConf flag.
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
                 )}
 
                 <div className="rounded-md bg-muted p-4 text-sm text-muted-foreground">
