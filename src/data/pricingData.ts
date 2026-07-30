@@ -531,13 +531,13 @@ export interface ElumProSiteBucket {
 
 /** C&I Pro: price applied site by site, never aggregated. */
 export const ELUM_PRO_SITE_BUCKETS: ElumProSiteBucket[] = [
-  { minMWp: 0, maxMWp: 1, pricePerMWp: 650, label: "≤ 1 MWp" },
-  { minMWp: 1, maxMWp: 2, pricePerMWp: 450, label: "> 1 and < 2 MWp" },
-  { minMWp: 2, maxMWp: null, pricePerMWp: 300, label: "≥ 2 MWp" },
+  { minMWp: 0, maxMWp: 1, pricePerMWp: 650, label: "Up to 1 MWp" },
+  { minMWp: 1, maxMWp: 2, pricePerMWp: 450, label: "1 to 2 MWp" },
+  { minMWp: 2, maxMWp: null, pricePerMWp: 300, label: "2 MWp and above" },
 ];
 
 export function getElumProBucket(mwp: number): ElumProSiteBucket {
-  // ≤1 MWp inclusive, >1 and <2, then ≥2
+  // up to 1 MWp inclusive, >1 and <2, then 2 and above
   if (mwp <= 1) return ELUM_PRO_SITE_BUCKETS[0];
   if (mwp < 2) return ELUM_PRO_SITE_BUCKETS[1];
   return ELUM_PRO_SITE_BUCKETS[2];
@@ -553,12 +553,12 @@ export interface ElumUtilityTier {
 
 /** Utility: single blended rate determined by total org portfolio size. */
 export const ELUM_UTILITY_TIERS: ElumUtilityTier[] = [
-  { minMWp: 0, maxMWp: 10, discountPercent: 0, pricePerMWp: 300, label: "< 10 MWp" },
-  { minMWp: 10, maxMWp: 20, discountPercent: 5, pricePerMWp: 285, label: "10–20 MWp" },
-  { minMWp: 20, maxMWp: 30, discountPercent: 10, pricePerMWp: 270, label: "20–30 MWp" },
-  { minMWp: 30, maxMWp: 40, discountPercent: 15, pricePerMWp: 255, label: "30–40 MWp" },
-  { minMWp: 40, maxMWp: 50, discountPercent: 20, pricePerMWp: 240, label: "40–50 MWp" },
-  { minMWp: 50, maxMWp: null, discountPercent: 25, pricePerMWp: 225, label: "50–60 MWp" },
+  { minMWp: 0, maxMWp: 10, discountPercent: 0, pricePerMWp: 300, label: "Under 10 MWp" },
+  { minMWp: 10, maxMWp: 20, discountPercent: 5, pricePerMWp: 285, label: "10-20 MWp" },
+  { minMWp: 20, maxMWp: 30, discountPercent: 10, pricePerMWp: 270, label: "20-30 MWp" },
+  { minMWp: 30, maxMWp: 40, discountPercent: 15, pricePerMWp: 255, label: "30-40 MWp" },
+  { minMWp: 40, maxMWp: 50, discountPercent: 20, pricePerMWp: 240, label: "40-50 MWp" },
+  { minMWp: 50, maxMWp: null, discountPercent: 25, pricePerMWp: 225, label: "50 MWp and above" },
 ];
 
 export function getElumUtilityTier(portfolioMWp: number): ElumUtilityTier {

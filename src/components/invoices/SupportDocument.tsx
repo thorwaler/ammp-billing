@@ -213,7 +213,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
           {data.elumOrgTierBreakdown.orgs.map(org => (
             <div key={`sites-${org.orgId}`} className="mb-4">
               <h3 className="text-sm font-semibold mb-1">
-                {org.orgName} — {org.siteCount} sites, {org.totalMWp.toFixed(3)} MWp
+                {org.orgName} — {org.siteCount} sites, {org.totalMWp.toFixed(3)} MWp, {formatCurrency(org.totalCost)}
               </h3>
               {org.warnings.map((w, i) => (
                 <p key={i} className="text-xs text-destructive mb-1">{w}</p>
@@ -244,6 +244,15 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot>
+                  <tr className="bg-muted font-semibold">
+                    <td className="border border-border p-1" colSpan={2}>Total</td>
+                    <td className="border border-border p-1 text-right">{org.totalMWp.toFixed(3)}</td>
+                    <td className="border border-border p-1"></td>
+                    <td className="border border-border p-1"></td>
+                    <td className="border border-border p-1 text-right">{formatCurrency(org.totalCost)}</td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           ))}
