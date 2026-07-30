@@ -1664,6 +1664,28 @@ export function InvoiceCalculator({
             nrr_amount: storedNrrAmount,
             xero_line_items: lineItems,
             prepaid_balance_delta: prepaidBalanceDelta,
+            // Freeze the inputs behind this invoice (when enabled) so it stays
+            // reproducible after later AMMP syncs.
+            ...(buildSnapshotFields({
+              freezeEnabled: freezeInvoice,
+              contractId: selectedCustomer.contractId || '',
+              customerId: selectedCustomer.id,
+              invoiceDate,
+              periodStart: selectedCustomer.periodStart,
+              periodEnd: selectedCustomer.periodEnd,
+              currency: selectedCustomer.currency,
+              exchangeRateEUR: selectedCustomer.currency === 'USD' ? exchangeRate : 1,
+              contract: selectedCustomer as unknown as Record<string, unknown>,
+              capabilities: selectedCustomer.cachedCapabilities || selectedCustomer.ammpCapabilities,
+              lineItems: lineItems as any,
+              totals: {
+                invoiceAmount: result.totalPrice,
+                arrAmount: storedArrAmount,
+                nrrAmount: storedNrrAmount,
+                totalMW: Number(mwManaged),
+              },
+            }) ?? {}) as any,
+
 
           }])
           .select()
