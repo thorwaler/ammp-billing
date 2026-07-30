@@ -30,6 +30,9 @@ interface InvoiceDetailsDialogProps {
     mw_change: number;
     modules_data: any;
     addons_data: any;
+    input_snapshot?: any | null;
+    snapshot_frozen_at?: string | null;
+    revision_deadline?: string | null;
   };
 }
 
