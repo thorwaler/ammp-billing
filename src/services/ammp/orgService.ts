@@ -6,10 +6,10 @@
  *   epm_lite  -> C&I Lite
  *   epm_pro   -> C&I Pro
  *   epm_utility -> Utility
- *   remote_econf -> org-wide remote eConf add-on (billable on Lite only)
+ *   elum_internal -> Internal
+ *   remote_econf -> org-wide remote eConf add-on (billable on Lite and Internal)
  *
- * Internal and Enterprise orgs keep their own dedicated contracts and are not
- * discovered here.
+ * Enterprise orgs keep their own dedicated contracts and are not discovered here.
  */
 
 import { dataApiClient } from "./dataApiClient";

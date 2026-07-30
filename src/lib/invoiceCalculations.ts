@@ -18,6 +18,10 @@ import {
   ELUM_LITE_ECONF_RATE,
   ELUM_TIER_LABELS,
   ELUM_UTILITY_MIN_SITE_MWP,
+  ELUM_INTERNAL_2026_BRACKETS,
+  ELUM_INTERNAL_2026_ECONF_RATE,
+  calculateElumInternalSteppedCost,
+  type ElumInternalBracket,
   getSolarAfricaTier,
   getAddonPrice, 
   calculateTieredPrice,
@@ -179,6 +183,9 @@ export interface CalculationParams {
   // C&I Lite rates (editable defaults)
   elumLiteBaseRate?: number;
   elumLiteEconfRate?: number;
+  // Internal 2026 stepped brackets + optional eConf add-on rate
+  elumInternalBrackets?: ElumInternalBracket[];
+  elumInternalEconfRate?: number;
   // Assets where MWh was entered in the PV capacity field (battery-only utility
   // sites). Suppresses the utility >2 MWp guard for those assets.
   mwhOverrideAssetIds?: string[];
@@ -291,6 +298,8 @@ export interface ElumOrgLine {
   appliedRate: number | null;
   appliedTierLabel?: string;
   baseCost: number;
+  /** Internal tier: stepped bracket detail behind baseCost */
+  bracketBreakdown?: Array<{ label: string; mwInBracket: number; pricePerMWp: number; cost: number }>;
   /** C&I Lite org-wide remote eConf add-on */
   econfApplied: boolean;
   econfRate: number;
@@ -853,6 +862,9 @@ export function calculateElumJubailiBreakdown(
  *   Utility   — single blended rate determined by the org portfolio size,
  *               applied uniformly to every MWp. Only available when every site
  *               exceeds 2 MWp; otherwise the org is blocked.
+ *   Internal  — stepped MWp brackets on the org portfolio (150 / 75 / 37.50),
+ *               each bracket's rate applied only to the MWp inside it. eConf is
+ *               supported and billed at an optional add-on rate (default 0).
  */
 export function calculateElumOrgTierBreakdown(
   tier: ElumOrgTier,
@@ -861,11 +873,17 @@ export function calculateElumOrgTierBreakdown(
   options: {
     liteBaseRate?: number;
     liteEconfRate?: number;
+    internalBrackets?: ElumInternalBracket[];
+    internalEconfRate?: number;
     mwhOverrideAssetIds?: string[];
   } = {}
 ): ElumOrgTierBreakdown {
   const liteBaseRate = options.liteBaseRate ?? ELUM_LITE_BASE_RATE;
   const liteEconfRate = options.liteEconfRate ?? ELUM_LITE_ECONF_RATE;
+  const internalBrackets = options.internalBrackets?.length
+    ? options.internalBrackets
+    : ELUM_INTERNAL_2026_BRACKETS;
+  const internalEconfRate = options.internalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE;
   const mwhOverrides = new Set(options.mwhOverrideAssetIds || []);
   const tierLabel = ELUM_TIER_LABELS[tier];
 
@@ -882,6 +900,7 @@ export function calculateElumOrgTierBreakdown(
     let baseCost = 0;
     let appliedRate: number | null = null;
     let appliedTierLabel: string | undefined;
+    let bracketBreakdown: ElumOrgLine["bracketBreakdown"];
 
     if (tier === "ci_pro") {
       for (const asset of assets) {
@@ -927,6 +946,27 @@ export function calculateElumOrgTierBreakdown(
           isMwhOverride: mwhOverrides.has(asset.assetId),
         });
       }
+    } else if (tier === "internal") {
+      // Internal 2026: stepped brackets on the org portfolio
+      const stepped = calculateElumInternalSteppedCost(totalMWp, internalBrackets);
+      baseCost = stepped.totalCost * frequencyMultiplier;
+      bracketBreakdown = stepped.brackets.map(b => ({
+        ...b,
+        cost: b.cost * frequencyMultiplier,
+      }));
+      // Blended effective rate so per-site rows reconcile with the org total
+      const blendedRate = totalMWp > 0 ? stepped.totalCost / totalMWp : 0;
+      appliedRate = blendedRate;
+      appliedTierLabel = stepped.brackets.map(b => b.label).join(" + ") || undefined;
+      for (const asset of assets) {
+        sites.push({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          mwp: asset.totalMW || 0,
+          pricePerMWp: blendedRate,
+          cost: (asset.totalMW || 0) * blendedRate * frequencyMultiplier,
+        });
+      }
     } else {
       // C&I Lite
       appliedRate = liteBaseRate;
@@ -942,18 +982,20 @@ export function calculateElumOrgTierBreakdown(
       }
     }
 
-    // Remote eConf: billable org-wide add-on on C&I Lite only (bundled elsewhere)
-    const econfApplied = tier === "ci_lite" && !!org.hasEconf;
-    const econfCost = econfApplied ? totalMWp * liteEconfRate * frequencyMultiplier : 0;
+    // Remote eConf: billable org-wide add-on on C&I Lite and Internal
+    // (bundled in Pro / Utility). Internal defaults to a 0 rate until agreed.
+    const econfRate = tier === "internal" ? internalEconfRate : liteEconfRate;
+    const econfApplied =
+      (tier === "ci_lite" || tier === "internal") && !!org.hasEconf && econfRate > 0;
+    const econfCost = econfApplied ? totalMWp * econfRate * frequencyMultiplier : 0;
 
     // The org is invoiced as one line (base + eConf), so the per-site detail must
     // show the combined effective rate — otherwise the site rows only add up to
     // the base cost and don't reconcile with the invoiced total.
     if (econfApplied) {
-      const combinedRate = liteBaseRate + liteEconfRate;
       for (const site of sites) {
-        site.pricePerMWp = combinedRate;
-        site.cost = site.mwp * combinedRate * frequencyMultiplier;
+        site.pricePerMWp = site.pricePerMWp + econfRate;
+        site.cost = site.mwp * site.pricePerMWp * frequencyMultiplier;
       }
     }
 
@@ -973,8 +1015,9 @@ export function calculateElumOrgTierBreakdown(
       appliedRate,
       appliedTierLabel,
       baseCost,
+      bracketBreakdown,
       econfApplied,
-      econfRate: liteEconfRate,
+      econfRate,
       econfCost,
       totalCost: baseCost + econfCost,
       sites,
@@ -1283,6 +1326,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       {
         liteBaseRate: params.elumLiteBaseRate,
         liteEconfRate: params.elumLiteEconfRate,
+        internalBrackets: params.elumInternalBrackets,
+        internalEconfRate: params.elumInternalEconfRate,
         mwhOverrideAssetIds: params.mwhOverrideAssetIds,
       }
     );

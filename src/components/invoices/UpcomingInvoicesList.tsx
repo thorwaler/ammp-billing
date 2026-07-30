@@ -64,7 +64,7 @@ export interface UpcomingInvoice {
   annualBillingAnchorDate?: string;
   ytdInvoicedAmount?: number;
   // Elum 2026 org-based tiers
-  orgPricingConfig?: { liteBaseRate?: number; liteEconfRate?: number };
+  orgPricingConfig?: { liteBaseRate?: number; liteEconfRate?: number; internalBrackets?: any[]; internalEconfRate?: number };
 }
 
 interface CustomerGroup {
@@ -237,7 +237,7 @@ export function UpcomingInvoicesList({
             committedMinimumMW: (c as any).committed_minimum_mw ?? undefined,
             annualBillingAnchorDate: (c as any).annual_billing_anchor_date ?? undefined,
             ytdInvoicedAmount: Number((c as any).ytd_invoiced_amount) || 0,
-            orgPricingConfig: ((c as any).org_pricing_config || {}) as { liteBaseRate?: number; liteEconfRate?: number },
+            orgPricingConfig: ((c as any).org_pricing_config || {}) as { liteBaseRate?: number; liteEconfRate?: number; internalBrackets?: any[]; internalEconfRate?: number },
           };
         });
 
@@ -371,6 +371,8 @@ export function UpcomingInvoicesList({
       orgBreakdown: invoice.cachedCapabilities?.orgBreakdown || [],
       elumLiteBaseRate: invoice.orgPricingConfig?.liteBaseRate,
       elumLiteEconfRate: invoice.orgPricingConfig?.liteEconfRate,
+      elumInternalBrackets: invoice.orgPricingConfig?.internalBrackets,
+      elumInternalEconfRate: invoice.orgPricingConfig?.internalEconfRate,
       perMWAnnualUpfrontIsAnnualCycle: invoice.packageType === 'per_mw_annual_upfront'
         ? isAnnualUpfrontCycle(invoice.nextInvoiceDate, invoice.annualBillingAnchorDate)
         : undefined,

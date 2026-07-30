@@ -367,6 +367,7 @@ const ELUM_TIER_FLAGS: Record<string, string> = {
   ci_lite: 'epm_lite',
   ci_pro: 'epm_pro',
   utility: 'epm_utility',
+  internal: 'elum_internal',
 };
 
 interface ClassifiedOrg {
@@ -1130,7 +1131,7 @@ async function generateElumAlerts(
       alert_type: 'elum_org_unassigned',
       severity: 'warning',
       title: `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag`,
-      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => o.orgName || o.orgId).join(', ')}.`,
+      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => o.orgName || o.orgId).join(', ')}.`,
       metadata: { contract: contractLabel, orgs: unassigned },
     });
   }

@@ -286,7 +286,7 @@ export function calculateSingleContractARR(
   const totalSites = cachedCapabilities?.totalSites || assetBreakdown.length || 0;
   // Elum 2026 org-tier packages price per sub-organisation, not from totalMW
   const orgBreakdown = cachedCapabilities?.orgBreakdown || [];
-  const orgPricingConfig = (contract.org_pricing_config || {}) as { liteBaseRate?: number; liteEconfRate?: number };
+  const orgPricingConfig = (contract.org_pricing_config || {}) as { liteBaseRate?: number; liteEconfRate?: number; internalBrackets?: any[]; internalEconfRate?: number };
 
 
   let annualValue = 0;
@@ -353,6 +353,8 @@ export function calculateSingleContractARR(
         orgBreakdown,
         elumLiteBaseRate: orgPricingConfig.liteBaseRate,
         elumLiteEconfRate: orgPricingConfig.liteEconfRate,
+        elumInternalBrackets: orgPricingConfig.internalBrackets,
+        elumInternalEconfRate: orgPricingConfig.internalEconfRate,
       });
       annualValue = result.totalPrice;
 
