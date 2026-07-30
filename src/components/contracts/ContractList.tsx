@@ -414,6 +414,14 @@ export function ContractList() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setDuplicateSource({ id: contract.id, customerId: contract.customerId })}
+                          title="Duplicate"
+                        >
+                          <Copy className="h-4 w-4" />
+                        </Button>
                         <Button 
                           variant="ghost" 
                           size="icon" 
