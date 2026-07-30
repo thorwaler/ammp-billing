@@ -413,6 +413,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       minimumChargeTiers: DEFAULT_MINIMUM_CHARGE_TIERS,
       siteChargeFrequency: "annual",
       minimumAnnualValue: 0,
+      invoiceFreezeEnabled: true,
       notes: "",
     },
   });
