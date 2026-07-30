@@ -942,6 +942,27 @@ export function calculateElumOrgTierBreakdown(
           isMwhOverride: mwhOverrides.has(asset.assetId),
         });
       }
+    } else if (tier === "internal") {
+      // Internal 2026: stepped brackets on the org portfolio
+      const stepped = calculateElumInternalSteppedCost(totalMWp, internalBrackets);
+      baseCost = stepped.totalCost * frequencyMultiplier;
+      bracketBreakdown = stepped.brackets.map(b => ({
+        ...b,
+        cost: b.cost * frequencyMultiplier,
+      }));
+      // Blended effective rate so per-site rows reconcile with the org total
+      const blendedRate = totalMWp > 0 ? stepped.totalCost / totalMWp : 0;
+      appliedRate = blendedRate;
+      appliedTierLabel = stepped.brackets.map(b => b.label).join(" + ") || undefined;
+      for (const asset of assets) {
+        sites.push({
+          assetId: asset.assetId,
+          assetName: asset.assetName,
+          mwp: asset.totalMW || 0,
+          pricePerMWp: blendedRate,
+          cost: (asset.totalMW || 0) * blendedRate * frequencyMultiplier,
+        });
+      }
     } else {
       // C&I Lite
       appliedRate = liteBaseRate;
@@ -957,18 +978,20 @@ export function calculateElumOrgTierBreakdown(
       }
     }
 
-    // Remote eConf: billable org-wide add-on on C&I Lite only (bundled elsewhere)
-    const econfApplied = tier === "ci_lite" && !!org.hasEconf;
-    const econfCost = econfApplied ? totalMWp * liteEconfRate * frequencyMultiplier : 0;
+    // Remote eConf: billable org-wide add-on on C&I Lite and Internal
+    // (bundled in Pro / Utility). Internal defaults to a 0 rate until agreed.
+    const econfRate = tier === "internal" ? internalEconfRate : liteEconfRate;
+    const econfApplied =
+      (tier === "ci_lite" || tier === "internal") && !!org.hasEconf && econfRate > 0;
+    const econfCost = econfApplied ? totalMWp * econfRate * frequencyMultiplier : 0;
 
     // The org is invoiced as one line (base + eConf), so the per-site detail must
     // show the combined effective rate — otherwise the site rows only add up to
     // the base cost and don't reconcile with the invoiced total.
     if (econfApplied) {
-      const combinedRate = liteBaseRate + liteEconfRate;
       for (const site of sites) {
-        site.pricePerMWp = combinedRate;
-        site.cost = site.mwp * combinedRate * frequencyMultiplier;
+        site.pricePerMWp = site.pricePerMWp + econfRate;
+        site.cost = site.mwp * site.pricePerMWp * frequencyMultiplier;
       }
     }
 
