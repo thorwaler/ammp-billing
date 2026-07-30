@@ -1192,6 +1192,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         annual_minimum_fee: isAnnualUpfront ? (data.annualMinimumFee ?? 0) : null,
         committed_minimum_mw: isAnnualUpfront ? (data.committedMinimumMW ?? null) : null,
         annual_billing_anchor_date: (isAnnualUpfront || data.package === 'sps_monitoring') ? (data.annualBillingAnchorDate || null) : null,
+        // Invoice input freezing (default on)
+        invoice_freeze_enabled: data.invoiceFreezeEnabled !== false,
         // Elum foundations
         zero_pv_alert_enabled: data.zeroPvAlertEnabled ?? false,
         zero_pv_estimate_multiplier: data.zeroPvEstimateMultiplier ?? 1.2,
