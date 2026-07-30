@@ -1175,12 +1175,17 @@ async function generateElumAlerts(
   // 1. Sub-orgs with no tier flag -> their assets are not priced
   const unassigned = cached.unassignedOrgs || [];
   if (unassigned.length > 0) {
+    const strandedAssets = unassigned.reduce((s: number, o: any) => s + (o.assetCount || 0), 0);
+    const strandedMW = unassigned.reduce((s: number, o: any) => s + (o.totalMW || 0), 0);
+    const impact = strandedAssets > 0
+      ? ` They hold ${strandedAssets} asset${strandedAssets === 1 ? '' : 's'} (${strandedMW.toFixed(2)} MWp) that are excluded from every tier.`
+      : '';
     pending.push({
       alert_type: 'elum_org_unassigned',
-      severity: 'warning',
+      severity: strandedAssets > 0 ? 'critical' : 'warning',
       title: `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag`,
-      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => o.orgName || o.orgId).join(', ')}.`,
-      metadata: { contract: contractLabel, orgs: unassigned },
+      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
+      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW },
     });
   }
 
