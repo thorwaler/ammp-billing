@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { postJsonWithRetry, isRateLimited } from '../_shared/internalFetch.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -117,49 +118,39 @@ async function getSharedAmmpApiKey(supabase: any): Promise<string> {
  */
 async function getToken(apiKey: string): Promise<string> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  const response = await fetch(`${supabaseUrl}/functions/v1/ammp-token-exchange`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${serviceKey}`,
-    },
-    body: JSON.stringify({ apiKey }),
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Token exchange failed: ${errorText}`);
-  }
-  
-  const data = await response.json();
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  const data = await postJsonWithRetry(
+    `${supabaseUrl}/functions/v1/ammp-token-exchange`,
+    serviceKey,
+    { apiKey },
+    'Token exchange',
+    5,
+    'ammp-device-enrichment',
+  );
   return data.access_token;
 }
 
 /**
- * Fetch data from AMMP API via proxy
+ * Fetch data from AMMP API via proxy.
+ *
+ * Retries with backoff and honours the gateway's "Retry after Nms" hint — a
+ * transient rate limit must never be mistaken for "this asset has no devices".
  */
 async function fetchAMMPData(token: string, path: string): Promise<any> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  
-  const response = await fetch(`${supabaseUrl}/functions/v1/ammp-data-proxy`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${serviceKey}`,
-    },
-    body: JSON.stringify({ token, path }),
-  });
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`AMMP API error: ${errorText}`);
-  }
-  
-  return response.json();
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+  return postJsonWithRetry(
+    `${supabaseUrl}/functions/v1/ammp-data-proxy`,
+    serviceKey,
+    { token, path },
+    `AMMP ${path}`,
+    3,
+    'ammp-device-enrichment',
+  );
 }
+
 
 /**
  * Calculate capabilities from asset and device data
