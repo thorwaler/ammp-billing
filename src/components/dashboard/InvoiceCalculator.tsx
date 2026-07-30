@@ -236,7 +236,12 @@ export function InvoiceCalculator({
   // Freeze the invoice inputs (snapshot) when creating. Defaults to the
   // contract setting, but can be overridden per invoice (useful for testing).
   const [freezeInvoice, setFreezeInvoice] = useState(true);
-  
+
+  // Reset the freeze override whenever the selected contract changes.
+  useEffect(() => {
+    setFreezeInvoice(selectedCustomer?.invoiceFreezeEnabled !== false);
+  }, [selectedCustomer?.contractId, selectedCustomer?.invoiceFreezeEnabled]);
+
 
   // Per-site billing state
   const [siteBillingData, setSiteBillingData] = useState<SiteBillingItem[]>([]);
