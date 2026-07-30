@@ -859,6 +859,9 @@ export function calculateElumJubailiBreakdown(
  *   Utility   — single blended rate determined by the org portfolio size,
  *               applied uniformly to every MWp. Only available when every site
  *               exceeds 2 MWp; otherwise the org is blocked.
+ *   Internal  — stepped MWp brackets on the org portfolio (150 / 75 / 37.50),
+ *               each bracket's rate applied only to the MWp inside it. eConf is
+ *               supported and billed at an optional add-on rate (default 0).
  */
 export function calculateElumOrgTierBreakdown(
   tier: ElumOrgTier,
@@ -867,11 +870,17 @@ export function calculateElumOrgTierBreakdown(
   options: {
     liteBaseRate?: number;
     liteEconfRate?: number;
+    internalBrackets?: ElumInternalBracket[];
+    internalEconfRate?: number;
     mwhOverrideAssetIds?: string[];
   } = {}
 ): ElumOrgTierBreakdown {
   const liteBaseRate = options.liteBaseRate ?? ELUM_LITE_BASE_RATE;
   const liteEconfRate = options.liteEconfRate ?? ELUM_LITE_ECONF_RATE;
+  const internalBrackets = options.internalBrackets?.length
+    ? options.internalBrackets
+    : ELUM_INTERNAL_2026_BRACKETS;
+  const internalEconfRate = options.internalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE;
   const mwhOverrides = new Set(options.mwhOverrideAssetIds || []);
   const tierLabel = ELUM_TIER_LABELS[tier];
 
