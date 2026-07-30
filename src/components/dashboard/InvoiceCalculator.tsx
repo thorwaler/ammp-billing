@@ -420,6 +420,7 @@ export function InvoiceCalculator({
             committedMinimumMW: (contract as any).committed_minimum_mw != null ? Number((contract as any).committed_minimum_mw) : undefined,
             annualBillingAnchorDate: (contract as any).annual_billing_anchor_date || undefined,
             ytdInvoicedAmount: (contract as any).ytd_invoiced_amount != null ? Number((contract as any).ytd_invoiced_amount) : 0,
+            invoiceFreezeEnabled: (contract as any).invoice_freeze_enabled !== false,
           };
         });
 
