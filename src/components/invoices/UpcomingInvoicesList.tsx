@@ -145,6 +145,7 @@ export function UpcomingInvoicesList({
           committed_minimum_mw,
           annual_billing_anchor_date,
           ytd_invoiced_amount,
+          org_pricing_config,
           contract_types ( pricing_model ),
           customers (
             id,
