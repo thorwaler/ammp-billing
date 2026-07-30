@@ -502,7 +502,8 @@ async function processContractSync(
   // Elum 2026 org-based tiers: asset -> sub-org assignment built during resolution
   const assetOrgMap = new Map<string, ClassifiedOrg>();
   let tierOrgs: ClassifiedOrg[] = [];
-  let unassignedOrgs: Array<{ orgId: string; orgName: string }> = [];
+  let unassignedOrgs: Array<{ orgId: string; orgName: string; assetCount?: number; totalMW?: number }> = [];
+  const orgResolutionLog: Array<{ orgId: string; orgName: string; assetCount: number; source: string }> = [];
   const doubleCountWarnings: Array<{ assetId: string; assetName: string; orgName: string }> = [];
   const elumTier: string | null = contract.elum_tier || null;
   const elumParentOrgId: string | null = contract.elum_parent_org_id || null;
@@ -512,16 +513,28 @@ async function processContractSync(
     // Discover sub-orgs under the Elum parent org and keep those on this tier
     const subOrgs = await getClassifiedSubOrgs(token, elumParentOrgId);
     tierOrgs = subOrgs.filter(o => o.tier === elumTier);
-    unassignedOrgs = subOrgs.filter(o => o.tier === null).map(o => ({ orgId: o.orgId, orgName: o.orgName }));
-    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned)`);
+    unassignedOrgs = subOrgs
+      .filter(o => o.tier === null)
+      .map(o => {
+        const orphaned = allAssets.filter((a: any) => a.org_id === o.orgId);
+        return {
+          orgId: o.orgId,
+          orgName: o.orgName,
+          assetCount: orphaned.length,
+          totalMW: orphaned.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
+        };
+      });
+    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned holding ${unassignedOrgs.reduce((s, o) => s + (o.assetCount || 0), 0)} assets)`);
     
-    // Resolve assets per sub-org via the org-scoped assets endpoint
+    // Resolve assets per sub-org via the org-scoped assets endpoint.
+    // A failed fetch throws (preserving the previous cache) instead of silently
+    // reporting the org as empty.
     for (const org of tierOrgs) {
       let orgAssets = await getAssetsForOrg(token, org.orgId);
-      let path = 'org-scoped';
+      let source = 'org-scoped';
       if (orgAssets.length === 0) {
         orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
-        path = 'global-fallback';
+        source = orgAssets.length > 0 ? 'global-fallback' : 'empty';
       }
       for (const a of orgAssets) {
         if (assetOrgMap.has(a.asset_id)) continue;
@@ -529,7 +542,8 @@ async function processContractSync(
         assetsToProcess.push({ asset_id: a.asset_id, asset_name: a.asset_name });
         if (!assetLookup.has(a.asset_id)) assetLookup.set(a.asset_id, a);
       }
-      console.log(`[AMMP Sync Contract] Sub-org ${org.orgName} (${org.tier}): ${orgAssets.length} assets via ${path}`);
+      orgResolutionLog.push({ orgId: org.orgId, orgName: org.orgName, assetCount: orgAssets.length, source });
+      console.log(`[AMMP Sync Contract] Sub-org ${org.orgName} (${org.tier}): ${orgAssets.length} assets via ${source}`);
     }
 
     if (contract.ammp_asset_group_id) {
