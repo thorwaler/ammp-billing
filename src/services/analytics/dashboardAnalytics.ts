@@ -349,6 +349,10 @@ export function calculateSingleContractARR(
         // Matriarch API fields
         irradiancePerSiteTiers: (contract as any).irradiance_per_site_tiers || undefined,
         performancePerMwpTiers: (contract as any).performance_per_mwp_tiers || undefined,
+        // Elum 2026 org-based tiers
+        orgBreakdown,
+        elumLiteBaseRate: orgPricingConfig.liteBaseRate,
+        elumLiteEconfRate: orgPricingConfig.liteEconfRate,
       });
       annualValue = result.totalPrice;
 
