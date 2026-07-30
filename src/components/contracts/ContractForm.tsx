@@ -528,12 +528,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue('annualFeePerSite', existingContract.annualFeePerSite ?? undefined);
       form.setValue('nextInvoiceDate', existingContract.nextInvoiceDate?.substring(0, 10) || '');
       
-      // Store contract ID for update if not extending
-      if (!isExtending) {
+      // Store contract ID for update if not extending or duplicating
+      if (!isExtending && !isDuplicating) {
         setExistingContractId(existingContract.id);
       }
     }
-  }, [existingContract, isExtending, form]);
+  }, [existingContract, isExtending, isDuplicating, form]);
 
   // Auto-extend period dates when extending a contract
   useEffect(() => {
