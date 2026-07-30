@@ -518,6 +518,16 @@ export function ContractList() {
             )}
           </DialogContent>
         </Dialog>
+
+        {duplicateSource && (
+          <DuplicateContractDialog
+            open={!!duplicateSource}
+            onOpenChange={(open) => { if (!open) setDuplicateSource(null); }}
+            contractId={duplicateSource.id}
+            currentCustomerId={duplicateSource.customerId}
+            onDuplicated={() => { setDuplicateSource(null); loadContracts(); }}
+          />
+        )}
       </CardContent>
     </Card>
   );
