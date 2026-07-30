@@ -276,11 +276,9 @@ interface ContractFormProps {
   isDuplicating?: boolean;
 }
 
-}
-
 // Module and addon definitions now imported from shared data file
 
-export function ContractForm({ existingCustomer, existingContract, onComplete, onCancel, isExtending, isNewContract }: ContractFormProps) {
+export function ContractForm({ existingCustomer, existingContract, onComplete, onCancel, isExtending, isNewContract, isDuplicating }: ContractFormProps) {
   const [selectedPackage, setSelectedPackage] = useState("");
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
