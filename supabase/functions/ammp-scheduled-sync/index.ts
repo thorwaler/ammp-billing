@@ -127,7 +127,12 @@ function calculateNextSyncAt(schedule: string): Date | null {
 }
 
 /**
- * Call ammp-sync-contract Edge Function for a single contract
+ * Call ammp-sync-contract Edge Function for a single contract.
+ *
+ * The gateway (or an upstream CDN) can answer with an HTML error page instead of
+ * JSON during a transient incident. Parsing that blindly used to surface
+ * `Unexpected token '<'` in the failure notification, hiding the real status, so
+ * the body is read as text first and non-JSON answers are retried with backoff.
  */
 async function syncContract(
   contractId: string,
@@ -136,32 +141,64 @@ async function syncContract(
 ): Promise<{ success: boolean; error?: string; totalSites?: number; totalMW?: number }> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  
-  try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/ammp-sync-contract`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`,
-      },
-      body: JSON.stringify({ contractId, apiKey, userId }),
-    });
-    
-    const result = await response.json();
-    
-    if (!response.ok || !result.success) {
-      return { success: false, error: result.error || 'Contract sync failed' };
+
+  const MAX_ATTEMPTS = 3;
+  let lastError = 'Contract sync failed';
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const response = await fetch(`${supabaseUrl}/functions/v1/ammp-sync-contract`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ contractId, apiKey, userId }),
+      });
+
+      const text = await response.text();
+      let result: any = null;
+      try {
+        result = JSON.parse(text);
+      } catch {
+        // Non-JSON body (HTML error page, empty response, ...)
+        lastError = `HTTP ${response.status} from sync function: ${text.slice(0, 200).replace(/\s+/g, ' ').trim() || '(empty body)'}`;
+        console.error(`[AMMP Background Sync] Non-JSON response for ${contractId} (attempt ${attempt}): ${lastError}`);
+        if (attempt < MAX_ATTEMPTS) {
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+          continue;
+        }
+        return { success: false, error: lastError };
+      }
+
+      if (!response.ok || !result.success) {
+        lastError = result?.error || `Contract sync failed (HTTP ${response.status})`;
+        // Retry only on transient server-side statuses; 4xx are deterministic.
+        if (attempt < MAX_ATTEMPTS && (response.status === 429 || response.status >= 500)) {
+          await new Promise((r) => setTimeout(r, 2000 * attempt));
+          continue;
+        }
+        return { success: false, error: lastError };
+      }
+
+      return {
+        success: true,
+        totalSites: result.totalSites,
+        totalMW: result.totalMW
+      };
+    } catch (error: any) {
+      lastError = error?.message ?? String(error);
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 2000 * attempt));
+        continue;
+      }
+      return { success: false, error: lastError };
     }
-    
-    return { 
-      success: true, 
-      totalSites: result.totalSites,
-      totalMW: result.totalMW
-    };
-  } catch (error: any) {
-    return { success: false, error: error.message };
   }
+
+  return { success: false, error: lastError };
 }
+
 
 interface SyncableContract {
   id: string;

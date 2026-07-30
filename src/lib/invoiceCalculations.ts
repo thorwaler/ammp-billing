@@ -946,6 +946,17 @@ export function calculateElumOrgTierBreakdown(
     const econfApplied = tier === "ci_lite" && !!org.hasEconf;
     const econfCost = econfApplied ? totalMWp * liteEconfRate * frequencyMultiplier : 0;
 
+    // The org is invoiced as one line (base + eConf), so the per-site detail must
+    // show the combined effective rate — otherwise the site rows only add up to
+    // the base cost and don't reconcile with the invoiced total.
+    if (econfApplied) {
+      const combinedRate = liteBaseRate + liteEconfRate;
+      for (const site of sites) {
+        site.pricePerMWp = combinedRate;
+        site.cost = site.mwp * combinedRate * frequencyMultiplier;
+      }
+    }
+
     if (assets.length === 0) {
       warnings.push("No assets resolved for this organisation.");
     }
