@@ -237,6 +237,7 @@ export function InvoiceCalculator({
   // contract setting, but can be overridden per invoice (useful for testing).
   const [freezeInvoice, setFreezeInvoice] = useState(true);
   
+
   // Per-site billing state
   const [siteBillingData, setSiteBillingData] = useState<SiteBillingItem[]>([]);
   const [selectedSitesToBill, setSelectedSitesToBill] = useState<SiteBillingItem[]>([]);
