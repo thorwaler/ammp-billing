@@ -9,13 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle, ArrowRightLeft } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle, ArrowRightLeft, Copy } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContractForm from "@/components/contracts/ContractForm";
 import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
+import { DuplicateContractDialog } from "@/components/contracts/DuplicateContractDialog";
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { CustomAssetPricing } from "@/lib/invoiceCalculations";
@@ -93,6 +94,7 @@ const ContractDetails = () => {
   const [discountEditAsset, setDiscountEditAsset] = useState<any | null>(null);
   const [isEnrichingDevices, setIsEnrichingDevices] = useState(false);
   const [showMoveDialog, setShowMoveDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [moveTargetCustomerId, setMoveTargetCustomerId] = useState("");
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [isMoving, setIsMoving] = useState(false);
@@ -583,6 +585,23 @@ const ContractDetails = () => {
                 />
               </DialogContent>
             </Dialog>
+
+            <Button variant="outline" onClick={() => setShowDuplicateDialog(true)}>
+              <Copy className="mr-2 h-4 w-4" />
+              Duplicate
+            </Button>
+
+            {contract && (
+              <DuplicateContractDialog
+                open={showDuplicateDialog}
+                onOpenChange={setShowDuplicateDialog}
+                contractId={contract.id}
+                currentCustomerId={contract.customer_id}
+                onDuplicated={() => navigate('/contracts')}
+              />
+            )}
+
+
             
             <Dialog open={showExtendDialog} onOpenChange={setShowExtendDialog}>
               <DialogTrigger asChild>

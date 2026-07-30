@@ -1,16 +1,29 @@
-## Fix Elum contract value showing €0 on customer cards
+## Duplicate a contract
 
-Verified: `src/pages/Customers.tsx` sums `calculateSingleContractARR(contract)` over active contracts, and that helper (`src/services/analytics/dashboardAnalytics.ts:232`) calls `calculateInvoice` without the Elum 2026 org-tier inputs — no `orgBreakdown`, no `elumLiteBaseRate` / `elumLiteEconfRate` from `org_pricing_config`. The pricing engine returns 0 for `elum_ci_lite` / `elum_ci_pro` / `elum_utility` without those, so the Elum card reads "€0/year" even though the cached capabilities hold the org breakdown.
+Add a "Duplicate" action that opens the contract form prefilled with everything from an existing contract, letting you pick the target customer and adjust name/dates before saving. Nothing is written until you submit.
 
-### Changes (`src/services/analytics/dashboardAnalytics.ts`)
-- Extend the `contract` input type of `calculateSingleContractARR` with `org_pricing_config`.
-- Read `orgBreakdown` from `cached_capabilities`.
-- Pass `orgBreakdown`, `elumLiteBaseRate` and `elumLiteEconfRate` (from `org_pricing_config`) into the `calculateInvoice` call — mirroring the fix already applied in `UpcomingInvoicesList.tsx`.
-- Relax the guard on line 301 so org-tier Elum contracts with `totalMW === 0` but a non-empty `orgBreakdown` are still calculated.
+### Where the action appears
+- `src/components/contracts/ContractList.tsx` — a Copy icon button in the row actions, next to Edit / View / Sync.
+- `src/pages/ContractDetails.tsx` — a "Duplicate" button in the header action row, next to Edit.
 
-No query changes needed — `Customers.tsx` already selects `contracts (*)`.
+### New component: `src/components/contracts/DuplicateContractDialog.tsx`
+- Loads the source contract row and maps it through the existing `mapContractRowToFormValues` helper in `src/lib/contractFormMapping.ts`, so every pricing field (modules, addons, tiers, Elum org config, thresholds, discounts, freeze/zero-PV settings) carries over correctly and no field silently resets.
+- A customer selector at the top, defaulting to the source contract's customer (reusing the pattern from `MoveContractDialog`).
+- Renders `ContractForm` in create mode with the mapped values, so the user reviews and edits before saving as a brand-new contract.
 
-### Side effect
-Dashboard ARR and reports use the same helper, so Elum org-tier contracts will start contributing their real annual value there too.
+### Fields reset on the copy
+- Identity: new id, contract name prefilled as `<name> (Copy)`.
+- AMMP sync state (per your choice): `cached_capabilities`, `ammp_asset_ids`, `ammp_sync_status`, `last_ammp_sync` cleared so the new contract syncs fresh. The asset-group / org-ID configuration itself is kept, since that's pricing setup.
+- Not carried over automatically: contract PDF, OCR data, and amendments (those belong to the original document); billing progress fields (`next_invoice_date`, `ytd_invoiced_amount`, `last_annual_invoice_date`, `last_anniversary_notice_sent_at`) start clean.
+- Period dates and signed date are left editable in the form rather than blindly copied.
 
-Out of scope for this pass: the Elum Utility sync returning no assets (no sub-org carries the `epm_utility` flag).
+### After saving
+Toast confirmation, list/details refresh, and navigation to the new contract so you can run an AMMP sync straight away.
+
+### Files touched
+- `src/components/contracts/DuplicateContractDialog.tsx` (new)
+- `src/components/contracts/ContractList.tsx`
+- `src/pages/ContractDetails.tsx`
+- `src/lib/contractFormMapping.ts` (small helper to strip identity/sync fields)
+
+No database changes required.
