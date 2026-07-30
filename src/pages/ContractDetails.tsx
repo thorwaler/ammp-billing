@@ -127,6 +127,11 @@ const ContractDetails = () => {
   }, [cachedCapabilities]);
   const showCategoryColumn = orgBreakdown.length > 0;
 
+  // Elum 2026: per-org resolution audit recorded by the last sync
+  const orgResolution: any[] = cachedCapabilities?.orgResolution || [];
+  const unassignedOrgs: any[] = cachedCapabilities?.unassignedOrgs || [];
+  const emptyOrgs = orgResolution.filter((o: any) => !o.assetCount);
+
   const loadContractData = async () => {
       setLoading(true);
       setError(null);
@@ -1567,6 +1572,52 @@ const ContractDetails = () => {
                   </Button>
                 </div>
               </div>
+
+              {/* Elum 2026: per-org resolution audit from the last sync */}
+              {orgResolution.length > 0 && (
+                <details className="mb-4 border rounded-lg bg-muted/30">
+                  <summary className="cursor-pointer p-3 text-sm font-medium">
+                    Org resolution ({orgResolution.length} sources,{' '}
+                    {orgResolution.reduce((s: number, o: any) => s + (o.assetCount || 0), 0)} assets)
+                    {emptyOrgs.length > 0 && (
+                      <span className="ml-2 text-destructive">- {emptyOrgs.length} returned no assets</span>
+                    )}
+                  </summary>
+                  <div className="max-h-64 overflow-auto border-t">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted sticky top-0">
+                        <tr>
+                          <th className="text-left p-2 font-medium">Organisation / group</th>
+                          <th className="text-right p-2 font-medium">Assets</th>
+                          <th className="text-left p-2 font-medium">Resolved via</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {orgResolution.map((o: any) => (
+                          <tr key={o.orgId} className="border-t">
+                            <td className="p-2">{o.orgName || o.orgId}</td>
+                            <td className={`p-2 text-right ${o.assetCount === 0 ? 'text-destructive font-medium' : ''}`}>
+                              {o.assetCount}
+                            </td>
+                            <td className="p-2 text-muted-foreground">{o.source}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {unassignedOrgs.length > 0 && (
+                    <div className="p-3 border-t text-xs text-muted-foreground">
+                      <span className="font-medium text-destructive">
+                        {unassignedOrgs.length} sub-org(s) without a tier flag
+                      </span>{' '}
+                      holding {unassignedOrgs.reduce((s: number, o: any) => s + (o.assetCount || 0), 0)} assets:{' '}
+                      {unassignedOrgs
+                        .map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`)
+                        .join(', ')}
+                    </div>
+                  )}
+                </details>
+              )}
 
               {/* Asset Table */}
               <div className={`${showAllAssets ? '' : 'max-h-96'} overflow-auto border rounded-lg`}>

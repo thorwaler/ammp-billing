@@ -71,8 +71,10 @@ interface CachedCapabilities {
   }>;
   /** Assets resolved from both an org and a legacy asset group (counted once) */
   doubleCountWarnings?: Array<{ assetId: string; assetName: string; orgName: string }>;
-  /** Sub-orgs under the parent org with no tier flag set */
-  unassignedOrgs?: Array<{ orgId: string; orgName: string }>;
+  /** Sub-orgs under the parent org with no tier flag set (with their impact) */
+  unassignedOrgs?: Array<{ orgId: string; orgName: string; assetCount?: number; totalMW?: number }>;
+  /** Per-org audit trail of how each org's assets were resolved during the last sync */
+  orgResolution?: Array<{ orgId: string; orgName: string; assetCount: number; source: string }>;
   needsDeviceEnrichment?: boolean;
   lastDeviceEnrichment?: string;
   deviceEnrichmentProgress?: {
@@ -378,47 +380,75 @@ interface ClassifiedOrg {
   hasEconf: boolean;
 }
 
+function classifyOrgRow(o: any): ClassifiedOrg {
+  const flags = o.feature_flags || {};
+  let tier: string | null = null;
+  for (const [t, flag] of Object.entries(ELUM_TIER_FLAGS)) {
+    if (flags[flag] === true && !tier) tier = t;
+  }
+  return {
+    orgId: o.org_id,
+    orgName: o.org_name || o.org_id,
+    uid: o.uid,
+    tier,
+    hasEconf: flags['remote_econf'] === true,
+  };
+}
+
 /**
  * Fetch sub-orgs of a parent org and classify them by AMMP feature flags.
+ * Recurses one level into child orgs so nested organisations are not missed.
+ * Throws on API failure so a partial org list can never silently shrink a tier.
  */
-async function getClassifiedSubOrgs(token: string, parentOrgId: string): Promise<ClassifiedOrg[]> {
+async function getClassifiedSubOrgs(
+  token: string,
+  parentOrgId: string,
+  depth = 0,
+  seen: Set<string> = new Set()
+): Promise<ClassifiedOrg[]> {
   const response = await fetchAMMPData(token, `/orgs?parent_org_id=${encodeURIComponent(parentOrgId)}`);
   const orgs: any[] = Array.isArray(response) ? response : (response?.orgs || []);
-  return orgs
-    .filter((o: any) => o.org_id && o.org_id !== parentOrgId)
-    .map((o: any) => {
-      const flags = o.feature_flags || {};
-      let tier: string | null = null;
-      for (const [t, flag] of Object.entries(ELUM_TIER_FLAGS)) {
-        if (flags[flag] === true && !tier) tier = t;
+  if (!Array.isArray(orgs)) {
+    throw new Error(`Unexpected /orgs payload for parent ${parentOrgId}`);
+  }
+
+  const direct = orgs
+    .filter((o: any) => o?.org_id && o.org_id !== parentOrgId && !seen.has(o.org_id))
+    .map(classifyOrgRow);
+
+  for (const o of direct) seen.add(o.orgId);
+
+  // One level of nesting: grandchild orgs also carry tier flags
+  if (depth < 1) {
+    for (const child of [...direct]) {
+      const nested = await getClassifiedSubOrgs(token, child.orgId, depth + 1, seen);
+      if (nested.length > 0) {
+        console.log(`[AMMP Sync Contract] ${nested.length} nested sub-orgs under ${child.orgName}`);
+        direct.push(...nested);
       }
-      return {
-        orgId: o.org_id,
-        orgName: o.org_name || o.org_id,
-        uid: o.uid,
-        tier,
-        hasEconf: flags['remote_econf'] === true,
-      };
-    });
+    }
+  }
+
+  return direct;
 }
 
 /**
  * Fetch assets belonging to a specific (sub-)org.
  * GET /v1/assets?org_ids=<orgId>
+ * Throws on API failure — the caller must preserve the existing cache rather
+ * than treating a failed fetch as "this org has no assets".
  */
 async function getAssetsForOrg(token: string, orgId: string): Promise<any[]> {
-  try {
-    const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
-    const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
-    return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
-      ...a,
-      asset_name: a.asset_name || 'Unknown',
-      org_id: a.org_id || orgId,
-    }));
-  } catch (error) {
-    console.error(`[AMMP Sync Contract] Failed to fetch assets for org ${orgId}:`, error);
-    return [];
+  const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
+  const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
+  if (!Array.isArray(assets)) {
+    throw new Error(`Unexpected /assets payload for org ${orgId} (${typeof response})`);
   }
+  return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
+    ...a,
+    asset_name: a.asset_name || 'Unknown',
+    org_id: a.org_id || orgId,
+  }));
 }
 
 /**
@@ -474,7 +504,8 @@ async function processContractSync(
   // Elum 2026 org-based tiers: asset -> sub-org assignment built during resolution
   const assetOrgMap = new Map<string, ClassifiedOrg>();
   let tierOrgs: ClassifiedOrg[] = [];
-  let unassignedOrgs: Array<{ orgId: string; orgName: string }> = [];
+  let unassignedOrgs: Array<{ orgId: string; orgName: string; assetCount?: number; totalMW?: number }> = [];
+  const orgResolutionLog: Array<{ orgId: string; orgName: string; assetCount: number; source: string }> = [];
   const doubleCountWarnings: Array<{ assetId: string; assetName: string; orgName: string }> = [];
   const elumTier: string | null = contract.elum_tier || null;
   const elumParentOrgId: string | null = contract.elum_parent_org_id || null;
@@ -484,16 +515,28 @@ async function processContractSync(
     // Discover sub-orgs under the Elum parent org and keep those on this tier
     const subOrgs = await getClassifiedSubOrgs(token, elumParentOrgId);
     tierOrgs = subOrgs.filter(o => o.tier === elumTier);
-    unassignedOrgs = subOrgs.filter(o => o.tier === null).map(o => ({ orgId: o.orgId, orgName: o.orgName }));
-    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned)`);
+    unassignedOrgs = subOrgs
+      .filter(o => o.tier === null)
+      .map(o => {
+        const orphaned = allAssets.filter((a: any) => a.org_id === o.orgId);
+        return {
+          orgId: o.orgId,
+          orgName: o.orgName,
+          assetCount: orphaned.length,
+          totalMW: orphaned.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
+        };
+      });
+    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned holding ${unassignedOrgs.reduce((s, o) => s + (o.assetCount || 0), 0)} assets)`);
     
-    // Resolve assets per sub-org via the org-scoped assets endpoint
+    // Resolve assets per sub-org via the org-scoped assets endpoint.
+    // A failed fetch throws (preserving the previous cache) instead of silently
+    // reporting the org as empty.
     for (const org of tierOrgs) {
       let orgAssets = await getAssetsForOrg(token, org.orgId);
-      let path = 'org-scoped';
+      let source = 'org-scoped';
       if (orgAssets.length === 0) {
         orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
-        path = 'global-fallback';
+        source = orgAssets.length > 0 ? 'global-fallback' : 'empty';
       }
       for (const a of orgAssets) {
         if (assetOrgMap.has(a.asset_id)) continue;
@@ -501,7 +544,8 @@ async function processContractSync(
         assetsToProcess.push({ asset_id: a.asset_id, asset_name: a.asset_name });
         if (!assetLookup.has(a.asset_id)) assetLookup.set(a.asset_id, a);
       }
-      console.log(`[AMMP Sync Contract] Sub-org ${org.orgName} (${org.tier}): ${orgAssets.length} assets via ${path}`);
+      orgResolutionLog.push({ orgId: org.orgId, orgName: org.orgName, assetCount: orgAssets.length, source });
+      console.log(`[AMMP Sync Contract] Sub-org ${org.orgName} (${org.tier}): ${orgAssets.length} assets via ${source}`);
     }
 
     if (contract.ammp_asset_group_id) {
@@ -560,6 +604,9 @@ async function processContractSync(
       if (econfCount > 0) legacySegments.push(econfOrg);
       for (const seg of legacySegments) (seg as any).isLegacyAssetGroup = true;
       if (legacySegments.length > 0) tierOrgs = [...tierOrgs, ...legacySegments];
+
+      if (baseCount > 0) orgResolutionLog.push({ orgId: baseOrg.orgId, orgName: baseOrg.orgName, assetCount: baseCount, source: 'legacy-group' });
+      if (econfCount > 0) orgResolutionLog.push({ orgId: econfOrg.orgId, orgName: econfOrg.orgName, assetCount: econfCount, source: 'legacy-group' });
 
       console.log(
         `[AMMP Sync Contract] Legacy asset group merged: ${members.length} members -> ${baseCount} standard, ${econfCount} eConf, ${excludedCount} excluded, ${doubleCountWarnings.length} overlaps de-duplicated`
@@ -843,6 +890,7 @@ async function processContractSync(
       : undefined,
     doubleCountWarnings: doubleCountWarnings.length > 0 ? doubleCountWarnings : undefined,
     unassignedOrgs: unassignedOrgs.length > 0 ? unassignedOrgs : undefined,
+    orgResolution: orgResolutionLog.length > 0 ? orgResolutionLog : undefined,
     needsDeviceEnrichment: totalExpected > 200 || 
       finalCapabilities.some(c => c.deviceCount === 0 && !existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId)?.deviceEnrichmentAttempted),
   };
@@ -1127,12 +1175,17 @@ async function generateElumAlerts(
   // 1. Sub-orgs with no tier flag -> their assets are not priced
   const unassigned = cached.unassignedOrgs || [];
   if (unassigned.length > 0) {
+    const strandedAssets = unassigned.reduce((s: number, o: any) => s + (o.assetCount || 0), 0);
+    const strandedMW = unassigned.reduce((s: number, o: any) => s + (o.totalMW || 0), 0);
+    const impact = strandedAssets > 0
+      ? ` They hold ${strandedAssets} asset${strandedAssets === 1 ? '' : 's'} (${strandedMW.toFixed(2)} MWp) that are excluded from every tier.`
+      : '';
     pending.push({
       alert_type: 'elum_org_unassigned',
-      severity: 'warning',
+      severity: strandedAssets > 0 ? 'critical' : 'warning',
       title: `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag`,
-      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => o.orgName || o.orgId).join(', ')}.`,
-      metadata: { contract: contractLabel, orgs: unassigned },
+      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
+      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW },
     });
   }
 
@@ -1333,10 +1386,11 @@ Deno.serve(async (req) => {
     }
 
     // Detect and record asset status changes (appeared, disappeared, reappeared)
-    // Only run if previous sync was complete - skip when resuming partial syncs to avoid false alerts
+    // Only run when BOTH the previous and the current sync are complete — a partial
+    // run holds only a subset of the assets and would flag the rest as disappeared.
     let assetChanges = { disappeared: 0, appeared: 0, reappeared: 0 };
     
-    if (previousSyncStatus !== 'partial') {
+    if (previousSyncStatus !== 'partial' && syncStatus !== 'partial') {
       assetChanges = await detectAssetChanges(
         supabase,
         contractId,
@@ -1350,7 +1404,7 @@ Deno.serve(async (req) => {
         previousCached
       );
     } else {
-      console.log(`[Asset Change Detection] Skipping - previous sync was partial, no reliable baseline`);
+      console.log(`[Asset Change Detection] Skipping - sync incomplete (previous: ${previousSyncStatus}, current: ${syncStatus}), no reliable baseline`);
     }
 
     // Elum 2026: raise alerts for org-resolution problems
