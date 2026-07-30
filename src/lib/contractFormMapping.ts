@@ -60,6 +60,8 @@ export interface ContractFormValues {
   elumParentOrgId?: string;
   elumLiteBaseRate?: number;
   elumLiteEconfRate?: number;
+  elumInternalBrackets?: any[];
+  elumInternalEconfRate?: number;
   isTrial?: boolean;
   trialSetupFee?: number;
   vendorApiOnboardingFee?: number;
