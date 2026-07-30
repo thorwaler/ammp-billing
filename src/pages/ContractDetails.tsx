@@ -585,6 +585,23 @@ const ContractDetails = () => {
                 />
               </DialogContent>
             </Dialog>
+
+            <Button variant="outline" onClick={() => setShowDuplicateDialog(true)}>
+              <Copy className="mr-2 h-4 w-4" />
+              Duplicate
+            </Button>
+
+            {contract && (
+              <DuplicateContractDialog
+                open={showDuplicateDialog}
+                onOpenChange={setShowDuplicateDialog}
+                contractId={contract.id}
+                currentCustomerId={contract.customer_id}
+                onDuplicated={() => navigate('/contracts')}
+              />
+            )}
+
+
             
             <Dialog open={showExtendDialog} onOpenChange={setShowExtendDialog}>
               <DialogTrigger asChild>
