@@ -259,6 +259,7 @@ interface ContractFormProps {
     committedMinimumMW?: number;
     annualBillingAnchorDate?: string;
     // Elum foundations
+    invoiceFreezeEnabled?: boolean;
     zeroPvAlertEnabled?: boolean;
     zeroPvEstimateMultiplier?: number;
     zeroPvGraceDays?: number;
