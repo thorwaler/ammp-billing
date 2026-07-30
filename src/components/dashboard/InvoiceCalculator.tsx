@@ -3232,6 +3232,22 @@ export function InvoiceCalculator({
                     Attach support document to Xero invoice
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="freeze-invoice"
+                    checked={freezeInvoice}
+                    onCheckedChange={(checked) => setFreezeInvoice(checked === true)}
+                  />
+                  <Label htmlFor="freeze-invoice" className="text-sm cursor-pointer">
+                    Freeze invoice inputs (snapshot for 30-day revision window)
+                  </Label>
+                </div>
+                {!freezeInvoice && (
+                  <p className="text-xs text-muted-foreground">
+                    Freezing is off — this invoice will not keep a reproducible snapshot of its inputs.
+                  </p>
+                )}
+
                 <Button 
                   className="w-full" 
                   onClick={handleSendToXero}
