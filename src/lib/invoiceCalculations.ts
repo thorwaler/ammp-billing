@@ -183,6 +183,9 @@ export interface CalculationParams {
   // C&I Lite rates (editable defaults)
   elumLiteBaseRate?: number;
   elumLiteEconfRate?: number;
+  // Internal 2026 stepped brackets + optional eConf add-on rate
+  elumInternalBrackets?: ElumInternalBracket[];
+  elumInternalEconfRate?: number;
   // Assets where MWh was entered in the PV capacity field (battery-only utility
   // sites). Suppresses the utility >2 MWp guard for those assets.
   mwhOverrideAssetIds?: string[];
