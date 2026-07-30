@@ -1,39 +1,60 @@
-## What's wrong
+## Goal
 
-The logs from the last enrichment run show every device fetch failing with the same cause:
+Add a fourth Elum 2026 org-based tier — **Internal** — that discovers its sites from AMMP organisation feature flags (`elum_internal`) instead of asset groups, alongside the existing C&I Lite / C&I Pro / Utility tiers. Pricing uses the stepped MWp brackets from the new contract (€150 / €75 / €37.50), applied across the org portfolio.
 
+The existing `elum_internal` package (asset-group / manual MW based, with the graduated tier editor) stays untouched so current contracts keep working. This is a new, separate package.
+
+## Pricing
+
+Stepped brackets on the organisation's total MWp — each bracket's rate applies only to the MWp inside it:
+
+```text
+First 100 MWp      EUR 150 / MWp / year
+100 - 500 MWp      EUR  75 / MWp / year
+Beyond 500 MWp     EUR 37.50 / MWp / year
 ```
-[AMMP Device Enrichment] Failed to fetch devices for 82874d23-...:
-RateLimitError: Rate limit exceeded for trace 019fb25d... Retry after 59171ms.
-```
 
-`ammp-device-enrichment` fires 10 simultaneous internal calls to `ammp-data-proxy` per wave (`BATCH_PARALLEL = 10`, batch of 50). The edge gateway rate-limits internal invocations per trace and asks for a ~59s wait. The function does none of that:
+A 600 MWp portfolio = 100x150 + 400x75 + 100x37.50.
 
-- `fetchAMMPData` is a plain `fetch` with no retry and no `Retry-after` handling — unlike `ammp-sync-contract`, which already has a `postJsonWithRetry` helper that honours the hint.
-- Worse: a failed fetch is swallowed in the `catch` and returned as `devices: []`. The asset is then run through `calculateCapabilitiesFromDevices`, marked as attempted/confirmed-empty, and written back to `cached_capabilities`. So a rate-limited run silently wipes hybrid/Solcast flags and permanently excludes those assets from future refetches.
+The contract also says Internal supports eConf. Handled the same way as C&I Lite: orgs carrying the `remote_econf` flag get an org-wide eConf add-on line at a configurable €/MWp rate, defaulting to 0 (no charge) until you confirm the rate. Setting the rate later needs no code change.
 
-That's the same class of bug already fixed for asset-group members in the contract sync: a transient API failure must never be persisted as "no data".
+## Changes
 
-## Fix
+**Pricing config — `src/data/pricingData.ts`**
+- New package id `elum_internal_2026`.
+- Extend `ElumOrgTier` with `"internal"`; add `internal: "elum_internal"` to `ELUM_TIER_FLAGS`, label `"Internal"` to `ELUM_TIER_LABELS`.
+- New `ELUM_INTERNAL_2026_BRACKETS` (stepped 150 / 75 / 37.50) and `ELUM_INTERNAL_2026_ECONF_RATE = 0`.
+- Include the new package in `isElumOrgTierPackage` and `elumTierForPackage`.
 
-**1. Share the retry helper**
-Move `parseRetryAfterMs` / `isRateLimited` / `postJsonWithRetry` out of `ammp-sync-contract/index.ts` into `supabase/functions/_shared/internalFetch.ts` (with a `label` parameter for logging) and import it from both functions. Behaviour stays identical for the contract sync.
+**Calculation — `src/lib/invoiceCalculations.ts`**
+- Add an `internal` branch to `calculateElumOrgTierBreakdown`: compute stepped bracket cost on the org's total MWp, emit per-bracket detail (MWp in bracket, rate, cost) on the org line, and distribute the resulting blended rate onto site rows so the detailed site table shows the correct effective €/MWp and cost.
+- Optional eConf add-on on top when the org has the flag and the rate is above 0, merged into the org's total the same way Lite does.
+- No Utility-style minimum-site-size gate; Internal has no site size restriction.
 
-**2. Use it in enrichment**
-`getToken` and `fetchAMMPData` in `ammp-device-enrichment` call the shared helper instead of raw `fetch`, so token exchange and every proxy call retry with backoff and honour `Retry after Nms`.
+**Sync — `supabase/functions/ammp-sync-contract/index.ts`**
+- Add `internal: 'elum_internal'` to the edge function's `ELUM_TIER_FLAGS` map so sub-orgs with that flag are classified and their assets fetched via `GET /v1/assets?org_ids=<id>`, exactly as the other tiers.
+- Update the "unassigned sub-orgs" alert text to include the new flag.
 
-**3. Never persist a failed fetch as empty**
-In the per-asset map, distinguish failure from a genuine empty device list: return `{ assetId, devices, failed: true }` on error. Assets with `failed: true` are skipped entirely — not enriched, not marked attempted, not marked `deviceEnrichmentConfirmedEmpty`, and they stay in the "remaining" count so the next run retries them.
+**Org discovery — `src/services/ammp/orgService.ts`**
+- Header comment plus classification picks up the new tier automatically once `ELUM_TIER_FLAGS` includes it; update the note that says Internal keeps a dedicated non-discovered contract.
 
-**4. Reduce concurrency and adapt**
-Drop `BATCH_PARALLEL` from 10 to 4, and add a small pause between waves. If a wave comes back with any rate-limit failure, stop the run early rather than burning the remaining assets against a closed window, and return `rateLimited: true` in the response.
+**Contract form — `src/components/contracts/ContractForm.tsx`**
+- New select option: "Elum Internal 2026 (Org-based, stepped MWp)".
+- On selection, apply the org-tier defaults path (parent org id field, zero-PV alerts on, freeze toggle, legacy asset-group transition block) already used by Lite/Pro/Utility.
+- Store `elum_tier = 'internal'`; keep `org_pricing_config` as `{}` unless an eConf/base rate override is entered.
+- Optional overrides for the three bracket rates + eConf rate, saved into `org_pricing_config`.
 
-**5. Report honestly**
-The response gains `failed` (count of assets skipped due to errors). If every asset in the batch failed, return a non-success response so the caller/UI shows the enrichment did not run instead of reporting "Complete: 0 enriched".
+**Downstream surfaces** — all already keyed off `isElumOrgTierPackage` / `elumOrgTierBreakdown`, so they pick the new tier up once the helpers include it; each gets a quick verification pass:
+- `src/lib/supportDocumentGenerator.ts` — per-org section with bracket breakdown table.
+- `src/components/dashboard/InvoiceCalculator.tsx` and `src/components/invoices/MergedInvoiceDialog.tsx` — one merged Xero line per sub-organisation.
+- `src/components/invoices/UpcomingInvoicesList.tsx` and `src/services/analytics/dashboardAnalytics.ts` — card estimates and contract ARR.
+- `src/lib/elumCombinedMinimum.ts` — Internal counts toward the €80k combined Elum minimum (confirm this is wanted; easy to exclude).
 
-## Technical notes
+**Database** — no migration needed. `package` and `elum_tier` are plain text with no check constraint, and `org_pricing_config` / `cached_capabilities` already hold the org breakdown.
 
-- Files touched: `supabase/functions/_shared/internalFetch.ts` (new), `supabase/functions/ammp-device-enrichment/index.ts`, `supabase/functions/ammp-sync-contract/index.ts` (import instead of local copy).
-- No database or schema changes.
-- No frontend change required; the enrichment poller keeps calling until `remaining` reaches 0, which now correctly includes previously-failed assets.
-- After deploying, a run on an affected contract will re-attempt assets that were wrongly marked empty only if they were not already flagged `deviceEnrichmentConfirmedEmpty`. If you want those cleared too, say so and I'll add a one-off reset of that flag for assets with zero devices.
+**Memory** — update `mem://features/elum-2026-org-tiers` to cover the Internal tier and its flag.
+
+## Open inputs
+
+1. eConf rate for Internal — shipping with 0 (free) unless you give a €/MWp figure.
+2. Whether Internal revenue counts toward the €80k combined Elum annual minimum.
