@@ -258,7 +258,9 @@ export function calculateSingleContractARR(
     hourly_rate?: number | null;
     upfront_discount_percent?: number | null;
     commitment_discount_percent?: number | null;
+    org_pricing_config?: any;
   }
+
 ): number {
   // POC contracts have no ARR
   if (contract.package === 'poc') return 0;
@@ -282,6 +284,10 @@ export function calculateSingleContractARR(
       ? assetBreakdown.reduce((sum: number, asset: any) => sum + (asset.totalMW || 0), 0)
       : contract.initial_mw || 0);
   const totalSites = cachedCapabilities?.totalSites || assetBreakdown.length || 0;
+  // Elum 2026 org-tier packages price per sub-organisation, not from totalMW
+  const orgBreakdown = cachedCapabilities?.orgBreakdown || [];
+  const orgPricingConfig = (contract.org_pricing_config || {}) as { liteBaseRate?: number; liteEconfRate?: number };
+
 
   let annualValue = 0;
 
@@ -298,7 +304,7 @@ export function calculateSingleContractARR(
       annualValue = annualFeePerSite * totalSites;
     }
     // For pro/custom/hybrid_tiered/elum packages - use calculateInvoice with frequencyMultiplier=1
-    else if (totalMW > 0 || contract.base_monthly_price || ((contract.minimum_charge_tiers as any[])?.length > 0 && totalSites > 0)) {
+    else if (totalMW > 0 || contract.base_monthly_price || orgBreakdown.length > 0 || ((contract.minimum_charge_tiers as any[])?.length > 0 && totalSites > 0)) {
       const result = calculateInvoice({
         packageType: contract.package as any,
         totalMW,
@@ -343,6 +349,10 @@ export function calculateSingleContractARR(
         // Matriarch API fields
         irradiancePerSiteTiers: (contract as any).irradiance_per_site_tiers || undefined,
         performancePerMwpTiers: (contract as any).performance_per_mwp_tiers || undefined,
+        // Elum 2026 org-based tiers
+        orgBreakdown,
+        elumLiteBaseRate: orgPricingConfig.liteBaseRate,
+        elumLiteEconfRate: orgPricingConfig.liteEconfRate,
       });
       annualValue = result.totalPrice;
 
