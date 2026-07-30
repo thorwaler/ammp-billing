@@ -18,7 +18,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter } from "date-fns";
-import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon } from "lucide-react";
+import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon, Lock, Unlock } from "lucide-react";
+import { daysUntilRevisionDeadline, isWithinRevisionWindow } from "@/lib/invoiceSnapshot";
 import { cn } from "@/lib/utils";
 import { formatDateCET } from "@/lib/dateUtils";
 
