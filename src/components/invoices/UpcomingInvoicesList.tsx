@@ -367,6 +367,10 @@ export function UpcomingInvoicesList({
       committedMinimumMW: invoice.committedMinimumMW,
       annualBillingAnchorDate: invoice.annualBillingAnchorDate,
       ytdInvoicedAmount: invoice.ytdInvoicedAmount,
+      // Elum 2026 org-based tiers (C&I Lite / C&I Pro / Utility)
+      orgBreakdown: invoice.cachedCapabilities?.orgBreakdown || [],
+      elumLiteBaseRate: invoice.orgPricingConfig?.liteBaseRate,
+      elumLiteEconfRate: invoice.orgPricingConfig?.liteEconfRate,
       perMWAnnualUpfrontIsAnnualCycle: invoice.packageType === 'per_mw_annual_upfront'
         ? isAnnualUpfrontCycle(invoice.nextInvoiceDate, invoice.annualBillingAnchorDate)
         : undefined,
