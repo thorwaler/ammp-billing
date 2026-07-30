@@ -184,6 +184,8 @@ export function MergedInvoiceDialog({
       orgBreakdown: contract.cachedCapabilities?.orgBreakdown,
       elumLiteBaseRate: (contract as any).orgPricingConfig?.liteBaseRate,
       elumLiteEconfRate: (contract as any).orgPricingConfig?.liteEconfRate,
+      elumInternalBrackets: (contract as any).orgPricingConfig?.internalBrackets,
+      elumInternalEconfRate: (contract as any).orgPricingConfig?.internalEconfRate,
       annualFeePerSite: contract.annualFeePerSite,
       // AMMP OS 2026 trial fields
       isTrial: contract.isTrial,

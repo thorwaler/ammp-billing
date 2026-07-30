@@ -371,6 +371,8 @@ export function UpcomingInvoicesList({
       orgBreakdown: invoice.cachedCapabilities?.orgBreakdown || [],
       elumLiteBaseRate: invoice.orgPricingConfig?.liteBaseRate,
       elumLiteEconfRate: invoice.orgPricingConfig?.liteEconfRate,
+      elumInternalBrackets: invoice.orgPricingConfig?.internalBrackets,
+      elumInternalEconfRate: invoice.orgPricingConfig?.internalEconfRate,
       perMWAnnualUpfrontIsAnnualCycle: invoice.packageType === 'per_mw_annual_upfront'
         ? isAnnualUpfrontCycle(invoice.nextInvoiceDate, invoice.annualBillingAnchorDate)
         : undefined,

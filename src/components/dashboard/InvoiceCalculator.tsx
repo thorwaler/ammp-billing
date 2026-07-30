@@ -892,6 +892,8 @@ export function InvoiceCalculator({
         || undefined,
       elumLiteBaseRate: (selectedCustomer as any).orgPricingConfig?.liteBaseRate,
       elumLiteEconfRate: (selectedCustomer as any).orgPricingConfig?.liteEconfRate,
+      elumInternalBrackets: (selectedCustomer as any).orgPricingConfig?.internalBrackets,
+      elumInternalEconfRate: (selectedCustomer as any).orgPricingConfig?.internalEconfRate,
       customAssetPricing: selectedCustomer.customAssetPricing,
       isTrial: selectedCustomer.isTrial,
       trialSetupFee: selectedCustomer.trialSetupFee,

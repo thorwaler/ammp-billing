@@ -353,6 +353,8 @@ export function calculateSingleContractARR(
         orgBreakdown,
         elumLiteBaseRate: orgPricingConfig.liteBaseRate,
         elumLiteEconfRate: orgPricingConfig.liteEconfRate,
+        elumInternalBrackets: orgPricingConfig.internalBrackets,
+        elumInternalEconfRate: orgPricingConfig.internalEconfRate,
       });
       annualValue = result.totalPrice;
 

@@ -150,6 +150,8 @@ export function mapContractRowToFormValues(row: AnyRow): ContractFormValues {
     elumParentOrgId: v(row.elum_parent_org_id),
     elumLiteBaseRate: v(orgPricing.liteBaseRate),
     elumLiteEconfRate: v(orgPricing.liteEconfRate),
+    elumInternalBrackets: v(orgPricing.internalBrackets),
+    elumInternalEconfRate: v(orgPricing.internalEconfRate),
 
     // AMMP OS 2026 trial
     isTrial: v(row.is_trial),
