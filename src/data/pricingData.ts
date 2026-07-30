@@ -531,13 +531,13 @@ export interface ElumProSiteBucket {
 
 /** C&I Pro: price applied site by site, never aggregated. */
 export const ELUM_PRO_SITE_BUCKETS: ElumProSiteBucket[] = [
-  { minMWp: 0, maxMWp: 1, pricePerMWp: 650, label: "≤ 1 MWp" },
-  { minMWp: 1, maxMWp: 2, pricePerMWp: 450, label: "> 1 and < 2 MWp" },
-  { minMWp: 2, maxMWp: null, pricePerMWp: 300, label: "≥ 2 MWp" },
+  { minMWp: 0, maxMWp: 1, pricePerMWp: 650, label: "Up to 1 MWp" },
+  { minMWp: 1, maxMWp: 2, pricePerMWp: 450, label: "1 to 2 MWp" },
+  { minMWp: 2, maxMWp: null, pricePerMWp: 300, label: "2 MWp and above" },
 ];
 
 export function getElumProBucket(mwp: number): ElumProSiteBucket {
-  // ≤1 MWp inclusive, >1 and <2, then ≥2
+  // up to 1 MWp inclusive, >1 and <2, then 2 and above
   if (mwp <= 1) return ELUM_PRO_SITE_BUCKETS[0];
   if (mwp < 2) return ELUM_PRO_SITE_BUCKETS[1];
   return ELUM_PRO_SITE_BUCKETS[2];
