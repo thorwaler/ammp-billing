@@ -117,24 +117,81 @@ function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'
 async function getToken(apiKey: string): Promise<string> {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  
-  const response = await fetch(`${supabaseUrl}/functions/v1/ammp-token-exchange`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${serviceKey}`,
-    },
-    body: JSON.stringify({ apiKey }),
-  });
-  
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Token exchange failed: ${error}`);
-  }
-  
-  const data = await response.json();
+
+  const data = await postJsonWithRetry(
+    `${supabaseUrl}/functions/v1/ammp-token-exchange`,
+    serviceKey,
+    { apiKey },
+    'Token exchange'
+  );
   return data.access_token;
 }
+
+/**
+ * POST to an internal function and parse JSON defensively.
+ *
+ * Gateways and CDNs can answer with an HTML error page during a transient
+ * incident; blindly calling `.json()` then throws `Unexpected token '<'` and
+ * hides the real status. Read as text, report `HTTP <status>: <snippet>` on
+ * non-JSON, and retry transient failures with backoff.
+ */
+async function postJsonWithRetry(
+  url: string,
+  serviceKey: string,
+  body: unknown,
+  label: string,
+  maxAttempts = 3
+): Promise<any> {
+  let lastError = `${label} failed`;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (err: any) {
+      lastError = `${label} failed: ${err?.message ?? String(err)}`;
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
+
+    const text = await response.text();
+    const snippet = text.slice(0, 200).replace(/\s+/g, ' ').trim() || '(empty body)';
+
+    if (!response.ok) {
+      lastError = `${label} failed: HTTP ${response.status}: ${snippet}`;
+      if (attempt < maxAttempts && (response.status === 429 || response.status >= 500)) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      lastError = `${label} returned a non-JSON response (HTTP ${response.status}): ${snippet}`;
+      console.error(`[ammp-sync-contract] ${lastError} (attempt ${attempt})`);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 1500 * attempt));
+        continue;
+      }
+      throw new Error(lastError);
+    }
+  }
+
+  throw new Error(lastError);
+}
+
 
 /**
  * Validate caller and resolve the effective team member running the sync.
