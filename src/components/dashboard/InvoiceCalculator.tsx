@@ -233,6 +233,9 @@ export function InvoiceCalculator({
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
   const [attachSupportDoc, setAttachSupportDoc] = useState(true);
+  // Freeze the invoice inputs (snapshot) when creating. Defaults to the
+  // contract setting, but can be overridden per invoice (useful for testing).
+  const [freezeInvoice, setFreezeInvoice] = useState(true);
   
   // Per-site billing state
   const [siteBillingData, setSiteBillingData] = useState<SiteBillingItem[]>([]);
