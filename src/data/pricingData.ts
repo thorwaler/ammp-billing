@@ -181,7 +181,8 @@ export type PackageType =
   | "per_mw_annual_upfront"
   | "elum_ci_lite"
   | "elum_ci_pro"
-  | "elum_utility";
+  | "elum_utility"
+  | "elum_internal_2026";
 
 // === SolarAfrica API Pricing ===
 
