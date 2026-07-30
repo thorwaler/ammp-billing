@@ -17,11 +17,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { FileText, Download, Search, MoreHorizontal, Pencil, Eye, CalendarIcon, X, ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
+import { FileText, Download, Search, MoreHorizontal, Pencil, Eye, CalendarIcon, X, ChevronLeft, ChevronRight, RefreshCw, Copy } from "lucide-react";
 import { syncContractAMMPData } from "@/services/ammp/ammpService";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import ContractForm from "@/components/contracts/ContractForm";
+import { DuplicateContractDialog } from "@/components/contracts/DuplicateContractDialog";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -56,7 +57,9 @@ export function ContractList() {
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingEdit, setIsLoadingEdit] = useState(false);
   const [syncingContractId, setSyncingContractId] = useState<string | null>(null);
+  const [duplicateSource, setDuplicateSource] = useState<{ id: string; customerId: string } | null>(null);
   const navigate = useNavigate();
+
 
   const loadContracts = useCallback(async () => {
     setIsLoading(true);
