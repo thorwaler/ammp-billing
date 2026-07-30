@@ -174,6 +174,9 @@ export function mapContractRowToFormValues(row: AnyRow): ContractFormValues {
     committedMinimumMW: v(row.committed_minimum_mw),
     annualBillingAnchorDate: v(row.annual_billing_anchor_date),
 
+    // Invoice input freezing (default on when the column is null on legacy rows)
+    invoiceFreezeEnabled: row.invoice_freeze_enabled !== false,
+
     // Elum foundations
     zeroPvAlertEnabled: v(row.zero_pv_alert_enabled),
     zeroPvEstimateMultiplier: v(row.zero_pv_estimate_multiplier),
