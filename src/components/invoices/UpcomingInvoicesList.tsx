@@ -237,6 +237,7 @@ export function UpcomingInvoicesList({
             committedMinimumMW: (c as any).committed_minimum_mw ?? undefined,
             annualBillingAnchorDate: (c as any).annual_billing_anchor_date ?? undefined,
             ytdInvoicedAmount: Number((c as any).ytd_invoiced_amount) || 0,
+            orgPricingConfig: ((c as any).org_pricing_config || {}) as { liteBaseRate?: number; liteEconfRate?: number },
           };
         });
 
