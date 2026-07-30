@@ -1386,10 +1386,11 @@ Deno.serve(async (req) => {
     }
 
     // Detect and record asset status changes (appeared, disappeared, reappeared)
-    // Only run if previous sync was complete - skip when resuming partial syncs to avoid false alerts
+    // Only run when BOTH the previous and the current sync are complete — a partial
+    // run holds only a subset of the assets and would flag the rest as disappeared.
     let assetChanges = { disappeared: 0, appeared: 0, reappeared: 0 };
     
-    if (previousSyncStatus !== 'partial') {
+    if (previousSyncStatus !== 'partial' && syncStatus !== 'partial') {
       assetChanges = await detectAssetChanges(
         supabase,
         contractId,
@@ -1403,7 +1404,7 @@ Deno.serve(async (req) => {
         previousCached
       );
     } else {
-      console.log(`[Asset Change Detection] Skipping - previous sync was partial, no reliable baseline`);
+      console.log(`[Asset Change Detection] Skipping - sync incomplete (previous: ${previousSyncStatus}, current: ${syncStatus}), no reliable baseline`);
     }
 
     // Elum 2026: raise alerts for org-resolution problems
