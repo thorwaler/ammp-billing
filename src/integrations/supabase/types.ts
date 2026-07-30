@@ -427,6 +427,7 @@ export type Database = {
           id: string
           inflation_cap_enabled: boolean
           initial_mw: number
+          invoice_freeze_enabled: boolean
           invoice_lead_days: number
           invoicing_type: string | null
           irradiance_per_site_tiers: Json | null
@@ -515,6 +516,7 @@ export type Database = {
           id?: string
           inflation_cap_enabled?: boolean
           initial_mw: number
+          invoice_freeze_enabled?: boolean
           invoice_lead_days?: number
           invoicing_type?: string | null
           irradiance_per_site_tiers?: Json | null
@@ -603,6 +605,7 @@ export type Database = {
           id?: string
           inflation_cap_enabled?: boolean
           initial_mw?: number
+          invoice_freeze_enabled?: boolean
           invoice_lead_days?: number
           invoicing_type?: string | null
           irradiance_per_site_tiers?: Json | null

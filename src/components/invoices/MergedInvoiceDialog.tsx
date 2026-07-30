@@ -17,6 +17,7 @@ import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pr
 import { isPackage2026 } from "@/data/pricingData";
 import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { buildSnapshotFields } from "@/lib/invoiceSnapshot";
 
 interface ContractForMerge {
   contractId: string;
@@ -723,8 +724,40 @@ export function MergedInvoiceDialog({
         
         // Calculate EUR amounts using dynamic exchange rate
         const eurMultiplier = primaryCurrency === 'USD' ? exchangeRate : 1;
-        
+
+        // Freeze the merged invoice inputs unless every contract in the merge
+        // has invoice freezing switched off.
+        const { data: freezeRows } = await supabase
+          .from('contracts')
+          .select('id, invoice_freeze_enabled')
+          .in('id', selectedContractsList.map(c => c.contractId));
+        const freezeEnabled = (freezeRows || []).some(r => (r as any).invoice_freeze_enabled !== false);
+
+        const snapshotFields = buildSnapshotFields({
+          freezeEnabled,
+          contractId: contracts[0].contractId,
+          customerId: contracts[0].customerId,
+          invoiceDate,
+          currency: primaryCurrency,
+          exchangeRateEUR: eurMultiplier,
+          contract: { mergedContractIds: selectedContractsList.map(c => c.contractId) },
+          capabilities: {
+            assets: selectedContractsList.flatMap(c =>
+              (c.cachedCapabilities?.assets || c.cachedCapabilities?.assetBreakdown || [])
+            ),
+            orgBreakdown: selectedContractsList.flatMap(c => c.cachedCapabilities?.orgBreakdown || []),
+          },
+          lineItems: lineItems as any,
+          totals: {
+            invoiceAmount: totalAmount,
+            arrAmount: totalARR,
+            nrrAmount: totalNRR,
+            totalMW,
+          },
+        });
+
         const { data: insertedMergedInvoice } = await supabase.from('invoices').insert([{
+
           user_id: user.id,
           customer_id: contracts[0].customerId,
           contract_id: contracts[0].contractId, // Primary contract
@@ -751,7 +784,9 @@ export function MergedInvoiceDialog({
             : null,
           support_document_data: Array.from(supportDocuments.entries())
             .filter(([id]) => selectedContracts.has(id))
-            .map(([id, doc]) => ({ contractId: id, data: doc })) as any
+            .map(([id, doc]) => ({ contractId: id, data: doc })) as any,
+          ...((snapshotFields ?? {}) as any)
+
         }]).select('id').maybeSingle();
         const mergedInvoiceId = insertedMergedInvoice?.id as string | undefined;
 

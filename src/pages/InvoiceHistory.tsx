@@ -18,7 +18,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter } from "date-fns";
-import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon } from "lucide-react";
+import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon, Lock, Unlock } from "lucide-react";
+import { daysUntilRevisionDeadline, isWithinRevisionWindow } from "@/lib/invoiceSnapshot";
 import { cn } from "@/lib/utils";
 import { formatDateCET } from "@/lib/dateUtils";
 
@@ -55,6 +56,9 @@ interface Invoice {
   sharepoint_file_id: string | null;
   sharepoint_drive_id: string | null;
   sharepoint_files: Array<{ driveId: string; fileId: string; fileName?: string }> | null;
+  input_snapshot: any | null;
+  snapshot_frozen_at: string | null;
+  revision_deadline: string | null;
   customer: {
     name: string;
   } | null;
@@ -570,23 +574,40 @@ export default function InvoiceHistory() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {invoice.xero_invoice_id ? (
-                            <Badge variant="default" className="flex items-center gap-1 w-fit">
-                              {invoice.xero_status || 'Sent'}
-                              <a 
-                                href={`https://go.xero.com/AccountsReceivable/View.aspx?InvoiceID=${invoice.xero_invoice_id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">Not Sent</Badge>
-                          )}
+                          <div className="flex flex-col items-start gap-1">
+                            {invoice.xero_invoice_id ? (
+                              <Badge variant="default" className="flex items-center gap-1 w-fit">
+                                {invoice.xero_status || 'Sent'}
+                                <a 
+                                  href={`https://go.xero.com/AccountsReceivable/View.aspx?InvoiceID=${invoice.xero_invoice_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">Not Sent</Badge>
+                            )}
+                            {invoice.snapshot_frozen_at ? (
+                              <Badge variant="outline" className="w-fit gap-1" title={`Frozen ${new Date(invoice.snapshot_frozen_at).toLocaleString()}`}>
+                                <Lock className="h-3 w-3" />
+                                Frozen
+                                {daysUntilRevisionDeadline(invoice.revision_deadline) !== null &&
+                                  isWithinRevisionWindow(invoice.revision_deadline) &&
+                                  ` · ${daysUntilRevisionDeadline(invoice.revision_deadline)}d`}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="w-fit gap-1 text-muted-foreground" title="No input snapshot was stored for this invoice">
+                                <Unlock className="h-3 w-3" />
+                                Live data
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
                             <Button

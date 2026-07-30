@@ -9,7 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Lock, Unlock } from "lucide-react";
+import { daysUntilRevisionDeadline, isWithinRevisionWindow } from "@/lib/invoiceSnapshot";
 
 interface InvoiceDetailsDialogProps {
   open: boolean;
@@ -29,6 +30,9 @@ interface InvoiceDetailsDialogProps {
     mw_change: number;
     modules_data: any;
     addons_data: any;
+    input_snapshot?: any | null;
+    snapshot_frozen_at?: string | null;
+    revision_deadline?: string | null;
   };
 }
 
@@ -117,6 +121,48 @@ export function InvoiceDetailsDialog({
             </div>
 
             <Separator />
+
+            {/* Freeze / snapshot status */}
+            <div>
+              <h3 className="font-semibold mb-2">Invoice freeze</h3>
+              {invoice.snapshot_frozen_at ? (
+                <div className="space-y-1 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="gap-1">
+                      <Lock className="h-3 w-3" /> Frozen
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {format(new Date(invoice.snapshot_frozen_at), 'dd MMM yyyy HH:mm')}
+                    </span>
+                  </div>
+                  <p className="text-muted-foreground">
+                    {invoice.input_snapshot?.assets?.length ?? 0} assets and{' '}
+                    {invoice.input_snapshot?.orgs?.length ?? 0} organisation rows captured
+                    {invoice.input_snapshot?.currency ? ` · ${invoice.input_snapshot.currency}` : ''}.
+                  </p>
+                  {invoice.revision_deadline && (
+                    <p className="text-muted-foreground">
+                      {isWithinRevisionWindow(invoice.revision_deadline)
+                        ? `Revision window open — ${daysUntilRevisionDeadline(invoice.revision_deadline)} day(s) left (until ${format(new Date(invoice.revision_deadline), 'dd MMM yyyy')}).`
+                        : `Revision window closed on ${format(new Date(invoice.revision_deadline), 'dd MMM yyyy')}.`}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-1 text-sm">
+                  <Badge variant="outline" className="gap-1 text-muted-foreground">
+                    <Unlock className="h-3 w-3" /> Live data
+                  </Badge>
+                  <p className="text-muted-foreground">
+                    No input snapshot was stored, so this invoice cannot be reproduced exactly after a later sync.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <Separator />
+
+
 
             {/* Line Items */}
             <div>

@@ -59,6 +59,7 @@ import {
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
 import { uploadToSharePoint } from "@/utils/sharePointUpload";
 import { isAnnualUpfrontCycle, monthsInPeriod } from "@/lib/invoiceScheduling";
+import { buildSnapshotFields } from "@/lib/invoiceSnapshot";
 // Asset group filtering now handled server-side in ammp-sync-contract
 
 // Simplified interfaces - complex types moved to shared files
@@ -174,6 +175,8 @@ interface Customer {
   committedMinimumMW?: number;
   annualBillingAnchorDate?: string;
   ytdInvoicedAmount?: number;
+  // Invoice input freezing
+  invoiceFreezeEnabled?: boolean;
 }
 
 // Default modules and addons from shared data
@@ -231,7 +234,16 @@ export function InvoiceCalculator({
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
   const [attachSupportDoc, setAttachSupportDoc] = useState(true);
-  
+  // Freeze the invoice inputs (snapshot) when creating. Defaults to the
+  // contract setting, but can be overridden per invoice (useful for testing).
+  const [freezeInvoice, setFreezeInvoice] = useState(true);
+
+  // Reset the freeze override whenever the selected contract changes.
+  useEffect(() => {
+    setFreezeInvoice(selectedCustomer?.invoiceFreezeEnabled !== false);
+  }, [selectedCustomer?.contractId, selectedCustomer?.invoiceFreezeEnabled]);
+
+
   // Per-site billing state
   const [siteBillingData, setSiteBillingData] = useState<SiteBillingItem[]>([]);
   const [selectedSitesToBill, setSelectedSitesToBill] = useState<SiteBillingItem[]>([]);
@@ -312,6 +324,7 @@ export function InvoiceCalculator({
             annual_billing_anchor_date,
             annual_minimum_fee,
             ytd_invoiced_amount,
+            invoice_freeze_enabled,
             contract_types ( pricing_model )
           )
         `)
@@ -417,6 +430,7 @@ export function InvoiceCalculator({
             committedMinimumMW: (contract as any).committed_minimum_mw != null ? Number((contract as any).committed_minimum_mw) : undefined,
             annualBillingAnchorDate: (contract as any).annual_billing_anchor_date || undefined,
             ytdInvoicedAmount: (contract as any).ytd_invoiced_amount != null ? Number((contract as any).ytd_invoiced_amount) : 0,
+            invoiceFreezeEnabled: (contract as any).invoice_freeze_enabled !== false,
           };
         });
 
@@ -1651,6 +1665,28 @@ export function InvoiceCalculator({
             nrr_amount: storedNrrAmount,
             xero_line_items: lineItems,
             prepaid_balance_delta: prepaidBalanceDelta,
+            // Freeze the inputs behind this invoice (when enabled) so it stays
+            // reproducible after later AMMP syncs.
+            ...(buildSnapshotFields({
+              freezeEnabled: freezeInvoice,
+              contractId: selectedCustomer.contractId || '',
+              customerId: selectedCustomer.id,
+              invoiceDate,
+              periodStart: selectedCustomer.periodStart,
+              periodEnd: selectedCustomer.periodEnd,
+              currency: selectedCustomer.currency,
+              exchangeRateEUR: null,
+              contract: selectedCustomer as unknown as Record<string, unknown>,
+              capabilities: selectedCustomer.cachedCapabilities || selectedCustomer.ammpCapabilities,
+              lineItems: lineItems as any,
+              totals: {
+                invoiceAmount: result.totalPrice,
+                arrAmount: storedArrAmount,
+                nrrAmount: storedNrrAmount,
+                totalMW: Number(mwManaged),
+              },
+            }) ?? {}) as any,
+
 
           }])
           .select()
@@ -3196,6 +3232,22 @@ export function InvoiceCalculator({
                     Attach support document to Xero invoice
                   </Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="freeze-invoice"
+                    checked={freezeInvoice}
+                    onCheckedChange={(checked) => setFreezeInvoice(checked === true)}
+                  />
+                  <Label htmlFor="freeze-invoice" className="text-sm cursor-pointer">
+                    Freeze invoice inputs (snapshot for 30-day revision window)
+                  </Label>
+                </div>
+                {!freezeInvoice && (
+                  <p className="text-xs text-muted-foreground">
+                    Freezing is off — this invoice will not keep a reproducible snapshot of its inputs.
+                  </p>
+                )}
+
                 <Button 
                   className="w-full" 
                   onClick={handleSendToXero}

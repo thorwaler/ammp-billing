@@ -161,6 +161,8 @@ const contractFormSchema = z.object({
   annualMinimumFee: z.coerce.number().optional(),
   committedMinimumMW: z.coerce.number().optional(),
   annualBillingAnchorDate: z.string().optional(),
+  // Invoice input freezing
+  invoiceFreezeEnabled: z.boolean().optional(),
   // Elum foundations (v1)
   zeroPvAlertEnabled: z.boolean().optional(),
   zeroPvEstimateMultiplier: z.coerce.number().optional(),
@@ -257,6 +259,7 @@ interface ContractFormProps {
     committedMinimumMW?: number;
     annualBillingAnchorDate?: string;
     // Elum foundations
+    invoiceFreezeEnabled?: boolean;
     zeroPvAlertEnabled?: boolean;
     zeroPvEstimateMultiplier?: number;
     zeroPvGraceDays?: number;
@@ -364,6 +367,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       annualMinimumFee: existingContract.annualMinimumFee ?? 0,
       committedMinimumMW: existingContract.committedMinimumMW ?? 0,
       annualBillingAnchorDate: existingContract.annualBillingAnchorDate?.toString().substring(0, 10) || "",
+      invoiceFreezeEnabled: existingContract.invoiceFreezeEnabled !== false,
       zeroPvAlertEnabled: existingContract.zeroPvAlertEnabled ?? false,
       zeroPvEstimateMultiplier: existingContract.zeroPvEstimateMultiplier ?? 1.2,
       zeroPvGraceDays: existingContract.zeroPvGraceDays ?? 30,
@@ -409,6 +413,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       minimumChargeTiers: DEFAULT_MINIMUM_CHARGE_TIERS,
       siteChargeFrequency: "annual",
       minimumAnnualValue: 0,
+      invoiceFreezeEnabled: true,
       notes: "",
     },
   });
@@ -1187,6 +1192,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         annual_minimum_fee: isAnnualUpfront ? (data.annualMinimumFee ?? 0) : null,
         committed_minimum_mw: isAnnualUpfront ? (data.committedMinimumMW ?? null) : null,
         annual_billing_anchor_date: (isAnnualUpfront || data.package === 'sps_monitoring') ? (data.annualBillingAnchorDate || null) : null,
+        // Invoice input freezing (default on)
+        invoice_freeze_enabled: data.invoiceFreezeEnabled !== false,
         // Elum foundations
         zero_pv_alert_enabled: data.zeroPvAlertEnabled ?? false,
         zero_pv_estimate_multiplier: data.zeroPvEstimateMultiplier ?? 1.2,
@@ -2495,7 +2502,37 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </>
             )}
 
+            {/* Invoice freezing */}
+            <div className="rounded-lg border p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">Invoice freezing</h3>
+                <p className="text-xs text-muted-foreground">
+                  Controls whether the inputs behind an invoice (assets, MWp, rates, exchange rate) are snapshotted when the invoice is created.
+                </p>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="invoiceFreezeEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <FormLabel>Freeze invoice inputs at creation</FormLabel>
+                      <FormDescription>
+                        On: each invoice keeps a frozen snapshot and stays reproducible for 30 days, even after a re-sync.
+                        Off: support documents always regenerate from live data — intended for testing.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value !== false} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+
             {/* Elum foundations */}
+
             <div className="rounded-lg border p-4 space-y-4">
               <div>
                 <h3 className="text-sm font-semibold">Elum foundations</h3>
