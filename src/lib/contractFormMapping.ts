@@ -188,3 +188,27 @@ export function mapContractRowToFormValues(row: AnyRow): ContractFormValues {
     contractTypeId: v(row.contract_type_id),
   };
 }
+
+/**
+ * Build form values for duplicating a contract: every pricing/config field is
+ * kept, but identity, AMMP sync state, document and billing-progress fields are
+ * stripped so the copy starts clean and re-syncs fresh.
+ */
+export function buildDuplicateFormValues(row: AnyRow): ContractFormValues {
+  const base = mapContractRowToFormValues(row);
+  const name = base.contractName?.trim();
+
+  return {
+    ...base,
+    id: "",
+    contractName: name ? `${name} (Copy)` : "Copy",
+    // AMMP sync state — cleared so the duplicate syncs from scratch
+    cachedCapabilities: undefined,
+    ammpSyncStatus: undefined,
+    lastAmmpSync: undefined,
+    // Billing progress starts clean
+    nextInvoiceDate: undefined,
+    contractStatus: "active",
+  };
+}
+
