@@ -367,6 +367,7 @@ const ELUM_TIER_FLAGS: Record<string, string> = {
   ci_lite: 'epm_lite',
   ci_pro: 'epm_pro',
   utility: 'epm_utility',
+  internal: 'elum_internal',
 };
 
 interface ClassifiedOrg {
