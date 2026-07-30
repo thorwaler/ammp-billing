@@ -2495,7 +2495,37 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </>
             )}
 
+            {/* Invoice freezing */}
+            <div className="rounded-lg border p-4 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold">Invoice freezing</h3>
+                <p className="text-xs text-muted-foreground">
+                  Controls whether the inputs behind an invoice (assets, MWp, rates, exchange rate) are snapshotted when the invoice is created.
+                </p>
+              </div>
+
+              <FormField
+                control={form.control}
+                name="invoiceFreezeEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between gap-4">
+                    <div className="space-y-0.5">
+                      <FormLabel>Freeze invoice inputs at creation</FormLabel>
+                      <FormDescription>
+                        On: each invoice keeps a frozen snapshot and stays reproducible for 30 days, even after a re-sync.
+                        Off: support documents always regenerate from live data — intended for testing.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value !== false} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            </div>
+
             {/* Elum foundations */}
+
             <div className="rounded-lg border p-4 space-y-4">
               <div>
                 <h3 className="text-sm font-semibold">Elum foundations</h3>
