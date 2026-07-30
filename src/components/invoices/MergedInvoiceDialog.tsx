@@ -784,7 +784,9 @@ export function MergedInvoiceDialog({
             : null,
           support_document_data: Array.from(supportDocuments.entries())
             .filter(([id]) => selectedContracts.has(id))
-            .map(([id, doc]) => ({ contractId: id, data: doc })) as any
+            .map(([id, doc]) => ({ contractId: id, data: doc })) as any,
+          ...((snapshotFields ?? {}) as any)
+
         }]).select('id').maybeSingle();
         const mergedInvoiceId = insertedMergedInvoice?.id as string | undefined;
 
