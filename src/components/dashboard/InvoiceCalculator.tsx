@@ -314,6 +314,7 @@ export function InvoiceCalculator({
             annual_billing_anchor_date,
             annual_minimum_fee,
             ytd_invoiced_amount,
+            invoice_freeze_enabled,
             contract_types ( pricing_model )
           )
         `)
