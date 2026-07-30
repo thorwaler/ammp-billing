@@ -75,6 +75,7 @@ export interface ContractFormValues {
   annualMinimumFee?: number;
   committedMinimumMW?: number;
   annualBillingAnchorDate?: string;
+  invoiceFreezeEnabled?: boolean;
   zeroPvAlertEnabled?: boolean;
   zeroPvEstimateMultiplier?: number;
   zeroPvGraceDays?: number;
