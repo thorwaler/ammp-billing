@@ -603,6 +603,9 @@ async function processContractSync(
       for (const seg of legacySegments) (seg as any).isLegacyAssetGroup = true;
       if (legacySegments.length > 0) tierOrgs = [...tierOrgs, ...legacySegments];
 
+      if (baseCount > 0) orgResolutionLog.push({ orgId: baseOrg.orgId, orgName: baseOrg.orgName, assetCount: baseCount, source: 'legacy-group' });
+      if (econfCount > 0) orgResolutionLog.push({ orgId: econfOrg.orgId, orgName: econfOrg.orgName, assetCount: econfCount, source: 'legacy-group' });
+
       console.log(
         `[AMMP Sync Contract] Legacy asset group merged: ${members.length} members -> ${baseCount} standard, ${econfCount} eConf, ${excludedCount} excluded, ${doubleCountWarnings.length} overlaps de-duplicated`
       );
