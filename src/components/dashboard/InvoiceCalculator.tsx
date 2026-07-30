@@ -174,6 +174,8 @@ interface Customer {
   committedMinimumMW?: number;
   annualBillingAnchorDate?: string;
   ytdInvoicedAmount?: number;
+  // Invoice input freezing
+  invoiceFreezeEnabled?: boolean;
 }
 
 // Default modules and addons from shared data
