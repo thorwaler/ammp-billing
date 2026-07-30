@@ -11,6 +11,36 @@
 
 export const REVISION_WINDOW_DAYS = 30;
 
+export interface SnapshotAsset {
+  assetId: string;
+  assetName: string;
+  totalMW: number;
+  isEstimated?: boolean;
+  estimatedFromMW?: number;
+  estimateSource?: string;
+  incidentId?: string;
+}
+
+export interface SnapshotOrgRow {
+  orgId?: string;
+  orgName: string;
+  tier?: string;
+  econf?: boolean;
+  siteCount?: number;
+  totalMW?: number;
+  ratePerMWp?: number;
+  cost?: number;
+}
+
+export interface SnapshotLineItem {
+  description?: string;
+  quantity?: number;
+  unitAmount?: number;
+  lineAmount?: number;
+  accountCode?: string;
+  [key: string]: unknown;
+}
+
 export interface InvoiceInputSnapshot {
   version: 1;
   contractId: string;
@@ -26,15 +56,13 @@ export interface InvoiceInputSnapshot {
 
   // Resolved asset list at freeze time (from cached_capabilities.assets
   // after zero-PV substitutions).
-  assets: Array<{
-    assetId: string;
-    assetName: string;
-    totalMW: number;
-    isEstimated?: boolean;
-    estimatedFromMW?: number;
-    estimateSource?: string;
-    incidentId?: string;
-  }>;
+  assets: SnapshotAsset[];
+
+  // Per-organisation tier/rate rows for Elum 2026 org-tier contracts.
+  orgs?: SnapshotOrgRow[];
+
+  // The Xero line items actually sent for this invoice.
+  lineItems?: SnapshotLineItem[];
 
   // Zero-PV incidents referenced by this invoice (for reversal on delete
   // or revision).
@@ -46,6 +74,8 @@ export interface InvoiceInputSnapshot {
     invoiceAmount: number;
     arrAmount?: number;
     nrrAmount?: number;
+    totalMW?: number;
+    siteCount?: number;
   };
 }
 
@@ -54,6 +84,7 @@ export interface SnapshotFields {
   snapshot_frozen_at: string;
   revision_deadline: string;
 }
+
 
 export function buildSnapshot(snap: InvoiceInputSnapshot): SnapshotFields {
   const now = new Date();
