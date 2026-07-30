@@ -1152,7 +1152,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               liteBaseRate: data.elumLiteBaseRate ?? ELUM_LITE_BASE_RATE,
               liteEconfRate: data.elumLiteEconfRate ?? ELUM_LITE_ECONF_RATE,
             }
-          : null,
+          : {},
         site_size_threshold_kwp: data.package === 'elum_epm' 
           ? (data.siteSizeThresholdKwp || 100) 
           : null,
