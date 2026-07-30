@@ -127,6 +127,11 @@ const ContractDetails = () => {
   }, [cachedCapabilities]);
   const showCategoryColumn = orgBreakdown.length > 0;
 
+  // Elum 2026: per-org resolution audit recorded by the last sync
+  const orgResolution: any[] = cachedCapabilities?.orgResolution || [];
+  const unassignedOrgs: any[] = cachedCapabilities?.unassignedOrgs || [];
+  const emptyOrgs = orgResolution.filter((o: any) => !o.assetCount);
+
   const loadContractData = async () => {
       setLoading(true);
       setError(null);
