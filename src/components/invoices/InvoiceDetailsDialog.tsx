@@ -9,7 +9,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Lock, Unlock } from "lucide-react";
+import { daysUntilRevisionDeadline, isWithinRevisionWindow } from "@/lib/invoiceSnapshot";
 
 interface InvoiceDetailsDialogProps {
   open: boolean;
