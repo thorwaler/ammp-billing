@@ -103,7 +103,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     const epm = data.elumEpmBreakdown;
     const lines = [
       `Site Size Threshold: ${epm.threshold} kWp`,
-      `Small Sites (≤ threshold): ${epm.smallSitesCount} sites @ ${fmt(epm.belowThresholdRate, cur)}/MWp — Total: ${fmt(epm.smallSitesTotal, cur)}`,
+      `Small Sites (at or below threshold): ${epm.smallSitesCount} sites @ ${fmt(epm.belowThresholdRate, cur)}/MWp — Total: ${fmt(epm.smallSitesTotal, cur)}`,
       `Large Sites (> threshold): ${epm.largeSitesCount} sites @ ${fmt(epm.aboveThresholdRate, cur)}/MWp — Total: ${fmt(epm.largeSitesTotal, cur)}`,
       ...(epm.sitesUsingMinimum > 0 ? [`Sites Using Minimum Fee: ${epm.sitesUsingMinimum}`] : []),
     ];
@@ -532,7 +532,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     breakdownLines.push([`Sites on Normal Pricing (${data.siteMinimumPricingSummary.sitesOnNormal} sites)`, fmt(data.siteMinimumPricingSummary.normalPricingTotal, cur)]);
     breakdownLines.push([`+ Sites on Minimum Pricing (${data.siteMinimumPricingSummary.sitesOnMinimum} sites)`, fmt(data.siteMinimumPricingSummary.minimumPricingTotal, cur)]);
     breakdownLines.push(['= Asset/Module Subtotal (annual)', fmt(data.assetBreakdownTotal, cur)]);
-    breakdownLines.push(['  × Billing Period', fmt(cb.assetBreakdownPeriod, cur)]);
+    breakdownLines.push(['  x Billing Period', fmt(cb.assetBreakdownPeriod, cur)]);
   } else if (data.elumInternalBreakdown) {
     breakdownLines.push([`Elum Internal Graduated Tiers (${data.elumInternalBreakdown.totalMW.toFixed(2)} MW)`, fmt(data.elumInternalBreakdown.totalCost, cur)]);
   } else if (data.elumJubailiBreakdown) {
@@ -556,7 +556,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   if (cb.fixedPackageCost > 0) breakdownLines.push(['+ Fixed Package Fee', fmt(cb.fixedPackageCost, cur)]);
   const spsU: any = (data as any).spsAnnualUpfrontBreakdown;
   if (spsU?.cycleType === 'quarterly_with_credit' && (spsU.creditApplied || 0) > 0) {
-    breakdownLines.push(['− Prepaid Credit Applied', `-${fmt(spsU.creditApplied, cur)}`]);
+    breakdownLines.push(['- Prepaid Credit Applied', `-${fmt(spsU.creditApplied, cur)}`]);
   }
   breakdownLines.push(['= Support Document Total', fmt(data.calculatedTotal, cur)]);
 
@@ -582,10 +582,10 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   y += 4;
   if (data.totalsMatch) {
     doc.setTextColor(22, 163, 74);
-    doc.text('✓ Totals Match', MARGIN, y);
+    doc.text('Totals Match: OK', MARGIN, y);
   } else {
     doc.setTextColor(220, 38, 38);
-    doc.text(`⚠ Totals Mismatch — Difference: ${fmt(Math.abs(data.calculatedTotal - data.invoiceTotal), cur)}`, MARGIN, y);
+    doc.text(`Totals Mismatch — Difference: ${fmt(Math.abs(data.calculatedTotal - data.invoiceTotal), cur)}`, MARGIN, y);
   }
   doc.setTextColor(0, 0, 0);
 
