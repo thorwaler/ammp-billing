@@ -573,23 +573,40 @@ export default function InvoiceHistory() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {invoice.xero_invoice_id ? (
-                            <Badge variant="default" className="flex items-center gap-1 w-fit">
-                              {invoice.xero_status || 'Sent'}
-                              <a 
-                                href={`https://go.xero.com/AccountsReceivable/View.aspx?InvoiceID=${invoice.xero_invoice_id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="inline-flex"
-                              >
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            </Badge>
-                          ) : (
-                            <Badge variant="secondary">Not Sent</Badge>
-                          )}
+                          <div className="flex flex-col items-start gap-1">
+                            {invoice.xero_invoice_id ? (
+                              <Badge variant="default" className="flex items-center gap-1 w-fit">
+                                {invoice.xero_status || 'Sent'}
+                                <a 
+                                  href={`https://go.xero.com/AccountsReceivable/View.aspx?InvoiceID=${invoice.xero_invoice_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </a>
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">Not Sent</Badge>
+                            )}
+                            {invoice.snapshot_frozen_at ? (
+                              <Badge variant="outline" className="w-fit gap-1" title={`Frozen ${new Date(invoice.snapshot_frozen_at).toLocaleString()}`}>
+                                <Lock className="h-3 w-3" />
+                                Frozen
+                                {daysUntilRevisionDeadline(invoice.revision_deadline) !== null &&
+                                  isWithinRevisionWindow(invoice.revision_deadline) &&
+                                  ` · ${daysUntilRevisionDeadline(invoice.revision_deadline)}d`}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="w-fit gap-1 text-muted-foreground" title="No input snapshot was stored for this invoice">
+                                <Unlock className="h-3 w-3" />
+                                Live data
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
+
                         <TableCell className="text-right">
                           <div className="flex gap-2 justify-end">
                             <Button
