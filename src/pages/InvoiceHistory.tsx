@@ -55,6 +55,9 @@ interface Invoice {
   sharepoint_file_id: string | null;
   sharepoint_drive_id: string | null;
   sharepoint_files: Array<{ driveId: string; fileId: string; fileName?: string }> | null;
+  input_snapshot: any | null;
+  snapshot_frozen_at: string | null;
+  revision_deadline: string | null;
   customer: {
     name: string;
   } | null;
