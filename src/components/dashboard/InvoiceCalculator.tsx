@@ -1674,7 +1674,7 @@ export function InvoiceCalculator({
               periodStart: selectedCustomer.periodStart,
               periodEnd: selectedCustomer.periodEnd,
               currency: selectedCustomer.currency,
-              exchangeRateEUR: selectedCustomer.currency === 'USD' ? exchangeRate : 1,
+              exchangeRateEUR: null,
               contract: selectedCustomer as unknown as Record<string, unknown>,
               capabilities: selectedCustomer.cachedCapabilities || selectedCustomer.ammpCapabilities,
               lineItems: lineItems as any,
