@@ -553,12 +553,12 @@ export interface ElumUtilityTier {
 
 /** Utility: single blended rate determined by total org portfolio size. */
 export const ELUM_UTILITY_TIERS: ElumUtilityTier[] = [
-  { minMWp: 0, maxMWp: 10, discountPercent: 0, pricePerMWp: 300, label: "< 10 MWp" },
-  { minMWp: 10, maxMWp: 20, discountPercent: 5, pricePerMWp: 285, label: "10–20 MWp" },
-  { minMWp: 20, maxMWp: 30, discountPercent: 10, pricePerMWp: 270, label: "20–30 MWp" },
-  { minMWp: 30, maxMWp: 40, discountPercent: 15, pricePerMWp: 255, label: "30–40 MWp" },
-  { minMWp: 40, maxMWp: 50, discountPercent: 20, pricePerMWp: 240, label: "40–50 MWp" },
-  { minMWp: 50, maxMWp: null, discountPercent: 25, pricePerMWp: 225, label: "50–60 MWp" },
+  { minMWp: 0, maxMWp: 10, discountPercent: 0, pricePerMWp: 300, label: "Under 10 MWp" },
+  { minMWp: 10, maxMWp: 20, discountPercent: 5, pricePerMWp: 285, label: "10-20 MWp" },
+  { minMWp: 20, maxMWp: 30, discountPercent: 10, pricePerMWp: 270, label: "20-30 MWp" },
+  { minMWp: 30, maxMWp: 40, discountPercent: 15, pricePerMWp: 255, label: "30-40 MWp" },
+  { minMWp: 40, maxMWp: 50, discountPercent: 20, pricePerMWp: 240, label: "40-50 MWp" },
+  { minMWp: 50, maxMWp: null, discountPercent: 25, pricePerMWp: 225, label: "50 MWp and above" },
 ];
 
 export function getElumUtilityTier(portfolioMWp: number): ElumUtilityTier {
