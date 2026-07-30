@@ -1,29 +1,39 @@
-## Duplicate a contract
+## What's wrong
 
-Add a "Duplicate" action that opens the contract form prefilled with everything from an existing contract, letting you pick the target customer and adjust name/dates before saving. Nothing is written until you submit.
+The logs from the last enrichment run show every device fetch failing with the same cause:
 
-### Where the action appears
-- `src/components/contracts/ContractList.tsx` — a Copy icon button in the row actions, next to Edit / View / Sync.
-- `src/pages/ContractDetails.tsx` — a "Duplicate" button in the header action row, next to Edit.
+```
+[AMMP Device Enrichment] Failed to fetch devices for 82874d23-...:
+RateLimitError: Rate limit exceeded for trace 019fb25d... Retry after 59171ms.
+```
 
-### New component: `src/components/contracts/DuplicateContractDialog.tsx`
-- Loads the source contract row and maps it through the existing `mapContractRowToFormValues` helper in `src/lib/contractFormMapping.ts`, so every pricing field (modules, addons, tiers, Elum org config, thresholds, discounts, freeze/zero-PV settings) carries over correctly and no field silently resets.
-- A customer selector at the top, defaulting to the source contract's customer (reusing the pattern from `MoveContractDialog`).
-- Renders `ContractForm` in create mode with the mapped values, so the user reviews and edits before saving as a brand-new contract.
+`ammp-device-enrichment` fires 10 simultaneous internal calls to `ammp-data-proxy` per wave (`BATCH_PARALLEL = 10`, batch of 50). The edge gateway rate-limits internal invocations per trace and asks for a ~59s wait. The function does none of that:
 
-### Fields reset on the copy
-- Identity: new id, contract name prefilled as `<name> (Copy)`.
-- AMMP sync state (per your choice): `cached_capabilities`, `ammp_asset_ids`, `ammp_sync_status`, `last_ammp_sync` cleared so the new contract syncs fresh. The asset-group / org-ID configuration itself is kept, since that's pricing setup.
-- Not carried over automatically: contract PDF, OCR data, and amendments (those belong to the original document); billing progress fields (`next_invoice_date`, `ytd_invoiced_amount`, `last_annual_invoice_date`, `last_anniversary_notice_sent_at`) start clean.
-- Period dates and signed date are left editable in the form rather than blindly copied.
+- `fetchAMMPData` is a plain `fetch` with no retry and no `Retry-after` handling — unlike `ammp-sync-contract`, which already has a `postJsonWithRetry` helper that honours the hint.
+- Worse: a failed fetch is swallowed in the `catch` and returned as `devices: []`. The asset is then run through `calculateCapabilitiesFromDevices`, marked as attempted/confirmed-empty, and written back to `cached_capabilities`. So a rate-limited run silently wipes hybrid/Solcast flags and permanently excludes those assets from future refetches.
 
-### After saving
-Toast confirmation, list/details refresh, and navigation to the new contract so you can run an AMMP sync straight away.
+That's the same class of bug already fixed for asset-group members in the contract sync: a transient API failure must never be persisted as "no data".
 
-### Files touched
-- `src/components/contracts/DuplicateContractDialog.tsx` (new)
-- `src/components/contracts/ContractList.tsx`
-- `src/pages/ContractDetails.tsx`
-- `src/lib/contractFormMapping.ts` (small helper to strip identity/sync fields)
+## Fix
 
-No database changes required.
+**1. Share the retry helper**
+Move `parseRetryAfterMs` / `isRateLimited` / `postJsonWithRetry` out of `ammp-sync-contract/index.ts` into `supabase/functions/_shared/internalFetch.ts` (with a `label` parameter for logging) and import it from both functions. Behaviour stays identical for the contract sync.
+
+**2. Use it in enrichment**
+`getToken` and `fetchAMMPData` in `ammp-device-enrichment` call the shared helper instead of raw `fetch`, so token exchange and every proxy call retry with backoff and honour `Retry after Nms`.
+
+**3. Never persist a failed fetch as empty**
+In the per-asset map, distinguish failure from a genuine empty device list: return `{ assetId, devices, failed: true }` on error. Assets with `failed: true` are skipped entirely — not enriched, not marked attempted, not marked `deviceEnrichmentConfirmedEmpty`, and they stay in the "remaining" count so the next run retries them.
+
+**4. Reduce concurrency and adapt**
+Drop `BATCH_PARALLEL` from 10 to 4, and add a small pause between waves. If a wave comes back with any rate-limit failure, stop the run early rather than burning the remaining assets against a closed window, and return `rateLimited: true` in the response.
+
+**5. Report honestly**
+The response gains `failed` (count of assets skipped due to errors). If every asset in the batch failed, return a non-success response so the caller/UI shows the enrichment did not run instead of reporting "Complete: 0 enriched".
+
+## Technical notes
+
+- Files touched: `supabase/functions/_shared/internalFetch.ts` (new), `supabase/functions/ammp-device-enrichment/index.ts`, `supabase/functions/ammp-sync-contract/index.ts` (import instead of local copy).
+- No database or schema changes.
+- No frontend change required; the enrichment poller keeps calling until `remaining` reaches 0, which now correctly includes previously-failed assets.
+- After deploying, a run on an affected contract will re-attempt assets that were wrongly marked empty only if they were not already flagged `deviceEnrichmentConfirmedEmpty`. If you want those cleared too, say so and I'll add a one-off reset of that flag for assets with zero devices.
