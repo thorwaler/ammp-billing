@@ -258,7 +258,9 @@ export function calculateSingleContractARR(
     hourly_rate?: number | null;
     upfront_discount_percent?: number | null;
     commitment_discount_percent?: number | null;
+    org_pricing_config?: any;
   }
+
 ): number {
   // POC contracts have no ARR
   if (contract.package === 'poc') return 0;
