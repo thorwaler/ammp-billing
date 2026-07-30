@@ -295,6 +295,8 @@ export interface ElumOrgLine {
   appliedRate: number | null;
   appliedTierLabel?: string;
   baseCost: number;
+  /** Internal tier: stepped bracket detail behind baseCost */
+  bracketBreakdown?: Array<{ label: string; mwInBracket: number; pricePerMWp: number; cost: number }>;
   /** C&I Lite org-wide remote eConf add-on */
   econfApplied: boolean;
   econfRate: number;
