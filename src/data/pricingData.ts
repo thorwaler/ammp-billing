@@ -497,21 +497,24 @@ export const calculateTieredPrice = (
 // === Elum 2026 org-based tiers ===
 // Contract: Elum <> AMMP 2026. Pricing is per Organisation (sub-org of the Elum
 // parent org), classified by AMMP feature flags:
-//   epm_lite -> C&I Lite, epm_pro -> C&I Pro, epm_utility -> Utility
+//   epm_lite -> C&I Lite, epm_pro -> C&I Pro, epm_utility -> Utility,
+//   elum_internal -> Internal
 //   remote_econf -> org-wide eConf add-on (billable on Lite only; bundled in Pro/Utility)
 
-export type ElumOrgTier = "ci_lite" | "ci_pro" | "utility";
+export type ElumOrgTier = "ci_lite" | "ci_pro" | "utility" | "internal";
 
 export const ELUM_TIER_FLAGS: Record<ElumOrgTier, string> = {
   ci_lite: "epm_lite",
   ci_pro: "epm_pro",
   utility: "epm_utility",
+  internal: "elum_internal",
 };
 
 export const ELUM_TIER_LABELS: Record<ElumOrgTier, string> = {
   ci_lite: "C&I Lite",
   ci_pro: "C&I Pro",
   utility: "Utility",
+  internal: "Internal",
 };
 
 export const ELUM_ECONF_FLAG = "remote_econf";
@@ -520,6 +523,56 @@ export const ELUM_ECONF_FLAG = "remote_econf";
 export const ELUM_LITE_BASE_RATE = 65;
 /** C&I Lite: org-wide remote eConf add-on, €/MWp/year on ALL sites in the org. */
 export const ELUM_LITE_ECONF_RATE = 335;
+
+export interface ElumInternalBracket {
+  /** inclusive lower bound in MWp */
+  minMWp: number;
+  /** upper bound in MWp, null = no limit */
+  maxMWp: number | null;
+  pricePerMWp: number;
+  label: string;
+}
+
+/**
+ * Internal 2026: stepped brackets on the org portfolio. Each bracket's rate
+ * applies only to the MWp that falls inside that bracket.
+ */
+export const ELUM_INTERNAL_2026_BRACKETS: ElumInternalBracket[] = [
+  { minMWp: 0, maxMWp: 100, pricePerMWp: 150, label: "First 100 MWp" },
+  { minMWp: 100, maxMWp: 500, pricePerMWp: 75, label: "100-500 MWp" },
+  { minMWp: 500, maxMWp: null, pricePerMWp: 37.5, label: "Beyond 500 MWp" },
+];
+
+/**
+ * Internal 2026 supports eConf. No separate charge has been agreed yet, so the
+ * add-on defaults to 0 €/MWp; override per contract via org_pricing_config.
+ */
+export const ELUM_INTERNAL_2026_ECONF_RATE = 0;
+
+/** Stepped bracket cost for the Internal tier. */
+export function calculateElumInternalSteppedCost(
+  totalMWp: number,
+  brackets: ElumInternalBracket[] = ELUM_INTERNAL_2026_BRACKETS
+): { totalCost: number; brackets: Array<{ label: string; mwInBracket: number; pricePerMWp: number; cost: number }> } {
+  const lines: Array<{ label: string; mwInBracket: number; pricePerMWp: number; cost: number }> = [];
+  let totalCost = 0;
+
+  for (const bracket of brackets) {
+    const upper = bracket.maxMWp ?? Infinity;
+    const mwInBracket = Math.max(0, Math.min(totalMWp, upper) - bracket.minMWp);
+    if (mwInBracket <= 0) continue;
+    const cost = mwInBracket * bracket.pricePerMWp;
+    totalCost += cost;
+    lines.push({
+      label: bracket.label,
+      mwInBracket,
+      pricePerMWp: bracket.pricePerMWp,
+      cost,
+    });
+  }
+
+  return { totalCost, brackets: lines };
+}
 
 export interface ElumProSiteBucket {
   /** inclusive lower bound in MWp */
