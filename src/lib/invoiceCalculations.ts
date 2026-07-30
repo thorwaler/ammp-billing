@@ -1326,6 +1326,8 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       {
         liteBaseRate: params.elumLiteBaseRate,
         liteEconfRate: params.elumLiteEconfRate,
+        internalBrackets: params.elumInternalBrackets,
+        internalEconfRate: params.elumInternalEconfRate,
         mwhOverrideAssetIds: params.mwhOverrideAssetIds,
       }
     );
