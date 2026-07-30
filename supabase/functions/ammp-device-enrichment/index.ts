@@ -534,12 +534,14 @@ Deno.serve(async (req) => {
     }
     
     const elapsedSec = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[AMMP Device Enrichment] Complete: ${enrichedAssets.size} enriched, ${remaining} remaining (${elapsedSec}s)`);
+    console.log(`[AMMP Device Enrichment] Complete: ${enrichedAssets.size} enriched, ${failedCount} failed, ${remaining} remaining (${elapsedSec}s)`);
     
     return new Response(
       JSON.stringify({ 
         success: true, 
         enriched: enrichedAssets.size,
+        failed: failedCount,
+        rateLimited,
         remaining: remaining,
         complete: remaining === 0,
         sitesWithSolcast: updatedCapabilities.sitesWithSolcast,
