@@ -629,11 +629,15 @@ export const ELUM_UTILITY_MIN_SITE_MWP = 2;
 export const ELUM_COMBINED_ANNUAL_MINIMUM = 80000;
 
 export const isElumOrgTierPackage = (packageType: string): boolean =>
-  packageType === "elum_ci_lite" || packageType === "elum_ci_pro" || packageType === "elum_utility";
+  packageType === "elum_ci_lite" ||
+  packageType === "elum_ci_pro" ||
+  packageType === "elum_utility" ||
+  packageType === "elum_internal_2026";
 
 export const elumTierForPackage = (packageType: string): ElumOrgTier | null => {
   if (packageType === "elum_ci_lite") return "ci_lite";
   if (packageType === "elum_ci_pro") return "ci_pro";
   if (packageType === "elum_utility") return "utility";
+  if (packageType === "elum_internal_2026") return "internal";
   return null;
 };
