@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runZeroPvScan } from '../_shared/zeroPvScan.ts';
-import { postJsonWithRetry as sharedPostJsonWithRetry } from '../_shared/internalFetch.ts';
+import { postJsonWithRetry as sharedPostJsonWithRetry, parseRetryAfterMs } from '../_shared/internalFetch.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
