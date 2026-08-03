@@ -523,7 +523,7 @@ async function getClassifiedSubOrgs(
   // One level of nesting: grandchild orgs also carry tier flags
   if (depth < 1) {
     for (const child of [...direct]) {
-      if (budgetExceeded()) {
+      if (discoveryBudgetExceeded()) {
         console.warn(`[AMMP Sync Contract] Time budget reached during nested org discovery — stopping recursion`);
         break;
       }
