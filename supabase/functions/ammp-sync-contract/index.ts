@@ -396,6 +396,15 @@ function classifyOrgRow(o: any): ClassifiedOrg {
 }
 
 /**
+ * Request-level time budget. The edge gateway kills the request at 150s idle,
+ * so every phase (org discovery, per-org asset resolution, asset batching)
+ * must yield well before that and return a `partial` result instead of hanging.
+ */
+const REQUEST_BUDGET_MS = 110_000;
+let requestDeadline = Number.POSITIVE_INFINITY;
+const budgetExceeded = () => Date.now() > requestDeadline;
+
+/**
  * Fetch sub-orgs of a parent org and classify them by AMMP feature flags.
  * Recurses one level into child orgs so nested organisations are not missed.
  * Throws on API failure so a partial org list can never silently shrink a tier.
