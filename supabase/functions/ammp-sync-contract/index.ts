@@ -749,11 +749,11 @@ async function processContractSync(
     console.log(`[AMMP Sync Contract] Large sync (${assetsToActuallyProcess.length} assets) - skipping device details`);
   }
   
-  let timedOut = false;
+  let timedOut = resolutionTruncated;
   
   for (let i = 0; i < assetsToActuallyProcess.length; i += BATCH_SIZE) {
-    // Check for timeout before processing batch
-    if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS) {
+    // Check for timeout before processing batch (per-phase budget and request budget)
+    if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS || budgetExceeded()) {
       console.log(`[AMMP Sync Contract] Timeout approaching, saving partial progress (${newCapabilities.length} new + ${existingCapabilities.length} existing)`);
       timedOut = true;
       break;
