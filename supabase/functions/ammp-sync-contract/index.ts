@@ -1273,6 +1273,7 @@ async function generateElumAlerts(
 
 
 Deno.serve(async (req) => {
+  requestDeadline = Date.now() + REQUEST_BUDGET_MS;
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
