@@ -1478,16 +1478,41 @@ Deno.serve(async (req) => {
     const previousAssetCount = previousCached?.assetBreakdown?.length || 0;
     if (cachedCapabilities.assetBreakdown.length === 0 && previousAssetCount > 0) {
       console.error(`[AMMP Sync Contract] Aborting update: sync returned 0 assets but ${previousAssetCount} were cached. Keeping previous cache.`);
+
+      // The cache is preserved, but the attempt must still be recorded — otherwise
+      // the run is invisible and `last_ammp_sync` looks like the sync never fired.
+      const abortReason = 'Sync resolved 0 assets while previous cache had assets — previous data kept. Check the AMMP org / asset-group configuration.';
+      await supabase
+        .from('contracts')
+        .update({
+          ammp_sync_status: 'partial',
+          last_ammp_sync: new Date().toISOString(),
+          cached_capabilities: {
+            ...(previousCached || {}),
+            lastSyncAttempt: {
+              at: new Date().toISOString(),
+              outcome: 'aborted_empty',
+              reason: abortReason,
+              resolvedAssets: 0,
+              previousAssetCount,
+              orgsResolved: cachedCapabilities.orgBreakdown?.length || 0,
+              timedOut: timedOut || false,
+            },
+          },
+        })
+        .eq('id', contractId);
+
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Sync resolved 0 assets while previous cache had assets — cache preserved. Check the AMMP org/asset-group configuration.',
+          error: abortReason,
           contractId,
           previousAssetCount,
         }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     // Update the contract with cached capabilities and sync status
     const { error: updateError } = await supabase
