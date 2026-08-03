@@ -132,24 +132,15 @@ async function getToken(apiKey: string): Promise<string> {
 }
 
 /**
- * Fetch data from AMMP API via proxy.
+ * Fetch data from the AMMP API directly (see `_shared/ammpClient.ts`).
  *
- * Retries with backoff and honours the gateway's "Retry after Nms" hint — a
- * transient rate limit must never be mistaken for "this asset has no devices".
+ * Retries with backoff on transient failures — a transient error must never be
+ * mistaken for "this asset has no devices".
  */
 async function fetchAMMPData(token: string, path: string): Promise<any> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL');
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-
-  return postJsonWithRetry(
-    `${supabaseUrl}/functions/v1/ammp-data-proxy`,
-    serviceKey,
-    { token, path },
-    `AMMP ${path}`,
-    3,
-    'ammp-device-enrichment',
-  );
+  return fetchAmmpData(token, path, { logTag: 'ammp-device-enrichment' });
 }
+
 
 
 /**
