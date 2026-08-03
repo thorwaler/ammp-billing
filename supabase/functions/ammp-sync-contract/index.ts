@@ -1,6 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runZeroPvScan } from '../_shared/zeroPvScan.ts';
-import { postJsonWithRetry as sharedPostJsonWithRetry } from '../_shared/internalFetch.ts';
+import { postJsonWithRetry as sharedPostJsonWithRetry, parseRetryAfterMs } from '../_shared/internalFetch.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
@@ -219,20 +219,103 @@ async function getSharedAmmpApiKey(supabase: any): Promise<string> {
   return latestConnection.api_key;
 }
 
+const AMMP_BASE_URL = 'https://data-api.ammp.io/v1';
+const AMMP_TIMEOUT_MS = 25_000;
+
 /**
- * Call existing ammp-data-proxy Edge Function internally
+ * Call the AMMP data API directly.
+ *
+ * This used to hop through the `ammp-data-proxy` Edge Function, but the edge
+ * gateway rate-limits function-to-function invocations per trace: walking a few
+ * hundred sub-orgs in one sync tripped it and the gateway asked for ~55s waits,
+ * which consumed the whole request budget before a single asset was processed.
+ * AMMP itself answers in tens of milliseconds, so the sync calls it directly.
+ * `ammp-data-proxy` stays in place for browser-side callers.
  */
 async function fetchAMMPData(token: string, path: string, method: string = 'GET'): Promise<any> {
-  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const maxAttempts = 3;
+  let lastError = `AMMP API call for ${path} failed`;
 
-  return postJsonWithRetry(
-    `${supabaseUrl}/functions/v1/ammp-data-proxy`,
-    serviceKey,
-    { path, method, token },
-    `AMMP API call for ${path}`
-  );
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), AMMP_TIMEOUT_MS);
+    let response: Response;
+
+    try {
+      response = await fetch(`${AMMP_BASE_URL}${path}`, {
+        method,
+        headers: {
+          accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      lastError = `AMMP API call for ${path} failed: ${err?.message ?? String(err)}`;
+      if (attempt < maxAttempts && (await waitBeforeRetry(1000 * attempt, path, lastError, attempt))) continue;
+      throw new Error(lastError);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+
+    const text = await response.text();
+
+    if (!response.ok) {
+      // A 404 on /assets/{id}/devices means the asset simply has no devices —
+      // fall back to the asset record so capabilities can still be computed.
+      if (response.status === 404 && path.startsWith('/assets/') && path.includes('/devices')) {
+        const assetId = path.split('/')[2];
+        try {
+          const asset = await fetchAMMPData(token, `/assets/${assetId}`);
+          return { ...asset, devices: [] };
+        } catch {
+          return { asset_id: assetId, asset_name: 'Unknown Asset', devices: [], total_pv_power: 0 };
+        }
+      }
+
+      const snippet = text.slice(0, 200).replace(/\s+/g, ' ').trim() || '(empty body)';
+      lastError = `AMMP API call for ${path} failed: HTTP ${response.status}: ${snippet}`;
+      const retryable = response.status === 429 || response.status >= 500;
+      if (attempt < maxAttempts && retryable) {
+        const hinted = parseRetryAfterMs(text, response.headers.get('retry-after'));
+        if (await waitBeforeRetry(hinted ?? 1000 * attempt, path, lastError, attempt)) continue;
+      }
+      throw new Error(lastError);
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      lastError = `AMMP API call for ${path} returned a non-JSON response (HTTP ${response.status})`;
+      if (attempt < maxAttempts && (await waitBeforeRetry(1000 * attempt, path, lastError, attempt))) continue;
+      throw new Error(lastError);
+    }
+  }
+
+  throw new Error(lastError);
 }
+
+/**
+ * Sleep before a retry, but never past the request deadline: waiting longer than
+ * the remaining budget guarantees a timed-out run that writes nothing.
+ * Returns false when the caller should give up instead of waiting.
+ */
+async function waitBeforeRetry(waitMs: number, path: string, reason: string, attempt: number): Promise<boolean> {
+  const remaining = requestDeadline - Date.now();
+  if (!Number.isFinite(remaining)) {
+    await new Promise((r) => setTimeout(r, waitMs));
+    return true;
+  }
+  if (waitMs >= remaining) {
+    console.warn(`[AMMP Sync Contract] Skipping retry for ${path}: ${waitMs}ms wait exceeds ${Math.max(0, remaining)}ms budget`);
+    return false;
+  }
+  console.warn(`[ammp-sync-contract] ${reason} — retrying in ${waitMs}ms (attempt ${attempt})`);
+  await new Promise((r) => setTimeout(r, waitMs));
+  return true;
+}
+
 
 /**
  * Calculate capabilities for a single asset
@@ -401,8 +484,18 @@ function classifyOrgRow(o: any): ClassifiedOrg {
  * must yield well before that and return a `partial` result instead of hanging.
  */
 const REQUEST_BUDGET_MS = 110_000;
+/**
+ * Slice of the budget reserved for the asset loop. Org discovery and per-org
+ * asset resolution must stop at `discoveryDeadline` so the loop can never be
+ * left with zero time (which produces a 0-asset run that writes nothing).
+ */
+const ASSET_LOOP_RESERVE_MS = 40_000;
 let requestDeadline = Number.POSITIVE_INFINITY;
+let discoveryDeadline = Number.POSITIVE_INFINITY;
 const budgetExceeded = () => Date.now() > requestDeadline;
+/** True once discovery has used everything except the asset-loop reserve. */
+const discoveryBudgetExceeded = () => Date.now() > discoveryDeadline;
+
 
 /**
  * Fetch sub-orgs of a parent org and classify them by AMMP feature flags.
@@ -430,7 +523,7 @@ async function getClassifiedSubOrgs(
   // One level of nesting: grandchild orgs also carry tier flags
   if (depth < 1) {
     for (const child of [...direct]) {
-      if (budgetExceeded()) {
+      if (discoveryBudgetExceeded()) {
         console.warn(`[AMMP Sync Contract] Time budget reached during nested org discovery — stopping recursion`);
         break;
       }
@@ -548,7 +641,7 @@ async function processContractSync(
     for (const org of tierOrgs) {
       let orgAssets: any[];
       let source: string;
-      if (budgetExceeded()) {
+      if (discoveryBudgetExceeded()) {
         // Out of time for org-scoped calls — use the already-fetched global list
         // so the org still contributes assets, and mark the sync as partial.
         resolutionTruncated = true;
@@ -1274,6 +1367,7 @@ async function generateElumAlerts(
 
 Deno.serve(async (req) => {
   requestDeadline = Date.now() + REQUEST_BUDGET_MS;
+  discoveryDeadline = requestDeadline - ASSET_LOOP_RESERVE_MS;
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -1384,16 +1478,41 @@ Deno.serve(async (req) => {
     const previousAssetCount = previousCached?.assetBreakdown?.length || 0;
     if (cachedCapabilities.assetBreakdown.length === 0 && previousAssetCount > 0) {
       console.error(`[AMMP Sync Contract] Aborting update: sync returned 0 assets but ${previousAssetCount} were cached. Keeping previous cache.`);
+
+      // The cache is preserved, but the attempt must still be recorded — otherwise
+      // the run is invisible and `last_ammp_sync` looks like the sync never fired.
+      const abortReason = 'Sync resolved 0 assets while previous cache had assets — previous data kept. Check the AMMP org / asset-group configuration.';
+      await supabase
+        .from('contracts')
+        .update({
+          ammp_sync_status: 'partial',
+          last_ammp_sync: new Date().toISOString(),
+          cached_capabilities: {
+            ...(previousCached || {}),
+            lastSyncAttempt: {
+              at: new Date().toISOString(),
+              outcome: 'aborted_empty',
+              reason: abortReason,
+              resolvedAssets: 0,
+              previousAssetCount,
+              orgsResolved: cachedCapabilities.orgBreakdown?.length || 0,
+              timedOut: timedOut || false,
+            },
+          },
+        })
+        .eq('id', contractId);
+
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Sync resolved 0 assets while previous cache had assets — cache preserved. Check the AMMP org/asset-group configuration.',
+          error: abortReason,
           contractId,
           previousAssetCount,
         }),
         { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     // Update the contract with cached capabilities and sync status
     const { error: updateError } = await supabase
