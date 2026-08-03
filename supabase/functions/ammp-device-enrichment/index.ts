@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { postJsonWithRetry, isRateLimited } from '../_shared/internalFetch.ts';
+import { fetchAmmpData } from '../_shared/ammpClient.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
