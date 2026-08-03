@@ -520,6 +520,7 @@ async function processContractSync(
   let unassignedOrgs: Array<{ orgId: string; orgName: string; assetCount?: number; totalMW?: number }> = [];
   const orgResolutionLog: Array<{ orgId: string; orgName: string; assetCount: number; source: string }> = [];
   const doubleCountWarnings: Array<{ assetId: string; assetName: string; orgName: string }> = [];
+  let resolutionTruncated = false;
   const elumTier: string | null = contract.elum_tier || null;
   const elumParentOrgId: string | null = contract.elum_parent_org_id || null;
   
