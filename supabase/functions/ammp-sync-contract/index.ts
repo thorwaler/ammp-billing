@@ -484,8 +484,18 @@ function classifyOrgRow(o: any): ClassifiedOrg {
  * must yield well before that and return a `partial` result instead of hanging.
  */
 const REQUEST_BUDGET_MS = 110_000;
+/**
+ * Slice of the budget reserved for the asset loop. Org discovery and per-org
+ * asset resolution must stop at `discoveryDeadline` so the loop can never be
+ * left with zero time (which produces a 0-asset run that writes nothing).
+ */
+const ASSET_LOOP_RESERVE_MS = 40_000;
 let requestDeadline = Number.POSITIVE_INFINITY;
+let discoveryDeadline = Number.POSITIVE_INFINITY;
 const budgetExceeded = () => Date.now() > requestDeadline;
+/** True once discovery has used everything except the asset-loop reserve. */
+const discoveryBudgetExceeded = () => Date.now() > discoveryDeadline;
+
 
 /**
  * Fetch sub-orgs of a parent org and classify them by AMMP feature flags.
