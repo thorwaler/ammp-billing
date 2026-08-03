@@ -641,7 +641,7 @@ async function processContractSync(
     for (const org of tierOrgs) {
       let orgAssets: any[];
       let source: string;
-      if (budgetExceeded()) {
+      if (discoveryBudgetExceeded()) {
         // Out of time for org-scoped calls — use the already-fetched global list
         // so the org still contributes assets, and mark the sync as partial.
         resolutionTruncated = true;
