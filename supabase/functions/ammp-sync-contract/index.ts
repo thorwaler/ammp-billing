@@ -545,11 +545,21 @@ async function processContractSync(
     // A failed fetch throws (preserving the previous cache) instead of silently
     // reporting the org as empty.
     for (const org of tierOrgs) {
-      let orgAssets = await getAssetsForOrg(token, org.orgId);
-      let source = 'org-scoped';
-      if (orgAssets.length === 0) {
+      let orgAssets: any[];
+      let source: string;
+      if (budgetExceeded()) {
+        // Out of time for org-scoped calls — use the already-fetched global list
+        // so the org still contributes assets, and mark the sync as partial.
+        resolutionTruncated = true;
         orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
-        source = orgAssets.length > 0 ? 'global-fallback' : 'empty';
+        source = 'global-fallback (time budget)';
+      } else {
+        orgAssets = await getAssetsForOrg(token, org.orgId);
+        source = 'org-scoped';
+        if (orgAssets.length === 0) {
+          orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
+          source = orgAssets.length > 0 ? 'global-fallback' : 'empty';
+        }
       }
       for (const a of orgAssets) {
         if (assetOrgMap.has(a.asset_id)) continue;
