@@ -1430,6 +1430,17 @@ const ContractDetails = () => {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Last sync attempt kept the previous data — explain why */}
+              {(cachedCapabilities as any)?.lastSyncAttempt?.outcome === 'aborted_empty' && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Last sync attempt ({formatDate((cachedCapabilities as any).lastSyncAttempt.at)}) resolved 0 assets, so the
+                    previous breakdown below was kept. {(cachedCapabilities as any).lastSyncAttempt.reason}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Summary Stats */}
               {(() => {
                 const ongridAssets = cachedCapabilities.assetBreakdown?.filter((a: any) => !a.isHybrid) || [];
