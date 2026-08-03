@@ -396,6 +396,15 @@ function classifyOrgRow(o: any): ClassifiedOrg {
 }
 
 /**
+ * Request-level time budget. The edge gateway kills the request at 150s idle,
+ * so every phase (org discovery, per-org asset resolution, asset batching)
+ * must yield well before that and return a `partial` result instead of hanging.
+ */
+const REQUEST_BUDGET_MS = 110_000;
+let requestDeadline = Number.POSITIVE_INFINITY;
+const budgetExceeded = () => Date.now() > requestDeadline;
+
+/**
  * Fetch sub-orgs of a parent org and classify them by AMMP feature flags.
  * Recurses one level into child orgs so nested organisations are not missed.
  * Throws on API failure so a partial org list can never silently shrink a tier.
@@ -421,6 +430,10 @@ async function getClassifiedSubOrgs(
   // One level of nesting: grandchild orgs also carry tier flags
   if (depth < 1) {
     for (const child of [...direct]) {
+      if (budgetExceeded()) {
+        console.warn(`[AMMP Sync Contract] Time budget reached during nested org discovery — stopping recursion`);
+        break;
+      }
       const nested = await getClassifiedSubOrgs(token, child.orgId, depth + 1, seen);
       if (nested.length > 0) {
         console.log(`[AMMP Sync Contract] ${nested.length} nested sub-orgs under ${child.orgName}`);
@@ -507,6 +520,7 @@ async function processContractSync(
   let unassignedOrgs: Array<{ orgId: string; orgName: string; assetCount?: number; totalMW?: number }> = [];
   const orgResolutionLog: Array<{ orgId: string; orgName: string; assetCount: number; source: string }> = [];
   const doubleCountWarnings: Array<{ assetId: string; assetName: string; orgName: string }> = [];
+  let resolutionTruncated = false;
   const elumTier: string | null = contract.elum_tier || null;
   const elumParentOrgId: string | null = contract.elum_parent_org_id || null;
   
@@ -532,11 +546,21 @@ async function processContractSync(
     // A failed fetch throws (preserving the previous cache) instead of silently
     // reporting the org as empty.
     for (const org of tierOrgs) {
-      let orgAssets = await getAssetsForOrg(token, org.orgId);
-      let source = 'org-scoped';
-      if (orgAssets.length === 0) {
+      let orgAssets: any[];
+      let source: string;
+      if (budgetExceeded()) {
+        // Out of time for org-scoped calls — use the already-fetched global list
+        // so the org still contributes assets, and mark the sync as partial.
+        resolutionTruncated = true;
         orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
-        source = orgAssets.length > 0 ? 'global-fallback' : 'empty';
+        source = 'global-fallback (time budget)';
+      } else {
+        orgAssets = await getAssetsForOrg(token, org.orgId);
+        source = 'org-scoped';
+        if (orgAssets.length === 0) {
+          orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
+          source = orgAssets.length > 0 ? 'global-fallback' : 'empty';
+        }
       }
       for (const a of orgAssets) {
         if (assetOrgMap.has(a.asset_id)) continue;
@@ -725,11 +749,11 @@ async function processContractSync(
     console.log(`[AMMP Sync Contract] Large sync (${assetsToActuallyProcess.length} assets) - skipping device details`);
   }
   
-  let timedOut = false;
+  let timedOut = resolutionTruncated;
   
   for (let i = 0; i < assetsToActuallyProcess.length; i += BATCH_SIZE) {
-    // Check for timeout before processing batch
-    if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS) {
+    // Check for timeout before processing batch (per-phase budget and request budget)
+    if (Date.now() - syncStartTime > MAX_SYNC_TIME_MS || budgetExceeded()) {
       console.log(`[AMMP Sync Contract] Timeout approaching, saving partial progress (${newCapabilities.length} new + ${existingCapabilities.length} existing)`);
       timedOut = true;
       break;
@@ -1249,6 +1273,7 @@ async function generateElumAlerts(
 
 
 Deno.serve(async (req) => {
+  requestDeadline = Date.now() + REQUEST_BUDGET_MS;
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
