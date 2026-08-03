@@ -1,31 +1,43 @@
-# Why the Internal contract's last sync date is stuck
+# Internal contract: sync runs but never records a sync
 
-## What the data shows
+## What the logs show
 
-The Internal (Elum 2026) contract last synced on 30 July — the same timestamp as the other Elum contracts, which is when they were last synced by hand. It is not excluded from the nightly job: it has an asset group and its customer has an AMMP org, so it passes the eligibility filter.
+Your manual syncs did fire (14:17, 14:20, 14:22 today). Each one ends the same way:
 
-The nightly runs on 31 Jul, 1, 2 and 3 Aug each produced only 3-4 "Contract Synced" notifications, always the same contracts (SPS, Matriarch, ePM Pro+, Bidvest), and no final run-summary notification was written on any of those days. There are ~20 eligible active contracts.
+```text
+WARNING Time budget reached during nested org discovery — stopping recursion
+INFO    Elum internal: 0 orgs (182 sub-orgs, 18 unassigned holding 3975 assets)
+INFO    Found 33 members in group b478cedf...
+INFO    Timeout approaching, saving partial progress (0 new + 0 existing)
+ERROR   Aborting update: sync returned 0 assets but 33 were cached. Keeping previous cache.
+```
 
-So the scheduled job starts, works through its first batch, and the background task is terminated before it reaches batch 2 — every later contract, including Internal, is never touched. The first batch is dominated by the heaviest contract (SPS, 133 sites), which alone takes ~3 minutes because each partial run is retried up to 3 more times inside the same background task.
+Three things stack up:
+
+1. Org discovery walks 182 sub-orgs and recurses one level into each. Nested `/orgs` calls get rate-limited, and the retry honours AMMP's `Retry after ~55s` — two of those consume the entire 110s request budget before a single asset is processed.
+2. No sub-org under the Elum parent carries the `elum_internal` flag (`0 orgs`), so this discovery pass produces nothing for this contract. Its 33 assets come purely from the legacy asset group.
+3. With no time left, the asset loop processes 0 assets. The safety guard then aborts the whole database write — and `last_ammp_sync` / `ammp_sync_status` are part of that same write, so the timestamp never moves and the run looks like it never happened.
 
 ## Plan
 
-### 1. Stop one batch from consuming the whole run
+### 1. Always record the attempt
 
-- Order eligible contracts by `last_ammp_sync` ascending (nulls first) so the least recently synced contract always goes first, instead of the current partial-first ordering that keeps re-picking the same heavy contracts.
-- Remove the inline continuation loop (3 extra full syncs awaited in-line). Leave a `partial` contract as partial; the next scheduled pass will pick it up first because it is now the oldest.
+Split the write: when the guard aborts because a run returned 0 assets, still write `ammp_sync_status` and `last_ammp_sync` (and the reason) while leaving `cached_capabilities` untouched. A protected cache should never mean an invisible sync.
 
-### 2. Make the run resumable
+### 2. Don't spend the whole budget on rate-limit waits
 
-- Add a wall-clock budget to `processContractsInBackground`. When it is exceeded, stop cleanly, write the summary notification with "processed X of Y — remaining contracts continue on the next run", and re-invoke `ammp-scheduled-sync` once to continue with the still-unsynced contracts.
-- Guard the re-invocation with a run counter so a stuck contract cannot cause an endless chain.
+- Cap the wait honoured for a `Retry-after` during org discovery. If the required wait would push past the remaining budget, skip that org, record it as unresolved, and continue instead of sleeping 55s.
+- Reserve a fixed slice of the request budget (e.g. 40s) for the asset loop so discovery can never leave it with zero time.
 
-### 3. Make a skipped contract visible
+### 3. Skip discovery work that cannot contribute
 
-- The run summary currently only fires on completion. Emit it on early exit too, listing how many contracts were not reached, so a contract silently going stale for days is noticeable.
+- Fetch the flat sub-org list first; only recurse into a child when the budget reserve allows, and stop recursing entirely once the elapsed time crosses the discovery cap.
+- When a contract's tier yields zero matching orgs at the top level and the contract has a legacy asset group configured, go straight to the asset-group path rather than recursing 182 orgs for nothing.
+
+### 4. Surface the outcome on the contract page
+
+Show the abort reason next to the sync badge ("last run resolved 0 assets — previous data kept, orgs unresolved: N") so a preserved-cache run is visibly different from a successful one.
 
 ## Technical notes
 
-Files: `supabase/functions/ammp-scheduled-sync/index.ts` only — `getSyncableContracts` (ordering), `processContractsInBackground` (budget, continuation removal, summary on early exit), and the handler (continuation invoke + run counter). No schema change, no change to `ammp-sync-contract`.
-
-Note: `getSyncableContracts` also reads the customer org as `c.customers?.[0]?.ammp_org_id`, but the embedded `customers` relation returns an object, not an array, so that fallback never resolves. It does not affect the Internal contract (it qualifies via its asset group), but it is fixed in the same pass.
+Files: `supabase/functions/ammp-sync-contract/index.ts` (discovery budget/reserve, rate-limit wait cap, split status write, abort reason in `cached_capabilities` metadata) and `src/pages/ContractDetails.tsx` (badge/reason display). No schema change.
