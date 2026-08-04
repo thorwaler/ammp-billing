@@ -1473,7 +1473,7 @@ export function InvoiceCalculator({
         Type: "ACCREC",
         Contact: { Name: selectedCustomer.name },
         Date: format(invoiceDate, "yyyy-MM-dd"),
-        DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"), // 30 days from invoice date
+        // DueDate is set server-side from the customer's Xero payment terms
         LineItems: lineItems,
         Reference: selectedCustomer.contractName 
           ? `${selectedCustomer.contractName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 30)}-${format(invoiceDate, "yyyyMMdd")}`

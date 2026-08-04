@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import CustomerForm from "./CustomerForm";
+import { useXeroBrandingThemes } from "@/hooks/useXeroBrandingThemes";
+
 import ContractForm from "../contracts/ContractForm";
 import { supabase } from "@/integrations/supabase/client";
 import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
@@ -129,6 +131,8 @@ export function CustomerCard({
   const displayName = getCustomerDisplayName({ name, nickname });
   const navigate = useNavigate();
   const [showEditForm, setShowEditForm] = useState(false);
+  const { themeName: brandingThemeName } = useXeroBrandingThemes(!!xero_branding_theme_id);
+
   const [showContractForm, setShowContractForm] = useState(false);
   const [showAddContractForm, setShowAddContractForm] = useState(false);
   const [showContractSelector, setShowContractSelector] = useState(false);
@@ -276,36 +280,10 @@ export function CustomerCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-background">
-                <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
-                  <DialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                      Edit Customer
-                    </DropdownMenuItem>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Edit Customer: {displayName}</DialogTitle>
-                    </DialogHeader>
-                    <CustomerForm 
-                      onComplete={() => {
-                        setShowEditForm(false);
-                        onContractCreated?.();
-                      }} 
-                      existingCustomer={{
-                        id,
-                        name,
-                        nickname,
-                        location,
-                        mwpManaged,
-                        status,
-                        xero_branding_theme_id,
-                        wht_gross_up_rate,
-                        xero_tax_type,
-                        manual_status_override,
-                      }}
-                    />
-                  </DialogContent>
-                </Dialog>
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowEditForm(true); }}>
+                  Edit Customer
+                </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
                 {status === 'active' ? (
                   <AlertDialog>
@@ -388,6 +366,33 @@ export function CustomerCard({
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
             <div className="font-medium">{formattedLastInvoiced}</div>
           </div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-sm text-muted-foreground">Xero invoicing</div>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <Badge variant="outline" className="text-xs">
+                {xero_branding_theme_id
+                  ? `Theme: ${brandingThemeName(xero_branding_theme_id) ?? 'custom'}`
+                  : 'Default theme'}
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                {xero_tax_type ? `Tax: ${xero_tax_type}` : 'No tax type'}
+              </Badge>
+              {wht_gross_up_rate ? (
+                <Badge variant="outline" className="text-xs">
+                  WHT {(Number(wht_gross_up_rate) * 100).toFixed(2).replace(/\.?0+$/, '')}%
+                </Badge>
+              ) : null}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setShowEditForm(true)}
+              >
+                Edit
+              </Button>
+            </div>
+          </div>
+
           {(modules.length > 0 || packageType === 'hybrid_tiered' || packageType === 'hybrid_tiered_assetgroups') && (
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Modules</div>
@@ -718,7 +723,33 @@ export function CustomerCard({
               </div>
             </DialogContent>
           </Dialog>
+          <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
+            <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Customer: {displayName}</DialogTitle>
+              </DialogHeader>
+              <CustomerForm
+                onComplete={() => {
+                  setShowEditForm(false);
+                  onContractCreated?.();
+                }}
+                existingCustomer={{
+                  id,
+                  name,
+                  nickname,
+                  location,
+                  mwpManaged,
+                  status,
+                  xero_branding_theme_id,
+                  wht_gross_up_rate,
+                  xero_tax_type,
+                  manual_status_override,
+                }}
+              />
+            </DialogContent>
+          </Dialog>
         </div>
+
       </CardContent>
     </Card>
   );

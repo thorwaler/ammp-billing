@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     // Fetch all local customers first to track deletions and preserve inactive status
     const { data: localCustomers, error: localError } = await supabase
       .from('customers')
-      .select('id, name, status, manual_status_override')
+      .select('id, name, status, manual_status_override, xero_tax_type')
       .eq('user_id', user.id);
 
     if (localError) {
@@ -116,9 +116,11 @@ Deno.serve(async (req) => {
         id: c.id, 
         name: c.name,
         status: c.status,
-        manual_status_override: c.manual_status_override 
+        manual_status_override: c.manual_status_override,
+        xero_tax_type: c.xero_tax_type,
       }]) || []
     );
+
     console.log(`Found ${localCustomerMap.size} local customers`);
 
     // Fetch customers from Xero (include archived)
@@ -199,15 +201,24 @@ Deno.serve(async (req) => {
         }
 
         // Map Xero contact to our customers table structure
-        const customerData = {
+        const salesTerms = contact.PaymentTerms?.Sales;
+        const customerData: Record<string, unknown> = {
           user_id: user.id,
           name: contact.Name || 'Unknown',
           location: contact.Addresses?.[0]?.City || null,
           mwp_managed: 0, // Default value, can be updated manually
           status: customerStatus,
           join_date: parseXeroDate(contact.UpdatedDateUTC),
-          xero_tax_type: contact.AccountsReceivableTaxType || null,
+          xero_payment_terms_days: salesTerms?.Day != null ? Number(salesTerms.Day) : null,
+          xero_payment_terms_type: salesTerms?.Type || null,
         };
+
+        // Only fill the tax type when we don't already have one locally,
+        // so a manual edit in the app is never overwritten by the sync.
+        if (!existingCustomer?.xero_tax_type) {
+          customerData.xero_tax_type = contact.AccountsReceivableTaxType || null;
+        }
+
 
         // Upsert customer (create or update by name)
         const { error: upsertError } = await supabase

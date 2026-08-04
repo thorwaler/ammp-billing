@@ -13,6 +13,8 @@ import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, T
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContractForm from "@/components/contracts/ContractForm";
+import CustomerForm from "@/components/customers/CustomerForm";
+
 import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
@@ -87,6 +89,8 @@ const ContractDetails = () => {
   const [error, setError] = useState<string | null>(null);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showEditCustomerDialog, setShowEditCustomerDialog] = useState(false);
+
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
   const [showAllAssets, setShowAllAssets] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
@@ -153,10 +157,16 @@ const ContractDetails = () => {
             customers (
               id,
               name,
+              nickname,
               location,
               mwp_managed,
-              status
+              status,
+              manual_status_override,
+              xero_branding_theme_id,
+              xero_tax_type,
+              wht_gross_up_rate
             )
+
           `)
           .eq('id', id)
           .single();
@@ -591,10 +601,37 @@ const ContractDetails = () => {
               </DialogContent>
             </Dialog>
 
+            {customer && (
+              <Dialog open={showEditCustomerDialog} onOpenChange={setShowEditCustomerDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit customer
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Edit Customer - {customer.name}</DialogTitle>
+                  </DialogHeader>
+                  <CustomerForm
+                    existingCustomer={{
+                      ...customer,
+                      mwpManaged: customer.mwp_managed || 0,
+                    }}
+                    onComplete={() => {
+                      setShowEditCustomerDialog(false);
+                      loadContractData();
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
+
             <Button variant="outline" onClick={() => setShowDuplicateDialog(true)}>
               <Copy className="mr-2 h-4 w-4" />
               Duplicate
             </Button>
+
 
             {contract && (
               <DuplicateContractDialog

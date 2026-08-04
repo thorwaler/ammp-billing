@@ -720,6 +720,8 @@ export type Database = {
           user_id: string
           wht_gross_up_rate: number | null
           xero_branding_theme_id: string | null
+          xero_payment_terms_days: number | null
+          xero_payment_terms_type: string | null
           xero_tax_type: string | null
         }
         Insert: {
@@ -747,6 +749,8 @@ export type Database = {
           user_id: string
           wht_gross_up_rate?: number | null
           xero_branding_theme_id?: string | null
+          xero_payment_terms_days?: number | null
+          xero_payment_terms_type?: string | null
           xero_tax_type?: string | null
         }
         Update: {
@@ -774,6 +778,8 @@ export type Database = {
           user_id?: string
           wht_gross_up_rate?: number | null
           xero_branding_theme_id?: string | null
+          xero_payment_terms_days?: number | null
+          xero_payment_terms_type?: string | null
           xero_tax_type?: string | null
         }
         Relationships: []
