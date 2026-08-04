@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceKey);
     
-    const { contractId, batchSize = 50, forceRecalculate = false, forceRefetch = false, userId } = await req.json();
+    const { contractId, batchSize = 500, forceRecalculate = false, forceRefetch = false, userId } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -389,12 +389,12 @@ Deno.serve(async (req) => {
     const batch = assetsNeedingEnrichment.slice(0, batchSize);
     const enrichedAssets: Map<string, AssetBreakdown> = new Map();
 
-    // Keep concurrency low: the edge gateway rate-limits internal invocations
-    // per trace, and a throttled run used to be persisted as "no devices".
-    const BATCH_PARALLEL = 4;
-    const WAVE_PAUSE_MS = 250;
+    // Enrichment calls the AMMP API directly (no internal gateway hop), so we can
+    // run a much wider wave. Failed fetches are still never persisted as "no devices".
+    const BATCH_PARALLEL = 12;
+    const WAVE_PAUSE_MS = 50;
     const startTime = Date.now();
-    const MAX_TIME_MS = 25000; // 25 seconds safety margin
+    const MAX_TIME_MS = 110000; // 110 seconds safety margin
 
     let failedCount = 0;
     let rateLimited = false;
