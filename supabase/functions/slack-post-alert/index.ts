@@ -80,7 +80,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: routes, error: routesError } = await supabase
     let routesQuery = supabase
       .from('slack_notification_routes')
       .select('*')
