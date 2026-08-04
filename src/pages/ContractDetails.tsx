@@ -13,6 +13,8 @@ import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, T
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContractForm from "@/components/contracts/ContractForm";
+import CustomerForm from "@/components/customers/CustomerForm";
+
 import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
