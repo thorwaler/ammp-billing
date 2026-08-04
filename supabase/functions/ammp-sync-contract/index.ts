@@ -51,9 +51,13 @@ interface UnassignedOrgEntry {
   uncovered?: number;
   uncoveredMW?: number;
   uncoveredAssets?: Array<{ assetId: string; assetName: string; mw: number }>;
+  /** Assets billed through another Elum tier contract's legacy asset group */
+  coveredElsewhere?: number;
+  coveredElsewhereAssets?: Array<{ assetId: string; assetName: string; tierName: string }>;
   /** Coverage not verified because the sync was truncated by the time budget */
   partial?: boolean;
 }
+
 
 interface CachedCapabilities {
 
@@ -681,7 +685,40 @@ async function processContractSync(
     // Coverage check: for each flag-less sub-org, classify its assets against the
     // legacy asset group resolution so covered assets are not reported as leakage.
     if (unassignedOrgs.length > 0) {
+      // Sibling Elum tier contracts (e.g. Lite when syncing Pro) — an asset that
+      // sits in another tier's legacy asset group is already billed there.
+      const siblingGroups: Array<{ tierName: string; ids: Set<string> }> = [];
+      if (!resolutionTruncated) {
+        const { data: siblings } = await supabase
+          .from('contracts')
+          .select('id, contract_name, elum_tier, ammp_asset_group_id')
+          .eq('elum_parent_org_id', elumParentOrgId)
+          .not('elum_tier', 'is', null)
+          .neq('id', contract.id);
+        const seenGroups = new Set<string>([contract.ammp_asset_group_id].filter(Boolean) as string[]);
+        for (const s of siblings || []) {
+          const gid = s.ammp_asset_group_id;
+          if (!gid || seenGroups.has(gid)) continue;
+          seenGroups.add(gid);
+          if (discoveryBudgetExceeded()) {
+            resolutionTruncated = true;
+            break;
+          }
+          try {
+            const members = await getAssetGroupMembers(token, gid);
+            siblingGroups.push({
+              tierName: s.contract_name || s.elum_tier || 'other tier',
+              ids: new Set(members.map((m) => m.asset_id)),
+            });
+          } catch (e) {
+            console.warn(`[AMMP Sync Contract] Sibling group ${gid} lookup failed:`, e);
+            resolutionTruncated = true;
+          }
+        }
+      }
+
       let totalCovered = 0;
+      let totalElsewhere = 0;
       let totalUncovered = 0;
       unassignedOrgs = unassignedOrgs.map((o) => {
         if (resolutionTruncated) return { ...o, partial: true };
@@ -689,41 +726,59 @@ async function processContractSync(
         let coveredStandard = 0;
         let coveredEconf = 0;
         let excluded = 0;
+        let coveredElsewhere = 0;
         let uncovered = 0;
         let uncoveredMW = 0;
         const uncoveredAssets: Array<{ assetId: string; assetName: string; mw: number }> = [];
+        const coveredElsewhereAssets: Array<{ assetId: string; assetName: string; tierName: string }> = [];
         for (const a of orgAssets) {
           const mw = (a.total_pv_power || 0) / 1_000_000;
           if (hasNotGroup && legacyExcludedIds.has(a.asset_id)) {
             excluded++;
-          } else if (legacyMemberIds.has(a.asset_id)) {
+            continue;
+          }
+          if (legacyMemberIds.has(a.asset_id)) {
             if (legacyEconfIds.has(a.asset_id)) coveredEconf++; else coveredStandard++;
-          } else if (assetOrgMap.has(a.asset_id)) {
+            continue;
+          }
+          if (assetOrgMap.has(a.asset_id)) {
             coveredStandard++;
-          } else {
-            uncovered++;
-            uncoveredMW += mw;
-            if (uncoveredAssets.length < 20) {
-              uncoveredAssets.push({ assetId: a.asset_id, assetName: a.asset_name, mw });
+            continue;
+          }
+          const sibling = siblingGroups.find((g) => g.ids.has(a.asset_id));
+          if (sibling) {
+            coveredElsewhere++;
+            if (coveredElsewhereAssets.length < 20) {
+              coveredElsewhereAssets.push({ assetId: a.asset_id, assetName: a.asset_name, tierName: sibling.tierName });
             }
+            continue;
+          }
+          uncovered++;
+          uncoveredMW += mw;
+          if (uncoveredAssets.length < 20) {
+            uncoveredAssets.push({ assetId: a.asset_id, assetName: a.asset_name, mw });
           }
         }
         totalCovered += coveredStandard + coveredEconf;
+        totalElsewhere += coveredElsewhere;
         totalUncovered += uncovered;
         return {
           ...o,
           coveredStandard,
           coveredEconf,
           ...(hasNotGroup ? { excluded } : {}),
+          coveredElsewhere,
+          coveredElsewhereAssets: coveredElsewhereAssets.length > 0 ? coveredElsewhereAssets : undefined,
           uncovered,
           uncoveredMW,
           uncoveredAssets: uncoveredAssets.length > 0 ? uncoveredAssets : undefined,
         };
       });
       console.log(
-        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by legacy group, ${totalUncovered} not covered${resolutionTruncated ? ' (skipped — resolution truncated)' : ''}`
+        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (skipped — resolution truncated)' : ''}`
       );
     }
+
 
     
     if (tierOrgs.length > 0 && assetsToProcess.length === 0) {
@@ -1294,13 +1349,17 @@ async function generateElumAlerts(
     const uncoveredMW = unassigned.reduce((s: number, o: any) => s + (o.uncoveredMW || 0), 0);
     const coveredStandard = unassigned.reduce((s: number, o: any) => s + (o.coveredStandard || 0), 0);
     const coveredEconf = unassigned.reduce((s: number, o: any) => s + (o.coveredEconf || 0), 0);
+    const coveredElsewhere = unassigned.reduce((s: number, o: any) => s + (o.coveredElsewhere || 0), 0);
     const anyPartial = unassigned.some((o: any) => o.partial);
-    const covered = coveredStandard + coveredEconf;
+    const covered = coveredStandard + coveredEconf + coveredElsewhere;
+    const elsewhereNote = coveredElsewhere > 0
+      ? ` ${coveredElsewhere} asset${coveredElsewhere === 1 ? ' is' : 's are'} billed through another Elum tier's asset group.`
+      : '';
     const impact = uncovered > 0
-      ? ` ${uncovered} asset${uncovered === 1 ? '' : 's'} (${uncoveredMW.toFixed(2)} MWp) are covered by neither a tier org nor the legacy asset group.`
+      ? ` ${uncovered} asset${uncovered === 1 ? '' : 's'} (${uncoveredMW.toFixed(2)} MWp) are in no tier org and in no Elum tier asset group.${elsewhereNote}`
       : anyPartial
-        ? ` Coverage against the legacy asset group could not be verified (sync was truncated).`
-        : ` All ${covered} of their assets are still priced through the legacy asset group.`;
+        ? ` Coverage against the Elum tier asset groups could not be verified (sync was truncated).`
+        : ` All ${covered} of their assets are still priced through an Elum tier asset group.${elsewhereNote}`;
     pending.push({
       alert_type: 'elum_org_unassigned',
       severity: uncovered > 0 ? 'critical' : 'info',
@@ -1308,7 +1367,8 @@ async function generateElumAlerts(
         ? `${uncovered} Elum asset${uncovered === 1 ? '' : 's'} not covered by any tier or legacy group`
         : `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag (all covered)`,
       description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
-      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW, uncovered, uncoveredMW, coveredStandard, coveredEconf },
+      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW, uncovered, uncoveredMW, coveredStandard, coveredEconf, coveredElsewhere },
+
     });
   }
 
