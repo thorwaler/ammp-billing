@@ -4,15 +4,17 @@
 
 Where those fields live today: they are only inside the "Edit Customer" dialog, reached from the three-dot menu on a customer card on the Customers page. I opened that dialog in the running app and both fields are there — "Xero branding theme ID" and "Withholding tax rate (%)", inside an "Xero invoicing" box near the bottom. The "Details" button on a customer card does **not** go to a customer page; it jumps straight to the contract page, which is likely where the settings were being looked for.
 
-So there are two problems: discoverability, and one setting that genuinely cannot be edited.
+So there are three problems: discoverability, a setting that cannot be edited, and a branding theme field that asks for an ID Xero never shows in its UI (Invoice settings only lists theme names like "Standard" and "Nigeria").
 
 Changes:
 
-- Add an "Xero invoicing" summary to the customer card itself, showing branding theme set / WHT rate / tax type at a glance, with an "Edit" affordance that opens the same customer dialog — no more hunting in the three-dot menu.
+- Replace the "Xero branding theme ID" text box with a **dropdown of theme names** pulled live from the connected Xero organisation ("Standard", "Nigeria", ...), plus an "Organisation default" option. The name is what you pick; the ID is stored behind the scenes. No more copying IDs.
+- Add an "Xero invoicing" summary to the customer card itself, showing branding theme name / WHT rate / tax type at a glance, with an "Edit" affordance that opens the same customer dialog — no more hunting in the three-dot menu.
 - Add an "Edit customer" entry point on the contract details page (header area, next to the customer name), opening the same customer form, so the settings are reachable from where the "Details" button lands.
 - Add the missing field: "Xero tax type" (the VAT / AccountsReceivableTaxType applied to every invoice line). Today it is written only by the Xero customer sync and cannot be changed in the app. It becomes a text input in the Xero invoicing block, pre-filled with the synced value, with helper text that codes vary per Xero organisation (e.g. `OUTPUT`, `NONE`, `EXEMPTOUTPUT`) and that blank means Xero's own contact default is used.
 
 Caveat worth flagging: the Xero customer sync currently overwrites `xero_tax_type` with the value from Xero. To keep a manual edit from being wiped, the sync will only fill this field when it is empty, leaving any manually entered value alone.
+
 
 
 ## 2. Invoice due dates from the customer's Xero terms
