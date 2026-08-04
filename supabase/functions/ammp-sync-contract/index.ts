@@ -458,11 +458,23 @@ async function getClassifiedSubOrgs(
     throw new Error(`Unexpected /orgs payload for parent ${parentOrgId}`);
   }
 
-  const direct = orgs
+  // The API does not always honour parent_org_id — when the payload carries the
+  // field, enforce the parent client-side so platform-wide orgs (other AMMP
+  // customers, catch-all buckets) are never treated as Elum sub-orgs.
+  const withParent = orgs.filter((o: any) => o?.parent_org_id);
+  const scoped = withParent.length > 0
+    ? orgs.filter((o: any) => !o?.parent_org_id || o.parent_org_id === parentOrgId)
+    : orgs;
+  if (scoped.length !== orgs.length) {
+    console.log(`[AMMP Sync Contract] /orgs?parent_org_id=${parentOrgId}: ${orgs.length} returned, ${scoped.length} actually children`);
+  }
+
+  const direct = scoped
     .filter((o: any) => o?.org_id && o.org_id !== parentOrgId && !seen.has(o.org_id))
     .map(classifyOrgRow);
 
   for (const o of direct) seen.add(o.orgId);
+
 
   // One level of nesting: grandchild orgs also carry tier flags
   if (depth < 1) {
