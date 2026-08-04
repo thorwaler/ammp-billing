@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,24 +7,18 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useXeroBrandingThemes } from "@/hooks/useXeroBrandingThemes";
 
 interface CustomerFormProps {
   onComplete: () => void;
   existingCustomer?: any;
 }
 
-interface BrandingTheme {
-  BrandingThemeID: string;
-  Name: string;
-}
-
 const NO_THEME = "__default__";
 
 const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [themes, setThemes] = useState<BrandingTheme[]>([]);
-  const [themesLoading, setThemesLoading] = useState(true);
-  const [themesError, setThemesError] = useState<string | null>(null);
+  const { themes, loading: themesLoading, error: themesError } = useXeroBrandingThemes();
   const [formData, setFormData] = useState({
     name: existingCustomer?.name || "",
     nickname: existingCustomer?.nickname || "",
@@ -42,22 +36,6 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   // Track original status to detect manual changes
   const [originalStatus] = useState(existingCustomer?.status || "active");
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke('xero-list-branding-themes');
-        if (error) throw error;
-        if (!cancelled) setThemes(data?.themes || []);
-      } catch (err: any) {
-        console.error('Failed to load Xero branding themes:', err);
-        if (!cancelled) setThemesError(err?.message || 'Could not load Xero branding themes');
-      } finally {
-        if (!cancelled) setThemesLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
 
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
