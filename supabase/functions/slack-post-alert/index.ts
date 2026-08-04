@@ -14,6 +14,8 @@ interface AlertPayload {
   invoice_id?: string | null;
   created_at?: string;
   is_test?: boolean;
+  /** Optional override: post only to this channel (used by per-channel tests) */
+  channel_id?: string | null;
 }
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/slack/api';
