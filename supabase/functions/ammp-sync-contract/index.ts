@@ -56,7 +56,10 @@ interface UnassignedOrgEntry {
   coveredElsewhereAssets?: Array<{ assetId: string; assetName: string; tierName: string }>;
   /** Coverage not verified because the sync was truncated by the time budget */
   partial?: boolean;
+  /** How the asset list for this org was resolved */
+  source?: 'org-scoped' | 'unresolved';
 }
+
 
 
 interface CachedCapabilities {
