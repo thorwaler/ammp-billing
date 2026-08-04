@@ -408,7 +408,7 @@ const ContractDetails = () => {
       
       while (!complete) {
         const { data, error } = await supabase.functions.invoke('ammp-device-enrichment', {
-          body: { contractId: contract.id, batchSize: 50, forceRecalculate, forceRefetch }
+          body: { contractId: contract.id, batchSize: 500, forceRecalculate, forceRefetch }
         });
         
         if (error) throw error;
