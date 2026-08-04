@@ -58,6 +58,8 @@ interface UnassignedOrgEntry {
   partial?: boolean;
   /** How the asset list for this org was resolved */
   source?: 'org-scoped' | 'unresolved';
+  /** Never-configured stub assets in AMMP catch-all orgs; excluded from counts. */
+  placeholders?: number;
 }
 
 
@@ -462,9 +464,6 @@ async function getClassifiedSubOrgs(
   // field, enforce the parent client-side so platform-wide orgs (other AMMP
   // customers, catch-all buckets) are never treated as Elum sub-orgs.
   const withParent = orgs.filter((o: any) => o?.parent_org_id);
-  if (depth === 0) {
-    console.log(`[AMMP Sync Contract] /orgs sample: ${JSON.stringify(orgs.slice(0, 2))}`);
-  }
   const scoped = withParent.length > 0
     ? orgs.filter((o: any) => !o?.parent_org_id || o.parent_org_id === parentOrgId)
     : orgs;
@@ -756,9 +755,6 @@ async function processContractSync(
           console.log(
             `[AMMP Sync Contract] Flag-less org ${o.orgName}: org-scoped ${orgAssets.length} assets (global-list filter would report ${globalCount})`
           );
-        }
-        if (orgAssets.length > 500) {
-          console.log(`[AMMP Sync Contract] Large flag-less org ${o.orgName} sample: ${JSON.stringify(orgAssets.slice(0, 2))}`);
         }
 
         let coveredStandard = 0;
