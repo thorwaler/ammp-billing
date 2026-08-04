@@ -129,6 +129,8 @@ export function CustomerCard({
   const displayName = getCustomerDisplayName({ name, nickname });
   const navigate = useNavigate();
   const [showEditForm, setShowEditForm] = useState(false);
+  const { themeName: brandingThemeName } = useXeroBrandingThemes(!!xero_branding_theme_id);
+
   const [showContractForm, setShowContractForm] = useState(false);
   const [showAddContractForm, setShowAddContractForm] = useState(false);
   const [showContractSelector, setShowContractSelector] = useState(false);
