@@ -11,9 +11,10 @@ Changes:
 - Replace the "Xero branding theme ID" text box with a **dropdown of theme names** pulled live from the connected Xero organisation ("Standard", "Nigeria", ...), plus an "Organisation default" option. The name is what you pick; the ID is stored behind the scenes. No more copying IDs.
 - Add an "Xero invoicing" summary to the customer card itself, showing branding theme name / WHT rate / tax type at a glance, with an "Edit" affordance that opens the same customer dialog — no more hunting in the three-dot menu.
 - Add an "Edit customer" entry point on the contract details page (header area, next to the customer name), opening the same customer form, so the settings are reachable from where the "Details" button lands.
-- Add the missing field: "Xero tax type" (the VAT / AccountsReceivableTaxType applied to every invoice line). Today it is written only by the Xero customer sync and cannot be changed in the app. It becomes a text input in the Xero invoicing block, pre-filled with the synced value, with helper text that codes vary per Xero organisation (e.g. `OUTPUT`, `NONE`, `EXEMPTOUTPUT`) and that blank means Xero's own contact default is used.
+- Add the missing field: "Xero tax type". This is **not** the same thing as the branding theme. The branding theme only controls how the invoice looks (logo, address block, wording) — it does not set tax. The tax type is the code Xero applies to each invoice line (e.g. `OUTPUT` for 7.5% Nigerian VAT, `NONE` for no tax), and it is what actually puts VAT on the invoice. Today it is written only by the Xero customer sync and cannot be changed in the app, so a Nigerian customer whose contact record in Xero has no tax default silently gets untaxed lines. It becomes a text input in the Xero invoicing block, pre-filled with the synced value, with helper text that codes vary per Xero organisation and that blank means Xero's own contact default is used.
 
 Caveat worth flagging: the Xero customer sync currently overwrites `xero_tax_type` with the value from Xero. To keep a manual edit from being wiped, the sync will only fill this field when it is empty, leaving any manually entered value alone.
+
 
 
 
