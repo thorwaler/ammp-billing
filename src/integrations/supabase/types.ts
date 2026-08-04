@@ -1365,6 +1365,36 @@ export type Database = {
           },
         ]
       }
+      slack_notification_routes: {
+        Row: {
+          channel_id: string
+          channel_name: string | null
+          created_at: string | null
+          enabled: boolean | null
+          id: string
+          notification_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          channel_id: string
+          channel_name?: string | null
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          notification_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          channel_id?: string
+          channel_name?: string | null
+          created_at?: string | null
+          enabled?: boolean | null
+          id?: string
+          notification_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

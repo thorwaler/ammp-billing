@@ -1,9 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const SLACK_GATEWAY_URL = 'https://connector-gateway.lovable.dev/slack/api';
+const PREVIEW_URL = 'https://id-preview--c3eaa719-b178-42f2-8022-18c351e01c55.lovable.app';
 
 interface NotificationPayload {
   notification_id: string;
@@ -129,10 +128,90 @@ Deno.serve(async (req) => {
 
     console.log('Webhook response status:', webhookResponse.status);
 
+    // --- Slack delivery (parallel to generic webhook) ---
+    let slackResults: any[] | undefined;
+    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+    const slackApiKey = Deno.env.get('SLACK_API_KEY');
+
+    if (lovableApiKey && slackApiKey) {
+      const { data: slackRoutes, error: routesError } = await supabase
+        .from('slack_notification_routes')
+        .select('*')
+        .eq('notification_type', type)
+        .eq('enabled', true);
+
+      if (routesError) {
+        console.error('Error fetching Slack routes:', routesError);
+      } else if (slackRoutes && slackRoutes.length > 0) {
+        const severityEmoji: Record<string, string> = {
+          critical: ':rotating_light:',
+          error: ':x:',
+          warning: ':warning:',
+          info: ':information_source:',
+        };
+        const emoji = severityEmoji[severity?.toLowerCase()] || ':bell:';
+        const lines = [
+          `${emoji} *${title}*`,
+          '',
+          message,
+          '',
+          `*Type:* ${type}`,
+          `*Severity:* ${severity}`,
+        ];
+        if (contract_id) {
+          lines.push(`*Contract:* <${PREVIEW_URL}/contracts/${contract_id}|Open contract>`);
+        }
+        if (metadata && Object.keys(metadata).length > 0) {
+          lines.push('', '*Details:*', '```json', JSON.stringify(metadata, null, 2), '```');
+        }
+        const slackText = lines.join('\n');
+
+        slackResults = [];
+        for (const route of slackRoutes) {
+          const slackResponse = await fetch(`${SLACK_GATEWAY_URL}/chat.postMessage`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${lovableApiKey}`,
+              'X-Connection-Api-Key': slackApiKey,
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            body: JSON.stringify({
+              channel: route.channel_id,
+              text: slackText,
+              username: 'AMMP Alerts',
+              icon_emoji: ':bell:',
+            }),
+          });
+
+          const responseText = await slackResponse.text();
+          let responseData: any;
+          try {
+            responseData = JSON.parse(responseText);
+          } catch {
+            responseData = { raw: responseText };
+          }
+
+          if (!slackResponse.ok || !responseData.ok) {
+            const reason = responseData.error || responseData.message || `HTTP ${slackResponse.status}`;
+            console.error(`Slack post failed for ${route.channel_id}:`, reason, responseData);
+            slackResults.push({ channel_id: route.channel_id, success: false, error: reason });
+          } else {
+            console.log(`Slack message posted to ${route.channel_id}:`, responseData.ts);
+            slackResults.push({ channel_id: route.channel_id, success: true, ts: responseData.ts });
+          }
+        }
+      } else {
+        console.log(`No Slack route configured for notification type '${type}'`);
+      }
+    } else {
+      console.log('Slack connector not configured; skipping Slack delivery');
+    }
+
     return new Response(JSON.stringify({ 
       success: true, 
       message: 'Notification sent to webhook',
-      webhookStatus: webhookResponse.status 
+      webhookStatus: webhookResponse.status,
+      slackResults,
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
