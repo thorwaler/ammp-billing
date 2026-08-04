@@ -32,7 +32,8 @@ This changes only the due date sent to Xero. It does not change the internal "cr
 
 ## Technical notes
 
-- `src/components/customers/CustomerForm.tsx`: add `xeroTaxType` to form state and the Xero invoicing card; include `xero_tax_type` in the insert/update payload.
+- New edge function `supabase/functions/xero-list-branding-themes/index.ts`: reuses the shared connection/refresh pattern from `xero-send-invoice`, calls `GET /api.xro/2.0/BrandingThemes`, returns `[{ BrandingThemeID, Name }]`.
+- `src/components/customers/CustomerForm.tsx`: swap the branding theme text input for a `Select` populated from that function (loaded when the dialog opens, with a loading/error state and a fallback manual-ID input if the call fails); add `xeroTaxType` to form state and the Xero invoicing card; include `xero_tax_type` in the insert/update payload.
 - `src/components/customers/CustomerCard.tsx`: add a compact Xero invoicing summary row (branding theme / WHT / tax type) with an inline Edit trigger reusing the existing `CustomerForm` dialog; pass `xero_tax_type` through.
 - `src/pages/ContractDetails.tsx`: add an "Edit customer" button that opens `CustomerForm` for the contract's customer (fetch the customer row's Xero fields alongside the contract).
 - Migration: add `xero_payment_terms_days integer` and `xero_payment_terms_type text` to `public.customers` (nullable, no grant changes needed — existing table).
