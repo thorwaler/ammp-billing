@@ -1,34 +1,39 @@
-# Why the Internal contract says 33 while the "Elum Internal" org line says 31
+# Editable Xero tax settings + Xero-driven invoice due dates
 
-## What the two numbers actually count
+## 1. Make the Nigeria customer setup fully editable
 
-They come from two different sources and are not meant to be the same set:
+What exists today for a customer (e.g. the Nigerian one):
+- Xero branding theme ID — editable in the customer form.
+- Withholding tax rate (%) — editable in the customer form.
+- Xero tax type (VAT / AccountsReceivableTaxType) — **not editable**. It is only written by the Xero customer sync from the contact's default sales tax, and silently applied to every invoice line at send time.
 
-- **33 (contract)** — members of the legacy asset group `b478cedf…`. The `elum_internal` feature flag matched **0** sub-orgs on this sync, so pricing falls back entirely to the group. Group membership is independent of which organisation owns the asset.
-- **31 (panel line "Elum Internal")** — assets returned by the org-scoped endpoint for the flag-less sub-org `0febdcb0…` ("Elum Internal"). Ownership by that org, not group membership.
+Change: add a "Xero tax type" field to the customer form's "Xero invoicing" block so it can be set or corrected manually.
 
-Cached sync data for the contract shows the overlap: 30 covered by this legacy group, 0 eConf, 0 covered elsewhere, 1 uncovered (`Port Saint Louis du Rhone`, 0 MWp), 0 placeholders.
+- Free-text input with helper text (Xero tax type codes vary per organisation, e.g. `OUTPUT`, `NONE`, `EXEMPTOUTPUT`), pre-filled with the currently synced value.
+- Note under the field that leaving it blank means Xero's own contact default is used.
+- Saving writes `xero_tax_type` on the customer.
+- The customer card gets the same treatment it already gives WHT/branding: show the tax type when set, so it is visible without opening the form.
 
-```text
-legacy group (33)              org "Elum Internal" (31)
-  +-----------------------------+----------------+
-  |  3 billed, owned by         |   30 shared    |  1 in the org but
-  |    other orgs               |                |  not in the group
-  +-----------------------------+----------------+
-```
+Caveat worth flagging: the nightly Xero customer sync currently overwrites `xero_tax_type` with the value from Xero. To keep a manual edit from being wiped, the sync will only fill this field when it is empty, leaving any manually entered value alone.
 
-So: **3 of the 33 billed assets live in a different organisation** than the "Elum Internal" sub-org, and **1 asset in that sub-org is not in the group**, therefore not billed. 30 + 3 = 33, 30 + 1 = 31.
+## 2. Invoice due dates from the customer's Xero terms
 
-Which 3 assets sit outside the org is not currently recorded — the sync stores only the aggregate coverage counters, so this direction (group members not owned by the flag-less org) is unverified today.
+Today both the single-invoice calculator and the merged-invoice dialog hardcode `DueDate = invoice date + 30 days`.
 
-## Proposed change: make the panel self-explanatory
+Change: use the customer's default payment terms from Xero instead.
 
-1. **Record the reverse diff during sync.** In `ammp-sync-contract`, while running the flag-less coverage pass, also compute the legacy group members that are *not* owned by any flag-less/tier org resolved this run, and store them on the org-resolution payload (ids + names, capped at 20) alongside the existing counters.
-2. **Label the org line clearly** in the Org resolution panel on `ContractDetails.tsx`: show it as "31 assets owned by this organisation — 30 of them billed via this contract's asset group", so it is never read as a billed-site count.
-3. **Show the reverse diff** as a small note under the legacy-group row: "3 billed assets are owned by other organisations" with the names on hover/expand.
-4. **Keep the uncovered alert as is** — `Port Saint Louis du Rhone` is a genuine gap and should stay flagged until it is added to the group (or intentionally excluded).
+- The Xero customer sync will also store each contact's sales payment terms (number of days + term type, e.g. "of the following month" vs "days after invoice date").
+- At invoice send time the due date is computed from those terms against the invoice date.
+- If a customer has no terms set in Xero, the invoice is sent without an explicit due date so Xero applies its own organisation default; the previous hardcoded +30 days is dropped.
+- Customers already synced will get their terms on the next customer sync; a note in the customer form explains that the due date follows Xero.
 
-## Technical details
+This changes only the due date sent to Xero. It does not change the internal "create by" / invoice-due notifications, which stay driven by `next_invoice_date` and the per-contract lead days.
 
-- `supabase/functions/ammp-sync-contract/index.ts`: in the block that builds `resolved` (the flag-less coverage loop, ~lines 739-828), accumulate a `Set` of all asset ids seen across flag-less and tier orgs; after the loop, diff `legacyMemberIds` against it and write `legacyOutsideOrgs: { count, assets[] }` into the org-resolution section of `cached_capabilities`. Skip the diff when `resolutionTruncated` is true, since the org set is then incomplete.
-- `src/pages/ContractDetails.tsx`: adjust the org row copy and render the new `legacyOutsideOrgs` note on the legacy-group row. No pricing or billing logic changes.
+## Technical notes
+
+- `src/components/customers/CustomerForm.tsx`: add `xeroTaxType` to form state and the Xero invoicing card; include `xero_tax_type` in the insert/update payload.
+- `src/components/customers/CustomerCard.tsx`: surface the tax type alongside the existing WHT/branding indicators.
+- Migration: add `xero_payment_terms_days integer` and `xero_payment_terms_type text` to `public.customers` (nullable, no grant changes needed — existing table).
+- `supabase/functions/xero-sync-customers/index.ts`: map `contact.PaymentTerms?.Sales` into the two new columns; change `xero_tax_type` write to only set when the local value is null.
+- `supabase/functions/xero-send-invoice/index.ts`: extend the customer lookup to the new terms columns, compute `DueDate` from `Day` + `Type` (`DAYSAFTERBILLDATE`, `OFCURRENTMONTH`, `DAYSAFTERBILLMONTH`, `OFFOLLOWINGMONTH`), and delete `DueDate` from the payload when no terms exist.
+- `src/components/dashboard/InvoiceCalculator.tsx` (line ~1476) and `src/components/invoices/MergedInvoiceDialog.tsx` (line ~592): remove the hardcoded `DueDate`, letting the edge function set it.
