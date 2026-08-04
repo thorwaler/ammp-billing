@@ -572,18 +572,15 @@ async function processContractSync(
     // Discover sub-orgs under the Elum parent org and keep those on this tier
     const subOrgs = await getClassifiedSubOrgs(token, elumParentOrgId);
     tierOrgs = subOrgs.filter(o => o.tier === elumTier);
+    // Flag-less sub-orgs: names only here. Their asset lists are resolved with
+    // the org-scoped endpoint in the coverage pass below — filtering the global
+    // /assets list on org_id attributes almost every asset in the account to a
+    // catch-all org and massively over-reports "unassigned" assets.
     unassignedOrgs = subOrgs
       .filter(o => o.tier === null)
-      .map(o => {
-        const orphaned = allAssets.filter((a: any) => a.org_id === o.orgId);
-        return {
-          orgId: o.orgId,
-          orgName: o.orgName,
-          assetCount: orphaned.length,
-          totalMW: orphaned.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
-        };
-      });
-    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned holding ${unassignedOrgs.reduce((s, o) => s + (o.assetCount || 0), 0)} assets)`);
+      .map(o => ({ orgId: o.orgId, orgName: o.orgName }));
+    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} without a tier flag)`);
+
     
     // Resolve assets per sub-org via the org-scoped assets endpoint.
     // A failed fetch throws (preserving the previous cache) instead of silently
