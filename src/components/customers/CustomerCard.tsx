@@ -276,36 +276,10 @@ export function CustomerCard({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="bg-background">
-                <Dialog open={showEditForm} onOpenChange={setShowEditForm}>
-                  <DialogTrigger asChild>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
-                      Edit Customer
-                    </DropdownMenuItem>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
-                    <DialogHeader>
-                      <DialogTitle>Edit Customer: {displayName}</DialogTitle>
-                    </DialogHeader>
-                    <CustomerForm 
-                      onComplete={() => {
-                        setShowEditForm(false);
-                        onContractCreated?.();
-                      }} 
-                      existingCustomer={{
-                        id,
-                        name,
-                        nickname,
-                        location,
-                        mwpManaged,
-                        status,
-                        xero_branding_theme_id,
-                        wht_gross_up_rate,
-                        xero_tax_type,
-                        manual_status_override,
-                      }}
-                    />
-                  </DialogContent>
-                </Dialog>
+                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setShowEditForm(true); }}>
+                  Edit Customer
+                </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
                 {status === 'active' ? (
                   <AlertDialog>
