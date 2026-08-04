@@ -757,6 +757,10 @@ async function processContractSync(
             `[AMMP Sync Contract] Flag-less org ${o.orgName}: org-scoped ${orgAssets.length} assets (global-list filter would report ${globalCount})`
           );
         }
+        if (orgAssets.length > 500) {
+          console.log(`[AMMP Sync Contract] Large flag-less org ${o.orgName} sample: ${JSON.stringify(orgAssets.slice(0, 2))}`);
+        }
+
         let coveredStandard = 0;
         let coveredEconf = 0;
         let excluded = 0;
