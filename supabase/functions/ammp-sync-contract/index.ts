@@ -51,9 +51,13 @@ interface UnassignedOrgEntry {
   uncovered?: number;
   uncoveredMW?: number;
   uncoveredAssets?: Array<{ assetId: string; assetName: string; mw: number }>;
+  /** Assets billed through another Elum tier contract's legacy asset group */
+  coveredElsewhere?: number;
+  coveredElsewhereAssets?: Array<{ assetId: string; assetName: string; tierName: string }>;
   /** Coverage not verified because the sync was truncated by the time budget */
   partial?: boolean;
 }
+
 
 interface CachedCapabilities {
 
