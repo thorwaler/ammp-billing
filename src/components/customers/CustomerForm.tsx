@@ -304,6 +304,11 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
               deduction on payment still nets the intended amount. Leave blank for none.
             </p>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Invoice due dates follow this customer's payment terms in Xero. Set them on the
+            contact in Xero; they are picked up on the next customer sync.
+          </p>
+
         </div>
 
         <div className="pt-2">
