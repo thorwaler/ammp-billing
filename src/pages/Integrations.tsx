@@ -25,6 +25,7 @@ const Integrations = () => {
           <AmmpIntegration />
           <SharePointIntegration />
           <WebhookNotifications />
+          <SlackNotifications />
         </div>
       </div>
     </Layout>
