@@ -1207,22 +1207,34 @@ async function generateElumAlerts(
   }
 
 
-  // 1. Sub-orgs with no tier flag -> their assets are not priced
+  // 1. Sub-orgs with no tier flag -> check whether their assets are still
+  // covered by the legacy asset group before treating them as leakage
   const unassigned = cached.unassignedOrgs || [];
   if (unassigned.length > 0) {
     const strandedAssets = unassigned.reduce((s: number, o: any) => s + (o.assetCount || 0), 0);
     const strandedMW = unassigned.reduce((s: number, o: any) => s + (o.totalMW || 0), 0);
-    const impact = strandedAssets > 0
-      ? ` They hold ${strandedAssets} asset${strandedAssets === 1 ? '' : 's'} (${strandedMW.toFixed(2)} MWp) that are excluded from every tier.`
-      : '';
+    const uncovered = unassigned.reduce((s: number, o: any) => s + (o.uncovered || 0), 0);
+    const uncoveredMW = unassigned.reduce((s: number, o: any) => s + (o.uncoveredMW || 0), 0);
+    const coveredStandard = unassigned.reduce((s: number, o: any) => s + (o.coveredStandard || 0), 0);
+    const coveredEconf = unassigned.reduce((s: number, o: any) => s + (o.coveredEconf || 0), 0);
+    const anyPartial = unassigned.some((o: any) => o.partial);
+    const covered = coveredStandard + coveredEconf;
+    const impact = uncovered > 0
+      ? ` ${uncovered} asset${uncovered === 1 ? '' : 's'} (${uncoveredMW.toFixed(2)} MWp) are covered by neither a tier org nor the legacy asset group.`
+      : anyPartial
+        ? ` Coverage against the legacy asset group could not be verified (sync was truncated).`
+        : ` All ${covered} of their assets are still priced through the legacy asset group.`;
     pending.push({
       alert_type: 'elum_org_unassigned',
-      severity: strandedAssets > 0 ? 'critical' : 'warning',
-      title: `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag`,
-      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag, so their assets are not included in pricing: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
-      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW },
+      severity: uncovered > 0 ? 'critical' : 'info',
+      title: uncovered > 0
+        ? `${uncovered} Elum asset${uncovered === 1 ? '' : 's'} not covered by any tier or legacy group`
+        : `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag (all covered)`,
+      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
+      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW, uncovered, uncoveredMW, coveredStandard, coveredEconf },
     });
   }
+
 
   // 2. Assets present in both a sub-org and the legacy asset group
   const doubleCounted = cached.doubleCountWarnings || [];
