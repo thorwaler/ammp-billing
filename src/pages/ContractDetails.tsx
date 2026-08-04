@@ -1638,6 +1638,8 @@ const ContractDetails = () => {
                           {unassignedOrgs.map((o: any) => (
                             <li key={o.orgId} className={o.uncovered > 0 ? 'text-destructive' : ''}>
                               <span className="font-medium">{o.orgName || o.orgId}</span> — {o.assetCount || 0} assets
+                              {o.placeholders ? ` (+${o.placeholders} empty AMMP stub assets ignored)` : ''}
+
                               {o.partial ? (
                                 <>: coverage not verified (sync truncated)</>
                               ) : (
