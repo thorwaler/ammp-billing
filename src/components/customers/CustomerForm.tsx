@@ -220,6 +220,25 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
               Optional overrides applied when invoices for this customer are sent to Xero.
             </p>
           </div>
+          {needsReconnect && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 space-y-2">
+              <p className="text-xs text-destructive">
+                Xero hasn't granted permission to read invoice settings, so branding themes and
+                tax codes can't be listed. Reconnect Xero once to enable the dropdowns — your
+                existing settings stay as they are.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={reconnecting}
+                onClick={handleReconnectXero}
+              >
+                {reconnecting && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                Reconnect Xero
+              </Button>
+            </div>
+          )}
           <div className="space-y-2">
             <Label htmlFor="xeroBrandingThemeId">Xero branding theme</Label>
             {themesLoading ? (
@@ -235,8 +254,8 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
                   onChange={handleInputChange}
                   placeholder="e.g. 4c82c365-35cb-490e-93bd-2c3a0bf6f7c2"
                 />
-                <p className="text-xs text-destructive">
-                  Could not load themes from Xero ({themesError}). Enter the theme ID manually.
+                <p className="text-xs text-muted-foreground">
+                  Theme list unavailable — enter the theme ID manually.
                 </p>
               </>
             ) : (
@@ -267,24 +286,61 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
             )}
             <p className="text-xs text-muted-foreground">
               Controls how the invoice looks (logo, address, wording) — e.g. a "Nigeria" theme.
-              It does not set tax; use the tax type below for VAT.
+              It does not set tax; use the tax code below for VAT.
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="xeroTaxType">Xero tax type</Label>
-            <Input
-              id="xeroTaxType"
-              name="xeroTaxType"
-              value={formData.xeroTaxType}
-              onChange={handleInputChange}
-              placeholder="e.g. OUTPUT"
-            />
+            <Label htmlFor="xeroTaxType">Xero tax code</Label>
+            {taxRatesLoading ? (
+              <div className="flex h-10 items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading tax codes from Xero…
+              </div>
+            ) : taxRatesError ? (
+              <>
+                <Input
+                  id="xeroTaxType"
+                  name="xeroTaxType"
+                  value={formData.xeroTaxType}
+                  onChange={handleInputChange}
+                  placeholder="e.g. OUTPUT"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Tax code list unavailable — enter the code manually.
+                </p>
+              </>
+            ) : (
+              <Select
+                value={formData.xeroTaxType || NO_TAX}
+                onValueChange={(value) =>
+                  handleSelectChange("xeroTaxType", value === NO_TAX ? "" : value)
+                }
+              >
+                <SelectTrigger id="xeroTaxType">
+                  <SelectValue placeholder="Contact default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_TAX}>Contact default</SelectItem>
+                  {taxRates.map((rate) => (
+                    <SelectItem key={rate.TaxType} value={rate.TaxType}>
+                      {rate.Name} ({rate.TaxType})
+                      {rate.EffectiveRate != null ? ` — ${rate.EffectiveRate}%` : ''}
+                    </SelectItem>
+                  ))}
+                  {formData.xeroTaxType &&
+                    !taxRates.some((r) => r.TaxType === formData.xeroTaxType) && (
+                      <SelectItem value={formData.xeroTaxType}>
+                        {formData.xeroTaxType} (not in Xero list)
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
+            )}
             <p className="text-xs text-muted-foreground">
-              Tax code applied to every invoice line (this is what puts VAT on the invoice).
-              Codes vary per Xero organisation (e.g. <code>OUTPUT</code>, <code>NONE</code>,
-              <code> EXEMPTOUTPUT</code>). Leave blank to use the contact's default in Xero.
+              Applied to every invoice line — this is what puts VAT on the invoice.
+              Leave on "Contact default" to use the contact's setting in Xero.
             </p>
           </div>
+
 
           <div className="space-y-2">
             <Label htmlFor="whtRatePercent">Withholding tax rate (%)</Label>
