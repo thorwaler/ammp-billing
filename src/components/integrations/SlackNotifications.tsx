@@ -384,19 +384,23 @@ const SlackNotifications = () => {
     const key = channelId ? `${type.id}:${channelId}` : type.id;
     setTesting((prev) => ({ ...prev, [key]: true }));
     try {
+      const sample = SAMPLE_PAYLOADS[type.id];
       const { error } = await supabase.functions.invoke('slack-post-alert', {
         body: {
           alert_type: type.id,
-          severity: 'warning',
-          title: `🧪 Test: ${type.label}`,
-          description: `This is a test Slack alert for *${type.label}*. If you see this message, the route is configured correctly.`,
-          metadata: { test: true, notification_type: type.id },
+          severity: sample?.severity ?? 'warning',
+          title: `[TEST] ${sample?.title ?? type.label}`,
+          description:
+            sample?.description ??
+            `This is a test Slack alert for *${type.label}*. If you see this message, the route is configured correctly.`,
+          metadata: { test: true, notification_type: type.id, ...(sample?.metadata ?? {}) },
           contract_id: null,
           customer_id: null,
           channel_id: channelId || null,
           is_test: true,
         },
       });
+
 
       if (error) throw error;
       toast.success(`Test message sent to Slack for ${type.label}`);
