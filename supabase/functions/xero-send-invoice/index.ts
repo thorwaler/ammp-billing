@@ -145,6 +145,50 @@ async function attachSupportDocuments(
   }
 }
 
+/**
+ * Compute a Xero DueDate from a contact's sales payment terms.
+ * Returns null when no usable terms are configured.
+ */
+function computeDueDate(
+  invoiceDateRaw: unknown,
+  days: number | null | undefined,
+  type: string | null | undefined
+): string | null {
+  if (days == null || !type) return null;
+  const d = Number(days);
+  if (!Number.isFinite(d) || d < 0) return null;
+
+  const base = invoiceDateRaw ? new Date(String(invoiceDateRaw)) : new Date();
+  if (isNaN(base.getTime())) return null;
+
+  const due = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate()));
+
+  switch (String(type).toUpperCase()) {
+    case 'DAYSAFTERBILLDATE':
+      due.setUTCDate(due.getUTCDate() + d);
+      break;
+    case 'DAYSAFTERBILLMONTH':
+      // end of the invoice month + d days
+      due.setUTCMonth(due.getUTCMonth() + 1, 0);
+      due.setUTCDate(due.getUTCDate() + d);
+      break;
+    case 'OFCURRENTMONTH':
+      due.setUTCDate(1);
+      due.setUTCDate(d || 1);
+      break;
+    case 'OFFOLLOWINGMONTH':
+      due.setUTCDate(1);
+      due.setUTCMonth(due.getUTCMonth() + 1);
+      due.setUTCDate(d || 1);
+      break;
+    default:
+      return null;
+  }
+
+  return due.toISOString().split('T')[0];
+}
+
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
