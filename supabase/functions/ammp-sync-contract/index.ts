@@ -767,14 +767,26 @@ async function processContractSync(
         let coveredElsewhere = 0;
         let uncovered = 0;
         let uncoveredMW = 0;
+        let placeholders = 0;
         const uncoveredAssets: Array<{ assetId: string; assetName: string; mw: number }> = [];
         const coveredElsewhereAssets: Array<{ assetId: string; assetName: string; tierName: string }> = [];
         for (const a of orgAssets) {
           const mw = (a.total_pv_power || 0) / 1_000_000;
+          // AMMP catch-all orgs are full of never-configured stub assets: no PV
+          // capacity, no location, no tags. They are not billable and must not
+          // be reported as revenue leakage.
+          const isPlaceholder =
+            (a.total_pv_power === null || a.total_pv_power === undefined) &&
+            !a.long_name && !a.country_code && !a.latitude && !a.tags;
+          if (isPlaceholder) {
+            placeholders++;
+            continue;
+          }
           if (hasNotGroup && legacyExcludedIds.has(a.asset_id)) {
             excluded++;
             continue;
           }
+
           if (legacyMemberIds.has(a.asset_id)) {
             if (legacyEconfIds.has(a.asset_id)) coveredEconf++; else coveredStandard++;
             continue;
