@@ -1,9 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const SLACK_GATEWAY_URL = 'https://connector-gateway.lovable.dev/slack/api';
+const PREVIEW_URL = 'https://id-preview--c3eaa719-b178-42f2-8022-18c351e01c55.lovable.app';
 
 interface NotificationPayload {
   notification_id: string;
