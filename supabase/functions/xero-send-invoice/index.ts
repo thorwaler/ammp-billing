@@ -224,9 +224,25 @@ Deno.serve(async (req) => {
     if (contactName) {
       const { data: customer } = await supabase
         .from('customers')
-        .select('xero_tax_type, xero_branding_theme_id, wht_gross_up_rate')
+        .select('xero_tax_type, xero_branding_theme_id, wht_gross_up_rate, xero_payment_terms_days, xero_payment_terms_type')
         .eq('name', contactName)
         .single();
+
+      // Due date follows the customer's Xero payment terms.
+      const dueDate = computeDueDate(
+        invoice.Date,
+        customer?.xero_payment_terms_days,
+        customer?.xero_payment_terms_type
+      );
+      if (dueDate) {
+        console.log(`Due date from Xero terms (${customer?.xero_payment_terms_days} ${customer?.xero_payment_terms_type}) for ${contactName}: ${dueDate}`);
+        invoice = { ...invoice, DueDate: dueDate };
+      } else {
+        // No terms configured — let Xero apply its own default.
+        const { DueDate: _dropped, ...rest } = invoice;
+        invoice = rest;
+      }
+
 
       // If customer has a tax type configured, apply it to all line items
       if (customer?.xero_tax_type && invoice.LineItems) {
