@@ -1,32 +1,66 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { FunctionsHttpError } from "@supabase/supabase-js";
 
 export interface XeroBrandingTheme {
   BrandingThemeID: string;
   Name: string;
 }
 
-// Module-level cache so many customer cards share a single Xero call.
-let cachedPromise: Promise<XeroBrandingTheme[]> | null = null;
+export interface XeroTaxRate {
+  TaxType: string;
+  Name: string;
+  EffectiveRate: number | null;
+}
 
-const loadThemes = (): Promise<XeroBrandingTheme[]> => {
-  if (!cachedPromise) {
-    cachedPromise = (async () => {
-      const { data, error } = await supabase.functions.invoke('xero-list-branding-themes');
-      if (error) throw error;
-      return (data?.themes || []) as XeroBrandingTheme[];
-    })().catch((err) => {
-      cachedPromise = null; // allow retry on next mount
+interface SettingsError {
+  message: string;
+  needsReconnect: boolean;
+}
+
+const isSettingsError = (err: unknown): err is SettingsError =>
+  typeof err === 'object' && err !== null && 'needsReconnect' in (err as any);
+
+/** Invoke an edge function and surface the real error body (401 => needs reconnect). */
+const invokeXeroSettings = async <T,>(fn: string, pick: (payload: any) => T): Promise<T> => {
+  const { data, error } = await supabase.functions.invoke(fn);
+  if (error) {
+    let message = error.message;
+    let status: number | undefined;
+    if (error instanceof FunctionsHttpError) {
+      status = error.context?.status;
+      try {
+        const body = await error.context.json();
+        if (body?.error) message = body.error;
+        if (body?.status) status = body.status;
+      } catch {
+        // keep the generic message
+      }
+    }
+    const settingsError: SettingsError = { message, needsReconnect: status === 401 };
+    throw settingsError;
+  }
+  return pick(data);
+};
+
+// Module-level caches so many cards/forms share a single Xero call.
+const caches: Record<string, Promise<any> | null> = {};
+
+const loadCached = <T,>(key: string, loader: () => Promise<T>): Promise<T> => {
+  if (!caches[key]) {
+    caches[key] = loader().catch((err) => {
+      caches[key] = null; // allow retry on next mount
       throw err;
     });
   }
-  return cachedPromise;
+  return caches[key] as Promise<T>;
 };
 
-export const useXeroBrandingThemes = (enabled = true) => {
-  const [themes, setThemes] = useState<XeroBrandingTheme[]>([]);
+const useXeroSettings = <T,>(key: string, loader: () => Promise<T[]>, enabled: boolean) => {
+  const [items, setItems] = useState<T[]>([]);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
+  const [needsReconnect, setNeedsReconnect] = useState(false);
 
   useEffect(() => {
     if (!enabled) {
@@ -34,22 +68,56 @@ export const useXeroBrandingThemes = (enabled = true) => {
       return;
     }
     let cancelled = false;
-    loadThemes()
+    setLoading(true);
+    loadCached(key, loader)
       .then((list) => {
-        if (!cancelled) setThemes(list);
+        if (!cancelled) setItems(list);
       })
-      .catch((err: any) => {
-        console.error('Failed to load Xero branding themes:', err);
-        if (!cancelled) setError(err?.message || 'Could not load Xero branding themes');
+      .catch((err: unknown) => {
+        console.error(`Failed to load ${key}:`, err);
+        if (cancelled) return;
+        if (isSettingsError(err)) {
+          setError(err.message);
+          setNeedsReconnect(err.needsReconnect);
+        } else {
+          setError((err as any)?.message || `Could not load ${key}`);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
-  }, [enabled]);
+  }, [enabled, key]);
+
+  return { items, loading, error, needsReconnect };
+};
+
+export const useXeroBrandingThemes = (enabled = true) => {
+  const { items, loading, error, needsReconnect } = useXeroSettings<XeroBrandingTheme>(
+    'xero-branding-themes',
+    () => invokeXeroSettings('xero-list-branding-themes', (d) => (d?.themes || []) as XeroBrandingTheme[]),
+    enabled,
+  );
 
   const themeName = (id?: string | null) =>
-    id ? themes.find((t) => t.BrandingThemeID === id)?.Name ?? null : null;
+    id ? items.find((t) => t.BrandingThemeID === id)?.Name ?? null : null;
 
-  return { themes, loading, error, themeName };
+  return { themes: items, loading, error, needsReconnect, themeName };
+};
+
+export const useXeroTaxRates = (enabled = true) => {
+  const { items, loading, error, needsReconnect } = useXeroSettings<XeroTaxRate>(
+    'xero-tax-rates',
+    () => invokeXeroSettings('xero-list-tax-rates', (d) => (d?.taxRates || []) as XeroTaxRate[]),
+    enabled,
+  );
+
+  const taxRateLabel = (taxType?: string | null) => {
+    if (!taxType) return null;
+    const match = items.find((t) => t.TaxType === taxType);
+    if (!match) return null;
+    return match.EffectiveRate != null ? `${match.Name} (${match.EffectiveRate}%)` : match.Name;
+  };
+
+  return { taxRates: items, loading, error, needsReconnect, taxRateLabel };
 };
