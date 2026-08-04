@@ -83,11 +83,15 @@ Deno.serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`Xero BrandingThemes failed [${response.status}]: ${errorText}`);
+      const message = response.status === 401
+        ? 'Xero has not granted permission to read invoice settings. Reconnect Xero in Settings > Integrations to enable the branding theme list.'
+        : 'Failed to load Xero branding themes';
       return new Response(
-        JSON.stringify({ error: 'Failed to load Xero branding themes', status: response.status, details: errorText.substring(0, 300) }),
+        JSON.stringify({ error: message, status: response.status, details: errorText.substring(0, 300) }),
         { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
 
     const data = await response.json();
     const themes = (data.BrandingThemes || []).map((t: any) => ({
