@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     // Fetch all local customers first to track deletions and preserve inactive status
     const { data: localCustomers, error: localError } = await supabase
       .from('customers')
-      .select('id, name, status, manual_status_override')
+      .select('id, name, status, manual_status_override, xero_tax_type')
       .eq('user_id', user.id);
 
     if (localError) {
@@ -116,9 +116,11 @@ Deno.serve(async (req) => {
         id: c.id, 
         name: c.name,
         status: c.status,
-        manual_status_override: c.manual_status_override 
+        manual_status_override: c.manual_status_override,
+        xero_tax_type: c.xero_tax_type,
       }]) || []
     );
+
     console.log(`Found ${localCustomerMap.size} local customers`);
 
     // Fetch customers from Xero (include archived)
