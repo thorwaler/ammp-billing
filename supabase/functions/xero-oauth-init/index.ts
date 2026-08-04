@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       `response_type=code&` +
       `client_id=${clientId}&` +
       `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `scope=offline_access accounting.transactions accounting.contacts accounting.attachments&` +
+      `scope=offline_access accounting.transactions accounting.contacts accounting.attachments accounting.settings.read&` +
       `state=${state}`;
 
     console.log('Xero OAuth init for user:', user.id);
