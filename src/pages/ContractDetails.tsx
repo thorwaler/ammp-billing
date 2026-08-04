@@ -87,6 +87,8 @@ const ContractDetails = () => {
   const [error, setError] = useState<string | null>(null);
   const [showExtendDialog, setShowExtendDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showEditCustomerDialog, setShowEditCustomerDialog] = useState(false);
+
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
   const [showAllAssets, setShowAllAssets] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
