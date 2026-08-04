@@ -1700,7 +1700,7 @@ Deno.serve(async (req) => {
                       'Content-Type': 'application/json',
                       'Authorization': `Bearer ${serviceKey}`,
                     },
-                    body: JSON.stringify({ contractId, batchSize: 50 }),
+                    body: JSON.stringify({ contractId, batchSize: 500 }),
                   });
                   
                   const enrichData = await enrichResult.json();
@@ -1750,7 +1750,7 @@ Deno.serve(async (req) => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${serviceKey}`,
               },
-              body: JSON.stringify({ contractId, batchSize: 50 }),
+              body: JSON.stringify({ contractId, batchSize: 500 }),
             });
             
             const enrichData = await enrichResult.json();
