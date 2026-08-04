@@ -8,8 +8,10 @@ For every flag-less sub-org, classify each of its assets against the legacy asse
 
 - **Covered (standard)** — asset is a legacy group member priced at the base tier rate
 - **Covered (eConf)** — asset is a legacy group member in the AND group
-- **Excluded** — asset is in the NOT group, so intentionally not billed
 - **Not covered** — asset belongs to no tier org and no legacy group: real revenue leakage
+
+The NOT-group ("excluded") bucket is only reported for contracts that still have an exclusion group configured; when that field is empty — the normal case now — the breakdown is just covered vs not covered.
+
 
 Then surface it in three places:
 
