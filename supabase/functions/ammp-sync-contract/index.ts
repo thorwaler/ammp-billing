@@ -602,6 +602,7 @@ async function processContractSync(
       };
 
       const members = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
+      legacyMemberIds = new Set(members.map((m) => m.asset_id));
 
       let econfIds = new Set<string>();
       if (contract.ammp_asset_group_id_and) {
@@ -613,6 +614,9 @@ async function processContractSync(
         const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
         excludedIds = new Set(notMembers.map((m) => m.asset_id));
       }
+      legacyEconfIds = econfIds;
+      legacyExcludedIds = excludedIds;
+      hasNotGroup = !!contract.ammp_asset_group_id_not;
 
       let baseCount = 0;
       let econfCount = 0;
@@ -648,6 +652,54 @@ async function processContractSync(
       );
 
     }
+
+    // Coverage check: for each flag-less sub-org, classify its assets against the
+    // legacy asset group resolution so covered assets are not reported as leakage.
+    if (unassignedOrgs.length > 0) {
+      let totalCovered = 0;
+      let totalUncovered = 0;
+      unassignedOrgs = unassignedOrgs.map((o) => {
+        if (resolutionTruncated) return { ...o, partial: true };
+        const orgAssets = allAssets.filter((a: any) => a.org_id === o.orgId);
+        let coveredStandard = 0;
+        let coveredEconf = 0;
+        let excluded = 0;
+        let uncovered = 0;
+        let uncoveredMW = 0;
+        const uncoveredAssets: Array<{ assetId: string; assetName: string; mw: number }> = [];
+        for (const a of orgAssets) {
+          const mw = (a.total_pv_power || 0) / 1_000_000;
+          if (hasNotGroup && legacyExcludedIds.has(a.asset_id)) {
+            excluded++;
+          } else if (legacyMemberIds.has(a.asset_id)) {
+            if (legacyEconfIds.has(a.asset_id)) coveredEconf++; else coveredStandard++;
+          } else if (assetOrgMap.has(a.asset_id)) {
+            coveredStandard++;
+          } else {
+            uncovered++;
+            uncoveredMW += mw;
+            if (uncoveredAssets.length < 20) {
+              uncoveredAssets.push({ assetId: a.asset_id, assetName: a.asset_name, mw });
+            }
+          }
+        }
+        totalCovered += coveredStandard + coveredEconf;
+        totalUncovered += uncovered;
+        return {
+          ...o,
+          coveredStandard,
+          coveredEconf,
+          ...(hasNotGroup ? { excluded } : {}),
+          uncovered,
+          uncoveredMW,
+          uncoveredAssets: uncoveredAssets.length > 0 ? uncoveredAssets : undefined,
+        };
+      });
+      console.log(
+        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by legacy group, ${totalUncovered} not covered${resolutionTruncated ? ' (skipped — resolution truncated)' : ''}`
+      );
+    }
+
     
     if (tierOrgs.length > 0 && assetsToProcess.length === 0) {
       console.warn(`[AMMP Sync Contract] No assets found for ${tierOrgs.length} ${elumTier} sub-orgs`);
