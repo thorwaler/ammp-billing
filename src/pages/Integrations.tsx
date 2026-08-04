@@ -2,6 +2,7 @@ import Layout from "@/components/layout/Layout";
 import XeroIntegration from "@/components/integrations/XeroIntegration";
 import AmmpIntegration from "@/components/integrations/AmmpIntegration";
 import WebhookNotifications from "@/components/integrations/WebhookNotifications";
+import SlackNotifications from "@/components/integrations/SlackNotifications";
 import SharePointIntegration from "@/components/integrations/SharePointIntegration";
 import { Link2 } from "lucide-react";
 
