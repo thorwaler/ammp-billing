@@ -24,8 +24,8 @@ const Integrations = () => {
           <XeroIntegration />
           <AmmpIntegration />
           <SharePointIntegration />
-          <WebhookNotifications />
           <SlackNotifications />
+          <WebhookNotifications />
         </div>
       </div>
     </Layout>
