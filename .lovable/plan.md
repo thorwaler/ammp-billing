@@ -29,3 +29,5 @@ Today each alert type can be routed to exactly one Slack channel, and the channe
   - Replace the `Select` with shadcn `Popover` + `Command` (`CommandInput` / `CommandList` / `CommandItem`) for searchable channel selection.
   - Per-channel `Switch` (enabled) and `Send` (test) controls; test posts using the specific `channel_id`.
 - No schema or behaviour change for the generic webhook notifications.
+
+4. **Panel order**: on the Integrations page, render the Slack notifications panel above the generic webhook notifications panel (swap the two in `src/pages/Integrations.tsx`).
