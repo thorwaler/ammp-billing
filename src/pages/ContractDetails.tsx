@@ -1640,15 +1640,23 @@ const ContractDetails = () => {
                                 <>
                                   : {(o.coveredStandard || 0) + (o.coveredEconf || 0)} covered by legacy group
                                   {o.coveredEconf ? ` (${o.coveredEconf} eConf)` : ''}
+                                  {o.coveredElsewhere ? `, ${o.coveredElsewhere} covered by another tier's group` : ''}
                                   {typeof o.excluded === 'number' && o.excluded > 0 ? `, ${o.excluded} excluded` : ''}
                                   , {o.uncovered || 0} not covered
                                   {o.uncoveredMW ? ` (${o.uncoveredMW.toFixed(2)} MWp)` : ''}
+                                  {o.coveredElsewhereAssets?.length ? (
+                                    <span className="block pl-3 opacity-70">
+                                      Other tier: {o.coveredElsewhereAssets.map((a: any) => `${a.assetName} (${a.tierName})`).join(', ')}
+                                      {o.coveredElsewhere > o.coveredElsewhereAssets.length ? ', …' : ''}
+                                    </span>
+                                  ) : null}
                                   {o.uncoveredAssets?.length ? (
                                     <span className="block pl-3 opacity-80">
                                       {o.uncoveredAssets.map((a: any) => a.assetName).join(', ')}
                                       {o.uncovered > o.uncoveredAssets.length ? ', …' : ''}
                                     </span>
                                   ) : null}
+
                                 </>
                               )}
                             </li>
