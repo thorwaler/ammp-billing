@@ -1,13 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Switch } from "@/components/ui/switch";
-import { Slack, Loader2, Send, CheckCircle2, AlertCircle, RefreshCw, Users } from "lucide-react";
+import { Slack, Loader2, Send, CheckCircle2, AlertCircle, RefreshCw, Users, Plus, X, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+
 
 interface SlackChannel {
   id: string;
@@ -67,9 +70,12 @@ const SlackNotifications = () => {
   const [saving, setSaving] = useState(false);
   const [channelsLoading, setChannelsLoading] = useState(false);
   const [channels, setChannels] = useState<SlackChannel[]>([]);
-  const [routes, setRoutes] = useState<Record<string, SlackRoute>>({});
+  const [routes, setRoutes] = useState<Record<string, SlackRoute[]>>({});
+  const [initialRouteIds, setInitialRouteIds] = useState<string[]>([]);
   const [connectionError, setConnectionError] = useState<string | null>(null);
-  const [testingTypes, setTestingTypes] = useState<Record<string, boolean>>({});
+  const [testing, setTesting] = useState<Record<string, boolean>>({});
+  const [openPicker, setOpenPicker] = useState<string | null>(null);
+  const [typeSearch, setTypeSearch] = useState("");
 
   useEffect(() => {
     loadData();
@@ -111,39 +117,53 @@ const SlackNotifications = () => {
         .select('*');
       if (error) throw error;
 
-      const routeMap: Record<string, SlackRoute> = {};
+      const routeMap: Record<string, SlackRoute[]> = {};
       for (const route of data || []) {
-        routeMap[route.notification_type] = route;
+        if (!routeMap[route.notification_type]) routeMap[route.notification_type] = [];
+        routeMap[route.notification_type].push(route);
       }
       setRoutes(routeMap);
+      setInitialRouteIds((data || []).map((r: any) => r.id));
     } catch (error: any) {
       console.error('Error fetching Slack routes:', error);
       toast.error('Failed to load Slack routes: ' + error.message);
     }
   };
 
-  const updateRoute = (typeId: string, channelId: string) => {
+  const addChannel = (typeId: string, channelId: string) => {
     const channel = channels.find((c) => c.id === channelId);
+    setRoutes((prev) => {
+      const current = prev[typeId] || [];
+      if (current.some((r) => r.channel_id === channelId)) return prev;
+      return {
+        ...prev,
+        [typeId]: [
+          ...current,
+          {
+            notification_type: typeId,
+            channel_id: channelId,
+            channel_name: channel?.name,
+            enabled: true,
+          },
+        ],
+      };
+    });
+    setOpenPicker(null);
+  };
+
+  const removeChannel = (typeId: string, channelId: string) => {
     setRoutes((prev) => ({
       ...prev,
-      [typeId]: {
-        ...prev[typeId],
-        notification_type: typeId,
-        channel_id: channelId,
-        channel_name: channel?.name,
-        enabled: true,
-      },
+      [typeId]: (prev[typeId] || []).filter((r) => r.channel_id !== channelId),
     }));
   };
 
-  const toggleRoute = (typeId: string, enabled: boolean) => {
+  const toggleChannel = (typeId: string, channelId: string, enabled: boolean) => {
     setRoutes((prev) => ({
       ...prev,
-      [typeId]: {
-        ...prev[typeId],
-        notification_type: typeId,
-        enabled,
-      },
+      [typeId]: (prev[typeId] || []).map((r) =>
+        r.channel_id === channelId ? { ...r, enabled } : r
+      ),
     }));
   };
 
@@ -152,35 +172,39 @@ const SlackNotifications = () => {
 
     setSaving(true);
     try {
-      const existingTypes = new Set(Object.keys(routes).filter((k) => routes[k]?.channel_id));
+      const keptIds = new Set(
+        Object.values(routes).flat().map((r) => r.id).filter(Boolean) as string[]
+      );
+      const toDelete = initialRouteIds.filter((id) => !keptIds.has(id));
 
-      for (const type of NOTIFICATION_TYPES.map((t) => t.id)) {
-        const route = routes[type];
-        const existing = route?.id;
+      if (toDelete.length > 0) {
+        const { error } = await supabase
+          .from('slack_notification_routes')
+          .delete()
+          .in('id', toDelete);
+        if (error) throw error;
+      }
 
-        if (!route || !route.channel_id) {
-          if (existing) {
-            await supabase.from('slack_notification_routes').delete().eq('id', existing);
+      for (const [typeId, list] of Object.entries(routes)) {
+        for (const route of list) {
+          const payload = {
+            notification_type: typeId,
+            channel_id: route.channel_id,
+            channel_name:
+              route.channel_name || channels.find((c) => c.id === route.channel_id)?.name || '',
+            enabled: route.enabled,
+          };
+
+          if (route.id) {
+            const { error } = await supabase
+              .from('slack_notification_routes')
+              .update(payload)
+              .eq('id', route.id);
+            if (error) throw error;
+          } else {
+            const { error } = await supabase.from('slack_notification_routes').insert(payload);
+            if (error) throw error;
           }
-          continue;
-        }
-
-        const payload = {
-          notification_type: route.notification_type,
-          channel_id: route.channel_id,
-          channel_name: route.channel_name || channels.find((c) => c.id === route.channel_id)?.name || '',
-          enabled: route.enabled,
-        };
-
-        if (existing) {
-          const { error } = await supabase
-            .from('slack_notification_routes')
-            .update(payload)
-            .eq('id', existing);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from('slack_notification_routes').insert(payload);
-          if (error) throw error;
         }
       }
 
@@ -194,14 +218,15 @@ const SlackNotifications = () => {
     }
   };
 
-  const testRoute = async (type: NotificationTypeOption) => {
-    const route = routes[type.id];
-    if (!route?.channel_id) {
-      toast.error('Select a Slack channel first');
+  const testRoute = async (type: NotificationTypeOption, channelId?: string) => {
+    const list = routes[type.id] || [];
+    if (list.length === 0) {
+      toast.error('Add a Slack channel first');
       return;
     }
 
-    setTestingTypes((prev) => ({ ...prev, [type.id]: true }));
+    const key = channelId ? `${type.id}:${channelId}` : type.id;
+    setTesting((prev) => ({ ...prev, [key]: true }));
     try {
       const { error } = await supabase.functions.invoke('slack-post-alert', {
         body: {
@@ -212,6 +237,7 @@ const SlackNotifications = () => {
           metadata: { test: true, notification_type: type.id },
           contract_id: null,
           customer_id: null,
+          channel_id: channelId || null,
           is_test: true,
         },
       });
@@ -222,11 +248,23 @@ const SlackNotifications = () => {
       console.error('Error testing Slack route:', error);
       toast.error('Failed to send test: ' + error.message);
     } finally {
-      setTestingTypes((prev) => ({ ...prev, [type.id]: false }));
+      setTesting((prev) => ({ ...prev, [key]: false }));
     }
   };
 
-  const groupedTypes = NOTIFICATION_TYPES.reduce((acc, type) => {
+  const filteredTypes = useMemo(() => {
+    const q = typeSearch.trim().toLowerCase();
+    if (!q) return NOTIFICATION_TYPES;
+    return NOTIFICATION_TYPES.filter(
+      (t) =>
+        t.label.toLowerCase().includes(q) ||
+        t.id.toLowerCase().includes(q) ||
+        t.group.toLowerCase().includes(q) ||
+        (routes[t.id] || []).some((r) => (r.channel_name || '').toLowerCase().includes(q))
+    );
+  }, [typeSearch, routes]);
+
+  const groupedTypes = filteredTypes.reduce((acc, type) => {
     if (!acc[type.group]) acc[type.group] = [];
     acc[type.group].push(type);
     return acc;
@@ -257,7 +295,7 @@ const SlackNotifications = () => {
         </CardTitle>
         <CardDescription className="flex items-center gap-2">
           <Users className="h-3 w-3" />
-          <span>Team integration • Route alerts to different Slack channels</span>
+          <span>Team integration • Route each alert to one or more Slack channels</span>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -303,7 +341,20 @@ const SlackNotifications = () => {
           </div>
         )}
 
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            value={typeSearch}
+            onChange={(e) => setTypeSearch(e.target.value)}
+            placeholder="Search alert types or channels..."
+            className="pl-9"
+          />
+        </div>
+
         <div className="space-y-6">
+          {Object.keys(groupedTypes).length === 0 && (
+            <p className="text-sm text-muted-foreground">No alert types match "{typeSearch}".</p>
+          )}
           {Object.entries(groupedTypes).map(([group, types]) => (
             <div key={group} className="space-y-3">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -311,61 +362,124 @@ const SlackNotifications = () => {
               </h3>
               <div className="space-y-3">
                 {types.map((type) => {
-                  const route = routes[type.id];
-                  const channelId = route?.channel_id || '';
-                  const enabled = route?.enabled ?? false;
+                  const list = routes[type.id] || [];
+                  const available = channels.filter(
+                    (c) => !list.some((r) => r.channel_id === c.id)
+                  );
 
                   return (
                     <div
                       key={type.id}
-                      className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg border bg-card"
+                      className="flex flex-col gap-3 p-3 rounded-lg border bg-card"
                     >
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
                           <Label className="text-sm font-medium">{type.label}</Label>
+                          <p className="text-xs text-muted-foreground mt-0.5">{type.id}</p>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">{type.id}</p>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Popover
+                            open={openPicker === type.id}
+                            onOpenChange={(open) => setOpenPicker(open ? type.id : null)}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={available.length === 0}
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add channel
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[260px] p-0" align="end">
+                              <Command>
+                                <CommandInput placeholder="Search channels..." />
+                                <CommandList>
+                                  <CommandEmpty>No channel found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {available.map((channel) => (
+                                      <CommandItem
+                                        key={channel.id}
+                                        value={channel.name}
+                                        onSelect={() => addChannel(type.id, channel.id)}
+                                      >
+                                        #{channel.name}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => testRoute(type)}
+                            disabled={testing[type.id] || list.length === 0}
+                            title="Send test message to all enabled channels"
+                          >
+                            {testing[type.id] ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Send className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2 flex-1">
-                        <Select
-                          value={channelId}
-                          onValueChange={(value) => updateRoute(type.id, value)}
-                          disabled={channels.length === 0}
-                        >
-                          <SelectTrigger className="w-full sm:w-[220px]">
-                            <SelectValue placeholder="Select channel" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {channels.map((channel) => (
-                              <SelectItem key={channel.id} value={channel.id}>
-                                #{channel.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        <Switch
-                          checked={enabled}
-                          onCheckedChange={(checked) => toggleRoute(type.id, checked)}
-                          disabled={!channelId}
-                          aria-label={`Enable ${type.label}`}
-                        />
-
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => testRoute(type)}
-                          disabled={testingTypes[type.id] || !channelId || !enabled}
-                          title="Send test message"
-                        >
-                          {testingTypes[type.id] ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Send className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
+                      {list.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Not routed to Slack.</p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {list.map((route) => {
+                            const testKey = `${type.id}:${route.channel_id}`;
+                            const name =
+                              route.channel_name ||
+                              channels.find((c) => c.id === route.channel_id)?.name ||
+                              route.channel_id;
+                            return (
+                              <div
+                                key={route.channel_id}
+                                className="flex items-center gap-2 rounded-full border bg-muted/40 pl-3 pr-1 py-1"
+                              >
+                                <span className="text-xs font-medium">#{name}</span>
+                                <Switch
+                                  checked={route.enabled}
+                                  onCheckedChange={(checked) =>
+                                    toggleChannel(type.id, route.channel_id, checked)
+                                  }
+                                  aria-label={`Enable ${name} for ${type.label}`}
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => testRoute(type, route.channel_id)}
+                                  disabled={testing[testKey]}
+                                  title={`Send test to #${name}`}
+                                >
+                                  {testing[testKey] ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Send className="h-3 w-3" />
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => removeChannel(type.id, route.channel_id)}
+                                  title={`Remove #${name}`}
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -393,3 +507,4 @@ const SlackNotifications = () => {
 };
 
 export default SlackNotifications;
+

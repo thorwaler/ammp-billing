@@ -14,6 +14,8 @@ interface AlertPayload {
   invoice_id?: string | null;
   created_at?: string;
   is_test?: boolean;
+  /** Optional override: post only to this channel (used by per-channel tests) */
+  channel_id?: string | null;
 }
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/slack/api';
@@ -61,7 +63,7 @@ Deno.serve(async (req) => {
     const payload: AlertPayload = await req.json();
     console.log('Received Slack alert payload:', JSON.stringify(payload));
 
-    const { alert_type, is_test } = payload;
+    const { alert_type, is_test, channel_id: channelOverride } = payload;
 
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     const slackApiKey = Deno.env.get('SLACK_API_KEY');
@@ -78,11 +80,18 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { data: routes, error: routesError } = await supabase
+    let routesQuery = supabase
       .from('slack_notification_routes')
       .select('*')
-      .eq('notification_type', alert_type)
-      .eq('enabled', true);
+      .eq('notification_type', alert_type);
+
+    if (channelOverride) {
+      routesQuery = routesQuery.eq('channel_id', channelOverride);
+    } else {
+      routesQuery = routesQuery.eq('enabled', true);
+    }
+
+    const { data: routes, error: routesError } = await routesQuery;
 
     if (routesError) {
       console.error('Error fetching Slack routes:', routesError);
