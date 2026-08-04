@@ -38,7 +38,25 @@ interface AssetCapabilities {
   devices: DeviceInfo[];
 }
 
+/** Flag-less sub-org plus how its assets fare against the legacy asset group */
+interface UnassignedOrgEntry {
+  orgId: string;
+  orgName: string;
+  assetCount?: number;
+  totalMW?: number;
+  coveredStandard?: number;
+  coveredEconf?: number;
+  /** Only set when the contract still has a NOT (exclusion) asset group configured */
+  excluded?: number;
+  uncovered?: number;
+  uncoveredMW?: number;
+  uncoveredAssets?: Array<{ assetId: string; assetName: string; mw: number }>;
+  /** Coverage not verified because the sync was truncated by the time budget */
+  partial?: boolean;
+}
+
 interface CachedCapabilities {
+
   totalMW: number;
   totalSites: number;
   ongridMW: number;
