@@ -462,12 +462,16 @@ async function getClassifiedSubOrgs(
   // field, enforce the parent client-side so platform-wide orgs (other AMMP
   // customers, catch-all buckets) are never treated as Elum sub-orgs.
   const withParent = orgs.filter((o: any) => o?.parent_org_id);
+  if (depth === 0) {
+    console.log(`[AMMP Sync Contract] /orgs sample: ${JSON.stringify(orgs.slice(0, 2))}`);
+  }
   const scoped = withParent.length > 0
     ? orgs.filter((o: any) => !o?.parent_org_id || o.parent_org_id === parentOrgId)
     : orgs;
   if (scoped.length !== orgs.length) {
     console.log(`[AMMP Sync Contract] /orgs?parent_org_id=${parentOrgId}: ${orgs.length} returned, ${scoped.length} actually children`);
   }
+
 
   const direct = scoped
     .filter((o: any) => o?.org_id && o.org_id !== parentOrgId && !seen.has(o.org_id))
