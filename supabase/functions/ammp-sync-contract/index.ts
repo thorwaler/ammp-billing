@@ -815,7 +815,8 @@ async function processContractSync(
         resolved.push({
           ...o,
           source: 'org-scoped',
-          assetCount: orgAssets.length,
+          assetCount: orgAssets.length - placeholders,
+          placeholders,
           totalMW: orgAssets.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
           coveredStandard,
           coveredEconf,
@@ -826,6 +827,7 @@ async function processContractSync(
           uncoveredMW,
           uncoveredAssets: uncoveredAssets.length > 0 ? uncoveredAssets : undefined,
         });
+
       }
       unassignedOrgs = resolved;
 
