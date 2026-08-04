@@ -362,6 +362,33 @@ export function CustomerCard({
             <div className="text-sm text-muted-foreground">Last Invoiced</div>
             <div className="font-medium">{formattedLastInvoiced}</div>
           </div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-sm text-muted-foreground">Xero invoicing</div>
+            <div className="flex flex-wrap items-center justify-end gap-1">
+              <Badge variant="outline" className="text-xs">
+                {xero_branding_theme_id
+                  ? `Theme: ${brandingThemeName(xero_branding_theme_id) ?? 'custom'}`
+                  : 'Default theme'}
+              </Badge>
+              <Badge variant="outline" className="text-xs">
+                {xero_tax_type ? `Tax: ${xero_tax_type}` : 'No tax type'}
+              </Badge>
+              {wht_gross_up_rate ? (
+                <Badge variant="outline" className="text-xs">
+                  WHT {(Number(wht_gross_up_rate) * 100).toFixed(2).replace(/\.?0+$/, '')}%
+                </Badge>
+              ) : null}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setShowEditForm(true)}
+              >
+                Edit
+              </Button>
+            </div>
+          </div>
+
           {(modules.length > 0 || packageType === 'hybrid_tiered' || packageType === 'hybrid_tiered_assetgroups') && (
             <div className="space-y-2">
               <div className="text-sm text-muted-foreground">Modules</div>
