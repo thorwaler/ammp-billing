@@ -1616,17 +1616,48 @@ const ContractDetails = () => {
                       </tbody>
                     </table>
                   </div>
-                  {unassignedOrgs.length > 0 && (
-                    <div className="p-3 border-t text-xs text-muted-foreground">
-                      <span className="font-medium text-destructive">
-                        {unassignedOrgs.length} sub-org(s) without a tier flag
-                      </span>{' '}
-                      holding {unassignedOrgs.reduce((s: number, o: any) => s + (o.assetCount || 0), 0)} assets:{' '}
-                      {unassignedOrgs
-                        .map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`)
-                        .join(', ')}
-                    </div>
-                  )}
+                  {unassignedOrgs.length > 0 && (() => {
+                    const totalUncovered = unassignedOrgs.reduce((s: number, o: any) => s + (o.uncovered || 0), 0);
+                    const totalAssets = unassignedOrgs.reduce((s: number, o: any) => s + (o.assetCount || 0), 0);
+                    return (
+                      <div className="p-3 border-t text-xs text-muted-foreground space-y-2">
+                        <div>
+                          <span className={`font-medium ${totalUncovered > 0 ? 'text-destructive' : 'text-foreground'}`}>
+                            {unassignedOrgs.length} sub-org(s) without a tier flag
+                          </span>{' '}
+                          holding {totalAssets} assets —{' '}
+                          {totalUncovered > 0
+                            ? `${totalUncovered} not covered by the legacy asset group`
+                            : 'all covered by the legacy asset group'}
+                        </div>
+                        <ul className="space-y-1">
+                          {unassignedOrgs.map((o: any) => (
+                            <li key={o.orgId} className={o.uncovered > 0 ? 'text-destructive' : ''}>
+                              <span className="font-medium">{o.orgName || o.orgId}</span> — {o.assetCount || 0} assets
+                              {o.partial ? (
+                                <>: coverage not verified (sync truncated)</>
+                              ) : (
+                                <>
+                                  : {(o.coveredStandard || 0) + (o.coveredEconf || 0)} covered by legacy group
+                                  {o.coveredEconf ? ` (${o.coveredEconf} eConf)` : ''}
+                                  {typeof o.excluded === 'number' && o.excluded > 0 ? `, ${o.excluded} excluded` : ''}
+                                  , {o.uncovered || 0} not covered
+                                  {o.uncoveredMW ? ` (${o.uncoveredMW.toFixed(2)} MWp)` : ''}
+                                  {o.uncoveredAssets?.length ? (
+                                    <span className="block pl-3 opacity-80">
+                                      {o.uncoveredAssets.map((a: any) => a.assetName).join(', ')}
+                                      {o.uncovered > o.uncoveredAssets.length ? ', …' : ''}
+                                    </span>
+                                  ) : null}
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })()}
+
                 </details>
               )}
 
