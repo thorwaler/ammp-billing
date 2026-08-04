@@ -112,6 +112,26 @@ Deno.serve(async (req) => {
     const text = buildSlackMessage(payload);
     const results: any[] = [];
 
+    const slackCall = async (method: string, body: Record<string, unknown>) => {
+      const response = await fetch(`${GATEWAY_URL}/${method}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${lovableApiKey}`,
+          'X-Connection-Api-Key': slackApiKey,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+        body: JSON.stringify(body),
+      });
+      const responseText = await response.text();
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { raw: responseText };
+      }
+      return { response, data };
+    };
+
     for (const route of routes) {
       const body = {
         channel: route.channel_id,
@@ -122,33 +142,32 @@ Deno.serve(async (req) => {
 
       console.log(`Posting Slack message to channel ${route.channel_id} for type ${alert_type}`);
 
-      const response = await fetch(`${GATEWAY_URL}/chat.postMessage`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${lovableApiKey}`,
-          'X-Connection-Api-Key': slackApiKey,
-          'Content-Type': 'application/json; charset=utf-8',
-        },
-        body: JSON.stringify(body),
-      });
+      let { response, data: responseData } = await slackCall('chat.postMessage', body);
 
-      const responseText = await response.text();
-      let responseData: any;
-      try {
-        responseData = JSON.parse(responseText);
-      } catch {
-        responseData = { raw: responseText };
+      // Bot isn't a member of the channel yet: join the public channel and retry once.
+      if (responseData?.error === 'not_in_channel' || responseData?.error === 'channel_not_found') {
+        console.log(`Bot not in channel ${route.channel_id}, attempting conversations.join`);
+        const joinResult = await slackCall('conversations.join', { channel: route.channel_id });
+        if (joinResult.data?.ok) {
+          ({ response, data: responseData } = await slackCall('chat.postMessage', body));
+        } else {
+          console.error(`conversations.join failed for ${route.channel_id}:`, joinResult.data);
+        }
       }
 
       if (!response.ok || !responseData.ok) {
         const reason = responseData.error || responseData.message || `HTTP ${response.status}`;
         console.error(`Slack post failed for ${route.channel_id}:`, reason, responseData);
-        results.push({ channel_id: route.channel_id, success: false, error: reason, details: responseData });
+        const hint = reason === 'not_in_channel'
+          ? 'Invite the Lovable App bot to this channel (private channels require a manual invite), or enable the channels:join scope on the Slack connection.'
+          : undefined;
+        results.push({ channel_id: route.channel_id, success: false, error: reason, hint, details: responseData });
       } else {
         console.log(`Slack message posted to ${route.channel_id}:`, responseData.ts);
         results.push({ channel_id: route.channel_id, success: true, ts: responseData.ts });
       }
     }
+
 
     const allFailed = results.every((r) => !r.success);
     return new Response(JSON.stringify({
