@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,8 +13,18 @@ interface CustomerFormProps {
   existingCustomer?: any;
 }
 
+interface BrandingTheme {
+  BrandingThemeID: string;
+  Name: string;
+}
+
+const NO_THEME = "__default__";
+
 const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [themes, setThemes] = useState<BrandingTheme[]>([]);
+  const [themesLoading, setThemesLoading] = useState(true);
+  const [themesError, setThemesError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: existingCustomer?.name || "",
     nickname: existingCustomer?.nickname || "",
@@ -22,6 +32,7 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
     mwpManaged: existingCustomer?.mwpManaged || "",
     status: existingCustomer?.status || "active",
     xeroBrandingThemeId: existingCustomer?.xero_branding_theme_id || "",
+    xeroTaxType: existingCustomer?.xero_tax_type || "",
     whtRatePercent:
       existingCustomer?.wht_gross_up_rate != null
         ? String(Number(existingCustomer.wht_gross_up_rate) * 100)
@@ -30,6 +41,24 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   
   // Track original status to detect manual changes
   const [originalStatus] = useState(existingCustomer?.status || "active");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('xero-list-branding-themes');
+        if (error) throw error;
+        if (!cancelled) setThemes(data?.themes || []);
+      } catch (err: any) {
+        console.error('Failed to load Xero branding themes:', err);
+        if (!cancelled) setThemesError(err?.message || 'Could not load Xero branding themes');
+      } finally {
+        if (!cancelled) setThemesLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
