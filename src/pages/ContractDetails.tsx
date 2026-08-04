@@ -597,10 +597,37 @@ const ContractDetails = () => {
               </DialogContent>
             </Dialog>
 
+            {customer && (
+              <Dialog open={showEditCustomerDialog} onOpenChange={setShowEditCustomerDialog}>
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit customer
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Edit Customer - {customer.name}</DialogTitle>
+                  </DialogHeader>
+                  <CustomerForm
+                    existingCustomer={{
+                      ...customer,
+                      mwpManaged: customer.mwp_managed || 0,
+                    }}
+                    onComplete={() => {
+                      setShowEditCustomerDialog(false);
+                      loadContractData();
+                    }}
+                  />
+                </DialogContent>
+              </Dialog>
+            )}
+
             <Button variant="outline" onClick={() => setShowDuplicateDialog(true)}>
               <Copy className="mr-2 h-4 w-4" />
               Duplicate
             </Button>
+
 
             {contract && (
               <DuplicateContractDialog
