@@ -153,10 +153,16 @@ const ContractDetails = () => {
             customers (
               id,
               name,
+              nickname,
               location,
               mwp_managed,
-              status
+              status,
+              manual_status_override,
+              xero_branding_theme_id,
+              xero_tax_type,
+              wht_gross_up_rate
             )
+
           `)
           .eq('id', id)
           .single();
