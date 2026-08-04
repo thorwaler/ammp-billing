@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     const payload: AlertPayload = await req.json();
     console.log('Received Slack alert payload:', JSON.stringify(payload));
 
-    const { alert_type, is_test } = payload;
+    const { alert_type, is_test, channel_id: channelOverride } = payload;
 
     const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
     const slackApiKey = Deno.env.get('SLACK_API_KEY');
