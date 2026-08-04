@@ -81,10 +81,18 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: routes, error: routesError } = await supabase
+    let routesQuery = supabase
       .from('slack_notification_routes')
       .select('*')
-      .eq('notification_type', alert_type)
-      .eq('enabled', true);
+      .eq('notification_type', alert_type);
+
+    if (channelOverride) {
+      routesQuery = routesQuery.eq('channel_id', channelOverride);
+    } else {
+      routesQuery = routesQuery.eq('enabled', true);
+    }
+
+    const { data: routes, error: routesError } = await routesQuery;
 
     if (routesError) {
       console.error('Error fetching Slack routes:', routesError);
