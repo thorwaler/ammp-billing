@@ -1349,13 +1349,17 @@ async function generateElumAlerts(
     const uncoveredMW = unassigned.reduce((s: number, o: any) => s + (o.uncoveredMW || 0), 0);
     const coveredStandard = unassigned.reduce((s: number, o: any) => s + (o.coveredStandard || 0), 0);
     const coveredEconf = unassigned.reduce((s: number, o: any) => s + (o.coveredEconf || 0), 0);
+    const coveredElsewhere = unassigned.reduce((s: number, o: any) => s + (o.coveredElsewhere || 0), 0);
     const anyPartial = unassigned.some((o: any) => o.partial);
-    const covered = coveredStandard + coveredEconf;
+    const covered = coveredStandard + coveredEconf + coveredElsewhere;
+    const elsewhereNote = coveredElsewhere > 0
+      ? ` ${coveredElsewhere} asset${coveredElsewhere === 1 ? ' is' : 's are'} billed through another Elum tier's asset group.`
+      : '';
     const impact = uncovered > 0
-      ? ` ${uncovered} asset${uncovered === 1 ? '' : 's'} (${uncoveredMW.toFixed(2)} MWp) are covered by neither a tier org nor the legacy asset group.`
+      ? ` ${uncovered} asset${uncovered === 1 ? '' : 's'} (${uncoveredMW.toFixed(2)} MWp) are in no tier org and in no Elum tier asset group.${elsewhereNote}`
       : anyPartial
-        ? ` Coverage against the legacy asset group could not be verified (sync was truncated).`
-        : ` All ${covered} of their assets are still priced through the legacy asset group.`;
+        ? ` Coverage against the Elum tier asset groups could not be verified (sync was truncated).`
+        : ` All ${covered} of their assets are still priced through an Elum tier asset group.${elsewhereNote}`;
     pending.push({
       alert_type: 'elum_org_unassigned',
       severity: uncovered > 0 ? 'critical' : 'info',
@@ -1363,7 +1367,8 @@ async function generateElumAlerts(
         ? `${uncovered} Elum asset${uncovered === 1 ? '' : 's'} not covered by any tier or legacy group`
         : `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag (all covered)`,
       description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
-      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW, uncovered, uncoveredMW, coveredStandard, coveredEconf },
+      metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW, uncovered, uncoveredMW, coveredStandard, coveredEconf, coveredElsewhere },
+
     });
   }
 
