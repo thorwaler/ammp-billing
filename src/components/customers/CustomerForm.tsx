@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useXeroBrandingThemes } from "@/hooks/useXeroBrandingThemes";
+import { useXeroBrandingThemes, useXeroTaxRates } from "@/hooks/useXeroBrandingThemes";
+import { startXeroOAuth } from "@/lib/xeroConnect";
 
 interface CustomerFormProps {
   onComplete: () => void;
@@ -15,10 +16,39 @@ interface CustomerFormProps {
 }
 
 const NO_THEME = "__default__";
+const NO_TAX = "__contact_default__";
 
 const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { themes, loading: themesLoading, error: themesError } = useXeroBrandingThemes();
+  const {
+    themes,
+    loading: themesLoading,
+    error: themesError,
+    needsReconnect: themesNeedReconnect,
+  } = useXeroBrandingThemes();
+  const {
+    taxRates,
+    loading: taxRatesLoading,
+    error: taxRatesError,
+    needsReconnect: taxNeedsReconnect,
+  } = useXeroTaxRates();
+  const needsReconnect = themesNeedReconnect || taxNeedsReconnect;
+  const [reconnecting, setReconnecting] = useState(false);
+
+  const handleReconnectXero = async () => {
+    setReconnecting(true);
+    try {
+      await startXeroOAuth();
+    } catch (error: any) {
+      setReconnecting(false);
+      toast({
+        title: "Could not start Xero reconnect",
+        description: error?.message || "Please try from Settings > Integrations.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const [formData, setFormData] = useState({
     name: existingCustomer?.name || "",
     nickname: existingCustomer?.nickname || "",
