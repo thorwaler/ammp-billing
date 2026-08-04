@@ -241,18 +241,71 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
             </p>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="xeroBrandingThemeId">Xero branding theme ID</Label>
-            <Input
-              id="xeroBrandingThemeId"
-              name="xeroBrandingThemeId"
-              value={formData.xeroBrandingThemeId}
-              onChange={handleInputChange}
-              placeholder="e.g. 4c82c365-35cb-490e-93bd-2c3a0bf6f7c2"
-            />
+            <Label htmlFor="xeroBrandingThemeId">Xero branding theme</Label>
+            {themesLoading ? (
+              <div className="flex h-10 items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" /> Loading themes from Xero…
+              </div>
+            ) : themesError ? (
+              <>
+                <Input
+                  id="xeroBrandingThemeId"
+                  name="xeroBrandingThemeId"
+                  value={formData.xeroBrandingThemeId}
+                  onChange={handleInputChange}
+                  placeholder="e.g. 4c82c365-35cb-490e-93bd-2c3a0bf6f7c2"
+                />
+                <p className="text-xs text-destructive">
+                  Could not load themes from Xero ({themesError}). Enter the theme ID manually.
+                </p>
+              </>
+            ) : (
+              <Select
+                value={formData.xeroBrandingThemeId || NO_THEME}
+                onValueChange={(value) =>
+                  handleSelectChange("xeroBrandingThemeId", value === NO_THEME ? "" : value)
+                }
+              >
+                <SelectTrigger id="xeroBrandingThemeId">
+                  <SelectValue placeholder="Organisation default" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_THEME}>Organisation default</SelectItem>
+                  {themes.map((theme) => (
+                    <SelectItem key={theme.BrandingThemeID} value={theme.BrandingThemeID}>
+                      {theme.Name}
+                    </SelectItem>
+                  ))}
+                  {formData.xeroBrandingThemeId &&
+                    !themes.some((t) => t.BrandingThemeID === formData.xeroBrandingThemeId) && (
+                      <SelectItem value={formData.xeroBrandingThemeId}>
+                        Unknown theme ({formData.xeroBrandingThemeId.slice(0, 8)}…)
+                      </SelectItem>
+                    )}
+                </SelectContent>
+              </Select>
+            )}
             <p className="text-xs text-muted-foreground">
-              Find in Xero → Settings → Invoice Settings. Leave blank to use the organisation default.
+              Controls how the invoice looks (logo, address, wording) — e.g. a "Nigeria" theme.
+              It does not set tax; use the tax type below for VAT.
             </p>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="xeroTaxType">Xero tax type</Label>
+            <Input
+              id="xeroTaxType"
+              name="xeroTaxType"
+              value={formData.xeroTaxType}
+              onChange={handleInputChange}
+              placeholder="e.g. OUTPUT"
+            />
+            <p className="text-xs text-muted-foreground">
+              Tax code applied to every invoice line (this is what puts VAT on the invoice).
+              Codes vary per Xero organisation (e.g. <code>OUTPUT</code>, <code>NONE</code>,
+              <code> EXEMPTOUTPUT</code>). Leave blank to use the contact's default in Xero.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="whtRatePercent">Withholding tax rate (%)</Label>
             <Input
