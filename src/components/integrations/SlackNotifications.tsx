@@ -64,6 +64,162 @@ const NOTIFICATION_TYPES: NotificationTypeOption[] = [
   { id: 'ammp_site_count_drop', label: 'AMMP Site Count Drop', group: 'Elum & Alerts' },
 ];
 
+interface SamplePayload {
+  severity: string;
+  title: string;
+  description: string;
+  metadata: Record<string, unknown>;
+}
+
+/** Realistic dummy payloads so test messages mirror what a real alert looks like in Slack. */
+const SAMPLE_PAYLOADS: Record<string, SamplePayload> = {
+  contract_expired: {
+    severity: 'critical',
+    title: 'Contract expired',
+    description: 'The contract "Sample Energy — Monitoring 2025" expired on 31 Jul 2026 and is still marked active.',
+    metadata: { customer: 'Sample Energy Ltd', contract: 'Monitoring 2025', expiry_date: '2026-07-31', days_overdue: 4 },
+  },
+  contract_expiring_soon: {
+    severity: 'warning',
+    title: 'Contract expiring in 30 days',
+    description: 'The contract "Sample Energy — Monitoring 2025" expires on 03 Sep 2026. Start the renewal conversation.',
+    metadata: { customer: 'Sample Energy Ltd', contract: 'Monitoring 2025', expiry_date: '2026-09-03', days_remaining: 30 },
+  },
+  mw_warning: {
+    severity: 'warning',
+    title: 'MW capacity at 92% of contracted volume',
+    description: 'Sample Energy Ltd is at 46.0 MWp of the 50.0 MWp contracted capacity.',
+    metadata: { customer: 'Sample Energy Ltd', current_mwp: 46.0, contracted_mwp: 50.0, utilisation_pct: 92 },
+  },
+  mw_exceeded: {
+    severity: 'critical',
+    title: 'Contracted MW capacity exceeded',
+    description: 'Sample Energy Ltd is at 54.3 MWp against a contracted 50.0 MWp — 4.3 MWp over.',
+    metadata: { customer: 'Sample Energy Ltd', current_mwp: 54.3, contracted_mwp: 50.0, overage_mwp: 4.3 },
+  },
+  ammp_sync_complete: {
+    severity: 'info',
+    title: 'AMMP sync complete',
+    description: 'Daily AMMP sync finished: 24 contracts synced, 1 812 assets refreshed in 4m 12s.',
+    metadata: { contracts_synced: 24, assets_refreshed: 1812, duration: '4m 12s', started_at: '2026-08-04T02:00:00Z' },
+  },
+  ammp_sync_failed: {
+    severity: 'critical',
+    title: 'AMMP sync failed',
+    description: 'Daily AMMP sync aborted after 3 retries: gateway returned HTTP 429 for /v1/assets.',
+    metadata: { endpoint: '/v1/assets', status: 429, retries: 3, contracts_pending: 6 },
+  },
+  ammp_contract_synced: {
+    severity: 'info',
+    title: 'Contract synced with AMMP',
+    description: 'Elum — C&I Light 2026 synced: 140 sites, 38.4 MWp across 9 sub-organisations.',
+    metadata: { contract: 'Elum — C&I Light 2026', sites: 140, total_mwp: 38.4, sub_orgs: 9 },
+  },
+  xero_sync_complete: {
+    severity: 'info',
+    title: 'Xero sync complete',
+    description: 'Xero sync finished: 12 invoices updated, 3 marked as paid.',
+    metadata: { invoices_updated: 12, marked_paid: 3, organisation: 'AMMP Technologies BV' },
+  },
+  xero_sync_failed: {
+    severity: 'critical',
+    title: 'Xero sync failed',
+    description: 'Xero sync failed: the access token could not be refreshed (invalid_grant). Reconnect Xero in Integrations.',
+    metadata: { error: 'invalid_grant', organisation: 'AMMP Technologies BV' },
+  },
+  invoice_increase: {
+    severity: 'warning',
+    title: 'Invoice amount increased by 34%',
+    description: 'The upcoming invoice for Sample Energy Ltd is EUR 41 200 vs EUR 30 750 last period.',
+    metadata: { customer: 'Sample Energy Ltd', previous_amount: 30750, current_amount: 41200, currency: 'EUR', change_pct: 34 },
+  },
+  mw_decrease: {
+    severity: 'warning',
+    title: 'MW decreased since last invoice',
+    description: 'Sample Energy Ltd dropped from 46.0 MWp to 39.2 MWp (-14.8%) between billing periods.',
+    metadata: { customer: 'Sample Energy Ltd', previous_mwp: 46.0, current_mwp: 39.2, change_pct: -14.8 },
+  },
+  site_decrease: {
+    severity: 'warning',
+    title: 'Site count decreased',
+    description: 'Sample Energy Ltd went from 88 to 74 billable sites (-14) since the last invoice.',
+    metadata: { customer: 'Sample Energy Ltd', previous_sites: 88, current_sites: 74, difference: -14 },
+  },
+  asset_disappeared: {
+    severity: 'critical',
+    title: 'Assets disappeared from AMMP',
+    description: '3 assets present at last invoice are no longer returned by AMMP for Sample Energy Ltd.',
+    metadata: { customer: 'Sample Energy Ltd', assets: ['Kano Rooftop 2', 'Lagos Hub A', 'Abuja Depot'], last_seen: '2026-07-01' },
+  },
+  asset_reappeared: {
+    severity: 'info',
+    title: 'Assets reappeared in AMMP',
+    description: '2 previously missing assets are visible again for Sample Energy Ltd.',
+    metadata: { customer: 'Sample Energy Ltd', assets: ['Kano Rooftop 2', 'Lagos Hub A'], missing_days: 34 },
+  },
+  invoice_due_soon: {
+    severity: 'info',
+    title: 'Invoice to be created in 5 days',
+    description: 'Sample Energy Ltd — Q3 2026 invoice (est. EUR 41 200) should be created by 09 Aug 2026.',
+    metadata: { customer: 'Sample Energy Ltd', period: 'Q3 2026', estimated_amount: 41200, currency: 'EUR', create_by: '2026-08-09' },
+  },
+  invoice_due_today: {
+    severity: 'warning',
+    title: 'Invoice due to be created today',
+    description: 'Sample Energy Ltd — Q3 2026 invoice (est. EUR 41 200) is due to be created today.',
+    metadata: { customer: 'Sample Energy Ltd', period: 'Q3 2026', estimated_amount: 41200, currency: 'EUR', create_by: '2026-08-04' },
+  },
+  invoice_overdue: {
+    severity: 'critical',
+    title: 'Invoice creation overdue by 6 days',
+    description: 'Sample Energy Ltd — Q3 2026 invoice was due to be created on 29 Jul 2026 and has not been generated.',
+    metadata: { customer: 'Sample Energy Ltd', period: 'Q3 2026', create_by: '2026-07-29', days_overdue: 6 },
+  },
+  elum_org_unassigned: {
+    severity: 'critical',
+    title: 'Elum sub-org without a tier',
+    description: 'Sub-organisation "Elum West Africa" has no tier feature flag: 12 of 31 assets are not covered by any legacy asset group.',
+    metadata: { org_name: 'Elum West Africa', org_id: 'org_sample_1234', total_assets: 31, covered: 19, uncovered: 12 },
+  },
+  elum_asset_double_count: {
+    severity: 'critical',
+    title: 'Elum asset counted in two tiers',
+    description: '4 assets appear in both C&I Light and C&I Pro resolution and would be billed twice.',
+    metadata: { assets: ['Terrafirma 1', 'Terrafirma 2', 'Kumasi Plant', 'Tema Yard'], tiers: ['C&I Light', 'C&I Pro'] },
+  },
+  elum_utility_site_too_small: {
+    severity: 'warning',
+    title: 'Utility site below 2 MWp',
+    description: 'Site "Bamako Solar 3" is billed under the Utility tier but only has 0.85 MWp.',
+    metadata: { site: 'Bamako Solar 3', pv_mwp: 0.85, minimum_mwp: 2, tier: 'Utility' },
+  },
+  elum_combined_minimum_shortfall: {
+    severity: 'warning',
+    title: 'Elum combined annual minimum shortfall',
+    description: 'Combined Elum contract value for 2026 is EUR 71 400 against the EUR 80 000 minimum — a EUR 8 600 shortfall.',
+    metadata: { year: 2026, combined_value: 71400, minimum: 80000, shortfall: 8600, currency: 'EUR' },
+  },
+  zero_pv_capacity: {
+    severity: 'warning',
+    title: 'Site reporting 0 MWp PV capacity',
+    description: 'Site "Kano Rooftop 2" reports 0 MWp in AMMP (last known 1.24 MWp). It will be billed on the last known value until corrected.',
+    metadata: { site: 'Kano Rooftop 2', asset_id: 'asset_sample_9876', current_mwp: 0, last_known_mwp: 1.24, detected_at: '2026-08-04' },
+  },
+  asset_reappeared_suspicious: {
+    severity: 'critical',
+    title: 'Suspicious asset return',
+    description: 'Asset "Lagos Hub A" disappeared 3 days before the last invoice and reappeared 2 days after it was issued.',
+    metadata: { site: 'Lagos Hub A', disappeared_at: '2026-06-28', reappeared_at: '2026-07-06', invoice_date: '2026-07-04' },
+  },
+  ammp_site_count_drop: {
+    severity: 'critical',
+    title: 'Significant AMMP site count drop',
+    description: 'Elum — C&I Light 2026 dropped from 172 to 140 sites (-18.6%) in the latest sync. Cached values were preserved.',
+    metadata: { contract: 'Elum — C&I Light 2026', previous_sites: 172, current_sites: 140, change_pct: -18.6 },
+  },
+};
+
+
 const SlackNotifications = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -228,19 +384,23 @@ const SlackNotifications = () => {
     const key = channelId ? `${type.id}:${channelId}` : type.id;
     setTesting((prev) => ({ ...prev, [key]: true }));
     try {
+      const sample = SAMPLE_PAYLOADS[type.id];
       const { error } = await supabase.functions.invoke('slack-post-alert', {
         body: {
           alert_type: type.id,
-          severity: 'warning',
-          title: `🧪 Test: ${type.label}`,
-          description: `This is a test Slack alert for *${type.label}*. If you see this message, the route is configured correctly.`,
-          metadata: { test: true, notification_type: type.id },
+          severity: sample?.severity ?? 'warning',
+          title: `[TEST] ${sample?.title ?? type.label}`,
+          description:
+            sample?.description ??
+            `This is a test Slack alert for *${type.label}*. If you see this message, the route is configured correctly.`,
+          metadata: { test: true, notification_type: type.id, ...(sample?.metadata ?? {}) },
           contract_id: null,
           customer_id: null,
           channel_id: channelId || null,
           is_test: true,
         },
       });
+
 
       if (error) throw error;
       toast.success(`Test message sent to Slack for ${type.label}`);
