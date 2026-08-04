@@ -35,6 +35,14 @@ const NOTIFICATION_TYPES = [
   { id: 'invoice_due_soon', label: 'Invoice Due Soon (heads-up)', group: 'Invoice' },
   { id: 'invoice_due_today', label: 'Invoice Due Today', group: 'Invoice' },
   { id: 'invoice_overdue', label: 'Invoice Overdue', group: 'Invoice' },
+  // Elum & alert-page alerts
+  { id: 'elum_org_unassigned', label: 'Elum Sub-org Without Tier', group: 'Elum & Alerts' },
+  { id: 'elum_asset_double_count', label: 'Elum Asset Double Count', group: 'Elum & Alerts' },
+  { id: 'elum_utility_site_too_small', label: 'Elum Utility Site < 2 MWp', group: 'Elum & Alerts' },
+  { id: 'elum_combined_minimum_shortfall', label: 'Elum Combined Minimum Shortfall', group: 'Elum & Alerts' },
+  { id: 'zero_pv_capacity', label: 'Zero PV Capacity', group: 'Elum & Alerts' },
+  { id: 'asset_reappeared_suspicious', label: 'Suspicious Asset Return', group: 'Elum & Alerts' },
+  { id: 'ammp_site_count_drop', label: 'AMMP Site Count Drop', group: 'Elum & Alerts' },
 ];
 
 const SEVERITY_LEVELS = [
