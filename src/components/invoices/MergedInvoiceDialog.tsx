@@ -589,7 +589,7 @@ export function MergedInvoiceDialog({
         Type: "ACCREC",
         Contact: { Name: customerName },
         Date: format(invoiceDate, "yyyy-MM-dd"),
-        DueDate: format(new Date(invoiceDate.getTime() + 30 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"),
+        // DueDate is set server-side from the customer's Xero payment terms
         LineItems: lineItems,
         Reference: `${customerName.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '-').substring(0, 20)}-Merged-${format(invoiceDate, "yyyyMMdd")}`,
         CurrencyCode: primaryCurrency,
