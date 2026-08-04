@@ -100,7 +100,9 @@ const CustomerForm = ({ onComplete, existingCustomer }: CustomerFormProps) => {
         mwp_managed: formData.mwpManaged ? parseFloat(formData.mwpManaged) : 0,
         status: formData.status,
         xero_branding_theme_id: formData.xeroBrandingThemeId.trim() || null,
+        xero_tax_type: formData.xeroTaxType.trim() || null,
         wht_gross_up_rate: whtRate,
+
         // Set manual_status_override to true if status was manually changed
         manual_status_override: statusChanged ? true : (existingCustomer?.manual_status_override || false),
       };
