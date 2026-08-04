@@ -31,7 +31,8 @@ This changes only the due date sent to Xero. It does not change the internal "cr
 ## Technical notes
 
 - `src/components/customers/CustomerForm.tsx`: add `xeroTaxType` to form state and the Xero invoicing card; include `xero_tax_type` in the insert/update payload.
-- `src/components/customers/CustomerCard.tsx`: surface the tax type alongside the existing WHT/branding indicators.
+- `src/components/customers/CustomerCard.tsx`: add a compact Xero invoicing summary row (branding theme / WHT / tax type) with an inline Edit trigger reusing the existing `CustomerForm` dialog; pass `xero_tax_type` through.
+- `src/pages/ContractDetails.tsx`: add an "Edit customer" button that opens `CustomerForm` for the contract's customer (fetch the customer row's Xero fields alongside the contract).
 - Migration: add `xero_payment_terms_days integer` and `xero_payment_terms_type text` to `public.customers` (nullable, no grant changes needed — existing table).
 - `supabase/functions/xero-sync-customers/index.ts`: map `contact.PaymentTerms?.Sales` into the two new columns; change `xero_tax_type` write to only set when the local value is null.
 - `supabase/functions/xero-send-invoice/index.ts`: extend the customer lookup to the new terms columns, compute `DueDate` from `Day` + `Type` (`DAYSAFTERBILLDATE`, `OFCURRENTMONTH`, `DAYSAFTERBILLMONTH`, `OFFOLLOWINGMONTH`), and delete `DueDate` from the payload when no terms exist.
