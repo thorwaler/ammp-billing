@@ -1617,8 +1617,10 @@ const ContractDetails = () => {
                     </table>
                   </div>
                   {unassignedOrgs.length > 0 && (() => {
-                    const totalUncovered = unassignedOrgs.reduce((s: number, o: any) => s + (o.uncovered || 0), 0);
-                    const totalAssets = unassignedOrgs.reduce((s: number, o: any) => s + (o.assetCount || 0), 0);
+                    const verified = unassignedOrgs.filter((o: any) => !o.partial);
+                    const unverified = unassignedOrgs.length - verified.length;
+                    const totalUncovered = verified.reduce((s: number, o: any) => s + (o.uncovered || 0), 0);
+                    const totalAssets = verified.reduce((s: number, o: any) => s + (o.assetCount || 0), 0);
                     return (
                       <div className="p-3 border-t text-xs text-muted-foreground space-y-2">
                         <div>
@@ -1629,11 +1631,15 @@ const ContractDetails = () => {
                           {totalUncovered > 0
                             ? `${totalUncovered} not covered by the legacy asset group`
                             : 'all covered by the legacy asset group'}
+                          {unverified > 0 ? ` (${unverified} org(s) not verified this sync)` : ''}
                         </div>
+
                         <ul className="space-y-1">
                           {unassignedOrgs.map((o: any) => (
                             <li key={o.orgId} className={o.uncovered > 0 ? 'text-destructive' : ''}>
                               <span className="font-medium">{o.orgName || o.orgId}</span> — {o.assetCount || 0} assets
+                              {o.placeholders ? ` (+${o.placeholders} empty AMMP stub assets ignored)` : ''}
+
                               {o.partial ? (
                                 <>: coverage not verified (sync truncated)</>
                               ) : (

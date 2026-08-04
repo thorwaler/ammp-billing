@@ -56,7 +56,12 @@ interface UnassignedOrgEntry {
   coveredElsewhereAssets?: Array<{ assetId: string; assetName: string; tierName: string }>;
   /** Coverage not verified because the sync was truncated by the time budget */
   partial?: boolean;
+  /** How the asset list for this org was resolved */
+  source?: 'org-scoped' | 'unresolved';
+  /** Never-configured stub assets in AMMP catch-all orgs; excluded from counts. */
+  placeholders?: number;
 }
+
 
 
 interface CachedCapabilities {
@@ -455,11 +460,24 @@ async function getClassifiedSubOrgs(
     throw new Error(`Unexpected /orgs payload for parent ${parentOrgId}`);
   }
 
-  const direct = orgs
+  // The API does not always honour parent_org_id — when the payload carries the
+  // field, enforce the parent client-side so platform-wide orgs (other AMMP
+  // customers, catch-all buckets) are never treated as Elum sub-orgs.
+  const withParent = orgs.filter((o: any) => o?.parent_org_id);
+  const scoped = withParent.length > 0
+    ? orgs.filter((o: any) => !o?.parent_org_id || o.parent_org_id === parentOrgId)
+    : orgs;
+  if (scoped.length !== orgs.length) {
+    console.log(`[AMMP Sync Contract] /orgs?parent_org_id=${parentOrgId}: ${orgs.length} returned, ${scoped.length} actually children`);
+  }
+
+
+  const direct = scoped
     .filter((o: any) => o?.org_id && o.org_id !== parentOrgId && !seen.has(o.org_id))
     .map(classifyOrgRow);
 
   for (const o of direct) seen.add(o.orgId);
+
 
   // One level of nesting: grandchild orgs also carry tier flags
   if (depth < 1) {
@@ -569,18 +587,15 @@ async function processContractSync(
     // Discover sub-orgs under the Elum parent org and keep those on this tier
     const subOrgs = await getClassifiedSubOrgs(token, elumParentOrgId);
     tierOrgs = subOrgs.filter(o => o.tier === elumTier);
+    // Flag-less sub-orgs: names only here. Their asset lists are resolved with
+    // the org-scoped endpoint in the coverage pass below — filtering the global
+    // /assets list on org_id attributes almost every asset in the account to a
+    // catch-all org and massively over-reports "unassigned" assets.
     unassignedOrgs = subOrgs
       .filter(o => o.tier === null)
-      .map(o => {
-        const orphaned = allAssets.filter((a: any) => a.org_id === o.orgId);
-        return {
-          orgId: o.orgId,
-          orgName: o.orgName,
-          assetCount: orphaned.length,
-          totalMW: orphaned.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
-        };
-      });
-    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} unassigned holding ${unassignedOrgs.reduce((s, o) => s + (o.assetCount || 0), 0)} assets)`);
+      .map(o => ({ orgId: o.orgId, orgName: o.orgName }));
+    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} without a tier flag)`);
+
     
     // Resolve assets per sub-org via the org-scoped assets endpoint.
     // A failed fetch throws (preserving the previous cache) instead of silently
@@ -720,23 +735,54 @@ async function processContractSync(
       let totalCovered = 0;
       let totalElsewhere = 0;
       let totalUncovered = 0;
-      unassignedOrgs = unassignedOrgs.map((o) => {
-        if (resolutionTruncated) return { ...o, partial: true };
-        const orgAssets = allAssets.filter((a: any) => a.org_id === o.orgId);
+      const resolved: UnassignedOrgEntry[] = [];
+      for (const o of unassignedOrgs) {
+        if (resolutionTruncated || discoveryBudgetExceeded()) {
+          resolutionTruncated = true;
+          resolved.push({ ...o, partial: true, source: 'unresolved' });
+          continue;
+        }
+        let orgAssets: any[];
+        try {
+          orgAssets = await getAssetsForOrg(token, o.orgId);
+        } catch (e) {
+          console.warn(`[AMMP Sync Contract] Flag-less org ${o.orgName} lookup failed:`, e);
+          resolved.push({ ...o, partial: true, source: 'unresolved' });
+          continue;
+        }
+        const globalCount = allAssets.filter((a: any) => a.org_id === o.orgId).length;
+        if (globalCount !== orgAssets.length) {
+          console.log(
+            `[AMMP Sync Contract] Flag-less org ${o.orgName}: org-scoped ${orgAssets.length} assets (global-list filter would report ${globalCount})`
+          );
+        }
+
         let coveredStandard = 0;
         let coveredEconf = 0;
         let excluded = 0;
         let coveredElsewhere = 0;
         let uncovered = 0;
         let uncoveredMW = 0;
+        let placeholders = 0;
         const uncoveredAssets: Array<{ assetId: string; assetName: string; mw: number }> = [];
         const coveredElsewhereAssets: Array<{ assetId: string; assetName: string; tierName: string }> = [];
         for (const a of orgAssets) {
           const mw = (a.total_pv_power || 0) / 1_000_000;
+          // AMMP catch-all orgs are full of never-configured stub assets: no PV
+          // capacity, no location, no tags. They are not billable and must not
+          // be reported as revenue leakage.
+          const isPlaceholder =
+            (a.total_pv_power === null || a.total_pv_power === undefined) &&
+            !a.long_name && !a.country_code && !a.latitude && !a.tags;
+          if (isPlaceholder) {
+            placeholders++;
+            continue;
+          }
           if (hasNotGroup && legacyExcludedIds.has(a.asset_id)) {
             excluded++;
             continue;
           }
+
           if (legacyMemberIds.has(a.asset_id)) {
             if (legacyEconfIds.has(a.asset_id)) coveredEconf++; else coveredStandard++;
             continue;
@@ -762,8 +808,12 @@ async function processContractSync(
         totalCovered += coveredStandard + coveredEconf;
         totalElsewhere += coveredElsewhere;
         totalUncovered += uncovered;
-        return {
+        resolved.push({
           ...o,
+          source: 'org-scoped',
+          assetCount: orgAssets.length - placeholders,
+          placeholders,
+          totalMW: orgAssets.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
           coveredStandard,
           coveredEconf,
           ...(hasNotGroup ? { excluded } : {}),
@@ -772,8 +822,11 @@ async function processContractSync(
           uncovered,
           uncoveredMW,
           uncoveredAssets: uncoveredAssets.length > 0 ? uncoveredAssets : undefined,
-        };
-      });
+        });
+
+      }
+      unassignedOrgs = resolved;
+
       console.log(
         `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (skipped — resolution truncated)' : ''}`
       );
