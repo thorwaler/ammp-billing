@@ -11,6 +11,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import CustomerForm from "./CustomerForm";
+import { useXeroBrandingThemes } from "@/hooks/useXeroBrandingThemes";
+
 import ContractForm from "../contracts/ContractForm";
 import { supabase } from "@/integrations/supabase/client";
 import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
