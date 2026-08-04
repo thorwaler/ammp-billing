@@ -720,9 +720,27 @@ async function processContractSync(
       let totalCovered = 0;
       let totalElsewhere = 0;
       let totalUncovered = 0;
-      unassignedOrgs = unassignedOrgs.map((o) => {
-        if (resolutionTruncated) return { ...o, partial: true };
-        const orgAssets = allAssets.filter((a: any) => a.org_id === o.orgId);
+      const resolved: UnassignedOrgEntry[] = [];
+      for (const o of unassignedOrgs) {
+        if (resolutionTruncated || discoveryBudgetExceeded()) {
+          resolutionTruncated = true;
+          resolved.push({ ...o, partial: true, source: 'unresolved' });
+          continue;
+        }
+        let orgAssets: any[];
+        try {
+          orgAssets = await getAssetsForOrg(token, o.orgId);
+        } catch (e) {
+          console.warn(`[AMMP Sync Contract] Flag-less org ${o.orgName} lookup failed:`, e);
+          resolved.push({ ...o, partial: true, source: 'unresolved' });
+          continue;
+        }
+        const globalCount = allAssets.filter((a: any) => a.org_id === o.orgId).length;
+        if (globalCount !== orgAssets.length) {
+          console.log(
+            `[AMMP Sync Contract] Flag-less org ${o.orgName}: org-scoped ${orgAssets.length} assets (global-list filter would report ${globalCount})`
+          );
+        }
         let coveredStandard = 0;
         let coveredEconf = 0;
         let excluded = 0;
@@ -762,8 +780,11 @@ async function processContractSync(
         totalCovered += coveredStandard + coveredEconf;
         totalElsewhere += coveredElsewhere;
         totalUncovered += uncovered;
-        return {
+        resolved.push({
           ...o,
+          source: 'org-scoped',
+          assetCount: orgAssets.length,
+          totalMW: orgAssets.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
           coveredStandard,
           coveredEconf,
           ...(hasNotGroup ? { excluded } : {}),
@@ -772,8 +793,10 @@ async function processContractSync(
           uncovered,
           uncoveredMW,
           uncoveredAssets: uncoveredAssets.length > 0 ? uncoveredAssets : undefined,
-        };
-      });
+        });
+      }
+      unassignedOrgs = resolved;
+
       console.log(
         `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (skipped — resolution truncated)' : ''}`
       );
