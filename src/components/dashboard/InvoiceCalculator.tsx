@@ -1253,6 +1253,16 @@ export function InvoiceCalculator({
         }
       }
       
+      // Enterprise eConf: one-time onboarding fee (NRR)
+      if (selectedCustomer.package === 'enterprise_econf' && includeOnboardingFee && selectedCustomer.onboardingSetupFee) {
+        lineItems.push({
+          Description: "Onboarding Setup Fee",
+          Quantity: 1,
+          UnitAmount: selectedCustomer.onboardingSetupFee,
+          AccountCode: ACCOUNT_IMPLEMENTATION_FEES
+        });
+      }
+
       // Matriarch API: NRR one-time fees
       if (isMatriarchApiPackage(selectedCustomer.package)) {
         if (includeOnboardingFee && selectedCustomer.onboardingSetupFee) {
@@ -1463,6 +1473,11 @@ export function InvoiceCalculator({
         nrrAmount += (result.starterPackageCost || 0) + (result.retainerCost || 0);
       }
       
+      // Enterprise eConf: onboarding fee is NRR
+      if (selectedCustomer.package === 'enterprise_econf' && includeOnboardingFee) {
+        nrrAmount += (selectedCustomer.onboardingSetupFee || 0);
+      }
+
       // Matriarch API: one-time fees are NRR
       if (isMatriarch) {
         if (includeOnboardingFee) nrrAmount += (selectedCustomer.onboardingSetupFee || 0);
@@ -2273,6 +2288,39 @@ export function InvoiceCalculator({
                 </div>
               )}
               
+              {/* Enterprise eConf section */}
+              {selectedCustomer.package === 'enterprise_econf' && (
+                <div className="p-3 border rounded-lg bg-muted/50 space-y-3">
+                  <h4 className="font-semibold text-sm">Enterprise eConf Details</h4>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Base rate:</span>
+                      <span className="ml-2 font-medium">
+                        {currencySymbol}{((selectedCustomer as any).orgPricingConfig?.liteBaseRate ?? 650).toLocaleString()}/MWp/yr
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">eConf upgrade:</span>
+                      <span className="ml-2 font-medium">
+                        +{currencySymbol}{((selectedCustomer as any).orgPricingConfig?.liteEconfRate ?? 150).toLocaleString()}/MWp/yr
+                      </span>
+                    </div>
+                  </div>
+                  {selectedCustomer.onboardingSetupFee ? (
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="include-onboarding-fee-econf"
+                        checked={includeOnboardingFee}
+                        onCheckedChange={(checked) => setIncludeOnboardingFee(checked === true)}
+                      />
+                      <Label htmlFor="include-onboarding-fee-econf" className="text-sm cursor-pointer">
+                        Include Onboarding Fee ({currencySymbol}{selectedCustomer.onboardingSetupFee.toLocaleString()})
+                      </Label>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
               {/* Matriarch API section */}
               {isMatriarchApiPackage(selectedCustomer.package) && (
                 <div className="p-3 border rounded-lg bg-muted/50 space-y-3">
