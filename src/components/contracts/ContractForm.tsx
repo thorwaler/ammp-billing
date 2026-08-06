@@ -801,8 +801,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("modules", []);
       setShowCustomPricing(false);
     } else if (value === "elum_jubaili") {
-      // Elum Jubaili - per-site pricing
-      form.setValue("annualFeePerSite", 500);
+      // Elum Jubaili - per-site pricing banded by genset rating (kVA)
+      form.setValue("minimumAnnualValue", DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE);
+      setJubailiKvaBands(DEFAULT_JUBAILI_KVA_BANDS);
       form.setValue("modules", []);
       setShowCustomPricing(false);
     } else if (value === "elum_portfolio_os") {
