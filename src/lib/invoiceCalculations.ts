@@ -145,6 +145,8 @@ export interface CalculationParams {
   annualFeePerSite?: number;
   sitesToBill?: SiteBillingItem[];
   // Elum package fields
+  /** Elum Jubaili: per-site annual fee bands by genset rating (kVA) */
+  jubailiKvaBands?: JubailiKvaBand[];
   siteSizeThresholdKwp?: number;
   belowThresholdPricePerMWp?: number;
   aboveThresholdPricePerMWp?: number;
