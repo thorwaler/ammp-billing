@@ -881,21 +881,20 @@ async function processContractSync(
     let baseCount = 0;
     let econfCount = 0;
     let excludedCount = 0;
-    let placeholderCount = 0;
+    // Zero-capacity sites are still billed; they are only surfaced for review so
+    // the existing zero-PV alert / revision flow can handle them.
+    const zeroCapacityAssets: Array<{ assetId: string; assetName: string }> = [];
     for (const m of members) {
       const a = m.raw;
-      // Never-configured stub assets: no PV capacity, no location, no tags.
-      if (
-        a &&
-        (a.total_pv_power === null || a.total_pv_power === undefined) &&
-        !a.long_name && !a.country_code && !a.latitude && !a.tags
-      ) {
-        placeholderCount++;
-        continue;
-      }
       if (excludedIds.has(m.asset_id)) {
         excludedCount++;
         continue;
+      }
+      if (
+        a &&
+        (a.total_pv_power === null || a.total_pv_power === undefined || a.total_pv_power === 0)
+      ) {
+        zeroCapacityAssets.push({ assetId: m.asset_id, assetName: m.asset_name });
       }
       const target = econfIds.has(m.asset_id) ? econfOrg : baseOrg;
       if (target === econfOrg) econfCount++; else baseCount++;
@@ -906,11 +905,18 @@ async function processContractSync(
     if (baseCount > 0) tierOrgs.push(baseOrg);
     if (econfCount > 0) tierOrgs.push(econfOrg);
     for (const seg of tierOrgs) (seg as any).isLegacyAssetGroup = true;
-    if (baseCount > 0) orgResolutionLog.push({ orgId: baseOrg.orgId, orgName: baseOrg.orgName, assetCount: baseCount, source: orgId ? 'org-scoped' : 'asset-group', placeholders: placeholderCount });
+    if (baseCount > 0) orgResolutionLog.push({
+      orgId: baseOrg.orgId,
+      orgName: baseOrg.orgName,
+      assetCount: baseCount,
+      source: orgId ? 'org-scoped' : 'asset-group',
+      zeroCapacity: zeroCapacityAssets.length,
+      zeroCapacityAssets: zeroCapacityAssets.slice(0, 50),
+    });
     if (econfCount > 0) orgResolutionLog.push({ orgId: econfOrg.orgId, orgName: econfOrg.orgName, assetCount: econfCount, source: orgId ? 'org-scoped' : 'asset-group' });
 
     console.log(
-      `[AMMP Sync Contract] Enterprise eConf (${orgId ? `org ${orgId}` : 'asset group'}): ${members.length} assets -> ${baseCount} standard, ${econfCount} eConf, ${excludedCount} excluded, ${placeholderCount} placeholders`
+      `[AMMP Sync Contract] Enterprise eConf (${orgId ? `org ${orgId}` : 'asset group'}): ${members.length} assets -> ${baseCount} standard, ${econfCount} eConf, ${excludedCount} excluded, ${zeroCapacityAssets.length} zero-capacity (billed)`
     );
 
   } else if (contract.ammp_asset_group_id) {
