@@ -2989,12 +2989,40 @@ export function InvoiceCalculator({
                     <span>Total:</span>
                     <span>{formatContractCurrency(result.elumJubailiBreakdown.totalCost)}</span>
                   </div>
-                  {result.elumJubailiBreakdown.unratedSites.length > 0 && (
-                    <p className="text-xs text-destructive">
-                      {result.elumJubailiBreakdown.unratedSites.length} site(s) have no genset rating in AMMP and are not billed:{' '}
-                      {result.elumJubailiBreakdown.unratedSites.map(s => s.assetName).join(', ')}
-                    </p>
-                  )}
+                  {(() => {
+                    const unrated = result.elumJubailiBreakdown!.unratedSites;
+                    const unset = unrated.filter(s => s.unratedReason !== 'zero' && s.unratedReason !== 'out_of_bands');
+                    const zero = unrated.filter(s => s.unratedReason === 'zero');
+                    const outOfBands = unrated.filter(s => s.unratedReason === 'out_of_bands');
+                    if (unrated.length === 0) return null;
+                    return (
+                      <div className="space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          {result.elumJubailiBreakdown!.siteCount} billed · {unset.length} rating not set in AMMP ·{' '}
+                          {zero.length} zero rating · {outOfBands.length} outside all bands
+                        </p>
+                        {unset.length > 0 && (
+                          <p className="text-xs text-destructive">
+                            No genset rating in AMMP (not billed):{' '}
+                            {unset
+                              .map(s => (s.nameKva ? `${s.assetName} (name suggests ${s.nameKva} kVA)` : s.assetName))
+                              .join(', ')}
+                          </p>
+                        )}
+                        {zero.length > 0 && (
+                          <p className="text-xs text-destructive">
+                            Genset rating is 0 kVA in AMMP (not billed): {zero.map(s => s.assetName).join(', ')}
+                          </p>
+                        )}
+                        {outOfBands.length > 0 && (
+                          <p className="text-xs text-destructive">
+                            Rating outside all configured bands: {outOfBands.map(s => `${s.assetName} (${s.kva} kVA)`).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {result.elumJubailiBreakdown.clampedSites.length > 0 && (
                     <p className="text-xs text-amber-600">
                       {result.elumJubailiBreakdown.clampedSites.length} site(s) fall outside the configured kVA bands and were clamped to the nearest band.

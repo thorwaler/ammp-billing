@@ -149,7 +149,13 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     {site.kva != null ? site.kva.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '—'}
                   </td>
                   <td className="border border-border p-1">
-                    {site.status === 'unrated' ? 'No rating — not billed' : site.bandLabel}
+                    {site.status === 'unrated'
+                      ? site.unratedReason === 'zero'
+                        ? 'Rating 0 kVA — not billed'
+                        : site.unratedReason === 'out_of_bands'
+                          ? 'Outside all bands — not billed'
+                          : 'Rating not set in AMMP — not billed'
+                      : site.bandLabel}
                     {site.status === 'clamped' ? ' (clamped)' : ''}
                   </td>
                   <td className="border border-border p-1 text-right">{formatCurrency(site.cost)}</td>
@@ -158,9 +164,13 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             </tbody>
           </table>
 
-          {data.elumJubailiBreakdown.unratedCount > 0 && (
+          {(data.elumJubailiBreakdown.unratedCount > 0 || data.elumJubailiBreakdown.clampedCount > 0) && (
             <p className="text-xs mt-2">
-              {data.elumJubailiBreakdown.unratedCount} site(s) have no genset rating in AMMP and are excluded from billing.
+              {data.elumJubailiBreakdown.unratedCount} site(s) have no usable genset rating in AMMP and are excluded from billing
+              {data.elumJubailiBreakdown.clampedCount > 0
+                ? `; ${data.elumJubailiBreakdown.clampedCount} site(s) fall outside the configured bands and were clamped to the nearest band`
+                : ''}
+              .
             </p>
           )}
         </section>

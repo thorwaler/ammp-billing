@@ -271,8 +271,10 @@ export interface JubailiSiteLine {
   annualFee: number;
   cost: number;
   status: 'billed' | 'unrated' | 'clamped';
+  /** Why the site is unrated: no value in AMMP vs an explicit zero rating */
+  unratedReason?: 'unset' | 'zero' | 'out_of_bands';
   clamped?: 'below' | 'above';
-  /** kVA parsed from the asset name that materially differs from the AMMP value */
+  /** kVA parsed from the asset name — used for alerting only, never for pricing */
   nameKva?: number;
 }
 
@@ -896,17 +898,23 @@ export function calculateElumJubailiBreakdown(
   const siteLines: JubailiSiteLine[] = [];
 
   for (const asset of assetBreakdown) {
-    const kva = asset.gensetKVA != null && asset.gensetKVA > 0 ? asset.gensetKVA : null;
+    // `null`/`undefined` = rating not set in AMMP; an explicit 0 is a distinct case.
+    const raw = asset.gensetKVA;
+    const kva = raw != null && raw > 0 ? raw : null;
+    // The site name is only used to raise data-quality flags — never to price.
+    const nameKva = parseKvaFromName(asset.assetName);
 
     if (kva === null) {
       siteLines.push({
         assetId: asset.assetId,
         assetName: asset.assetName,
-        kva: null,
+        kva: raw != null ? raw : null,
         bandLabel: 'Unrated',
         annualFee: 0,
         cost: 0,
         status: 'unrated',
+        unratedReason: raw == null ? 'unset' : 'zero',
+        nameKva,
       });
       continue;
     }
@@ -921,11 +929,12 @@ export function calculateElumJubailiBreakdown(
         annualFee: 0,
         cost: 0,
         status: 'unrated',
+        unratedReason: 'out_of_bands',
+        nameKva,
       });
       continue;
     }
 
-    const nameKva = parseKvaFromName(asset.assetName);
     const mismatch =
       nameKva !== undefined && Math.abs(nameKva - kva) / Math.max(nameKva, kva) > 0.2
         ? nameKva
@@ -943,6 +952,7 @@ export function calculateElumJubailiBreakdown(
       nameKva: mismatch,
     });
   }
+
 
   const billedLines = siteLines.filter(l => l.status !== 'unrated');
   const bandedCost = billedLines.reduce((sum, l) => sum + l.cost, 0);
@@ -978,7 +988,7 @@ export function calculateElumJubailiBreakdown(
     bandedCost,
     unratedSites: siteLines.filter(l => l.status === 'unrated'),
     clampedSites: siteLines.filter(l => l.status === 'clamped'),
-    mismatchedSites: siteLines.filter(l => l.nameKva !== undefined),
+    mismatchedSites: siteLines.filter(l => l.status !== 'unrated' && l.nameKva !== undefined),
     minimumAnnualFee,
     minimumForPeriod,
     minimumApplied,
