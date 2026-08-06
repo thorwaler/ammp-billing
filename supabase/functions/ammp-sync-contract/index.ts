@@ -1089,6 +1089,7 @@ async function processContractSync(
           assetName: member.asset_name,
           totalMW: 0,
           capacityKWp: 0,
+          gensetKVA: null,
           hasSolcast: false,
           hasBattery: false,
           hasGenset: false,
