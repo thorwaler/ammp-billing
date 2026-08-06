@@ -41,6 +41,8 @@ import {
   isSpsPackage,
   isMatriarchApiPackage,
   getSolarAfricaTier,
+  isElumPackage,
+  elumPackageLabel,
   SOLAR_AFRICA_MUNICIPALITY_TIERS,
   type ComplexityLevel, 
   type PackageType,
