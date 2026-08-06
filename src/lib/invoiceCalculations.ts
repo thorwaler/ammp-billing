@@ -271,8 +271,10 @@ export interface JubailiSiteLine {
   annualFee: number;
   cost: number;
   status: 'billed' | 'unrated' | 'clamped';
+  /** Why the site is unrated: no value in AMMP vs an explicit zero rating */
+  unratedReason?: 'unset' | 'zero' | 'out_of_bands';
   clamped?: 'below' | 'above';
-  /** kVA parsed from the asset name that materially differs from the AMMP value */
+  /** kVA parsed from the asset name — used for alerting only, never for pricing */
   nameKva?: number;
 }
 
