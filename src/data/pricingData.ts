@@ -182,7 +182,8 @@ export type PackageType =
   | "elum_ci_lite"
   | "elum_ci_pro"
   | "elum_utility"
-  | "elum_internal_2026";
+  | "elum_internal_2026"
+  | "enterprise_econf";
 
 // === SolarAfrica API Pricing ===
 
@@ -641,3 +642,26 @@ export const elumTierForPackage = (packageType: string): ElumOrgTier | null => {
   if (packageType === "elum_internal_2026") return "internal";
   return null;
 };
+
+// === Enterprise eConf (asset-group based) ===
+// Same shape as C&I Lite pricing (base €/MWp on the portfolio + eConf add-on
+// charged on every MWp of the eConf segment), but resolved purely from AMMP
+// asset groups — the primary group defines the portfolio, the AND group marks
+// the eConf upgrade, the NOT group excludes sites. No sub-org discovery.
+
+/** Enterprise eConf: base rate €/MWp/year (Annex C default). */
+export const ENTERPRISE_ECONF_BASE_RATE = 650;
+/** Enterprise eConf: eConf upgrade add-on €/MWp/year on top of the base rate. */
+export const ENTERPRISE_ECONF_ECONF_RATE = 150;
+/** Enterprise eConf: default minimum annual value. */
+export const ENTERPRISE_ECONF_MIN_ANNUAL_VALUE = 5000;
+/** Enterprise eConf: default one-time onboarding fee. */
+export const ENTERPRISE_ECONF_ONBOARDING_FEE = 1075;
+
+export const isEnterpriseEconfPackage = (packageType: string): boolean =>
+  packageType === "enterprise_econf";
+
+/** Packages whose invoice detail is rendered from the per-org/segment breakdown. */
+export const usesOrgTierBreakdown = (packageType: string): boolean =>
+  isElumOrgTierPackage(packageType) || isEnterpriseEconfPackage(packageType);
+

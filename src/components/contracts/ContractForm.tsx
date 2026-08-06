@@ -53,7 +53,12 @@ import {
   ELUM_INTERNAL_2026_BRACKETS,
   ELUM_INTERNAL_2026_ECONF_RATE,
   isElumOrgTierPackage,
-  elumTierForPackage
+  elumTierForPackage,
+  isEnterpriseEconfPackage,
+  ENTERPRISE_ECONF_BASE_RATE,
+  ENTERPRISE_ECONF_ECONF_RATE,
+  ENTERPRISE_ECONF_MIN_ANNUAL_VALUE,
+  ENTERPRISE_ECONF_ONBOARDING_FEE
 } from "@/data/pricingData";
 import {
   Select,
@@ -807,6 +812,15 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         form.setValue("elumLiteEconfRate", ELUM_LITE_ECONF_RATE);
       }
       setShowCustomPricing(false);
+    } else if (value === "enterprise_econf") {
+      // Enterprise eConf — asset-group based per-MWp pricing with eConf upgrade
+      form.setValue("modules", []);
+      form.setValue("billingFrequency", "annual");
+      form.setValue("minimumAnnualValue", ENTERPRISE_ECONF_MIN_ANNUAL_VALUE);
+      form.setValue("elumLiteBaseRate", ENTERPRISE_ECONF_BASE_RATE);
+      form.setValue("elumLiteEconfRate", ENTERPRISE_ECONF_ECONF_RATE);
+      setOnboardingSetupFee(existingContract?.onboardingSetupFee ?? ENTERPRISE_ECONF_ONBOARDING_FEE);
+      setShowCustomPricing(false);
     } else if (value === "ammp_os_2026") {
       // AMMP OS 2026 - new pricing structure
       form.setValue("modules", []);
@@ -1155,10 +1169,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           : null,
         elum_tier: elumTierForPackage(data.package),
         elum_parent_org_id: isElumOrgTierPackage(data.package) ? (data.elumParentOrgId || null) : null,
-        org_pricing_config: data.package === 'elum_ci_lite'
+        org_pricing_config: (data.package === 'elum_ci_lite' || data.package === 'enterprise_econf')
           ? {
-              liteBaseRate: data.elumLiteBaseRate ?? ELUM_LITE_BASE_RATE,
-              liteEconfRate: data.elumLiteEconfRate ?? ELUM_LITE_ECONF_RATE,
+              liteBaseRate: data.elumLiteBaseRate ?? (data.package === 'enterprise_econf' ? ENTERPRISE_ECONF_BASE_RATE : ELUM_LITE_BASE_RATE),
+              liteEconfRate: data.elumLiteEconfRate ?? (data.package === 'enterprise_econf' ? ENTERPRISE_ECONF_ECONF_RATE : ELUM_LITE_ECONF_RATE),
             }
           : data.package === 'elum_internal_2026'
           ? {
@@ -1194,7 +1208,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         // Matriarch API fields
         irradiance_per_site_tiers: data.package === 'matriarch_api' ? irradianceSiteTiers : [],
         performance_per_mwp_tiers: data.package === 'matriarch_api' ? performanceMwpTiers : [],
-        onboarding_setup_fee: data.package === 'matriarch_api' ? onboardingSetupFee : null,
+        onboarding_setup_fee: (data.package === 'matriarch_api' || data.package === 'enterprise_econf') ? onboardingSetupFee : null,
         vendor_api_fee: data.package === 'matriarch_api' ? vendorApiFee : null,
         // Custom contract type reference
         contract_type_id: selectedContractTypeId || null,
@@ -1382,6 +1396,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       <SelectItem value="sps_monitoring">SPS Monitoring (3 stacking discounts, quarterly billing, €100k min)</SelectItem>
                       <SelectItem value="solar_africa_api">SolarAfrica API (Municipality-based tiered pricing)</SelectItem>
                       <SelectItem value="matriarch_api">Matriarch API (Irradiance + Performance dual pricing)</SelectItem>
+                      <SelectItem value="enterprise_econf">Enterprise eConf (Asset groups, per MWp + eConf upgrade rate)</SelectItem>
                       <SelectItem value="per_mw_annual_upfront">Per-MW + Annual Upfront Minimum (Annual floor billed upfront, quarterly per-MW overage)</SelectItem>
                       {customContractTypes.length > 0 && (
                         <>
@@ -1426,6 +1441,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       "Elum Utility 2026: Sub-orgs with the epm_utility flag. A single blended rate based on the org portfolio size, applied to every MWp. Only valid when every site exceeds 2 MWp." :
                       watchPackage === "elum_internal_2026" ?
                       "Elum Internal 2026: Sub-orgs with the elum_internal flag. Stepped MWp brackets on the org portfolio (€150 / €75 / €37.50), each rate applied only to the MWp inside its bracket. eConf supported." :
+                      watchPackage === "enterprise_econf" ?
+                      "Enterprise eConf: Priced per MWp/year from AMMP asset groups. The primary group is the billable portfolio, the eConf add-on group (AND) is billed at the base rate plus the eConf upgrade rate, and the exclusion group (NOT) is left out. Supports a minimum annual value and a one-time onboarding fee." :
                       watchPackage === "ammp_os_2026" ?
                       "AMMP OS 2026: 5 modules with per-MWp pricing, optional trial toggle (50% off modules + setup fees), and updated add-ons." :
                       watchPackage === "solar_africa_api" ?
@@ -1895,6 +1912,56 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   <p>Per-site contracts appear in the invoice creator every month to capture new site onboarding fees and annual renewal anniversaries as they occur.</p>
                 </div>
               </>
+            )}
+
+            {/* Enterprise eConf (asset-group based) fields */}
+            {isEnterpriseEconfPackage(watchPackage) && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="elumLiteBaseRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Base rate (€/MWp/year)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="1" {...field} />
+                        </FormControl>
+                        <FormDescription>Applied to every MWp in the primary asset group.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="elumLiteEconfRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>eConf upgrade (€/MWp/year)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="1" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Added on top of the base rate for sites in the eConf add-on group (AND).
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FormLabel>Onboarding fee (one-time)</FormLabel>
+                  <Input
+                    type="number"
+                    step="1"
+                    value={onboardingSetupFee}
+                    onChange={(e) => setOnboardingSetupFee(Number(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional one-time setup fee, added to an invoice when selected in the calculator.
+                  </p>
+                </div>
+              </div>
             )}
 
             {/* Elum 2026 org-based tier fields */}
@@ -3079,7 +3146,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                 </div>
 
                 {/* Asset Group Selectors - for Elum-style filtering */}
-                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || watchPackage === "elum_internal" || watchPackage === "hybrid_tiered_assetgroups" || isElumOrgTierPackage(watchPackage) || form.watch('ammpAssetGroupId')) && (
+                {(watchPackage === "elum_epm" || watchPackage === "elum_jubaili" || watchPackage === "elum_portfolio_os" || watchPackage === "elum_internal" || watchPackage === "hybrid_tiered_assetgroups" || isElumOrgTierPackage(watchPackage) || isEnterpriseEconfPackage(watchPackage) || form.watch('ammpAssetGroupId')) && (
                   <div className="space-y-4 mt-4 pt-4 border-t">
                     <h4 className="text-sm font-medium">
                       {isElumOrgTierPackage(watchPackage) ? 'Legacy Asset Group Filtering (transition)' : 'Asset Group Filtering'}
@@ -3117,7 +3184,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdAnd', id);
                         form.setValue('ammpAssetGroupNameAnd', name);
                       }}
-                      label={isElumOrgTierPackage(watchPackage) ? "eConf add-on group (AND)" : "Secondary Asset Group (AND)"}
+                      label={(isElumOrgTierPackage(watchPackage) || isEnterpriseEconfPackage(watchPackage)) ? "eConf add-on group (AND)" : "Secondary Asset Group (AND)"}
                       optional
                       showClearButton
                       onClear={() => {
@@ -3133,7 +3200,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdNot', id);
                         form.setValue('ammpAssetGroupNameNot', name);
                       }}
-                      label={isElumOrgTierPackage(watchPackage) ? "Exclude group (NOT)" : "Exclusion Asset Group (NOT)"}
+                      label={(isElumOrgTierPackage(watchPackage) || isEnterpriseEconfPackage(watchPackage)) ? "Exclude group (NOT)" : "Exclusion Asset Group (NOT)"}
                       optional
                       showClearButton
                       onClear={() => {

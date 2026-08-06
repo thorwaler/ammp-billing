@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { CalculationResult, getFrequencyMultiplier, getPeriodMonthsMultiplier } from "./invoiceCalculations";
 import { monthsInPeriod } from "./invoiceScheduling";
 import { format, startOfYear, endOfYear } from "date-fns";
-import { isElumOrgTierPackage } from "@/data/pricingData";
+import { usesOrgTierBreakdown } from "@/data/pricingData";
 
 
 export interface SupportDocumentData {
@@ -829,7 +829,7 @@ function generateAssetBreakdown(
 
   // For Elum 2026 org-based tiers - pricing lives in the per-org tables, so the
   // generic monitoring-fee breakdown would only render zero rates.
-  if (isElumOrgTierPackage(packageType) && calculationResult.elumOrgTierBreakdown) {
+  if (usesOrgTierBreakdown(packageType) && calculationResult.elumOrgTierBreakdown) {
     return { assetBreakdown: [] };
   }
 

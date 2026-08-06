@@ -12,6 +12,9 @@ import {
   isMatriarchApiPackage,
   isElumOrgTierPackage,
   elumTierForPackage,
+  isEnterpriseEconfPackage,
+  ENTERPRISE_ECONF_BASE_RATE,
+  ENTERPRISE_ECONF_ECONF_RATE,
   getElumProBucket,
   getElumUtilityTier,
   ELUM_LITE_BASE_RATE,
@@ -876,6 +879,8 @@ export function calculateElumOrgTierBreakdown(
     internalBrackets?: ElumInternalBracket[];
     internalEconfRate?: number;
     mwhOverrideAssetIds?: string[];
+    /** Display label override (e.g. "Enterprise eConf" reusing the Lite maths) */
+    tierLabelOverride?: string;
   } = {}
 ): ElumOrgTierBreakdown {
   const liteBaseRate = options.liteBaseRate ?? ELUM_LITE_BASE_RATE;
@@ -885,7 +890,8 @@ export function calculateElumOrgTierBreakdown(
     : ELUM_INTERNAL_2026_BRACKETS;
   const internalEconfRate = options.internalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE;
   const mwhOverrides = new Set(options.mwhOverrideAssetIds || []);
-  const tierLabel = ELUM_TIER_LABELS[tier];
+  const tierLabel = options.tierLabelOverride ?? ELUM_TIER_LABELS[tier];
+
 
   const orgLines: ElumOrgLine[] = [];
   const globalWarnings: string[] = [];
@@ -1333,6 +1339,22 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     );
     result.elumOrgTierBreakdown = breakdown;
     result.totalMWCost = breakdown.totalCost;
+  } else if (isEnterpriseEconfPackage(packageType)) {
+    // Enterprise eConf — asset-group based. Same maths as C&I Lite (base €/MWp
+    // on the portfolio + eConf add-on on every MWp of the eConf segment), but
+    // the segments come from asset groups resolved at sync time.
+    const breakdown = calculateElumOrgTierBreakdown(
+      "ci_lite",
+      params.orgBreakdown || [],
+      frequencyMultiplier,
+      {
+        liteBaseRate: params.elumLiteBaseRate ?? ENTERPRISE_ECONF_BASE_RATE,
+        liteEconfRate: params.elumLiteEconfRate ?? ENTERPRISE_ECONF_ECONF_RATE,
+        tierLabelOverride: "Enterprise eConf",
+      }
+    );
+    result.elumOrgTierBreakdown = breakdown;
+    result.totalMWCost = breakdown.totalCost;
   } else if (packageType === 'elum_internal') {
     // Elum Internal Assets - graduated MW pricing
     const tiers = params.graduatedMWTiers || [];
@@ -1621,7 +1643,7 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
   let baseCost = result.starterPackageCost + result.totalMWCost + result.minimumCharges;
   
   // Apply minimum annual value to BASE COST only (for Pro, Custom, 2026, and Elum packages - not SolarAfrica)
-  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal' || packageType === 'ammp_os_2026') && minimumAnnualValue) {
+  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal' || packageType === 'ammp_os_2026' || packageType === 'enterprise_econf') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
     if (baseCost < minimumForPeriod) {
       const adjustment = minimumForPeriod - baseCost;
