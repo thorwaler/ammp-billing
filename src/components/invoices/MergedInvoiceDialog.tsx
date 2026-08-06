@@ -285,11 +285,15 @@ export function MergedInvoiceDialog({
       if (!result) continue;
       
       const contractLabel = contract.contractName || contract.packageType;
+
+      // Elum contracts: collapse all recurring platform charges into one line.
+      const isElumSummary = isElumPackage(contract.packageType);
       
       // Add module costs (skip for per_mw_annual_upfront and SPS annual upfront — handled by dedicated blocks below)
       const spsB = (result as any).spsAnnualUpfrontBreakdown;
       const suppressModules = !!result.perMWAnnualUpfrontBreakdown
-        || spsB?.cycleType === 'annual_upfront';
+        || spsB?.cycleType === 'annual_upfront'
+        || isElumSummary;
       if (result.moduleCosts && result.moduleCosts.length > 0 && !suppressModules) {
         result.moduleCosts.forEach((mc: any) => {
           lineItems.push({
