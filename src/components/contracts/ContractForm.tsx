@@ -2334,14 +2334,21 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   />
                   <FormField
                     control={form.control}
-                    name="annualFeePerSite"
+                    name="minimumAnnualValue"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Per-Site Fee ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                        <FormLabel>Minimum Annual Fee ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" placeholder="500" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 500)} />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder={String(DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE)}
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={e => field.onChange(e.target.valueAsNumber || DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE)}
+                          />
                         </FormControl>
-                        <FormDescription>Flat fee charged per site in the asset group</FormDescription>
+                        <FormDescription>Floor applied to the banded site fees (pro-rated per billing period)</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
