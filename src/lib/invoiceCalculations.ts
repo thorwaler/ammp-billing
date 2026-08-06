@@ -988,7 +988,7 @@ export function calculateElumJubailiBreakdown(
     bandedCost,
     unratedSites: siteLines.filter(l => l.status === 'unrated'),
     clampedSites: siteLines.filter(l => l.status === 'clamped'),
-    mismatchedSites: siteLines.filter(l => l.nameKva !== undefined),
+    mismatchedSites: siteLines.filter(l => l.status !== 'unrated' && l.nameKva !== undefined),
     minimumAnnualFee,
     minimumForPeriod,
     minimumApplied,
