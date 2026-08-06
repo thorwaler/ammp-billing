@@ -171,6 +171,7 @@ export function MergedInvoiceDialog({
       ammpCapabilities: contract.cachedCapabilities,
       assetBreakdown,
       enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0,
+      jubailiKvaBands: (contract as any).orgPricingConfig?.jubailiKvaBands,
       baseMonthlyPrice: contract.baseMonthlyPrice || 0,
       billingFrequency: contract.billingFrequency,
       siteChargeFrequency: contract.siteChargeFrequency || "annual",
