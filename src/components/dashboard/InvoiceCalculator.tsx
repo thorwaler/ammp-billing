@@ -1056,7 +1056,9 @@ export function InvoiceCalculator({
       // Add module costs (Platform Fees - ARR)
       // When site minimum pricing is active, use the breakdown instead of moduleCosts
       // Only use threshold wording when there are ACTUALLY sites below threshold (mixed pricing)
-      if (result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0) {
+      if (isElumSummary) {
+        // handled by the single Elum summary line below
+      } else if (result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0) {
         // Sites above threshold (normal pricing)
         if (result.siteMinimumPricingBreakdown.normalPricingTotal > 0) {
           lineItems.push({
