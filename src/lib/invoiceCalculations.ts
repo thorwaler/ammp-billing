@@ -258,14 +258,51 @@ export interface ElumEpmBreakdown {
   sitesUsingMinimum?: number;  // Count of sites where minimum was applied
 }
 
+export interface JubailiSiteLine {
+  assetId: string;
+  assetName: string;
+  /** Genset rating in kVA (from AMMP `genset_capacity` / 1000) */
+  kva: number | null;
+  bandLabel: string;
+  annualFee: number;
+  cost: number;
+  status: 'billed' | 'unrated' | 'clamped';
+  clamped?: 'below' | 'above';
+  /** kVA parsed from the asset name that materially differs from the AMMP value */
+  nameKva?: number;
+}
+
+export interface JubailiBandSummary {
+  label: string;
+  minKva: number;
+  maxKva: number | null;
+  annualFee: number;
+  siteCount: number;
+  cost: number;
+}
+
 export interface ElumJubailiBreakdown {
+  /** Weighted average annual fee per billed site (kept for summary displays) */
   perSiteFee: number;
+  /** Billed sites only (unrated sites are excluded) */
   siteCount: number;
   sites: Array<{ assetId: string; assetName: string }>;
   totalCost: number;
-  appliedTier?: MinimumChargeTier;
-  allTiers?: MinimumChargeTier[];
   totalMW?: number;
+  /** kVA band pricing */
+  bands: JubailiBandSummary[];
+  siteLines: JubailiSiteLine[];
+  bandedCost: number;
+  /** Sites without a genset rating in AMMP — not billed, flagged for data fix */
+  unratedSites: JubailiSiteLine[];
+  /** Sites whose rating fell outside the configured bands (clamped to nearest) */
+  clampedSites: JubailiSiteLine[];
+  /** Sites where the name suggests a very different kVA than the AMMP field */
+  mismatchedSites: JubailiSiteLine[];
+  minimumAnnualFee: number;
+  minimumForPeriod: number;
+  minimumApplied: boolean;
+  minimumTopUp: number;
 }
 
 export interface ElumInternalTierBreakdown {
