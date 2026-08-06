@@ -328,9 +328,10 @@ function calculateCapabilities(
   // Calculate capacity in kWp (total_pv_power is in Watts)
   const capacityKWp = (asset.total_pv_power || 0) / 1000;
 
-  // Genset rating: AMMP returns `genset_capacity` in VA
+  // Genset rating: AMMP returns `genset_capacity` in VA. `null` means "not set"
+  // and must stay null — an explicit 0 is a distinct (reported) case.
   const gensetKVA =
-    asset.genset_capacity != null && Number(asset.genset_capacity) > 0
+    asset.genset_capacity != null && Number.isFinite(Number(asset.genset_capacity))
       ? Number(asset.genset_capacity) / 1000
       : null;
 
