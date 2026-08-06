@@ -27,6 +27,8 @@ interface AssetCapabilities {
   assetName: string;
   totalMW: number;
   capacityKWp: number;
+  /** Genset rating in kVA (AMMP `genset_capacity` is in VA) */
+  gensetKVA: number | null;
   hasSolcast: boolean;
   hasBattery: boolean;
   hasGenset: boolean;
