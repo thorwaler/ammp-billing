@@ -1101,7 +1101,15 @@ async function processContractSync(
         const cachedSolcastDate = cachedSolcastDates[member.asset_id] || null;
         
         return calculateCapabilities(
-          { ...assetData, asset_id: member.asset_id, asset_name: member.asset_name },
+          {
+            ...assetData,
+            asset_id: member.asset_id,
+            asset_name: member.asset_name,
+            // Ratings come from the org-scoped lookup when available
+            genset_capacity: gensetCapacityByAsset.has(member.asset_id)
+              ? gensetCapacityByAsset.get(member.asset_id)
+              : assetData.genset_capacity ?? null,
+          },
           devices,
           cachedDate,
           cachedSolcastDate
