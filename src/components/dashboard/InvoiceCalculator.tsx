@@ -889,6 +889,7 @@ export function InvoiceCalculator({
       belowThresholdPricePerMWp: selectedCustomer.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: selectedCustomer.aboveThresholdPricePerMWp,
       graduatedMWTiers: selectedCustomer.graduatedMWTiers,
+      jubailiKvaBands: (selectedCustomer as any).orgPricingConfig?.jubailiKvaBands,
       // Elum 2026 org-based tiers: sub-org grouping resolved by the AMMP sync
       orgBreakdown: (effectiveCapabilities as any)?.orgBreakdown
         || ((selectedCustomer as any).cachedCapabilities?.orgBreakdown)
