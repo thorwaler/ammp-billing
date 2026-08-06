@@ -3160,6 +3160,14 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         remote eConf, the rest at the standard tier rate — one contract covers both.
                       </p>
                     )}
+                    {isEnterpriseEconfPackage(watchPackage) && (
+                      <p className="text-xs text-muted-foreground">
+                        The billable portfolio is every asset in the AMMP org above. Assets in the eConf
+                        add-on group (AND) are billed at the base rate plus the eConf upgrade rate; the
+                        exclusion group (NOT) is left out. The primary group is only used as a fallback
+                        when no org ID is set.
+                      </p>
+                    )}
 
                     <AssetGroupSelector
                       orgId={form.watch('contractAmmpOrgId') || form.watch('elumParentOrgId') || undefined}
@@ -3168,7 +3176,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupId', id);
                         form.setValue('ammpAssetGroupName', name);
                       }}
-                      label="Primary Asset Group"
+                      label={isEnterpriseEconfPackage(watchPackage) ? "Primary Asset Group (legacy fallback)" : "Primary Asset Group"}
                       optional
                       showClearButton
                       onClear={() => {
@@ -3176,6 +3184,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupName', '');
                       }}
                     />
+
                     
                     <AssetGroupSelector
                       orgId={form.watch('contractAmmpOrgId') || form.watch('elumParentOrgId') || undefined}
