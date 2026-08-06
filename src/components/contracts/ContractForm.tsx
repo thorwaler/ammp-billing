@@ -685,6 +685,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           ]);
         }
 
+        // Load Elum Jubaili kVA bands
+        const jubBands = ((contract as any).org_pricing_config || {}).jubailiKvaBands;
+        if (Array.isArray(jubBands) && jubBands.length > 0) {
+          setJubailiKvaBands(jubBands);
+        }
+
         // Load Elum asset group fields
         form.setValue('ammpAssetGroupId', contract.ammp_asset_group_id || '');
         form.setValue('ammpAssetGroupName', contract.ammp_asset_group_name || '');
