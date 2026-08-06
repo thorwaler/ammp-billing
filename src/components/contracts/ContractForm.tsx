@@ -2394,6 +2394,87 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                     )}
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <FormLabel>Genset kVA Pricing Bands</FormLabel>
+                  <FormDescription>
+                    Annual fee per site, based on the site's genset rating from AMMP (kVA). Sites without a
+                    rating are not billed and are flagged in the invoice calculator.
+                  </FormDescription>
+                  <div className="rounded-md border divide-y">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 p-2 text-xs font-medium text-muted-foreground">
+                      <span>Min kVA</span>
+                      <span>Max kVA (blank = no cap)</span>
+                      <span>Annual fee / site</span>
+                      <span />
+                    </div>
+                    {jubailiKvaBands.map((band, index) => (
+                      <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 p-2 items-center">
+                        <Input
+                          type="number"
+                          value={band.minKva}
+                          onChange={e =>
+                            setJubailiKvaBands(bands =>
+                              bands.map((b, i) => (i === index ? { ...b, minKva: e.target.valueAsNumber || 0 } : b))
+                            )
+                          }
+                        />
+                        <Input
+                          type="number"
+                          value={band.maxKva ?? ''}
+                          placeholder="∞"
+                          onChange={e =>
+                            setJubailiKvaBands(bands =>
+                              bands.map((b, i) =>
+                                i === index
+                                  ? { ...b, maxKva: Number.isNaN(e.target.valueAsNumber) ? null : e.target.valueAsNumber }
+                                  : b
+                              )
+                            )
+                          }
+                        />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={band.annualFee}
+                          onChange={e =>
+                            setJubailiKvaBands(bands =>
+                              bands.map((b, i) => (i === index ? { ...b, annualFee: e.target.valueAsNumber || 0 } : b))
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setJubailiKvaBands(bands => bands.filter((_, i) => i !== index))}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setJubailiKvaBands(bands => [...bands, { minKva: 0, maxKva: null, annualFee: 0 }])
+                      }
+                    >
+                      Add band
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setJubailiKvaBands(DEFAULT_JUBAILI_KVA_BANDS)}
+                    >
+                      Reset to defaults
+                    </Button>
+                  </div>
+                </div>
               </>
             )}
 
