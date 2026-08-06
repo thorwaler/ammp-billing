@@ -446,7 +446,28 @@ export async function generateSupportDocumentData(
     elumJubailiBreakdown = {
       perSiteFee: jubBreak.perSiteFee,
       siteCount: jubBreak.siteCount,
-      totalCost: jubBreak.totalCost
+      totalCost: jubBreak.totalCost,
+      bandedCost: jubBreak.bandedCost,
+      minimumAnnualFee: jubBreak.minimumAnnualFee,
+      minimumApplied: jubBreak.minimumApplied,
+      minimumTopUp: jubBreak.minimumTopUp,
+      bands: jubBreak.bands.map(b => ({
+        label: b.label,
+        annualFee: b.annualFee,
+        siteCount: b.siteCount,
+        cost: b.cost,
+      })),
+      sites: jubBreak.siteLines.map(s => ({
+        assetId: s.assetId,
+        assetName: s.assetName,
+        kva: s.kva,
+        bandLabel: s.bandLabel,
+        annualFee: s.annualFee,
+        cost: s.cost,
+        status: s.status,
+      })),
+      unratedCount: jubBreak.unratedSites.length,
+      clampedCount: jubBreak.clampedSites.length,
     };
   }
 
