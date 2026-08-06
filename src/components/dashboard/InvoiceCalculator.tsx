@@ -1395,7 +1395,7 @@ export function InvoiceCalculator({
       }
       
       // Add minimum contract adjustment if present (Platform Fee - ARR)
-      if (result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
+      if (!isElumSummary && result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
         lineItems.push({
           Description: "Minimum Contract Value Adjustment",
           Quantity: 1,
