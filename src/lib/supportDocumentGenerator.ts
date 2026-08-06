@@ -121,6 +121,7 @@ export interface SupportDocumentData {
       annualFee: number;
       cost: number;
       status: 'billed' | 'unrated' | 'clamped';
+      unratedReason?: 'unset' | 'zero' | 'out_of_bands';
     }>;
     unratedCount: number;
     clampedCount: number;
@@ -465,6 +466,7 @@ export async function generateSupportDocumentData(
         annualFee: s.annualFee,
         cost: s.cost,
         status: s.status,
+        unratedReason: s.unratedReason,
       })),
       unratedCount: jubBreak.unratedSites.length,
       clampedCount: jubBreak.clampedSites.length,
