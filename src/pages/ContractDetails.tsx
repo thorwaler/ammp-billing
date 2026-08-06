@@ -1642,8 +1642,18 @@ const ContractDetails = () => {
                       </thead>
                       <tbody>
                         {orgResolution.map((o: any) => (
-                          <tr key={o.orgId} className="border-t">
-                            <td className="p-2">{o.orgName || o.orgId}</td>
+                          <tr key={o.orgId} className="border-t align-top">
+                            <td className="p-2">
+                              {o.orgName || o.orgId}
+                              {o.zeroCapacity ? (
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {o.zeroCapacity} zero-capacity site(s) — still billed
+                                  {o.zeroCapacityAssets?.length ? (
+                                    <>: {o.zeroCapacityAssets.map((a: any) => a.assetName).join(', ')}</>
+                                  ) : null}
+                                </div>
+                              ) : null}
+                            </td>
                             <td className={`p-2 text-right ${o.assetCount === 0 ? 'text-destructive font-medium' : ''}`}>
                               {o.assetCount}
                             </td>
