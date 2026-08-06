@@ -93,12 +93,76 @@ export function SupportDocument({ data }: SupportDocumentProps) {
       {/* Elum Jubaili Breakdown (if applicable) */}
       {data.elumJubailiBreakdown && (
         <section className="mb-6">
-          <h2 className="text-base font-bold mb-3">Elum Jubaili Pricing Breakdown</h2>
-          <div className="text-sm mb-3">
-            <p><strong>Per-Site Annual Fee:</strong> {formatCurrency(data.elumJubailiBreakdown.perSiteFee)}</p>
-            <p><strong>Site Count:</strong> {data.elumJubailiBreakdown.siteCount}</p>
-            <p><strong>Total Cost:</strong> {formatCurrency(data.elumJubailiBreakdown.totalCost)}</p>
-          </div>
+          <h2 className="text-base font-bold mb-3">Elum Jubaili Pricing Breakdown (genset kVA bands)</h2>
+          <table className="w-full text-xs border-collapse mb-3">
+            <thead>
+              <tr className="bg-muted">
+                <th className="border border-border p-1 text-left">Band</th>
+                <th className="border border-border p-1 text-right">Fee / site / year</th>
+                <th className="border border-border p-1 text-right">Sites</th>
+                <th className="border border-border p-1 text-right">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.elumJubailiBreakdown.bands.map((band, i) => (
+                <tr key={i}>
+                  <td className="border border-border p-1">{band.label}</td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(band.annualFee)}</td>
+                  <td className="border border-border p-1 text-right">{band.siteCount}</td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(band.cost)}</td>
+                </tr>
+              ))}
+              <tr className="font-bold">
+                <td className="border border-border p-1" colSpan={2}>Banded total</td>
+                <td className="border border-border p-1 text-right">{data.elumJubailiBreakdown.siteCount}</td>
+                <td className="border border-border p-1 text-right">{formatCurrency(data.elumJubailiBreakdown.bandedCost)}</td>
+              </tr>
+              {data.elumJubailiBreakdown.minimumApplied && (
+                <tr>
+                  <td className="border border-border p-1" colSpan={3}>
+                    Minimum annual fee top-up ({formatCurrency(data.elumJubailiBreakdown.minimumAnnualFee)}/year)
+                  </td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(data.elumJubailiBreakdown.minimumTopUp)}</td>
+                </tr>
+              )}
+              <tr className="font-bold">
+                <td className="border border-border p-1" colSpan={3}>Total</td>
+                <td className="border border-border p-1 text-right">{formatCurrency(data.elumJubailiBreakdown.totalCost)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="bg-muted">
+                <th className="border border-border p-1 text-left">Site</th>
+                <th className="border border-border p-1 text-right">Genset (kVA)</th>
+                <th className="border border-border p-1 text-left">Band</th>
+                <th className="border border-border p-1 text-right">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.elumJubailiBreakdown.sites.map((site) => (
+                <tr key={site.assetId}>
+                  <td className="border border-border p-1">{site.assetName}</td>
+                  <td className="border border-border p-1 text-right">
+                    {site.kva != null ? site.kva.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '—'}
+                  </td>
+                  <td className="border border-border p-1">
+                    {site.status === 'unrated' ? 'No rating — not billed' : site.bandLabel}
+                    {site.status === 'clamped' ? ' (clamped)' : ''}
+                  </td>
+                  <td className="border border-border p-1 text-right">{formatCurrency(site.cost)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {data.elumJubailiBreakdown.unratedCount > 0 && (
+            <p className="text-xs mt-2">
+              {data.elumJubailiBreakdown.unratedCount} site(s) have no genset rating in AMMP and are excluded from billing.
+            </p>
+          )}
         </section>
       )}
 
