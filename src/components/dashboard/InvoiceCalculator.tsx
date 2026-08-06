@@ -846,6 +846,7 @@ export function InvoiceCalculator({
       assetId: asset.assetId,
       assetName: asset.assetName,
       totalMW: asset.totalMW,
+      gensetKVA: asset.gensetKVA,
       isHybrid: asset.isHybrid,
       hasSolcast: asset.hasSolcast,
       solcastOnboardingDate: asset.solcastOnboardingDate,
