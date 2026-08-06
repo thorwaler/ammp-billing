@@ -1,44 +1,46 @@
-# Jubaili kVA: fix the missing genset ratings, then surface them everywhere
+# Jubaili kVA: read genset ratings from the org-scoped assets call
 
 ## What the data shows
 
-The Jubaili contract (Elum SAS, 575 sites) synced successfully at 09:14 today, but **not one cached asset carries a `gensetKVA` value — the field is absent from every stored asset record**. That is why all 575 sites report "no genset rating" and nothing is billed. The cached totals also confirm these are genset sites, not PV: 575 sites for 1.05 MW combined.
+The Jubaili contract (Elum SAS, 575 sites) synced successfully this morning, but **no cached asset carries a genset rating** — the field is absent from every stored asset record, which is why all 575 sites report "no genset rating" and nothing is billed.
 
-So the calculation logic is behaving correctly; it is being fed no ratings. There are two possible causes and the plan verifies which before changing pricing behaviour:
+Cause: the sync resolves Jubaili assets through the global `GET /assets` response (10,806 assets) and the asset-group members call. `genset_capacity` is only returned by the org-scoped call, `GET /v1/assets?org_ids=<ORG_ID>`, so the rating never enters the pipeline.
 
-1. The bulk `GET /assets` call the sync uses (10,806 assets in one response) may not include `genset_capacity` — it may only be returned on the per-asset endpoint or behind a field/include parameter.
-2. The rating is present in the response but is not reaching the stored record.
+## The fix
 
-## Step 1 — Confirm the source of the ratings
+For Jubaili contracts, fetch the ratings from the org-scoped endpoint once per sync:
 
-Add temporary diagnostic logging to the sync that prints the raw AMMP payload keys for a handful of Jubaili assets, then run the sync and read the logs. This answers directly whether `genset_capacity` is present on the bulk `/assets` response, present but named differently, or absent.
+1. Call `GET /v1/assets?org_ids=<contract org id>` (for this contract: the Jubaili org already stored on it).
+2. Build a lookup keyed by `asset_id` holding the raw `genset_capacity`.
+3. Wherever a single site's rating is needed, read it from that lookup — never from a per-asset details call.
 
-## Step 2 — Fix the fetch based on what Step 1 shows
+Rules applied consistently:
 
-- **If the bulk response carries it**: correct the mapping so the value is persisted, and confirm on a re-sync that ratings appear.
-- **If the bulk response omits it**: fetch the rating from the per-asset endpoint (or the parameterised list call that returns it) for the assets on Jubaili contracts only. This is 575 assets, so it runs as its own batched, resumable pass inside the existing sync-time budget, in the same style as device enrichment, rather than a blocking loop.
-- Ratings are cached on the asset record so later syncs never blank an existing value; only a newer non-null rating replaces it.
+- `genset_capacity` is in volt-amps: kVA = value ÷ 1000, displayed rounded (whole kVA, one decimal only when below 10).
+- `null` means **not set** and stays null — it is never coerced to 0. A genuine 0 is a distinct, separately reported case.
+- A rating already cached is never blanked by a later sync that fails to return one; only a newer non-null value replaces it.
+- Sites in the asset group that the org call does not return keep a null rating and are listed as such.
 
-## Step 3 — Name-derived fallback for unrated sites
+## Site name is for alerting only
 
-Many Jubaili sites carry the rating in their name ("Total Logistics Gen 3 250KVA", "Samana Travel 13 KVA", "NILE UNIVERSITY 1000KVA"). Where AMMP has no rating:
+Many site names embed a rating ("Total Logistics Gen 3 250KVA", "NILE UNIVERSITY 1000KVA"). Names are **never** used to price a site. They are only compared against the AMMP value to raise data-quality flags:
 
-- Use the kVA parsed from the site name as a **fallback** rating, so the site is billed instead of dropped.
-- Mark that site as **"Rating from name"** in the calculator, contract page and support document, so it is clear the AMMP record still needs fixing.
-- Sites with neither an AMMP rating nor a parsable name stay unrated and unbilled, and are listed for follow-up.
+- Name says a rating but AMMP has none → "Rating missing in AMMP (name suggests N kVA)".
+- Name and AMMP differ materially (more than 20%) → "Name/AMMP mismatch"; the site is still billed on the AMMP value.
 
-## Step 4 — Show kVA and flags in all three views
+Sites with no AMMP rating are not billed and are listed for follow-up, as today.
 
-Once ratings flow through:
+## Where it shows up
 
-- **Contract page — Asset Breakdown** (Jubaili only): new **kVA** and **Band** columns, per-row status flag (Unrated / Rating from name / Clamped / Name mismatch), and a summary strip with rated, unrated, clamped and mismatched counts plus the resulting annual banded total. A warning banner appears while any site is unrated.
-- **Invoice calculator**: a counts line (billed / from name / clamped / unrated / mismatched) above the band breakdown, with the problem sites always listed rather than folded away.
-- **Support document**: the per-site table gains an explicit **Status** column using the same flags, plus a note under the table stating how many sites were excluded as unrated and how many were clamped, so the totals are explained.
+- **Contract page — asset breakdown** (Jubaili only): kVA and band columns, per-row status (Rated / Not set in AMMP / Zero rating / Clamped / Name mismatch), and a counts summary with the resulting annual banded total.
+- **Invoice calculator**: counts line (billed / not set / zero / clamped / mismatched) above the band breakdown, with the problem sites listed.
+- **Support document**: per-site status column plus a note stating how many sites were excluded for a missing rating and how many were clamped, so the totals reconcile.
+- **Alerts**: one data-quality alert per sync summarising missing ratings, mismatches and clamped sites.
 
 ## Technical notes
 
-- Pricing math in `calculateElumJubailiBreakdown` (`src/lib/invoiceCalculations.ts`) is unchanged apart from accepting the new "rating from name" status; bands, clamping and the annual-minimum floor already work.
-- `parseKvaFromName` already exists and is reused for the fallback, so the calculator, contract page and support document all derive identical values.
-- The contract page reads bands from the contract's `org_pricing_config.jubailiKvaBands` (defaults as fallback) so it never disagrees with the invoice.
-- The second Jubaili contract (Elum, 577 assets) picks up the same fix automatically — the change is at package level, not per contract.
-- The diagnostic logging from Step 1 is removed once the fetch is confirmed working.
+- `supabase/functions/ammp-sync-contract/index.ts`: for `elum_jubaili`, add an org-scoped `/assets?org_ids=...` fetch and a `Map<asset_id, genset_capacity>`; the capability mapper reads `gensetKVA` from that map (`/1000`, null preserved) instead of the global asset record. No per-asset detail calls are added.
+- Banding, clamping and the €20,000 annual minimum in `calculateElumJubailiBreakdown` (`src/lib/invoiceCalculations.ts`) already work and stay as they are; only the site status values change (`rated` / `unset` / `zero` / `clamped` / `mismatch`).
+- `parseKvaFromName` stays, but is used solely to produce the alert flags — it never feeds a price.
+- One re-sync of each Jubaili contract populates the ratings; until then the existing "sync required" notice stands.
+- The second Jubaili contract picks the change up automatically — it is package-level, not per contract.
