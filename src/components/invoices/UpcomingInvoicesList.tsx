@@ -300,6 +300,7 @@ export function UpcomingInvoicesList({
           assetId: asset.assetId,
           assetName: asset.assetName,
           totalMW: asset.totalMW,
+          gensetKVA: asset.gensetKVA,
           isHybrid: asset.isHybrid
         }))
       : undefined;
