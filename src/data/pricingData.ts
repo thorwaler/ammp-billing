@@ -665,3 +665,27 @@ export const isEnterpriseEconfPackage = (packageType: string): boolean =>
 export const usesOrgTierBreakdown = (packageType: string): boolean =>
   isElumOrgTierPackage(packageType) || isEnterpriseEconfPackage(packageType);
 
+/** Every Elum contract package (legacy + 2026 org tiers). */
+export const isElumPackage = (packageType: string): boolean =>
+  packageType === "elum_epm" ||
+  packageType === "elum_jubaili" ||
+  packageType === "elum_portfolio_os" ||
+  packageType === "elum_internal" ||
+  isElumOrgTierPackage(packageType);
+
+/** Human label used on the single summarised Elum invoice line. */
+export const elumPackageLabel = (packageType: string): string => {
+  switch (packageType) {
+    case "elum_epm": return "Elum ePM";
+    case "elum_jubaili": return "Elum Jubaili";
+    case "elum_portfolio_os": return "Elum Portfolio OS";
+    case "elum_internal": return "Elum Internal";
+    case "elum_ci_lite": return "Elum C&I Light";
+    case "elum_ci_pro": return "Elum C&I Pro";
+    case "elum_utility": return "Elum Utility";
+    case "elum_internal_2026": return "Elum Internal";
+    default: return "Elum";
+  }
+};
+
+
