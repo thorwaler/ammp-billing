@@ -1039,8 +1039,12 @@ export function InvoiceCalculator({
       const ACCOUNT_PLATFORM_FEES = xeroConfig?.modules?.accountCode || xeroConfig?.basePrice?.accountCode || "1002";
       const ACCOUNT_IMPLEMENTATION_FEES = xeroConfig?.addons?.accountCode || "1000";
 
+      // Elum contracts: all recurring platform charges collapse into one line.
+      // The full per-org / per-tier / per-site detail lives in the support document.
+      const isElumSummary = isElumPackage(selectedCustomer.package);
+
       // Add base pricing if applicable (Platform Fee - ARR)
-      if (result.basePricingCost > 0) {
+      if (!isElumSummary && result.basePricingCost > 0) {
         lineItems.push({
           Description: xeroConfig?.basePrice?.description || "Base Pricing",
           Quantity: 1,
