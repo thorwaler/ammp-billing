@@ -1,30 +1,44 @@
-# Jubaili: show kVA and flag off-tier sites everywhere
+# Jubaili kVA: fix the missing genset ratings, then surface them everywhere
 
-The Jubaili contract is now priced per site by genset rating (kVA), but the contract page's Asset Breakdown still only shows MW, hybrid, Solcast and device counts. This makes the breakdown match the new invoicing model and makes problem sites obvious before an invoice is created.
+## What the data shows
 
-## What changes
+The Jubaili contract (Elum SAS, 575 sites) synced successfully at 09:14 today, but **not one cached asset carries a `gensetKVA` value — the field is absent from every stored asset record**. That is why all 575 sites report "no genset rating" and nothing is billed. The cached totals also confirm these are genset sites, not PV: 575 sites for 1.05 MW combined.
 
-### Contract page — Asset Breakdown (Jubaili contracts only)
-- New **kVA** column showing each site's genset rating, and a **Band** column showing which pricing band it falls into with the annual fee.
-- Status flag per row:
-  - **Unrated** — no genset rating in AMMP, so the site is not billed.
-  - **Clamped** — rating sits outside the configured bands and is billed at the nearest band.
-  - **Name mismatch** — the kVA in the site name differs from the AMMP value by more than 20% (billed on the AMMP value).
-- A summary strip above the table: total sites, rated sites, unrated sites, clamped sites, name mismatches, and the resulting annual banded total.
-- A warning banner when any site is unrated, clamped or mismatched, telling the user these need fixing in AMMP.
-- MW/hybrid/Solcast columns stay, since they're still useful, but kVA leads for Jubaili.
+So the calculation logic is behaving correctly; it is being fed no ratings. There are two possible causes and the plan verifies which before changing pricing behaviour:
 
-### Invoice calculator
-The Jubaili band breakdown already lists bands and site statuses. Adds:
-- A compact counts line (billed / unrated / clamped / mismatched) at the top of the Jubaili section so problems are visible without scrolling the site list.
-- Unrated, clamped and mismatched sites are always shown rather than folded into the site list.
+1. The bulk `GET /assets` call the sync uses (10,806 assets in one response) may not include `genset_capacity` — it may only be returned on the per-asset endpoint or behind a field/include parameter.
+2. The rating is present in the response but is not reaching the stored record.
 
-### Support document
-- The per-site Jubaili table keeps the kVA and band columns and gains an explicit **Status** column with the same three flags.
-- A short note under the table listing how many sites are unrated (excluded from billing) and how many were clamped, so the customer-facing document explains the totals.
+## Step 1 — Confirm the source of the ratings
+
+Add temporary diagnostic logging to the sync that prints the raw AMMP payload keys for a handful of Jubaili assets, then run the sync and read the logs. This answers directly whether `genset_capacity` is present on the bulk `/assets` response, present but named differently, or absent.
+
+## Step 2 — Fix the fetch based on what Step 1 shows
+
+- **If the bulk response carries it**: correct the mapping so the value is persisted, and confirm on a re-sync that ratings appear.
+- **If the bulk response omits it**: fetch the rating from the per-asset endpoint (or the parameterised list call that returns it) for the assets on Jubaili contracts only. This is 575 assets, so it runs as its own batched, resumable pass inside the existing sync-time budget, in the same style as device enrichment, rather than a blocking loop.
+- Ratings are cached on the asset record so later syncs never blank an existing value; only a newer non-null rating replaces it.
+
+## Step 3 — Name-derived fallback for unrated sites
+
+Many Jubaili sites carry the rating in their name ("Total Logistics Gen 3 250KVA", "Samana Travel 13 KVA", "NILE UNIVERSITY 1000KVA"). Where AMMP has no rating:
+
+- Use the kVA parsed from the site name as a **fallback** rating, so the site is billed instead of dropped.
+- Mark that site as **"Rating from name"** in the calculator, contract page and support document, so it is clear the AMMP record still needs fixing.
+- Sites with neither an AMMP rating nor a parsable name stay unrated and unbilled, and are listed for follow-up.
+
+## Step 4 — Show kVA and flags in all three views
+
+Once ratings flow through:
+
+- **Contract page — Asset Breakdown** (Jubaili only): new **kVA** and **Band** columns, per-row status flag (Unrated / Rating from name / Clamped / Name mismatch), and a summary strip with rated, unrated, clamped and mismatched counts plus the resulting annual banded total. A warning banner appears while any site is unrated.
+- **Invoice calculator**: a counts line (billed / from name / clamped / unrated / mismatched) above the band breakdown, with the problem sites always listed rather than folded away.
+- **Support document**: the per-site table gains an explicit **Status** column using the same flags, plus a note under the table stating how many sites were excluded as unrated and how many were clamped, so the totals are explained.
 
 ## Technical notes
-- All flag logic already exists in `calculateElumJubailiBreakdown` (`src/lib/invoiceCalculations.ts`) via `JubailiSiteLine.status`, `clamped` and `nameKva`. Nothing changes in the pricing math — this is presentation only.
-- The contract page (`src/pages/ContractDetails.tsx`) will call the same helpers (`resolveJubailiBand`, `formatJubailiBandLabel`, `parseKvaFromName`) against `cached_capabilities.assetBreakdown[].gensetKVA`, using the contract's own bands from `org_pricing_config.jubailiKvaBands` with the defaults as fallback, so the page and the invoice never disagree.
-- The new columns and summary render only when the contract package is `elum_jubaili`; every other package's Asset Breakdown is untouched.
-- Sites still need an AMMP re-sync for `gensetKVA` to be populated; where it's missing, rows show as Unrated with a prompt to sync.
+
+- Pricing math in `calculateElumJubailiBreakdown` (`src/lib/invoiceCalculations.ts`) is unchanged apart from accepting the new "rating from name" status; bands, clamping and the annual-minimum floor already work.
+- `parseKvaFromName` already exists and is reused for the fallback, so the calculator, contract page and support document all derive identical values.
+- The contract page reads bands from the contract's `org_pricing_config.jubailiKvaBands` (defaults as fallback) so it never disagrees with the invoice.
+- The second Jubaili contract (Elum, 577 assets) picks up the same fix automatically — the change is at package level, not per contract.
+- The diagnostic logging from Step 1 is removed once the fetch is confirmed working.
