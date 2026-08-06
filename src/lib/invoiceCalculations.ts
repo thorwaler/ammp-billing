@@ -876,6 +876,8 @@ export function calculateElumOrgTierBreakdown(
     internalBrackets?: ElumInternalBracket[];
     internalEconfRate?: number;
     mwhOverrideAssetIds?: string[];
+    /** Display label override (e.g. "Enterprise eConf" reusing the Lite maths) */
+    tierLabelOverride?: string;
   } = {}
 ): ElumOrgTierBreakdown {
   const liteBaseRate = options.liteBaseRate ?? ELUM_LITE_BASE_RATE;
@@ -885,7 +887,8 @@ export function calculateElumOrgTierBreakdown(
     : ELUM_INTERNAL_2026_BRACKETS;
   const internalEconfRate = options.internalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE;
   const mwhOverrides = new Set(options.mwhOverrideAssetIds || []);
-  const tierLabel = ELUM_TIER_LABELS[tier];
+  const tierLabel = options.tierLabelOverride ?? ELUM_TIER_LABELS[tier];
+
 
   const orgLines: ElumOrgLine[] = [];
   const globalWarnings: string[] = [];
