@@ -354,7 +354,7 @@ export function MergedInvoiceDialog({
 
       
       // Add site minimum pricing if applicable
-      if (result.siteMinimumPricingBreakdown) {
+      if (!isElumSummary && result.siteMinimumPricingBreakdown) {
         if (result.siteMinimumPricingBreakdown.normalPricingTotal > 0) {
           lineItems.push({
             Description: `[${contractLabel}] Monitoring Fee - Sites Above Threshold (${result.siteMinimumPricingBreakdown.sitesAboveThreshold} sites)`,
@@ -374,7 +374,7 @@ export function MergedInvoiceDialog({
       }
       
       // Elum 2026 org-based tiers: one combined line per sub-organisation (base + eConf)
-      if (result.elumOrgTierBreakdown) {
+      if (!isElumSummary && result.elumOrgTierBreakdown) {
         result.elumOrgTierBreakdown.orgs.forEach(org => {
           if (org.totalCost > 0) {
             const rateNote = org.appliedRate != null
@@ -413,7 +413,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add Elum Internal graduated MW tier line items
-      if (result.elumInternalBreakdown) {
+      if (!isElumSummary && result.elumInternalBreakdown) {
         result.elumInternalBreakdown.tiers.forEach((tier: any) => {
           if (tier.cost > 0) {
             lineItems.push({
@@ -427,7 +427,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add Elum ePM site pricing line items
-      if (result.elumEpmBreakdown) {
+      if (!isElumSummary && result.elumEpmBreakdown) {
         if (result.elumEpmBreakdown.smallSitesTotal > 0) {
           lineItems.push({
             Description: `[${contractLabel}] Small Sites ≤${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.smallSites?.length || 0} sites)`,
@@ -447,7 +447,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add Elum Jubaili per-site fee
-      if (result.elumJubailiBreakdown) {
+      if (!isElumSummary && result.elumJubailiBreakdown) {
         lineItems.push({
           Description: `[${contractLabel}] Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × €${result.elumJubailiBreakdown.perSiteFee}/site)`,
           Quantity: 1,
@@ -457,7 +457,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add base monthly price
-      if (result.basePricingCost && result.basePricingCost > 0) {
+      if (!isElumSummary && result.basePricingCost && result.basePricingCost > 0) {
         lineItems.push({
           Description: `[${contractLabel}] Base Monthly Fee`,
           Quantity: 1,
@@ -467,7 +467,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add minimum contract adjustment
-      if (result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
+      if (!isElumSummary && result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
         lineItems.push({
           Description: `[${contractLabel}] Minimum Contract Adjustment`,
           Quantity: 1,
