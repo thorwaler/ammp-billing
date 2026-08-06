@@ -135,6 +135,7 @@ function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'
     assetName: stored.assetName,
     totalMW: stored.totalMW,
     capacityKWp: stored.capacityKWp,
+    gensetKVA: stored.gensetKVA ?? null,
     hasSolcast: stored.hasSolcast,
     hasBattery: stored.isHybrid, // Stored as isHybrid
     hasGenset: false,
