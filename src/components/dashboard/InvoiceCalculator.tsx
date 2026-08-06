@@ -1151,7 +1151,7 @@ export function InvoiceCalculator({
 
 
       // Elum 2026 org-based tiers: one combined line per sub-organisation (base + eConf)
-      if (result.elumOrgTierBreakdown) {
+      if (!isElumSummary && result.elumOrgTierBreakdown) {
         const ob = result.elumOrgTierBreakdown;
         ob.orgs.forEach(org => {
           if (org.totalCost > 0) {
@@ -1193,7 +1193,7 @@ export function InvoiceCalculator({
       }
       
       // Add Elum Internal graduated MW tier line items
-      if (result.elumInternalBreakdown) {
+      if (!isElumSummary && result.elumInternalBreakdown) {
         result.elumInternalBreakdown.tiers.forEach((tier: any) => {
           if (tier.cost > 0) {
             lineItems.push({
@@ -1207,7 +1207,7 @@ export function InvoiceCalculator({
       }
       
       // Add Elum ePM site pricing line items
-      if (result.elumEpmBreakdown) {
+      if (!isElumSummary && result.elumEpmBreakdown) {
         if (result.elumEpmBreakdown.smallSitesTotal > 0) {
           lineItems.push({
             Description: `Small Sites ≤${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.smallSites?.length || 0} sites)`,
@@ -1227,7 +1227,7 @@ export function InvoiceCalculator({
       }
       
       // Add Elum Jubaili per-site fee line item
-      if (result.elumJubailiBreakdown) {
+      if (!isElumSummary && result.elumJubailiBreakdown) {
         lineItems.push({
           Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × ${currencySymbol}${result.elumJubailiBreakdown.perSiteFee}/site)`,
           Quantity: 1,
@@ -1235,6 +1235,48 @@ export function InvoiceCalculator({
           AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
+
+      // Elum: single summarised recurring line (detail lives in the support document)
+      if (isElumSummary) {
+        const ob = result.elumOrgTierBreakdown;
+        const recurringTotal =
+          (result.basePricingCost || 0) +
+          (result.moduleCosts?.reduce((s: number, mc: any) => s + (mc.cost || 0), 0) || 0) +
+          (result.minimumCharges || 0) +
+          (result.siteMinimumPricingBreakdown
+            ? (result.siteMinimumPricingBreakdown.normalPricingTotal || 0) +
+              (result.siteMinimumPricingBreakdown.minimumPricingTotal || 0)
+            : 0) +
+          (ob?.totalCost || 0) +
+          (result.elumInternalBreakdown?.totalCost || 0) +
+          (result.elumEpmBreakdown?.totalCost || 0) +
+          (result.elumJubailiBreakdown?.totalCost || 0) +
+          (result.minimumContractAdjustment || 0);
+
+        if (recurringTotal > 0) {
+          const siteCount = ob
+            ? ob.orgs.reduce((s, o) => s + (o.siteCount || 0), 0)
+            : (result.elumEpmBreakdown
+                ? (result.elumEpmBreakdown.smallSites?.length || 0) + (result.elumEpmBreakdown.largeSites?.length || 0)
+                : result.elumJubailiBreakdown?.siteCount || 0);
+          const totalMWp = ob
+            ? ob.orgs.reduce((s, o) => s + (o.totalMWp || 0), 0)
+            : Number(mwManaged) || 0;
+
+          const scopeParts: string[] = [];
+          if (siteCount > 0) scopeParts.push(`${siteCount} sites`);
+          if (totalMWp > 0) scopeParts.push(`${totalMWp.toFixed(2)} MWp`);
+          const scope = scopeParts.length > 0 ? ` (${scopeParts.join(', ')})` : '';
+
+          lineItems.push({
+            Description: `${elumPackageLabel(selectedCustomer.package)} — Platform Monitoring${scope} — see attached support document for the detailed breakdown`,
+            Quantity: 1,
+            UnitAmount: recurringTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        }
+      }
+
       
       // Matriarch API: Add irradiance + performance line items (ARR)
       if (result.matriarchApiBreakdown) {
