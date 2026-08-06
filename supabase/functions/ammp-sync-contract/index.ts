@@ -1025,6 +1025,29 @@ async function processContractSync(
   // Filter out already-synced assets for continuation
   const assetsToActuallyProcess = assetsToProcess.filter(a => !alreadySyncedIds.has(a.asset_id));
   console.log(`[AMMP Sync Contract] ${totalExpected} total assets, ${assetsToActuallyProcess.length} need processing`);
+
+  // Jubaili is priced on the genset rating, and `genset_capacity` is only
+  // returned by the org-scoped assets call — build a rating lookup once per
+  // sync (keyed by asset_id) instead of hitting the per-asset details endpoint.
+  const gensetCapacityByAsset = new Map<string, number | null>();
+  if (packageType === 'elum_jubaili') {
+    const ratingOrgId = orgId || contract.contract_ammp_org_id;
+    if (ratingOrgId) {
+      try {
+        const orgAssets = await getAssetsForOrg(token, ratingOrgId);
+        for (const a of orgAssets) {
+          gensetCapacityByAsset.set(a.asset_id, a.genset_capacity ?? null);
+        }
+        const rated = [...gensetCapacityByAsset.values()].filter(v => v != null).length;
+        console.log(`[AMMP Sync Contract] Jubaili genset ratings: ${rated}/${gensetCapacityByAsset.size} assets rated (org ${ratingOrgId})`);
+      } catch (e) {
+        console.error(`[AMMP Sync Contract] Failed to fetch genset ratings for org ${ratingOrgId}:`, e);
+      }
+    } else {
+      console.warn(`[AMMP Sync Contract] Jubaili contract ${contractId} has no org ID — cannot resolve genset ratings`);
+    }
+  }
+  
   
   // Batch fetch full asset data (metadata + devices) for each asset
   const newCapabilities: AssetCapabilities[] = [];
