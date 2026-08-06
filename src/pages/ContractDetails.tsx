@@ -1786,6 +1786,15 @@ const ContractDetails = () => {
                             </td>
                           )}
                           <td className="p-2 text-right">{asset.totalMW?.toFixed(4)}</td>
+                          {contract?.package === 'elum_jubaili' && (
+                            <td className="p-2 text-right">
+                              {asset.gensetKVA == null ? (
+                                <span className="text-destructive text-xs">Not set</span>
+                              ) : (
+                                asset.gensetKVA.toLocaleString(undefined, { maximumFractionDigits: 1 })
+                              )}
+                            </td>
+                          )}
                           <td className="p-2 text-center">
                             {asset.isHybrid ? <Badge variant="outline" className="bg-purple-50">Yes</Badge> : '-'}
                           </td>
