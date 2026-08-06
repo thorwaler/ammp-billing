@@ -1722,6 +1722,27 @@ const ContractDetails = () => {
                 </details>
               )}
 
+              {/* Jubaili genset rating summary */}
+              {contract?.package === 'elum_jubaili' && (() => {
+                const assets = cachedCapabilities.assetBreakdown as any[];
+                const rated = assets.filter(a => a.gensetKVA != null && a.gensetKVA > 0);
+                const zero = assets.filter(a => a.gensetKVA === 0);
+                const unset = assets.filter(a => a.gensetKVA == null);
+                return (
+                  <div className="mb-3 text-sm rounded-lg border p-3 space-y-1">
+                    <div className="font-medium">Genset ratings (from AMMP)</div>
+                    <div className="text-muted-foreground">
+                      {rated.length} rated · {zero.length} rated 0 kVA · {unset.length} not set in AMMP
+                    </div>
+                    {unset.length > 0 && (
+                      <div className="text-destructive text-xs">
+                        Sites without a rating are not billed. Re-sync the contract after the ratings are set in AMMP.
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* Asset Table */}
               <div className={`${showAllAssets ? '' : 'max-h-96'} overflow-auto border rounded-lg`}>
                 <table className="w-full text-sm">
@@ -1730,6 +1751,9 @@ const ContractDetails = () => {
                       <th className="text-left p-2 font-medium">Asset Name</th>
                       {showCategoryColumn && <th className="text-left p-2 font-medium">Category</th>}
                       <th className="text-right p-2 font-medium">MW</th>
+                      {contract?.package === 'elum_jubaili' && (
+                        <th className="text-right p-2 font-medium">Genset (kVA)</th>
+                      )}
                       <th className="text-center p-2 font-medium">Hybrid</th>
                       <th className="text-center p-2 font-medium">Solcast</th>
                       <th className="text-center p-2 font-medium">Discount</th>
