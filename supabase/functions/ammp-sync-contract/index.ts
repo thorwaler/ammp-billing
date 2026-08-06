@@ -27,6 +27,8 @@ interface AssetCapabilities {
   assetName: string;
   totalMW: number;
   capacityKWp: number;
+  /** Genset rating in kVA (AMMP `genset_capacity` is in VA) */
+  gensetKVA: number | null;
   hasSolcast: boolean;
   hasBattery: boolean;
   hasGenset: boolean;
@@ -78,6 +80,8 @@ interface CachedCapabilities {
     assetName: string;
     totalMW: number;
     capacityKWp: number;
+    /** Genset rating in kVA (AMMP `genset_capacity` / 1000) */
+    gensetKVA?: number | null;
     isHybrid: boolean;
     hasSolcast: boolean;
     deviceCount: number;
@@ -131,6 +135,7 @@ function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'
     assetName: stored.assetName,
     totalMW: stored.totalMW,
     capacityKWp: stored.capacityKWp,
+    gensetKVA: stored.gensetKVA ?? null,
     hasSolcast: stored.hasSolcast,
     hasBattery: stored.isHybrid, // Stored as isHybrid
     hasGenset: false,
@@ -322,12 +327,19 @@ function calculateCapabilities(
   
   // Calculate capacity in kWp (total_pv_power is in Watts)
   const capacityKWp = (asset.total_pv_power || 0) / 1000;
-  
+
+  // Genset rating: AMMP returns `genset_capacity` in VA
+  const gensetKVA =
+    asset.genset_capacity != null && Number(asset.genset_capacity) > 0
+      ? Number(asset.genset_capacity) / 1000
+      : null;
+
   return {
     assetId: asset.asset_id,
     assetName: asset.asset_name,
     totalMW: capacityKWp / 1000, // Convert kWp to MW
     capacityKWp,
+    gensetKVA,
     hasSolcast,
     hasBattery,
     hasGenset,
@@ -1077,6 +1089,7 @@ async function processContractSync(
           assetName: member.asset_name,
           totalMW: 0,
           capacityKWp: 0,
+          gensetKVA: null,
           hasSolcast: false,
           hasBattery: false,
           hasGenset: false,
@@ -1161,6 +1174,7 @@ async function processContractSync(
         assetName: c.assetName,
         totalMW: c.totalMW,
         capacityKWp: c.capacityKWp,
+        gensetKVA: c.gensetKVA ?? existingAsset?.gensetKVA ?? null,
         isHybrid: useExisting ? existingAsset.isHybrid : (c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter),
         hasSolcast: useExisting ? existingAsset.hasSolcast : c.hasSolcast,
         deviceCount: useExisting ? existingAsset.deviceCount : c.deviceCount,

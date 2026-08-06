@@ -300,6 +300,7 @@ export function UpcomingInvoicesList({
           assetId: asset.assetId,
           assetName: asset.assetName,
           totalMW: asset.totalMW,
+          gensetKVA: asset.gensetKVA,
           isHybrid: asset.isHybrid
         }))
       : undefined;
@@ -337,6 +338,7 @@ export function UpcomingInvoicesList({
       ammpCapabilities: invoice.cachedCapabilities,
       assetBreakdown,
       enableSiteMinimumPricing: !!assetBreakdown && assetBreakdown.length > 0,
+      jubailiKvaBands: (invoice as any).orgPricingConfig?.jubailiKvaBands,
       baseMonthlyPrice: invoice.baseMonthlyPrice,
       billingFrequency: invoice.billingFrequency,
       siteChargeFrequency: invoice.siteChargeFrequency,

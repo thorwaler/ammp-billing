@@ -45,6 +45,9 @@ import {
   DEFAULT_PORTFOLIO_DISCOUNT_TIERS,
   DEFAULT_MINIMUM_CHARGE_TIERS,
   DEFAULT_GRADUATED_MW_TIERS,
+  DEFAULT_JUBAILI_KVA_BANDS,
+  DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE,
+  type JubailiKvaBand,
   ELUM_LITE_BASE_RATE,
   ELUM_LITE_ECONF_RATE,
   ELUM_PRO_SITE_BUCKETS,
@@ -299,6 +302,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [portfolioDiscountTiers, setPortfolioDiscountTiers] = useState<DiscountTier[]>(DEFAULT_PORTFOLIO_DISCOUNT_TIERS);
   const [minimumChargeTiers, setMinimumChargeTiers] = useState<MinimumChargeTier[]>(DEFAULT_MINIMUM_CHARGE_TIERS);
   const [graduatedMWTiers, setGraduatedMWTiers] = useState<GraduatedMWTier[]>(DEFAULT_GRADUATED_MW_TIERS);
+  const [jubailiKvaBands, setJubailiKvaBands] = useState<JubailiKvaBand[]>(DEFAULT_JUBAILI_KVA_BANDS);
   const [irradianceSiteTiers, setIrradianceSiteTiers] = useState<IrradianceSiteTier[]>(MATRIARCH_IRRADIANCE_SITE_TIERS);
   const [performanceMwpTiers, setPerformanceMwpTiers] = useState<PerformanceMWpTier[]>(MATRIARCH_PERFORMANCE_MWP_TIERS);
   const [onboardingSetupFee, setOnboardingSetupFee] = useState<number>(MATRIARCH_ONBOARDING_FEE);
@@ -681,6 +685,12 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           ]);
         }
 
+        // Load Elum Jubaili kVA bands
+        const jubBands = ((contract as any).org_pricing_config || {}).jubailiKvaBands;
+        if (Array.isArray(jubBands) && jubBands.length > 0) {
+          setJubailiKvaBands(jubBands);
+        }
+
         // Load Elum asset group fields
         form.setValue('ammpAssetGroupId', contract.ammp_asset_group_id || '');
         form.setValue('ammpAssetGroupName', contract.ammp_asset_group_name || '');
@@ -791,8 +801,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("modules", []);
       setShowCustomPricing(false);
     } else if (value === "elum_jubaili") {
-      // Elum Jubaili - per-site pricing
-      form.setValue("annualFeePerSite", 500);
+      // Elum Jubaili - per-site pricing banded by genset rating (kVA)
+      form.setValue("minimumAnnualValue", DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE);
+      setJubailiKvaBands(DEFAULT_JUBAILI_KVA_BANDS);
       form.setValue("modules", []);
       setShowCustomPricing(false);
     } else if (value === "elum_portfolio_os") {
@@ -1179,6 +1190,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               internalBrackets: ELUM_INTERNAL_2026_BRACKETS,
               internalEconfRate: data.elumInternalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE,
             }
+          : data.package === 'elum_jubaili'
+          ? { jubailiKvaBands }
           : {},
         site_size_threshold_kwp: data.package === 'elum_epm' 
           ? (data.siteSizeThresholdKwp || 100) 
@@ -2322,14 +2335,21 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   />
                   <FormField
                     control={form.control}
-                    name="annualFeePerSite"
+                    name="minimumAnnualValue"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Per-Site Fee ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                        <FormLabel>Minimum Annual Fee ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
                         <FormControl>
-                          <Input type="number" step="0.01" placeholder="500" {...field} onChange={e => field.onChange(e.target.valueAsNumber || 500)} />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder={String(DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE)}
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={e => field.onChange(e.target.valueAsNumber || DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE)}
+                          />
                         </FormControl>
-                        <FormDescription>Flat fee charged per site in the asset group</FormDescription>
+                        <FormDescription>Floor applied to the banded site fees (pro-rated per billing period)</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -2374,6 +2394,87 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       </FormItem>
                     )}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <FormLabel>Genset kVA Pricing Bands</FormLabel>
+                  <FormDescription>
+                    Annual fee per site, based on the site's genset rating from AMMP (kVA). Sites without a
+                    rating are not billed and are flagged in the invoice calculator.
+                  </FormDescription>
+                  <div className="rounded-md border divide-y">
+                    <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 p-2 text-xs font-medium text-muted-foreground">
+                      <span>Min kVA</span>
+                      <span>Max kVA (blank = no cap)</span>
+                      <span>Annual fee / site</span>
+                      <span />
+                    </div>
+                    {jubailiKvaBands.map((band, index) => (
+                      <div key={index} className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 p-2 items-center">
+                        <Input
+                          type="number"
+                          value={band.minKva}
+                          onChange={e =>
+                            setJubailiKvaBands(bands =>
+                              bands.map((b, i) => (i === index ? { ...b, minKva: e.target.valueAsNumber || 0 } : b))
+                            )
+                          }
+                        />
+                        <Input
+                          type="number"
+                          value={band.maxKva ?? ''}
+                          placeholder="∞"
+                          onChange={e =>
+                            setJubailiKvaBands(bands =>
+                              bands.map((b, i) =>
+                                i === index
+                                  ? { ...b, maxKva: Number.isNaN(e.target.valueAsNumber) ? null : e.target.valueAsNumber }
+                                  : b
+                              )
+                            )
+                          }
+                        />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={band.annualFee}
+                          onChange={e =>
+                            setJubailiKvaBands(bands =>
+                              bands.map((b, i) => (i === index ? { ...b, annualFee: e.target.valueAsNumber || 0 } : b))
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setJubailiKvaBands(bands => bands.filter((_, i) => i !== index))}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setJubailiKvaBands(bands => [...bands, { minKva: 0, maxKva: null, annualFee: 0 }])
+                      }
+                    >
+                      Add band
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setJubailiKvaBands(DEFAULT_JUBAILI_KVA_BANDS)}
+                    >
+                      Reset to defaults
+                    </Button>
+                  </div>
                 </div>
               </>
             )}

@@ -24,6 +24,11 @@ import {
   ELUM_INTERNAL_2026_BRACKETS,
   ELUM_INTERNAL_2026_ECONF_RATE,
   calculateElumInternalSteppedCost,
+  DEFAULT_JUBAILI_KVA_BANDS,
+  DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE,
+  formatJubailiBandLabel,
+  resolveJubailiBand,
+  type JubailiKvaBand,
   type ElumInternalBracket,
   getSolarAfricaTier,
   getAddonPrice, 
@@ -113,6 +118,8 @@ export interface CalculationParams {
     assetName: string;
     totalMW: number;
     capacityKWp?: number;
+    /** Genset rating in kVA (AMMP `genset_capacity` / 1000) */
+    gensetKVA?: number | null;
     isHybrid?: boolean;
     hasSolcast?: boolean;
     solcastOnboardingDate?: string;
@@ -138,6 +145,8 @@ export interface CalculationParams {
   annualFeePerSite?: number;
   sitesToBill?: SiteBillingItem[];
   // Elum package fields
+  /** Elum Jubaili: per-site annual fee bands by genset rating (kVA) */
+  jubailiKvaBands?: JubailiKvaBand[];
   siteSizeThresholdKwp?: number;
   belowThresholdPricePerMWp?: number;
   aboveThresholdPricePerMWp?: number;
@@ -253,14 +262,51 @@ export interface ElumEpmBreakdown {
   sitesUsingMinimum?: number;  // Count of sites where minimum was applied
 }
 
+export interface JubailiSiteLine {
+  assetId: string;
+  assetName: string;
+  /** Genset rating in kVA (from AMMP `genset_capacity` / 1000) */
+  kva: number | null;
+  bandLabel: string;
+  annualFee: number;
+  cost: number;
+  status: 'billed' | 'unrated' | 'clamped';
+  clamped?: 'below' | 'above';
+  /** kVA parsed from the asset name that materially differs from the AMMP value */
+  nameKva?: number;
+}
+
+export interface JubailiBandSummary {
+  label: string;
+  minKva: number;
+  maxKva: number | null;
+  annualFee: number;
+  siteCount: number;
+  cost: number;
+}
+
 export interface ElumJubailiBreakdown {
+  /** Weighted average annual fee per billed site (kept for summary displays) */
   perSiteFee: number;
+  /** Billed sites only (unrated sites are excluded) */
   siteCount: number;
   sites: Array<{ assetId: string; assetName: string }>;
   totalCost: number;
-  appliedTier?: MinimumChargeTier;
-  allTiers?: MinimumChargeTier[];
   totalMW?: number;
+  /** kVA band pricing */
+  bands: JubailiBandSummary[];
+  siteLines: JubailiSiteLine[];
+  bandedCost: number;
+  /** Sites without a genset rating in AMMP — not billed, flagged for data fix */
+  unratedSites: JubailiSiteLine[];
+  /** Sites whose rating fell outside the configured bands (clamped to nearest) */
+  clampedSites: JubailiSiteLine[];
+  /** Sites where the name suggests a very different kVA than the AMMP field */
+  mismatchedSites: JubailiSiteLine[];
+  minimumAnnualFee: number;
+  minimumForPeriod: number;
+  minimumApplied: boolean;
+  minimumTopUp: number;
 }
 
 export interface ElumInternalTierBreakdown {
@@ -814,43 +860,129 @@ export function calculateElumEpmBreakdown(
   };
 }
 
+/** Pull a kVA figure out of an asset name, e.g. "Total Logistics Gen 3 250KVA" */
+export function parseKvaFromName(name?: string): number | undefined {
+  if (!name) return undefined;
+  const match = name.match(/(\d+(?:[.,]\d+)?)\s*k\s*va/i);
+  if (!match) return undefined;
+  const value = parseFloat(match[1].replace(',', '.'));
+  return Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
 /**
- * Calculate Elum Jubaili per-site pricing with tiered support
+ * Elum Jubaili — annual subscription per site, priced by the site's genset
+ * rating (kVA) from the AMMP assets endpoint.
+ *
+ * - Sites without a rating (null / 0) are NOT billed and are reported so the
+ *   AMMP data can be fixed.
+ * - Ratings outside the configured bands clamp to the nearest band and are
+ *   flagged.
+ * - The annual minimum fee acts as a floor on the (pro-rated) period charge.
  */
 export function calculateElumJubailiBreakdown(
-  assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number }>,
-  fallbackPerSiteFee: number,
+  assetBreakdown: Array<{ assetId: string; assetName: string; totalMW: number; gensetKVA?: number | null }>,
   frequencyMultiplier: number,
-  totalMW?: number,
-  minimumChargeTiers?: MinimumChargeTier[]
+  options: {
+    bands?: JubailiKvaBand[];
+    minimumAnnualFee?: number;
+    totalMW?: number;
+  } = {}
 ): ElumJubailiBreakdown {
-  const siteCount = assetBreakdown.length;
-  const calculatedTotalMW = totalMW ?? assetBreakdown.reduce((sum, a) => sum + a.totalMW, 0);
-  
-  // Use tiered pricing if available, otherwise fallback to flat fee
-  let perSiteFee = fallbackPerSiteFee;
-  let appliedTier: MinimumChargeTier | undefined;
-  
-  if (minimumChargeTiers && minimumChargeTiers.length > 0) {
-    appliedTier = minimumChargeTiers.find(tier => 
-      calculatedTotalMW >= tier.minMW && 
-      (tier.maxMW === null || calculatedTotalMW <= tier.maxMW)
-    );
-    if (appliedTier) {
-      perSiteFee = appliedTier.chargePerSite;
+  const bands = options.bands?.length ? options.bands : DEFAULT_JUBAILI_KVA_BANDS;
+  const minimumAnnualFee = options.minimumAnnualFee ?? DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE;
+  const calculatedTotalMW =
+    options.totalMW ?? assetBreakdown.reduce((sum, a) => sum + (a.totalMW || 0), 0);
+
+  const siteLines: JubailiSiteLine[] = [];
+
+  for (const asset of assetBreakdown) {
+    const kva = asset.gensetKVA != null && asset.gensetKVA > 0 ? asset.gensetKVA : null;
+
+    if (kva === null) {
+      siteLines.push({
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        kva: null,
+        bandLabel: 'Unrated',
+        annualFee: 0,
+        cost: 0,
+        status: 'unrated',
+      });
+      continue;
     }
+
+    const match = resolveJubailiBand(kva, bands);
+    if (!match) {
+      siteLines.push({
+        assetId: asset.assetId,
+        assetName: asset.assetName,
+        kva,
+        bandLabel: 'Unrated',
+        annualFee: 0,
+        cost: 0,
+        status: 'unrated',
+      });
+      continue;
+    }
+
+    const nameKva = parseKvaFromName(asset.assetName);
+    const mismatch =
+      nameKva !== undefined && Math.abs(nameKva - kva) / Math.max(nameKva, kva) > 0.2
+        ? nameKva
+        : undefined;
+
+    siteLines.push({
+      assetId: asset.assetId,
+      assetName: asset.assetName,
+      kva,
+      bandLabel: formatJubailiBandLabel(match.band),
+      annualFee: match.band.annualFee,
+      cost: match.band.annualFee * frequencyMultiplier,
+      status: match.clamped ? 'clamped' : 'billed',
+      clamped: match.clamped,
+      nameKva: mismatch,
+    });
   }
-  
-  const totalCost = siteCount * perSiteFee * frequencyMultiplier;
-  
+
+  const billedLines = siteLines.filter(l => l.status !== 'unrated');
+  const bandedCost = billedLines.reduce((sum, l) => sum + l.cost, 0);
+
+  const bandSummaries: JubailiBandSummary[] = [...bands]
+    .sort((a, b) => a.minKva - b.minKva)
+    .map(band => {
+      const label = formatJubailiBandLabel(band);
+      const lines = billedLines.filter(l => l.bandLabel === label);
+      return {
+        label,
+        minKva: band.minKva,
+        maxKva: band.maxKva,
+        annualFee: band.annualFee,
+        siteCount: lines.length,
+        cost: lines.reduce((sum, l) => sum + l.cost, 0),
+      };
+    })
+    .filter(b => b.siteCount > 0);
+
+  const minimumForPeriod = minimumAnnualFee * frequencyMultiplier;
+  const minimumApplied = minimumForPeriod > bandedCost;
+  const totalCost = minimumApplied ? minimumForPeriod : bandedCost;
+
   return {
-    perSiteFee,
-    siteCount,
-    sites: assetBreakdown.map(a => ({ assetId: a.assetId, assetName: a.assetName })),
+    perSiteFee: billedLines.length > 0 ? bandedCost / billedLines.length / (frequencyMultiplier || 1) : 0,
+    siteCount: billedLines.length,
+    sites: billedLines.map(l => ({ assetId: l.assetId, assetName: l.assetName })),
     totalCost,
-    appliedTier,
-    allTiers: minimumChargeTiers,
-    totalMW: calculatedTotalMW
+    totalMW: calculatedTotalMW,
+    bands: bandSummaries,
+    siteLines,
+    bandedCost,
+    unratedSites: siteLines.filter(l => l.status === 'unrated'),
+    clampedSites: siteLines.filter(l => l.status === 'clamped'),
+    mismatchedSites: siteLines.filter(l => l.nameKva !== undefined),
+    minimumAnnualFee,
+    minimumForPeriod,
+    minimumApplied,
+    minimumTopUp: minimumApplied ? minimumForPeriod - bandedCost : 0,
   };
 }
 
@@ -1302,18 +1434,15 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       result.totalMWCost = breakdown.totalCost;
     }
   } else if (packageType === 'elum_jubaili') {
-    // Elum Jubaili - per-site fee with tiered support
-    const perSiteFee = params.annualFeePerSite || 500;
+    // Elum Jubaili - annual per-site fee banded by genset rating (kVA)
     const assets = normalAssets; // Use filtered assets (excluding discounted)
-    
+
     if (assets.length > 0) {
-      const breakdown = calculateElumJubailiBreakdown(
-        assets,
-        perSiteFee,
-        frequencyMultiplier,
-        adjustedTotalMW,
-        params.minimumChargeTiers
-      );
+      const breakdown = calculateElumJubailiBreakdown(assets, frequencyMultiplier, {
+        bands: params.jubailiKvaBands,
+        minimumAnnualFee: params.minimumAnnualValue ?? DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE,
+        totalMW: adjustedTotalMW,
+      });
       result.elumJubailiBreakdown = breakdown;
       result.totalMWCost = breakdown.totalCost;
     }

@@ -103,6 +103,27 @@ export interface SupportDocumentData {
     perSiteFee: number;
     siteCount: number;
     totalCost: number;
+    bandedCost: number;
+    minimumAnnualFee: number;
+    minimumApplied: boolean;
+    minimumTopUp: number;
+    bands: Array<{
+      label: string;
+      annualFee: number;
+      siteCount: number;
+      cost: number;
+    }>;
+    sites: Array<{
+      assetId: string;
+      assetName: string;
+      kva: number | null;
+      bandLabel: string;
+      annualFee: number;
+      cost: number;
+      status: 'billed' | 'unrated' | 'clamped';
+    }>;
+    unratedCount: number;
+    clampedCount: number;
   };
   elumInternalBreakdown?: {
     tiers: {
@@ -425,7 +446,28 @@ export async function generateSupportDocumentData(
     elumJubailiBreakdown = {
       perSiteFee: jubBreak.perSiteFee,
       siteCount: jubBreak.siteCount,
-      totalCost: jubBreak.totalCost
+      totalCost: jubBreak.totalCost,
+      bandedCost: jubBreak.bandedCost,
+      minimumAnnualFee: jubBreak.minimumAnnualFee,
+      minimumApplied: jubBreak.minimumApplied,
+      minimumTopUp: jubBreak.minimumTopUp,
+      bands: jubBreak.bands.map(b => ({
+        label: b.label,
+        annualFee: b.annualFee,
+        siteCount: b.siteCount,
+        cost: b.cost,
+      })),
+      sites: jubBreak.siteLines.map(s => ({
+        assetId: s.assetId,
+        assetName: s.assetName,
+        kva: s.kva,
+        bandLabel: s.bandLabel,
+        annualFee: s.annualFee,
+        cost: s.cost,
+        status: s.status,
+      })),
+      unratedCount: jubBreak.unratedSites.length,
+      clampedCount: jubBreak.clampedSites.length,
     };
   }
 
@@ -801,12 +843,12 @@ function generateAssetBreakdown(
     };
   }
   
-  // For Elum Jubaili - use flat per-site fee
+  // For Elum Jubaili - per-site fee banded by genset rating (kVA)
   if (packageType === 'elum_jubaili' && calculationResult.elumJubailiBreakdown) {
     const jubBreak = calculationResult.elumJubailiBreakdown;
-    
+
     return {
-      assetBreakdown: jubBreak.sites.map(site => ({
+      assetBreakdown: jubBreak.siteLines.map(site => ({
         assetId: site.assetId,
         assetName: site.assetName,
         pvCapacityKWp: 0,
@@ -817,7 +859,7 @@ function generateAssetBreakdown(
         controlActive: false,
         reportingActive: false,
         pricePerKWp: 0,
-        pricePerYear: jubBreak.perSiteFee
+        pricePerYear: site.annualFee
       }))
     };
   }

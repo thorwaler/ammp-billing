@@ -846,6 +846,7 @@ export function InvoiceCalculator({
       assetId: asset.assetId,
       assetName: asset.assetName,
       totalMW: asset.totalMW,
+      gensetKVA: asset.gensetKVA,
       isHybrid: asset.isHybrid,
       hasSolcast: asset.hasSolcast,
       solcastOnboardingDate: asset.solcastOnboardingDate,
@@ -888,6 +889,7 @@ export function InvoiceCalculator({
       belowThresholdPricePerMWp: selectedCustomer.belowThresholdPricePerMWp,
       aboveThresholdPricePerMWp: selectedCustomer.aboveThresholdPricePerMWp,
       graduatedMWTiers: selectedCustomer.graduatedMWTiers,
+      jubailiKvaBands: (selectedCustomer as any).orgPricingConfig?.jubailiKvaBands,
       // Elum 2026 org-based tiers: sub-org grouping resolved by the AMMP sync
       orgBreakdown: (effectiveCapabilities as any)?.orgBreakdown
         || ((selectedCustomer as any).cachedCapabilities?.orgBreakdown)
@@ -2958,34 +2960,51 @@ export function InvoiceCalculator({
               </div>
             )}
 
-            {/* Elum Jubaili breakdown */}
+            {/* Elum Jubaili breakdown — annual per-site fee by genset kVA band */}
             {result.elumJubailiBreakdown && (
               <div className="space-y-3 mb-4">
-                <h4 className="font-medium text-sm">Elum Jubaili Pricing:</h4>
+                <h4 className="font-medium text-sm">Elum Jubaili Pricing (genset kVA bands):</h4>
                 <div className="space-y-2 text-sm pl-2">
-                  {result.elumJubailiBreakdown.allTiers && result.elumJubailiBreakdown.allTiers.length > 0 && (
-                    <div className="mb-2">
-                      <p className="text-muted-foreground mb-1">Per-Site Fee Tiers (based on {result.elumJubailiBreakdown.totalMW?.toFixed(2)} MW):</p>
-                      {result.elumJubailiBreakdown.allTiers.map((tier: any, index: number) => {
-                        const isApplied = tier === result.elumJubailiBreakdown?.appliedTier;
-                        return (
-                          <div 
-                            key={index} 
-                            className={`flex justify-between ${isApplied ? 'font-medium text-primary' : 'text-muted-foreground'}`}
-                          >
-                            <span>{tier.label || `Tier ${index + 1}`} ({tier.minMW}-{tier.maxMW || '∞'} MW):</span>
-                            <span>{formatContractCurrency(tier.chargePerSite)}/site {isApplied && '← Applied'}</span>
-                          </div>
-                        );
-                      })}
+                  {result.elumJubailiBreakdown.bands.map((band, index: number) => (
+                    <div key={index} className="flex justify-between">
+                      <span>
+                        {band.label} ({band.siteCount} sites × {formatContractCurrency(band.annualFee)}/site/yr):
+                      </span>
+                      <span>{formatContractCurrency(band.cost)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between border-t border-border pt-2">
+                    <span>Banded total ({result.elumJubailiBreakdown.siteCount} billed sites):</span>
+                    <span>{formatContractCurrency(result.elumJubailiBreakdown.bandedCost)}</span>
+                  </div>
+                  {result.elumJubailiBreakdown.minimumApplied && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>
+                        Minimum annual fee top-up ({formatContractCurrency(result.elumJubailiBreakdown.minimumAnnualFee)}/yr):
+                      </span>
+                      <span>{formatContractCurrency(result.elumJubailiBreakdown.minimumTopUp)}</span>
                     </div>
                   )}
                   <div className="flex justify-between font-medium border-t border-border pt-2">
-                    <span>
-                      Site Fees ({result.elumJubailiBreakdown.siteCount} sites × {formatContractCurrency(result.elumJubailiBreakdown.perSiteFee)}/site):
-                    </span>
+                    <span>Total:</span>
                     <span>{formatContractCurrency(result.elumJubailiBreakdown.totalCost)}</span>
                   </div>
+                  {result.elumJubailiBreakdown.unratedSites.length > 0 && (
+                    <p className="text-xs text-destructive">
+                      {result.elumJubailiBreakdown.unratedSites.length} site(s) have no genset rating in AMMP and are not billed:{' '}
+                      {result.elumJubailiBreakdown.unratedSites.map(s => s.assetName).join(', ')}
+                    </p>
+                  )}
+                  {result.elumJubailiBreakdown.clampedSites.length > 0 && (
+                    <p className="text-xs text-amber-600">
+                      {result.elumJubailiBreakdown.clampedSites.length} site(s) fall outside the configured kVA bands and were clamped to the nearest band.
+                    </p>
+                  )}
+                  {result.elumJubailiBreakdown.mismatchedSites.length > 0 && (
+                    <p className="text-xs text-amber-600">
+                      {result.elumJubailiBreakdown.mismatchedSites.length} site(s) have a name that disagrees with the AMMP genset rating — billed on the AMMP value.
+                    </p>
+                  )}
                 </div>
               </div>
             )}
