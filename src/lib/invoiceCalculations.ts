@@ -1430,18 +1430,15 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
       result.totalMWCost = breakdown.totalCost;
     }
   } else if (packageType === 'elum_jubaili') {
-    // Elum Jubaili - per-site fee with tiered support
-    const perSiteFee = params.annualFeePerSite || 500;
+    // Elum Jubaili - annual per-site fee banded by genset rating (kVA)
     const assets = normalAssets; // Use filtered assets (excluding discounted)
-    
+
     if (assets.length > 0) {
-      const breakdown = calculateElumJubailiBreakdown(
-        assets,
-        perSiteFee,
-        frequencyMultiplier,
-        adjustedTotalMW,
-        params.minimumChargeTiers
-      );
+      const breakdown = calculateElumJubailiBreakdown(assets, frequencyMultiplier, {
+        bands: params.jubailiKvaBands,
+        minimumAnnualFee: params.minimumAnnualValue ?? DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE,
+        totalMW: adjustedTotalMW,
+      });
       result.elumJubailiBreakdown = breakdown;
       result.totalMWCost = breakdown.totalCost;
     }
