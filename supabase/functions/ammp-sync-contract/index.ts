@@ -80,6 +80,8 @@ interface CachedCapabilities {
     assetName: string;
     totalMW: number;
     capacityKWp: number;
+    /** Genset rating in kVA (AMMP `genset_capacity` / 1000) */
+    gensetKVA?: number | null;
     isHybrid: boolean;
     hasSolcast: boolean;
     deviceCount: number;
