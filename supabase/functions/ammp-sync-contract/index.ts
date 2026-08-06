@@ -327,12 +327,19 @@ function calculateCapabilities(
   
   // Calculate capacity in kWp (total_pv_power is in Watts)
   const capacityKWp = (asset.total_pv_power || 0) / 1000;
-  
+
+  // Genset rating: AMMP returns `genset_capacity` in VA
+  const gensetKVA =
+    asset.genset_capacity != null && Number(asset.genset_capacity) > 0
+      ? Number(asset.genset_capacity) / 1000
+      : null;
+
   return {
     assetId: asset.asset_id,
     assetName: asset.asset_name,
     totalMW: capacityKWp / 1000, // Convert kWp to MW
     capacityKWp,
+    gensetKVA,
     hasSolcast,
     hasBattery,
     hasGenset,
