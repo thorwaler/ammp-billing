@@ -1914,6 +1914,56 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </>
             )}
 
+            {/* Enterprise eConf (asset-group based) fields */}
+            {isEnterpriseEconfPackage(watchPackage) && (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <FormField
+                    control={form.control}
+                    name="elumLiteBaseRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Base rate (€/MWp/year)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="1" {...field} />
+                        </FormControl>
+                        <FormDescription>Applied to every MWp in the primary asset group.</FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="elumLiteEconfRate"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>eConf upgrade (€/MWp/year)</FormLabel>
+                        <FormControl>
+                          <Input type="number" step="1" {...field} />
+                        </FormControl>
+                        <FormDescription>
+                          Added on top of the base rate for sites in the eConf add-on group (AND).
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FormLabel>Onboarding fee (one-time)</FormLabel>
+                  <Input
+                    type="number"
+                    step="1"
+                    value={onboardingSetupFee}
+                    onChange={(e) => setOnboardingSetupFee(Number(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional one-time setup fee, added to an invoice when selected in the calculator.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Elum 2026 org-based tier fields */}
             {isElumOrgTierPackage(watchPackage) && (
               <>
@@ -3134,7 +3184,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdAnd', id);
                         form.setValue('ammpAssetGroupNameAnd', name);
                       }}
-                      label={isElumOrgTierPackage(watchPackage) ? "eConf add-on group (AND)" : "Secondary Asset Group (AND)"}
+                      label={(isElumOrgTierPackage(watchPackage) || isEnterpriseEconfPackage(watchPackage)) ? "eConf add-on group (AND)" : "Secondary Asset Group (AND)"}
                       optional
                       showClearButton
                       onClear={() => {
@@ -3150,7 +3200,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                         form.setValue('ammpAssetGroupIdNot', id);
                         form.setValue('ammpAssetGroupNameNot', name);
                       }}
-                      label={isElumOrgTierPackage(watchPackage) ? "Exclude group (NOT)" : "Exclusion Asset Group (NOT)"}
+                      label={(isElumOrgTierPackage(watchPackage) || isEnterpriseEconfPackage(watchPackage)) ? "Exclude group (NOT)" : "Exclusion Asset Group (NOT)"}
                       optional
                       showClearButton
                       onClear={() => {
