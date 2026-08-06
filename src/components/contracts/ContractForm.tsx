@@ -1189,6 +1189,8 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               internalBrackets: ELUM_INTERNAL_2026_BRACKETS,
               internalEconfRate: data.elumInternalEconfRate ?? ELUM_INTERNAL_2026_ECONF_RATE,
             }
+          : data.package === 'elum_jubaili'
+          ? { jubailiKvaBands }
           : {},
         site_size_threshold_kwp: data.package === 'elum_epm' 
           ? (data.siteSizeThresholdKwp || 100) 
