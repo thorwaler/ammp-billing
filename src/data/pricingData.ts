@@ -422,6 +422,55 @@ export const DEFAULT_PER_SITE_PRICING = {
   onboardingFeePerSite: 1000,  // One-off setup cost per site
   annualFeePerSite: 1000       // Annual subscription per site
 };
+
+// ---------------------------------------------------------------------------
+// Elum Jubaili — annual subscription per site, banded by genset rating (kVA).
+// The kVA value comes from the AMMP /v1/assets `genset_capacity` field (in VA).
+// ---------------------------------------------------------------------------
+export interface JubailiKvaBand {
+  minKva: number;
+  /** null = open ended (top band) */
+  maxKva: number | null;
+  annualFee: number;
+}
+
+export const DEFAULT_JUBAILI_KVA_BANDS: JubailiKvaBand[] = [
+  { minKva: 9, maxKva: 134, annualFee: 17.5 },
+  { minKva: 135, maxKva: 200, annualFee: 22.5 },
+  { minKva: 201, maxKva: 650, annualFee: 32.5 },
+  { minKva: 651, maxKva: 1500, annualFee: 37.5 },
+];
+
+export const DEFAULT_JUBAILI_MINIMUM_ANNUAL_FEE = 20000;
+
+export const formatJubailiBandLabel = (band: JubailiKvaBand): string =>
+  band.maxKva === null ? `${band.minKva}+ kVA` : `${band.minKva} – ${band.maxKva} kVA`;
+
+export interface JubailiBandMatch {
+  band: JubailiKvaBand;
+  /** Set when the rating fell outside every band and was clamped */
+  clamped?: 'below' | 'above';
+}
+
+/**
+ * Resolve the band for a genset rating. Ratings outside the configured range
+ * clamp to the nearest band (and report it so the caller can raise an alert).
+ */
+export const resolveJubailiBand = (
+  kva: number,
+  bands: JubailiKvaBand[] = DEFAULT_JUBAILI_KVA_BANDS
+): JubailiBandMatch | null => {
+  if (!bands || bands.length === 0) return null;
+  const sorted = [...bands].sort((a, b) => a.minKva - b.minKva);
+
+  const exact = sorted.find(
+    (b) => kva >= b.minKva && (b.maxKva === null || kva <= b.maxKva)
+  );
+  if (exact) return { band: exact };
+
+  if (kva < sorted[0].minKva) return { band: sorted[0], clamped: 'below' };
+  return { band: sorted[sorted.length - 1], clamped: 'above' };
+};
 export type BillingFrequency = "monthly" | "quarterly" | "biannual" | "annual";
 export type ComplexityLevel = "low" | "medium" | "high";
 export type SiteChargeFrequency = "monthly" | "annual";
