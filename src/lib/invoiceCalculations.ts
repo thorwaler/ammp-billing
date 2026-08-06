@@ -1336,6 +1336,22 @@ export function calculateInvoice(params: CalculationParams): CalculationResult {
     );
     result.elumOrgTierBreakdown = breakdown;
     result.totalMWCost = breakdown.totalCost;
+  } else if (isEnterpriseEconfPackage(packageType)) {
+    // Enterprise eConf — asset-group based. Same maths as C&I Lite (base €/MWp
+    // on the portfolio + eConf add-on on every MWp of the eConf segment), but
+    // the segments come from asset groups resolved at sync time.
+    const breakdown = calculateElumOrgTierBreakdown(
+      "ci_lite",
+      params.orgBreakdown || [],
+      frequencyMultiplier,
+      {
+        liteBaseRate: params.elumLiteBaseRate ?? ENTERPRISE_ECONF_BASE_RATE,
+        liteEconfRate: params.elumLiteEconfRate ?? ENTERPRISE_ECONF_ECONF_RATE,
+        tierLabelOverride: "Enterprise eConf",
+      }
+    );
+    result.elumOrgTierBreakdown = breakdown;
+    result.totalMWCost = breakdown.totalCost;
   } else if (packageType === 'elum_internal') {
     // Elum Internal Assets - graduated MW pricing
     const tiers = params.graduatedMWTiers || [];
