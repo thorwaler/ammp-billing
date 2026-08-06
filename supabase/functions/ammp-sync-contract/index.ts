@@ -1174,6 +1174,7 @@ async function processContractSync(
         assetName: c.assetName,
         totalMW: c.totalMW,
         capacityKWp: c.capacityKWp,
+        gensetKVA: c.gensetKVA ?? existingAsset?.gensetKVA ?? null,
         isHybrid: useExisting ? existingAsset.isHybrid : (c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter),
         hasSolcast: useExisting ? existingAsset.hasSolcast : c.hasSolcast,
         deviceCount: useExisting ? existingAsset.deviceCount : c.deviceCount,
