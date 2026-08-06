@@ -14,7 +14,7 @@ import { SupportDocumentDownloadDialog } from "./SupportDocumentDownloadDialog";
 import { generateSupportDocumentData, SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
-import { isPackage2026 } from "@/data/pricingData";
+import { isPackage2026, isElumPackage, elumPackageLabel } from "@/data/pricingData";
 import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { buildSnapshotFields } from "@/lib/invoiceSnapshot";
@@ -285,11 +285,15 @@ export function MergedInvoiceDialog({
       if (!result) continue;
       
       const contractLabel = contract.contractName || contract.packageType;
+
+      // Elum contracts: collapse all recurring platform charges into one line.
+      const isElumSummary = isElumPackage(contract.packageType);
       
       // Add module costs (skip for per_mw_annual_upfront and SPS annual upfront — handled by dedicated blocks below)
       const spsB = (result as any).spsAnnualUpfrontBreakdown;
       const suppressModules = !!result.perMWAnnualUpfrontBreakdown
-        || spsB?.cycleType === 'annual_upfront';
+        || spsB?.cycleType === 'annual_upfront'
+        || isElumSummary;
       if (result.moduleCosts && result.moduleCosts.length > 0 && !suppressModules) {
         result.moduleCosts.forEach((mc: any) => {
           lineItems.push({
@@ -350,7 +354,7 @@ export function MergedInvoiceDialog({
 
       
       // Add site minimum pricing if applicable
-      if (result.siteMinimumPricingBreakdown) {
+      if (!isElumSummary && result.siteMinimumPricingBreakdown) {
         if (result.siteMinimumPricingBreakdown.normalPricingTotal > 0) {
           lineItems.push({
             Description: `[${contractLabel}] Monitoring Fee - Sites Above Threshold (${result.siteMinimumPricingBreakdown.sitesAboveThreshold} sites)`,
@@ -370,7 +374,7 @@ export function MergedInvoiceDialog({
       }
       
       // Elum 2026 org-based tiers: one combined line per sub-organisation (base + eConf)
-      if (result.elumOrgTierBreakdown) {
+      if (!isElumSummary && result.elumOrgTierBreakdown) {
         result.elumOrgTierBreakdown.orgs.forEach(org => {
           if (org.totalCost > 0) {
             const rateNote = org.appliedRate != null
@@ -409,7 +413,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add Elum Internal graduated MW tier line items
-      if (result.elumInternalBreakdown) {
+      if (!isElumSummary && result.elumInternalBreakdown) {
         result.elumInternalBreakdown.tiers.forEach((tier: any) => {
           if (tier.cost > 0) {
             lineItems.push({
@@ -423,7 +427,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add Elum ePM site pricing line items
-      if (result.elumEpmBreakdown) {
+      if (!isElumSummary && result.elumEpmBreakdown) {
         if (result.elumEpmBreakdown.smallSitesTotal > 0) {
           lineItems.push({
             Description: `[${contractLabel}] Small Sites ≤${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.smallSites?.length || 0} sites)`,
@@ -443,7 +447,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add Elum Jubaili per-site fee
-      if (result.elumJubailiBreakdown) {
+      if (!isElumSummary && result.elumJubailiBreakdown) {
         lineItems.push({
           Description: `[${contractLabel}] Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × €${result.elumJubailiBreakdown.perSiteFee}/site)`,
           Quantity: 1,
@@ -453,7 +457,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add base monthly price
-      if (result.basePricingCost && result.basePricingCost > 0) {
+      if (!isElumSummary && result.basePricingCost && result.basePricingCost > 0) {
         lineItems.push({
           Description: `[${contractLabel}] Base Monthly Fee`,
           Quantity: 1,
@@ -463,7 +467,7 @@ export function MergedInvoiceDialog({
       }
       
       // Add minimum contract adjustment
-      if (result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
+      if (!isElumSummary && result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
         lineItems.push({
           Description: `[${contractLabel}] Minimum Contract Adjustment`,
           Quantity: 1,
@@ -471,6 +475,49 @@ export function MergedInvoiceDialog({
           AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
+
+      // Elum: single summarised recurring line (detail lives in the support document)
+      if (isElumSummary) {
+        const ob = result.elumOrgTierBreakdown;
+        const recurringTotal =
+          (result.basePricingCost || 0) +
+          (result.moduleCosts?.reduce((s: number, mc: any) => s + (mc.cost || 0), 0) || 0) +
+          (result.minimumCharges || 0) +
+          (result.siteMinimumPricingBreakdown
+            ? (result.siteMinimumPricingBreakdown.normalPricingTotal || 0) +
+              (result.siteMinimumPricingBreakdown.minimumPricingTotal || 0)
+            : 0) +
+          (ob?.totalCost || 0) +
+          ((result as any).elumInternalBreakdown?.totalCost || 0) +
+          (result.elumEpmBreakdown?.totalCost || 0) +
+          (result.elumJubailiBreakdown?.totalCost || 0) +
+          (result.minimumContractAdjustment || 0);
+
+        if (recurringTotal > 0) {
+          const siteCount = ob
+            ? ob.orgs.reduce((s: number, o: any) => s + (o.siteCount || 0), 0)
+            : (result.elumEpmBreakdown
+                ? (result.elumEpmBreakdown.smallSites?.length || 0) + (result.elumEpmBreakdown.largeSites?.length || 0)
+                : result.elumJubailiBreakdown?.siteCount || 0);
+          const totalMWp = ob
+            ? ob.orgs.reduce((s: number, o: any) => s + (o.totalMWp || 0), 0)
+            : (contract as any).mwManaged || 0;
+
+          const scopeParts: string[] = [];
+          if (siteCount > 0) scopeParts.push(`${siteCount} sites`);
+          if (totalMWp > 0) scopeParts.push(`${Number(totalMWp).toFixed(2)} MWp`);
+          const scope = scopeParts.length > 0 ? ` (${scopeParts.join(', ')})` : '';
+
+          lineItems.push({
+            Description: `[${contractLabel}] ${elumPackageLabel(contract.packageType)} — Platform Monitoring${scope} — see attached support document for the detailed breakdown`,
+            Quantity: 1,
+            UnitAmount: recurringTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        }
+      }
+      
+
       
       // Add retainer cost
       if (result.retainerCost && result.retainerCost > 0) {

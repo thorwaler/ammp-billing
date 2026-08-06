@@ -41,6 +41,8 @@ import {
   isSpsPackage,
   isMatriarchApiPackage,
   getSolarAfricaTier,
+  isElumPackage,
+  elumPackageLabel,
   SOLAR_AFRICA_MUNICIPALITY_TIERS,
   type ComplexityLevel, 
   type PackageType,
@@ -1037,8 +1039,12 @@ export function InvoiceCalculator({
       const ACCOUNT_PLATFORM_FEES = xeroConfig?.modules?.accountCode || xeroConfig?.basePrice?.accountCode || "1002";
       const ACCOUNT_IMPLEMENTATION_FEES = xeroConfig?.addons?.accountCode || "1000";
 
+      // Elum contracts: all recurring platform charges collapse into one line.
+      // The full per-org / per-tier / per-site detail lives in the support document.
+      const isElumSummary = isElumPackage(selectedCustomer.package);
+
       // Add base pricing if applicable (Platform Fee - ARR)
-      if (result.basePricingCost > 0) {
+      if (!isElumSummary && result.basePricingCost > 0) {
         lineItems.push({
           Description: xeroConfig?.basePrice?.description || "Base Pricing",
           Quantity: 1,
@@ -1050,7 +1056,9 @@ export function InvoiceCalculator({
       // Add module costs (Platform Fees - ARR)
       // When site minimum pricing is active, use the breakdown instead of moduleCosts
       // Only use threshold wording when there are ACTUALLY sites below threshold (mixed pricing)
-      if (result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0) {
+      if (isElumSummary) {
+        // handled by the single Elum summary line below
+      } else if (result.siteMinimumPricingBreakdown && result.siteMinimumPricingBreakdown.sitesBelowThreshold.length > 0) {
         // Sites above threshold (normal pricing)
         if (result.siteMinimumPricingBreakdown.normalPricingTotal > 0) {
           lineItems.push({
@@ -1143,7 +1151,7 @@ export function InvoiceCalculator({
 
 
       // Elum 2026 org-based tiers: one combined line per sub-organisation (base + eConf)
-      if (result.elumOrgTierBreakdown) {
+      if (!isElumSummary && result.elumOrgTierBreakdown) {
         const ob = result.elumOrgTierBreakdown;
         ob.orgs.forEach(org => {
           if (org.totalCost > 0) {
@@ -1185,7 +1193,7 @@ export function InvoiceCalculator({
       }
       
       // Add Elum Internal graduated MW tier line items
-      if (result.elumInternalBreakdown) {
+      if (!isElumSummary && result.elumInternalBreakdown) {
         result.elumInternalBreakdown.tiers.forEach((tier: any) => {
           if (tier.cost > 0) {
             lineItems.push({
@@ -1199,7 +1207,7 @@ export function InvoiceCalculator({
       }
       
       // Add Elum ePM site pricing line items
-      if (result.elumEpmBreakdown) {
+      if (!isElumSummary && result.elumEpmBreakdown) {
         if (result.elumEpmBreakdown.smallSitesTotal > 0) {
           lineItems.push({
             Description: `Small Sites ≤${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.smallSites?.length || 0} sites)`,
@@ -1219,7 +1227,7 @@ export function InvoiceCalculator({
       }
       
       // Add Elum Jubaili per-site fee line item
-      if (result.elumJubailiBreakdown) {
+      if (!isElumSummary && result.elumJubailiBreakdown) {
         lineItems.push({
           Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × ${currencySymbol}${result.elumJubailiBreakdown.perSiteFee}/site)`,
           Quantity: 1,
@@ -1227,6 +1235,48 @@ export function InvoiceCalculator({
           AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
+
+      // Elum: single summarised recurring line (detail lives in the support document)
+      if (isElumSummary) {
+        const ob = result.elumOrgTierBreakdown;
+        const recurringTotal =
+          (result.basePricingCost || 0) +
+          (result.moduleCosts?.reduce((s: number, mc: any) => s + (mc.cost || 0), 0) || 0) +
+          (result.minimumCharges || 0) +
+          (result.siteMinimumPricingBreakdown
+            ? (result.siteMinimumPricingBreakdown.normalPricingTotal || 0) +
+              (result.siteMinimumPricingBreakdown.minimumPricingTotal || 0)
+            : 0) +
+          (ob?.totalCost || 0) +
+          (result.elumInternalBreakdown?.totalCost || 0) +
+          (result.elumEpmBreakdown?.totalCost || 0) +
+          (result.elumJubailiBreakdown?.totalCost || 0) +
+          (result.minimumContractAdjustment || 0);
+
+        if (recurringTotal > 0) {
+          const siteCount = ob
+            ? ob.orgs.reduce((s, o) => s + (o.siteCount || 0), 0)
+            : (result.elumEpmBreakdown
+                ? (result.elumEpmBreakdown.smallSites?.length || 0) + (result.elumEpmBreakdown.largeSites?.length || 0)
+                : result.elumJubailiBreakdown?.siteCount || 0);
+          const totalMWp = ob
+            ? ob.orgs.reduce((s, o) => s + (o.totalMWp || 0), 0)
+            : Number(mwManaged) || 0;
+
+          const scopeParts: string[] = [];
+          if (siteCount > 0) scopeParts.push(`${siteCount} sites`);
+          if (totalMWp > 0) scopeParts.push(`${totalMWp.toFixed(2)} MWp`);
+          const scope = scopeParts.length > 0 ? ` (${scopeParts.join(', ')})` : '';
+
+          lineItems.push({
+            Description: `${elumPackageLabel(selectedCustomer.package)} — Platform Monitoring${scope} — see attached support document for the detailed breakdown`,
+            Quantity: 1,
+            UnitAmount: recurringTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        }
+      }
+
       
       // Matriarch API: Add irradiance + performance line items (ARR)
       if (result.matriarchApiBreakdown) {
@@ -1345,7 +1395,7 @@ export function InvoiceCalculator({
       }
       
       // Add minimum contract adjustment if present (Platform Fee - ARR)
-      if (result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
+      if (!isElumSummary && result.minimumContractAdjustment && result.minimumContractAdjustment > 0) {
         lineItems.push({
           Description: "Minimum Contract Value Adjustment",
           Quantity: 1,
