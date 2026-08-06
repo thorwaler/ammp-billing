@@ -839,6 +839,60 @@ async function processContractSync(
     }
     console.log(`[AMMP Sync Contract] Elum org-based resolution: ${assetsToProcess.length} assets`);
 
+  } else if (packageType === 'enterprise_econf' && contract.ammp_asset_group_id) {
+    // Enterprise eConf: purely asset-group driven. The primary group is the
+    // billable portfolio, the AND group marks the eConf upgrade (higher rate),
+    // the NOT group excludes sites. Members are split into two pseudo-orgs so
+    // pricing can apply the base rate and the base+eConf rate side by side.
+    const baseOrg: ClassifiedOrg = {
+      orgId: `assetgroup:${contract.ammp_asset_group_id}:base`,
+      orgName: 'Standard sites',
+      tier: null,
+      hasEconf: false,
+    };
+    const econfOrg: ClassifiedOrg = {
+      orgId: `assetgroup:${contract.ammp_asset_group_id}:econf`,
+      orgName: 'eConf upgrade sites',
+      tier: null,
+      hasEconf: true,
+    };
+
+    const members = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
+
+    let econfIds = new Set<string>();
+    if (contract.ammp_asset_group_id_and) {
+      const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
+      econfIds = new Set(andMembers.map((m) => m.asset_id));
+    }
+    let excludedIds = new Set<string>();
+    if (contract.ammp_asset_group_id_not) {
+      const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
+      excludedIds = new Set(notMembers.map((m) => m.asset_id));
+    }
+
+    let baseCount = 0;
+    let econfCount = 0;
+    let excludedCount = 0;
+    for (const m of members) {
+      if (excludedIds.has(m.asset_id)) {
+        excludedCount++;
+        continue;
+      }
+      const target = econfIds.has(m.asset_id) ? econfOrg : baseOrg;
+      if (target === econfOrg) econfCount++; else baseCount++;
+      assetOrgMap.set(m.asset_id, target);
+      assetsToProcess.push({ asset_id: m.asset_id, asset_name: m.asset_name });
+    }
+
+    if (baseCount > 0) tierOrgs.push(baseOrg);
+    if (econfCount > 0) tierOrgs.push(econfOrg);
+    for (const seg of tierOrgs) (seg as any).isLegacyAssetGroup = true;
+    if (baseCount > 0) orgResolutionLog.push({ orgId: baseOrg.orgId, orgName: baseOrg.orgName, assetCount: baseCount, source: 'asset-group' });
+    if (econfCount > 0) orgResolutionLog.push({ orgId: econfOrg.orgId, orgName: econfOrg.orgName, assetCount: econfCount, source: 'asset-group' });
+
+    console.log(
+      `[AMMP Sync Contract] Enterprise eConf asset groups: ${members.length} members -> ${baseCount} standard, ${econfCount} eConf, ${excludedCount} excluded`
+    );
   } else if (contract.ammp_asset_group_id) {
     // Asset group filtering (for elum_epm, elum_jubaili, or any contract with asset group)
     const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
