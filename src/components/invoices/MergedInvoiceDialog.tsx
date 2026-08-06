@@ -475,6 +475,49 @@ export function MergedInvoiceDialog({
           AccountCode: ACCOUNT_PLATFORM_FEES
         });
       }
+
+      // Elum: single summarised recurring line (detail lives in the support document)
+      if (isElumSummary) {
+        const ob = result.elumOrgTierBreakdown;
+        const recurringTotal =
+          (result.basePricingCost || 0) +
+          (result.moduleCosts?.reduce((s: number, mc: any) => s + (mc.cost || 0), 0) || 0) +
+          (result.minimumCharges || 0) +
+          (result.siteMinimumPricingBreakdown
+            ? (result.siteMinimumPricingBreakdown.normalPricingTotal || 0) +
+              (result.siteMinimumPricingBreakdown.minimumPricingTotal || 0)
+            : 0) +
+          (ob?.totalCost || 0) +
+          ((result as any).elumInternalBreakdown?.totalCost || 0) +
+          (result.elumEpmBreakdown?.totalCost || 0) +
+          (result.elumJubailiBreakdown?.totalCost || 0) +
+          (result.minimumContractAdjustment || 0);
+
+        if (recurringTotal > 0) {
+          const siteCount = ob
+            ? ob.orgs.reduce((s: number, o: any) => s + (o.siteCount || 0), 0)
+            : (result.elumEpmBreakdown
+                ? (result.elumEpmBreakdown.smallSites?.length || 0) + (result.elumEpmBreakdown.largeSites?.length || 0)
+                : result.elumJubailiBreakdown?.siteCount || 0);
+          const totalMWp = ob
+            ? ob.orgs.reduce((s: number, o: any) => s + (o.totalMWp || 0), 0)
+            : (contract as any).mwManaged || 0;
+
+          const scopeParts: string[] = [];
+          if (siteCount > 0) scopeParts.push(`${siteCount} sites`);
+          if (totalMWp > 0) scopeParts.push(`${Number(totalMWp).toFixed(2)} MWp`);
+          const scope = scopeParts.length > 0 ? ` (${scopeParts.join(', ')})` : '';
+
+          lineItems.push({
+            Description: `[${contractLabel}] ${elumPackageLabel(contract.packageType)} — Platform Monitoring${scope} — see attached support document for the detailed breakdown`,
+            Quantity: 1,
+            UnitAmount: recurringTotal,
+            AccountCode: ACCOUNT_PLATFORM_FEES,
+          });
+        }
+      }
+      
+
       
       // Add retainer cost
       if (result.retainerCost && result.retainerCost > 0) {
