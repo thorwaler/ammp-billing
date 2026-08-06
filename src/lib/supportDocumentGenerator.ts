@@ -103,6 +103,27 @@ export interface SupportDocumentData {
     perSiteFee: number;
     siteCount: number;
     totalCost: number;
+    bandedCost: number;
+    minimumAnnualFee: number;
+    minimumApplied: boolean;
+    minimumTopUp: number;
+    bands: Array<{
+      label: string;
+      annualFee: number;
+      siteCount: number;
+      cost: number;
+    }>;
+    sites: Array<{
+      assetId: string;
+      assetName: string;
+      kva: number | null;
+      bandLabel: string;
+      annualFee: number;
+      cost: number;
+      status: 'billed' | 'unrated' | 'clamped';
+    }>;
+    unratedCount: number;
+    clampedCount: number;
   };
   elumInternalBreakdown?: {
     tiers: {
