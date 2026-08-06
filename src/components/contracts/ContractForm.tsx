@@ -1442,7 +1442,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       watchPackage === "elum_internal_2026" ?
                       "Elum Internal 2026: Sub-orgs with the elum_internal flag. Stepped MWp brackets on the org portfolio (€150 / €75 / €37.50), each rate applied only to the MWp inside its bracket. eConf supported." :
                       watchPackage === "enterprise_econf" ?
-                      "Enterprise eConf: Priced per MWp/year from AMMP asset groups. The primary group is the billable portfolio, the eConf add-on group (AND) is billed at the base rate plus the eConf upgrade rate, and the exclusion group (NOT) is left out. Supports a minimum annual value and a one-time onboarding fee." :
+                      "Enterprise eConf: Priced per MWp/year across the whole AMMP org. Every asset in the org is billed at the base rate; assets in the eConf add-on group (AND) get the base plus the eConf upgrade rate, and the exclusion group (NOT) is left out. Supports a minimum annual value and a one-time onboarding fee." :
                       watchPackage === "ammp_os_2026" ?
                       "AMMP OS 2026: 5 modules with per-MWp pricing, optional trial toggle (50% off modules + setup fees), and updated add-ons." :
                       watchPackage === "solar_africa_api" ?
