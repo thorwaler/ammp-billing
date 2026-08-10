@@ -1030,8 +1030,10 @@ async function processContractSync(
   // returned by the org-scoped assets call — build a rating lookup once per
   // sync (keyed by asset_id) instead of hitting the per-asset details endpoint.
   const gensetCapacityByAsset = new Map<string, number | null>();
+  let ratingFetchFailed = false;
   if (packageType === 'elum_jubaili') {
-    const ratingOrgId = orgId || contract.contract_ammp_org_id;
+    const ratingOrgId =
+      orgId || contract.contract_ammp_org_id || contract.customers?.ammp_org_id || null;
     if (ratingOrgId) {
       try {
         const orgAssets = await getAssetsForOrg(token, ratingOrgId);
@@ -1039,14 +1041,32 @@ async function processContractSync(
           gensetCapacityByAsset.set(a.asset_id, a.genset_capacity ?? null);
         }
         const rated = [...gensetCapacityByAsset.values()].filter(v => v != null).length;
-        console.log(`[AMMP Sync Contract] Jubaili genset ratings: ${rated}/${gensetCapacityByAsset.size} assets rated (org ${ratingOrgId})`);
+        const matched = assetsToProcess.filter(a => gensetCapacityByAsset.has(a.asset_id)).length;
+        const matchedRated = assetsToProcess.filter(
+          a => gensetCapacityByAsset.get(a.asset_id) != null
+        ).length;
+        console.log(
+          `[AMMP Sync Contract] Jubaili genset ratings (org ${ratingOrgId}): ` +
+            `${rated}/${gensetCapacityByAsset.size} org assets rated; ` +
+            `${matched}/${assetsToProcess.length} contract assets matched, ${matchedRated} rated`
+        );
+        if (matched === 0) {
+          console.warn(
+            `[AMMP Sync Contract] Jubaili contract ${contractId}: no contract asset matched the org rating list — check the org ID`
+          );
+        }
       } catch (e) {
+        // A failed fetch must not be written as "no site is rated" — keep the
+        // sync partial so the previous ratings survive.
+        ratingFetchFailed = true;
         console.error(`[AMMP Sync Contract] Failed to fetch genset ratings for org ${ratingOrgId}:`, e);
       }
     } else {
+      ratingFetchFailed = true;
       console.warn(`[AMMP Sync Contract] Jubaili contract ${contractId} has no org ID — cannot resolve genset ratings`);
     }
   }
+
   
   
   // Batch fetch full asset data (metadata + devices) for each asset
@@ -1061,7 +1081,7 @@ async function processContractSync(
     console.log(`[AMMP Sync Contract] Large sync (${assetsToActuallyProcess.length} assets) - skipping device details`);
   }
   
-  let timedOut = resolutionTruncated;
+  let timedOut = resolutionTruncated || ratingFetchFailed;
   
   for (let i = 0; i < assetsToActuallyProcess.length; i += BATCH_SIZE) {
     // Check for timeout before processing batch (per-phase budget and request budget)
@@ -1206,7 +1226,13 @@ async function processContractSync(
         assetName: c.assetName,
         totalMW: c.totalMW,
         capacityKWp: c.capacityKWp,
-        gensetKVA: c.gensetKVA ?? existingAsset?.gensetKVA ?? null,
+        // Ratings come from the org-scoped lookup (also for assets carried over
+        // from a previous partial sync, which may predate the rating support).
+        gensetKVA:
+          gensetCapacityByAsset.get(c.assetId) != null
+            ? Number(gensetCapacityByAsset.get(c.assetId)) / 1000
+            : c.gensetKVA ?? existingAsset?.gensetKVA ?? null,
+
         isHybrid: useExisting ? existingAsset.isHybrid : (c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter),
         hasSolcast: useExisting ? existingAsset.hasSolcast : c.hasSolcast,
         deviceCount: useExisting ? existingAsset.deviceCount : c.deviceCount,
