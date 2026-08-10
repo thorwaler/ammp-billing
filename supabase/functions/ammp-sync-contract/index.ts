@@ -1081,7 +1081,7 @@ async function processContractSync(
     console.log(`[AMMP Sync Contract] Large sync (${assetsToActuallyProcess.length} assets) - skipping device details`);
   }
   
-  let timedOut = resolutionTruncated;
+  let timedOut = resolutionTruncated || ratingFetchFailed;
   
   for (let i = 0; i < assetsToActuallyProcess.length; i += BATCH_SIZE) {
     // Check for timeout before processing batch (per-phase budget and request budget)
@@ -1226,7 +1226,13 @@ async function processContractSync(
         assetName: c.assetName,
         totalMW: c.totalMW,
         capacityKWp: c.capacityKWp,
-        gensetKVA: c.gensetKVA ?? existingAsset?.gensetKVA ?? null,
+        // Ratings come from the org-scoped lookup (also for assets carried over
+        // from a previous partial sync, which may predate the rating support).
+        gensetKVA:
+          gensetCapacityByAsset.get(c.assetId) != null
+            ? Number(gensetCapacityByAsset.get(c.assetId)) / 1000
+            : c.gensetKVA ?? existingAsset?.gensetKVA ?? null,
+
         isHybrid: useExisting ? existingAsset.isHybrid : (c.hasBattery || c.hasGenset || c.hasHybridEMS || c.hasHybridMeter),
         hasSolcast: useExisting ? existingAsset.hasSolcast : c.hasSolcast,
         deviceCount: useExisting ? existingAsset.deviceCount : c.deviceCount,
