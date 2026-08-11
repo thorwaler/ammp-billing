@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { AlertTriangle, AlertCircle, Info, Check, ExternalLink, Trash2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,6 +6,126 @@ import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import type { InvoiceAlertRecord } from "@/hooks/useInvoiceAlerts";
+
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+const formatScalar = (v: unknown): string =>
+  typeof v === "number"
+    ? v.toLocaleString(undefined, { maximumFractionDigits: 2 })
+    : String(v);
+
+const humanKey = (k: string) => k.replace(/[_-]/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+
+const isIdKey = (k: string) => /id$/i.test(k);
+
+function recordLabel(rec: Record<string, unknown>): string {
+  for (const k of ["assetName", "orgName", "name", "title", "label"]) {
+    if (typeof rec[k] === "string" && rec[k]) return rec[k] as string;
+  }
+  const entry = Object.entries(rec).find(([k, v]) => !isIdKey(k) && v != null);
+  return entry ? `${humanKey(entry[0])}: ${formatScalar(entry[1])}` : "(unnamed)";
+}
+
+function recordSecondary(rec: Record<string, unknown>, usedLabelKey?: string): string {
+  return Object.entries(rec)
+    .filter(
+      ([k, v]) =>
+        !isIdKey(k) &&
+        k !== usedLabelKey &&
+        v != null &&
+        (typeof v === "string" || typeof v === "number" || typeof v === "boolean")
+    )
+    .map(([k, v]) => `${humanKey(k)}: ${formatScalar(v)}`)
+    .join(" · ");
+}
+
+function DetailList({ items }: { items: unknown[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded ? items : items.slice(0, 10);
+
+  return (
+    <div className="space-y-1">
+      {visible.map((item, i) => {
+        if (!isPlainObject(item)) {
+          return (
+            <div key={i} className="font-medium">
+              {formatScalar(item)}
+            </div>
+          );
+        }
+        const labelKey = ["assetName", "orgName", "name", "title", "label"].find(
+          (k) => typeof item[k] === "string" && item[k]
+        );
+        const secondary = recordSecondary(item, labelKey);
+        return (
+          <div key={i} className="flex flex-wrap items-baseline gap-x-2">
+            <span className="font-medium">{recordLabel(item)}</span>
+            {secondary && <span className="text-muted-foreground">{secondary}</span>}
+          </div>
+        );
+      })}
+      {items.length > 10 && (
+        <button
+          type="button"
+          onClick={() => setExpanded((e) => !e)}
+          className="text-xs underline text-muted-foreground hover:text-foreground"
+        >
+          {expanded ? "Show less" : `Show all ${items.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function DetailEntry({ entryKey, value }: { entryKey: string; value: unknown }) {
+  const label = <span className="text-muted-foreground">{humanKey(entryKey)}: </span>;
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return (
+        <div>
+          {label}
+          <span className="font-medium">none</span>
+        </div>
+      );
+    }
+    return (
+      <div className="col-span-2">
+        <div className="text-muted-foreground mb-1">
+          {humanKey(entryKey)} ({value.length})
+        </div>
+        <DetailList items={value} />
+      </div>
+    );
+  }
+
+  if (isPlainObject(value)) {
+    return (
+      <div className="col-span-2">
+        <div className="text-muted-foreground mb-1">{humanKey(entryKey)}</div>
+        <div className="space-y-0.5">
+          {Object.entries(value).map(([k, v]) => (
+            <div key={k}>
+              <span className="text-muted-foreground">{humanKey(k)}: </span>
+              <span className="font-medium">
+                {isPlainObject(v) || Array.isArray(v) ? JSON.stringify(v) : formatScalar(v)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {label}
+      <span className="font-medium">{formatScalar(value)}</span>
+    </div>
+  );
+}
+
 
 interface AlertCardProps {
   alert: InvoiceAlertRecord;
@@ -99,15 +220,7 @@ export function AlertCard({ alert, onAcknowledge, onDelete }: AlertCardProps) {
             <p className="text-xs font-medium text-muted-foreground mb-2">Details</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               {Object.entries(alert.metadata).map(([key, value]) => (
-                <div key={key}>
-                  <span className="text-muted-foreground">{key.replace(/_/g, ' ')}: </span>
-                  <span className="font-medium">
-                    {typeof value === 'number' 
-                      ? value.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                      : String(value)
-                    }
-                  </span>
-                </div>
+                <DetailEntry key={key} entryKey={key} value={value} />
               ))}
             </div>
           </div>
