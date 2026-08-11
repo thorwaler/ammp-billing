@@ -220,15 +220,7 @@ export function AlertCard({ alert, onAcknowledge, onDelete }: AlertCardProps) {
             <p className="text-xs font-medium text-muted-foreground mb-2">Details</p>
             <div className="grid grid-cols-2 gap-2 text-xs">
               {Object.entries(alert.metadata).map(([key, value]) => (
-                <div key={key}>
-                  <span className="text-muted-foreground">{key.replace(/_/g, ' ')}: </span>
-                  <span className="font-medium">
-                    {typeof value === 'number' 
-                      ? value.toLocaleString(undefined, { maximumFractionDigits: 2 })
-                      : String(value)
-                    }
-                  </span>
-                </div>
+                <DetailEntry key={key} entryKey={key} value={value} />
               ))}
             </div>
           </div>
