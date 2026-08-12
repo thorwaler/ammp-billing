@@ -1179,7 +1179,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           ? (data.contractAmmpOrgId || null) 
           : null,
         elum_tier: elumTierForPackage(data.package),
-        elum_parent_org_id: isElumOrgTierPackage(data.package) ? (data.elumParentOrgId || null) : null,
+        elum_parent_org_id: (isElumOrgTierPackage(data.package) || data.package === 'elum_internal')
+          ? (data.elumParentOrgId || null)
+          : null,
         org_pricing_config: (data.package === 'elum_ci_lite' || data.package === 'enterprise_econf')
           ? {
               liteBaseRate: data.elumLiteBaseRate ?? (data.package === 'enterprise_econf' ? ENTERPRISE_ECONF_BASE_RATE : ELUM_LITE_BASE_RATE),
