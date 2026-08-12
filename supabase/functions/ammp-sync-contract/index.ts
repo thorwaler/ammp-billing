@@ -1804,6 +1804,8 @@ Deno.serve(async (req) => {
         id,
         customer_id,
         package,
+        company_name,
+        contract_name,
         ammp_org_id,
         ammp_asset_group_id,
         ammp_asset_group_id_and,
