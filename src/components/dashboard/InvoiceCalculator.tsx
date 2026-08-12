@@ -49,6 +49,7 @@ import {
   type PricingTier,
   calculateTieredPrice
 } from "@/data/pricingData";
+import { buildPackageLineItems } from "@/lib/xeroLineItems";
 import { TierPricingEditor } from "@/components/contracts/TierPricingEditor";
 import { 
   calculateInvoice, 
