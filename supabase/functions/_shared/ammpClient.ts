@@ -117,3 +117,26 @@ export async function fetchAmmpData(
 
   throw new Error(lastError);
 }
+
+/**
+ * Fetch every asset belonging to an org: `GET /assets?org_ids=<orgId>`.
+ * This is the only endpoint that returns `genset_capacity`, so Jubaili kVA
+ * pricing depends on it. Throws on API failure — callers must keep their
+ * existing cache rather than treating a failed fetch as "no assets".
+ */
+export async function fetchOrgAssets(
+  token: string,
+  orgId: string,
+  options: AmmpFetchOptions = {},
+): Promise<any[]> {
+  const response = await fetchAmmpData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`, options);
+  const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
+  if (!Array.isArray(assets)) {
+    throw new Error(`Unexpected /assets payload for org ${orgId} (${typeof response})`);
+  }
+  return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
+    ...a,
+    asset_name: a.asset_name || 'Unknown',
+    org_id: a.org_id || orgId,
+  }));
+}
