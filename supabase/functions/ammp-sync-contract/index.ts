@@ -471,23 +471,12 @@ async function getClassifiedSubOrgs(
   return direct;
 }
 
-/**
- * Fetch assets belonging to a specific (sub-)org.
- * GET /v1/assets?org_ids=<orgId>
- * Throws on API failure — the caller must preserve the existing cache rather
- * than treating a failed fetch as "this org has no assets".
- */
+/** Fetch assets of a (sub-)org, bounded by this request's deadline. */
 async function getAssetsForOrg(token: string, orgId: string): Promise<any[]> {
-  const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
-  const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
-  if (!Array.isArray(assets)) {
-    throw new Error(`Unexpected /assets payload for org ${orgId} (${typeof response})`);
-  }
-  return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
-    ...a,
-    asset_name: a.asset_name || 'Unknown',
-    org_id: a.org_id || orgId,
-  }));
+  return fetchOrgAssets(token, orgId, {
+    deadline: Number.isFinite(requestDeadline) ? requestDeadline : undefined,
+    logTag: 'ammp-sync-contract',
+  });
 }
 
 /**
