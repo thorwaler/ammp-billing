@@ -1979,6 +1979,28 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
 
+            {/* Elum Internal (legacy): feature-flag first, asset group as fallback */}
+            {watchPackage === "elum_internal" && (
+              <FormField
+                control={form.control}
+                name="elumParentOrgId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Elum parent org ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="UUID of the Elum parent organisation" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      On sync, sub-organisations under this parent that carry the elum_internal feature flag
+                      are used as the billable portfolio. The asset group below is only used as a fallback when
+                      no flagged sub-org is found (its exclusion group still applies).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+
             {/* Elum 2026 org-based tier fields */}
             {isElumOrgTierPackage(watchPackage) && (
               <>
