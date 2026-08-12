@@ -395,35 +395,7 @@ interface AssetGroupMember {
   asset_name: string;
 }
 
-const ELUM_TIER_FLAGS: Record<string, string> = {
-  ci_lite: 'epm_lite',
-  ci_pro: 'epm_pro',
-  utility: 'epm_utility',
-  internal: 'elum_internal',
-};
-
-interface ClassifiedOrg {
-  orgId: string;
-  orgName: string;
-  uid?: number;
-  tier: string | null;
-  hasEconf: boolean;
-}
-
-function classifyOrgRow(o: any): ClassifiedOrg {
-  const flags = o.feature_flags || {};
-  let tier: string | null = null;
-  for (const [t, flag] of Object.entries(ELUM_TIER_FLAGS)) {
-    if (flags[flag] === true && !tier) tier = t;
-  }
-  return {
-    orgId: o.org_id,
-    orgName: o.org_name || o.org_id,
-    uid: o.uid,
-    tier,
-    hasEconf: flags['remote_econf'] === true,
-  };
-}
+// Tier flags, ClassifiedOrg and classifyOrgRow live in ../_shared/elumFlags.ts
 
 /**
  * Request-level time budget. The edge gateway kills the request at 150s idle,
