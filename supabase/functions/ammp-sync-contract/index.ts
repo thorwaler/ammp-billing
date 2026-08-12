@@ -1962,7 +1962,7 @@ Deno.serve(async (req) => {
       contractId,
       contract.customer_id,
       effectiveUserId,
-      contract.company_name || 'Contract',
+      contract.contract_name || contract.company_name || 'Contract',
       cachedCapabilities,
       previousCached
     );
