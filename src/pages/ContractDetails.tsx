@@ -1712,7 +1712,7 @@ const ContractDetails = () => {
                                   ) : null}
                                   {o.siblingIncomplete ? (
                                     <span className="block pl-3 opacity-70">
-                                      Partially verified — a sibling tier's asset group no longer exists in AMMP, so some assets may show as not covered.
+                                      Partially verified — another tier's asset group could not be read from AMMP, so some assets may show as not covered.
                                     </span>
                                   ) : null}
 
