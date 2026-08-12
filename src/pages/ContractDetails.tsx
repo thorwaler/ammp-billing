@@ -1688,7 +1688,8 @@ const ContractDetails = () => {
                               {o.placeholders ? ` (+${o.placeholders} empty AMMP stub assets ignored)` : ''}
 
                               {o.partial ? (
-                                <>: coverage not verified (sync truncated)</>
+                                <>: coverage not verified (sync ran out of time — re-sync to complete)</>
+
                               ) : (
                                 <>
                                   : {(o.coveredStandard || 0) + (o.coveredEconf || 0)} covered by legacy group
@@ -1709,8 +1710,14 @@ const ContractDetails = () => {
                                       {o.uncovered > o.uncoveredAssets.length ? ', …' : ''}
                                     </span>
                                   ) : null}
+                                  {o.siblingIncomplete ? (
+                                    <span className="block pl-3 opacity-70">
+                                      Partially verified — a sibling tier's asset group no longer exists in AMMP, so some assets may show as not covered.
+                                    </span>
+                                  ) : null}
 
                                 </>
+
                               )}
                             </li>
                           ))}

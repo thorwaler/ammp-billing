@@ -56,10 +56,13 @@ interface UnassignedOrgEntry {
   /** Assets billed through another Elum tier contract's legacy asset group */
   coveredElsewhere?: number;
   coveredElsewhereAssets?: Array<{ assetId: string; assetName: string; tierName: string }>;
-  /** Coverage not verified because the sync was truncated by the time budget */
+  /** Coverage not verified because the sync ran out of its time budget */
   partial?: boolean;
+  /** Coverage verified, but a sibling tier's asset group could not be read (e.g. deleted in AMMP) */
+  siblingIncomplete?: boolean;
   /** How the asset list for this org was resolved */
   source?: 'org-scoped' | 'unresolved';
+
   /** Never-configured stub assets in AMMP catch-all orgs; excluded from counts. */
   placeholders?: number;
 }
@@ -735,6 +738,10 @@ async function processContractSync(
       // Sibling Elum tier contracts (e.g. Lite when syncing Pro) — an asset that
       // sits in another tier's legacy asset group is already billed there.
       const siblingGroups: Array<{ tierName: string; ids: Set<string> }> = [];
+      // A sibling group that no longer exists in AMMP degrades coverage detail for
+      // this pass, but it is not truncation — the org-scoped coverage still runs.
+      const missingSiblingGroups: string[] = [];
+      let siblingLookupIncomplete = false;
       if (!resolutionTruncated) {
         const { data: siblings } = await supabase
           .from('contracts')
@@ -757,8 +764,17 @@ async function processContractSync(
               tierName: s.contract_name || s.elum_tier || 'other tier',
               ids: new Set(members.map((m) => m.asset_id)),
             });
-          } catch (e) {
+          } catch (e: any) {
+            if (e?.groupNotFound) {
+              missingSiblingGroups.push(gid);
+              siblingLookupIncomplete = true;
+              console.warn(
+                `[AMMP Sync Contract] Sibling asset group ${gid} (contract "${s.contract_name || s.elum_tier}") no longer exists in AMMP — skipped, its stale ammp_asset_group_id should be cleared`
+              );
+              continue;
+            }
             console.warn(`[AMMP Sync Contract] Sibling group ${gid} lookup failed:`, e);
+            siblingLookupIncomplete = true;
             resolutionTruncated = true;
           }
         }
@@ -769,11 +785,12 @@ async function processContractSync(
       let totalUncovered = 0;
       const resolved: UnassignedOrgEntry[] = [];
       for (const o of unassignedOrgs) {
-        if (resolutionTruncated || discoveryBudgetExceeded()) {
+        if (discoveryBudgetExceeded()) {
           resolutionTruncated = true;
           resolved.push({ ...o, partial: true, source: 'unresolved' });
           continue;
         }
+
         let orgAssets: any[];
         try {
           orgAssets = await getAssetsForOrg(token, o.orgId);
@@ -843,6 +860,7 @@ async function processContractSync(
         resolved.push({
           ...o,
           source: 'org-scoped',
+          ...(siblingLookupIncomplete ? { siblingIncomplete: true } : {}),
           assetCount: orgAssets.length - placeholders,
           placeholders,
           totalMW: orgAssets.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
@@ -860,7 +878,8 @@ async function processContractSync(
       unassignedOrgs = resolved;
 
       console.log(
-        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (skipped — resolution truncated)' : ''}`
+        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (partially skipped — ran out of time budget)' : ''}${missingSiblingGroups.length > 0 ? ` (sibling asset group(s) missing in AMMP: ${missingSiblingGroups.join(', ')})` : ''}`
+
       );
     }
 
