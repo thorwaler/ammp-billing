@@ -664,19 +664,32 @@ async function processContractSync(
         hasEconf: true,
       };
 
-      const members = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
+      const safeGroupMembers = async (gid: string) => {
+        try {
+          return await getAssetGroupMembers(token, gid);
+        } catch (e: any) {
+          if (e?.groupNotFound) {
+            console.warn(`[AMMP Sync Contract] Skipping missing asset group ${gid} — treated as empty`);
+            return [];
+          }
+          throw e;
+        }
+      };
+
+      const members = await safeGroupMembers(contract.ammp_asset_group_id);
       legacyMemberIds = new Set(members.map((m) => m.asset_id));
 
       let econfIds = new Set<string>();
       if (contract.ammp_asset_group_id_and) {
-        const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
+        const andMembers = await safeGroupMembers(contract.ammp_asset_group_id_and);
         econfIds = new Set(andMembers.map((m) => m.asset_id));
       }
       let excludedIds = new Set<string>();
       if (contract.ammp_asset_group_id_not) {
-        const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
+        const notMembers = await safeGroupMembers(contract.ammp_asset_group_id_not);
         excludedIds = new Set(notMembers.map((m) => m.asset_id));
       }
+
       legacyEconfIds = econfIds;
       legacyExcludedIds = excludedIds;
       hasNotGroup = !!contract.ammp_asset_group_id_not;
