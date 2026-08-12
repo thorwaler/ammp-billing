@@ -56,10 +56,13 @@ interface UnassignedOrgEntry {
   /** Assets billed through another Elum tier contract's legacy asset group */
   coveredElsewhere?: number;
   coveredElsewhereAssets?: Array<{ assetId: string; assetName: string; tierName: string }>;
-  /** Coverage not verified because the sync was truncated by the time budget */
+  /** Coverage not verified because the sync ran out of its time budget */
   partial?: boolean;
+  /** Coverage verified, but a sibling tier's asset group could not be read (e.g. deleted in AMMP) */
+  siblingIncomplete?: boolean;
   /** How the asset list for this org was resolved */
   source?: 'org-scoped' | 'unresolved';
+
   /** Never-configured stub assets in AMMP catch-all orgs; excluded from counts. */
   placeholders?: number;
 }
