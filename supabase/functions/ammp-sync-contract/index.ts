@@ -13,14 +13,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface DeviceInfo {
-  deviceId: string;
-  deviceName: string;
-  deviceType: string;
-  manufacturer: string | null;
-  model: string | null;
-  dataProvider: string | null;
-}
+import type { DeviceInfo, CachedAssetBreakdown } from '../_shared/ammpTypes.ts';
 
 interface AssetCapabilities {
   assetId: string;
