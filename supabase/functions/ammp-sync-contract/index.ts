@@ -860,6 +860,7 @@ async function processContractSync(
         resolved.push({
           ...o,
           source: 'org-scoped',
+          ...(siblingLookupIncomplete ? { siblingIncomplete: true } : {}),
           assetCount: orgAssets.length - placeholders,
           placeholders,
           totalMW: orgAssets.reduce((s: number, a: any) => s + (a.total_pv_power || 0) / 1_000_000, 0),
@@ -877,7 +878,8 @@ async function processContractSync(
       unassignedOrgs = resolved;
 
       console.log(
-        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (skipped — resolution truncated)' : ''}`
+        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (partially skipped — ran out of time budget)' : ''}${missingSiblingGroups.length > 0 ? ` (sibling asset group(s) missing in AMMP: ${missingSiblingGroups.join(', ')})` : ''}`
+
       );
     }
 
