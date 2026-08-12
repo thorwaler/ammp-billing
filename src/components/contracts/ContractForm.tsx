@@ -1447,7 +1447,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       watchPackage === "elum_portfolio_os" ?
                       "Elum Portfolio OS: Use a separate AMMP org ID with full pricing flexibility (modules, addons, custom pricing)." :
                       watchPackage === "elum_internal" ?
-                      "Elum Internal Assets: Graduated MW pricing with different rates for different MW tiers (e.g., €150/MW for 0-100MW, €75/MW for 100-500MW)." :
+                      "Elum Internal Assets: Graduated MW pricing with different rates for different MW tiers (e.g., €150/MW for 0-100MW, €75/MW for 100-500MW). Sites are resolved from sub-orgs carrying the elum_internal feature flag; the asset group is only used when no flagged sub-org is found." :
                       watchPackage === "elum_ci_lite" ?
                       "Elum C&I Light 2026: Sub-orgs under the Elum parent org carrying the epm_lite flag. Base €/MWp on the whole org portfolio, plus an org-wide remote eConf add-on charged on all sites when the org has the flag." :
                       watchPackage === "elum_ci_pro" ?
