@@ -14,7 +14,7 @@ import { SupportDocumentDownloadDialog } from "./SupportDocumentDownloadDialog";
 import { generateSupportDocumentData, SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier } from "@/data/pricingData";
-import { isPackage2026, isElumPackage, elumPackageLabel } from "@/data/pricingData";
+import { isPackage2026, isElumPackage } from "@/data/pricingData";
 import { buildPackageLineItems } from "@/lib/xeroLineItems";
 import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
 import { useCurrency } from "@/contexts/CurrencyContext";
