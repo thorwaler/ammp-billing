@@ -71,21 +71,7 @@ interface CachedCapabilities {
   ongridSites: number;
   hybridSites: number;
   sitesWithSolcast: number;
-  assetBreakdown: Array<{
-    assetId: string;
-    assetName: string;
-    totalMW: number;
-    capacityKWp: number;
-    /** Genset rating in kVA (AMMP `genset_capacity` / 1000) */
-    gensetKVA?: number | null;
-    isHybrid: boolean;
-    hasSolcast: boolean;
-    deviceCount: number;
-    onboardingDate?: string | null;
-    solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
-    devices: DeviceInfo[];
-    deviceEnrichmentAttempted?: boolean;
-  }>;
+  assetBreakdown: CachedAssetBreakdown[];
   lastSynced: string;
   /** Elum 2026: per-sub-organisation grouping of the resolved assets */
   orgBreakdown?: Array<{
