@@ -1688,7 +1688,8 @@ const ContractDetails = () => {
                               {o.placeholders ? ` (+${o.placeholders} empty AMMP stub assets ignored)` : ''}
 
                               {o.partial ? (
-                                <>: coverage not verified (sync truncated)</>
+                                <>: coverage not verified (sync ran out of time — re-sync to complete)</>
+
                               ) : (
                                 <>
                                   : {(o.coveredStandard || 0) + (o.coveredEconf || 0)} covered by legacy group
