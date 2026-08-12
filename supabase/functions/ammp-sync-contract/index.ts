@@ -884,7 +884,7 @@ async function processContractSync(
       unassignedOrgs = resolved;
 
       console.log(
-        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (partially skipped — ran out of time budget)' : ''}${missingSiblingGroups.length > 0 ? ` (sibling asset group(s) missing in AMMP: ${missingSiblingGroups.join(', ')})` : ''}`
+        `[AMMP Sync Contract] Unassigned sub-org coverage: ${totalCovered} covered by this legacy group, ${totalElsewhere} covered by another tier group, ${totalUncovered} not covered${resolutionTruncated ? ' (partially skipped — ran out of time budget)' : ''}${missingSiblingGroups.length > 0 ? ` (stale sibling asset group reference(s) cleared: ${missingSiblingGroups.join(', ')})` : ''}`
 
       );
     }
