@@ -1710,8 +1710,14 @@ const ContractDetails = () => {
                                       {o.uncovered > o.uncoveredAssets.length ? ', …' : ''}
                                     </span>
                                   ) : null}
+                                  {o.siblingIncomplete ? (
+                                    <span className="block pl-3 opacity-70">
+                                      Partially verified — a sibling tier's asset group no longer exists in AMMP, so some assets may show as not covered.
+                                    </span>
+                                  ) : null}
 
                                 </>
+
                               )}
                             </li>
                           ))}
