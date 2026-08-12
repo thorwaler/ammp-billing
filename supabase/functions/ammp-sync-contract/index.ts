@@ -970,7 +970,94 @@ async function processContractSync(
       `[AMMP Sync Contract] Enterprise eConf (${orgId ? `org ${orgId}` : 'asset group'}): ${members.length} assets -> ${baseCount} standard, ${econfCount} eConf, ${excludedCount} excluded, ${zeroCapacityAssets.length} zero-capacity (billed)`
     );
 
+  } else if (packageType === 'elum_internal' && (elumParentOrgId || orgId)) {
+    // Elum Internal (legacy graduated MW): resolve sites from sub-orgs carrying
+    // the `elum_internal` feature flag first. The configured asset group is only
+    // used when no flagged sub-org is found (handled by the fallback below).
+    const parentForFlags = elumParentOrgId || orgId!;
+    let flaggedOrgs: ClassifiedOrg[] = [];
+    try {
+      const subOrgs = await getClassifiedSubOrgs(token, parentForFlags);
+      flaggedOrgs = subOrgs.filter((o) => o.tier === 'internal');
+    } catch (e) {
+      console.warn(`[AMMP Sync Contract] Elum Internal flag discovery failed for ${parentForFlags}: ${(e as any)?.message}`);
+    }
+
+    if (flaggedOrgs.length > 0) {
+      // NOT group still excludes sites even when orgs come from feature flags
+      let excludedIds = new Set<string>();
+      if (contract.ammp_asset_group_id_not) {
+        try {
+          const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
+          excludedIds = new Set(notMembers.map((m) => m.asset_id));
+        } catch (e: any) {
+          if (!e?.groupNotFound) throw e;
+          console.warn(`[AMMP Sync Contract] NOT group ${contract.ammp_asset_group_id_not} missing — no exclusions applied`);
+        }
+      }
+
+      let excludedCount = 0;
+      for (const org of flaggedOrgs) {
+        let orgAssets: any[];
+        let source: string;
+        if (discoveryBudgetExceeded()) {
+          resolutionTruncated = true;
+          orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
+          source = 'global-fallback (time budget)';
+        } else {
+          orgAssets = await getAssetsForOrg(token, org.orgId);
+          source = 'org-scoped';
+          if (orgAssets.length === 0) {
+            orgAssets = allAssets.filter((a: any) => a.org_id === org.orgId);
+            source = orgAssets.length > 0 ? 'global-fallback' : 'empty';
+          }
+        }
+        let kept = 0;
+        for (const a of orgAssets) {
+          if (excludedIds.has(a.asset_id)) { excludedCount++; continue; }
+          if (assetOrgMap.has(a.asset_id)) continue;
+          assetOrgMap.set(a.asset_id, org);
+          assetsToProcess.push({ asset_id: a.asset_id, asset_name: a.asset_name });
+          if (!assetLookup.has(a.asset_id)) assetLookup.set(a.asset_id, a);
+          kept++;
+        }
+        orgResolutionLog.push({ orgId: org.orgId, orgName: org.orgName, assetCount: kept, source: `feature-flag elum_internal / ${source}` });
+      }
+      tierOrgs = [...flaggedOrgs];
+
+      console.log(
+        `[AMMP Sync Contract] Elum Internal: ${flaggedOrgs.length} flagged sub-org(s) -> ${assetsToProcess.length} assets (${excludedCount} excluded)`
+      );
+    }
+
+    if (assetsToProcess.length === 0 && contract.ammp_asset_group_id) {
+      // Fallback: legacy asset group resolution
+      console.log('[AMMP Sync Contract] Elum Internal: no elum_internal sub-orgs found — falling back to asset group');
+      const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
+      assetsToProcess = [...primaryMembers];
+      if (contract.ammp_asset_group_id_and) {
+        const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
+        const andIds = new Set(andMembers.map((m) => m.asset_id));
+        assetsToProcess = assetsToProcess.filter((m) => andIds.has(m.asset_id));
+      }
+      if (contract.ammp_asset_group_id_not) {
+        const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
+        const notIds = new Set(notMembers.map((m) => m.asset_id));
+        assetsToProcess = assetsToProcess.filter((m) => !notIds.has(m.asset_id));
+      }
+      orgResolutionLog.push({
+        orgId: `assetgroup:${contract.ammp_asset_group_id}`,
+        orgName: contract.ammp_asset_group_name || 'Asset group (fallback)',
+        assetCount: assetsToProcess.length,
+        source: 'asset-group',
+      });
+      console.log(`[AMMP Sync Contract] Elum Internal asset-group fallback: ${assetsToProcess.length} assets`);
+    } else if (assetsToProcess.length === 0) {
+      console.warn('[AMMP Sync Contract] Elum Internal: no flagged sub-orgs and no asset group configured');
+    }
+
   } else if (contract.ammp_asset_group_id) {
+
     // Asset group filtering (for elum_epm, elum_jubaili, or any contract with asset group)
     const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
     assetsToProcess = [...primaryMembers];

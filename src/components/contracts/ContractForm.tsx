@@ -1179,7 +1179,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
           ? (data.contractAmmpOrgId || null) 
           : null,
         elum_tier: elumTierForPackage(data.package),
-        elum_parent_org_id: isElumOrgTierPackage(data.package) ? (data.elumParentOrgId || null) : null,
+        elum_parent_org_id: (isElumOrgTierPackage(data.package) || data.package === 'elum_internal')
+          ? (data.elumParentOrgId || null)
+          : null,
         org_pricing_config: (data.package === 'elum_ci_lite' || data.package === 'enterprise_econf')
           ? {
               liteBaseRate: data.elumLiteBaseRate ?? (data.package === 'enterprise_econf' ? ENTERPRISE_ECONF_BASE_RATE : ELUM_LITE_BASE_RATE),
@@ -1445,7 +1447,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       watchPackage === "elum_portfolio_os" ?
                       "Elum Portfolio OS: Use a separate AMMP org ID with full pricing flexibility (modules, addons, custom pricing)." :
                       watchPackage === "elum_internal" ?
-                      "Elum Internal Assets: Graduated MW pricing with different rates for different MW tiers (e.g., €150/MW for 0-100MW, €75/MW for 100-500MW)." :
+                      "Elum Internal Assets: Graduated MW pricing with different rates for different MW tiers (e.g., €150/MW for 0-100MW, €75/MW for 100-500MW). Sites are resolved from sub-orgs carrying the elum_internal feature flag; the asset group is only used when no flagged sub-org is found." :
                       watchPackage === "elum_ci_lite" ?
                       "Elum C&I Light 2026: Sub-orgs under the Elum parent org carrying the epm_lite flag. Base €/MWp on the whole org portfolio, plus an org-wide remote eConf add-on charged on all sites when the org has the flag." :
                       watchPackage === "elum_ci_pro" ?
@@ -1975,6 +1977,28 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                   </p>
                 </div>
               </div>
+            )}
+
+            {/* Elum Internal (legacy): feature-flag first, asset group as fallback */}
+            {watchPackage === "elum_internal" && (
+              <FormField
+                control={form.control}
+                name="elumParentOrgId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Elum parent org ID</FormLabel>
+                    <FormControl>
+                      <Input placeholder="UUID of the Elum parent organisation" {...field} />
+                    </FormControl>
+                    <FormDescription>
+                      On sync, sub-organisations under this parent that carry the elum_internal feature flag
+                      are used as the billable portfolio. The asset group below is only used as a fallback when
+                      no flagged sub-org is found (its exclusion group still applies).
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             )}
 
             {/* Elum 2026 org-based tier fields */}
