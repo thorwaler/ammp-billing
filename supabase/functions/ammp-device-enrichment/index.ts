@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 import type { DeviceInfo, CachedAssetBreakdown as AssetBreakdown } from '../_shared/ammpTypes.ts';
-export type { DeviceInfo };
 
 interface CachedCapabilities {
   totalMW: number;
