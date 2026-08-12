@@ -42,13 +42,13 @@ import {
   isMatriarchApiPackage,
   getSolarAfricaTier,
   isElumPackage,
-  elumPackageLabel,
   SOLAR_AFRICA_MUNICIPALITY_TIERS,
   type ComplexityLevel, 
   type PackageType,
   type PricingTier,
   calculateTieredPrice
 } from "@/data/pricingData";
+import { buildPackageLineItems } from "@/lib/xeroLineItems";
 import { TierPricingEditor } from "@/components/contracts/TierPricingEditor";
 import { 
   calculateInvoice, 
@@ -1102,182 +1102,15 @@ export function InvoiceCalculator({
         }
       }
 
-      // Per-MW + Annual Upfront Minimum: emit floor or overage line in place of raw MW × rate modules.
-      if (result.perMWAnnualUpfrontBreakdown) {
-        const b = result.perMWAnnualUpfrontBreakdown;
-        const rateDisplay = `${currencySymbol}${b.perMWpRate.toLocaleString()}/MW`;
-        if (b.cycleType === 'annual_upfront') {
-          const syncedMW = b.syncedMW || 0;
-          const fixedMin = b.fixedAnnualMinimum || 0;
-          const desc = `Annual Platform Fee — Minimum (max of synced ${syncedMW.toFixed(2)} MW × ${rateDisplay} = ${currencySymbol}${b.mwBasedFloor.toLocaleString()} and fixed minimum ${currencySymbol}${fixedMin.toLocaleString()})`;
-          lineItems.push({
-            Description: desc,
-            Quantity: 1,
-            UnitAmount: b.annualFloor,
-            AccountCode: ACCOUNT_PLATFORM_FEES
-          });
-        } else if (b.overageAmount > 0) {
-          lineItems.push({
-            Description: `Per-MW Quarterly Overage (${Number(mwManaged).toFixed(2)} MW × ${rateDisplay}, YTD adjustment above annual minimum)`,
-            Quantity: 1,
-            UnitAmount: b.overageAmount,
-            AccountCode: ACCOUNT_PLATFORM_FEES
-          });
-        }
-      }
-
-      // SPS Monitoring annual-upfront dual cadence
-      if (result.spsAnnualUpfrontBreakdown) {
-        const sb = result.spsAnnualUpfrontBreakdown;
-        if (sb.cycleType === 'annual_upfront') {
-          // Single upfront line. Per-module lines suppressed by the gate above.
-          const annualDesc = sb.annualUpfrontAmount > sb.annualDiscountedFee
-            ? `Annual Platform Fee — Minimum (Minimum Annual Contract Value ${currencySymbol}${sb.annualMinimum.toLocaleString()} exceeds discounted annual SPS value ${currencySymbol}${sb.annualDiscountedFee.toLocaleString()})`
-            : `Annual Platform Fee — Full Annual SPS Value (${currencySymbol}${sb.annualDiscountedFee.toLocaleString()} exceeds minimum ${currencySymbol}${sb.annualMinimum.toLocaleString()})`;
-          lineItems.push({
-            Description: annualDesc,
-            Quantity: 1,
-            UnitAmount: sb.annualUpfrontAmount,
-            AccountCode: ACCOUNT_PLATFORM_FEES,
-          });
-        } else if (sb.creditApplied > 0) {
-          // Quarterly cycle: module lines already emitted above; append negative credit.
-          lineItems.push({
-            Description: `Annual Minimum Already Paid — credit applied from prepaid balance (remaining after this invoice: ${currencySymbol}${sb.prepaidBalanceAfter.toLocaleString()})`,
-            Quantity: 1,
-            UnitAmount: -sb.creditApplied,
-            AccountCode: ACCOUNT_PLATFORM_FEES,
-          });
-        }
-      }
-
-
-      // Elum 2026 org-based tiers: one combined line per sub-organisation (base + eConf)
-      if (!isElumSummary && result.elumOrgTierBreakdown) {
-        const ob = result.elumOrgTierBreakdown;
-        ob.orgs.forEach(org => {
-          if (org.totalCost > 0) {
-            const rateNote = org.appliedRate != null
-              ? ` @ ${currencySymbol}${org.appliedRate}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
-              : ' (per-site size buckets)';
-            const econfNote = org.econfCost > 0
-              ? ` + Remote eConf @ ${currencySymbol}${org.econfRate}/MWp/yr`
-              : '';
-            lineItems.push({
-              Description: `${ob.tierLabel} — ${org.orgName} (${org.siteCount} sites, ${org.totalMWp.toFixed(2)} MWp)${rateNote}${econfNote}`,
-              Quantity: 1,
-              UnitAmount: org.totalCost,
-              AccountCode: ACCOUNT_PLATFORM_FEES,
-            });
-          }
-        });
-      }
-
-
-      // Add hybrid tiered pricing line items (for hybrid_tiered packages like BLS)
-      if (result.hybridTieredBreakdown) {
-        if (result.hybridTieredBreakdown.ongrid.cost > 0) {
-          lineItems.push({
-            Description: `On-Grid Sites Monitoring (${result.hybridTieredBreakdown.ongrid.mw.toFixed(2)} MW)`,
-            Quantity: 1,
-            UnitAmount: result.hybridTieredBreakdown.ongrid.cost,
-            AccountCode: ACCOUNT_PLATFORM_FEES
-          });
-        }
-        if (result.hybridTieredBreakdown.hybrid.cost > 0) {
-          lineItems.push({
-            Description: `Hybrid Sites Monitoring (${result.hybridTieredBreakdown.hybrid.mw.toFixed(2)} MW)`,
-            Quantity: 1,
-            UnitAmount: result.hybridTieredBreakdown.hybrid.cost,
-            AccountCode: ACCOUNT_PLATFORM_FEES
-          });
-        }
-      }
-      
-      // Add Elum Internal graduated MW tier line items
-      if (!isElumSummary && result.elumInternalBreakdown) {
-        result.elumInternalBreakdown.tiers.forEach((tier: any) => {
-          if (tier.cost > 0) {
-            lineItems.push({
-              Description: `${tier.label || `${tier.minMW}-${tier.maxMW === Infinity ? '∞' : tier.maxMW} MW`} (${tier.mwInTier.toFixed(2)} MW × ${currencySymbol}${tier.pricePerMW}/MW)`,
-              Quantity: 1,
-              UnitAmount: tier.cost,
-              AccountCode: ACCOUNT_PLATFORM_FEES
-            });
-          }
-        });
-      }
-      
-      // Add Elum ePM site pricing line items
-      if (!isElumSummary && result.elumEpmBreakdown) {
-        if (result.elumEpmBreakdown.smallSitesTotal > 0) {
-          lineItems.push({
-            Description: `Small Sites ≤${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.smallSites?.length || 0} sites)`,
-            Quantity: 1,
-            UnitAmount: result.elumEpmBreakdown.smallSitesTotal,
-            AccountCode: ACCOUNT_PLATFORM_FEES
-          });
-        }
-        if (result.elumEpmBreakdown.largeSitesTotal > 0) {
-          lineItems.push({
-            Description: `Large Sites >${result.elumEpmBreakdown.threshold}kWp (${result.elumEpmBreakdown.largeSites?.length || 0} sites)`,
-            Quantity: 1,
-            UnitAmount: result.elumEpmBreakdown.largeSitesTotal,
-            AccountCode: ACCOUNT_PLATFORM_FEES
-          });
-        }
-      }
-      
-      // Add Elum Jubaili per-site fee line item
-      if (!isElumSummary && result.elumJubailiBreakdown) {
-        lineItems.push({
-          Description: `Per-Site Fee (${result.elumJubailiBreakdown.siteCount} sites × ${currencySymbol}${result.elumJubailiBreakdown.perSiteFee}/site)`,
-          Quantity: 1,
-          UnitAmount: result.elumJubailiBreakdown.totalCost,
-          AccountCode: ACCOUNT_PLATFORM_FEES
-        });
-      }
-
-      // Elum: single summarised recurring line (detail lives in the support document)
-      if (isElumSummary) {
-        const ob = result.elumOrgTierBreakdown;
-        const recurringTotal =
-          (result.basePricingCost || 0) +
-          (result.moduleCosts?.reduce((s: number, mc: any) => s + (mc.cost || 0), 0) || 0) +
-          (result.minimumCharges || 0) +
-          (result.siteMinimumPricingBreakdown
-            ? (result.siteMinimumPricingBreakdown.normalPricingTotal || 0) +
-              (result.siteMinimumPricingBreakdown.minimumPricingTotal || 0)
-            : 0) +
-          (ob?.totalCost || 0) +
-          (result.elumInternalBreakdown?.totalCost || 0) +
-          (result.elumEpmBreakdown?.totalCost || 0) +
-          (result.elumJubailiBreakdown?.totalCost || 0) +
-          (result.minimumContractAdjustment || 0);
-
-        if (recurringTotal > 0) {
-          const siteCount = ob
-            ? ob.orgs.reduce((s, o) => s + (o.siteCount || 0), 0)
-            : (result.elumEpmBreakdown
-                ? (result.elumEpmBreakdown.smallSites?.length || 0) + (result.elumEpmBreakdown.largeSites?.length || 0)
-                : result.elumJubailiBreakdown?.siteCount || 0);
-          const totalMWp = ob
-            ? ob.orgs.reduce((s, o) => s + (o.totalMWp || 0), 0)
-            : Number(mwManaged) || 0;
-
-          const scopeParts: string[] = [];
-          if (siteCount > 0) scopeParts.push(`${siteCount} sites`);
-          if (totalMWp > 0) scopeParts.push(`${totalMWp.toFixed(2)} MWp`);
-          const scope = scopeParts.length > 0 ? ` (${scopeParts.join(', ')})` : '';
-
-          lineItems.push({
-            Description: `${elumPackageLabel(selectedCustomer.package)} — Platform Monitoring${scope} — see attached support document for the detailed breakdown`,
-            Quantity: 1,
-            UnitAmount: recurringTotal,
-            AccountCode: ACCOUNT_PLATFORM_FEES,
-          });
-        }
-      }
+      // Package-specific recurring platform lines (per-MW upfront, SPS cadence,
+      // Elum tiers/packages, hybrid tiers) — shared with the merged-invoice dialog.
+      lineItems.push(...buildPackageLineItems({
+        result,
+        packageType: selectedCustomer.package,
+        currencySymbol,
+        accountCode: ACCOUNT_PLATFORM_FEES,
+        mwManaged: Number(mwManaged),
+      }));
 
       
       // Matriarch API: Add irradiance + performance line items (ARR)

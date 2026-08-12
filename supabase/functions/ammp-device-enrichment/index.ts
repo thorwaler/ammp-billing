@@ -7,29 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface DeviceInfo {
-  deviceId: string;
-  deviceName: string;
-  deviceType: string;
-  manufacturer?: string;
-  model?: string;
-  dataProvider?: string;
-}
-
-interface AssetBreakdown {
-  assetId: string;
-  assetName: string;
-  totalMW: number;
-  capacityKWp: number;
-  isHybrid: boolean;
-  hasSolcast: boolean;
-  deviceCount: number;
-  onboardingDate: string | null;
-  solcastOnboardingDate: string | null;
-  devices: DeviceInfo[];
-  deviceEnrichmentAttempted?: boolean;
-  deviceEnrichmentConfirmedEmpty?: boolean; // True when AMMP confirmed no devices exist
-}
+import type { DeviceInfo, CachedAssetBreakdown as AssetBreakdown } from '../_shared/ammpTypes.ts';
 
 interface CachedCapabilities {
   totalMW: number;

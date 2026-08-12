@@ -1,7 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runZeroPvScan } from '../_shared/zeroPvScan.ts';
 import { postJsonWithRetry as sharedPostJsonWithRetry, parseRetryAfterMs } from '../_shared/internalFetch.ts';
-import { fetchAmmpData } from '../_shared/ammpClient.ts';
+import { fetchAmmpData, fetchOrgAssets } from '../_shared/ammpClient.ts';
+import { classifyOrgRow, type ClassifiedOrg } from '../_shared/elumFlags.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
@@ -13,14 +14,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface DeviceInfo {
-  deviceId: string;
-  deviceName: string;
-  deviceType: string;
-  manufacturer: string | null;
-  model: string | null;
-  dataProvider: string | null;
-}
+import type { DeviceInfo, CachedAssetBreakdown } from '../_shared/ammpTypes.ts';
 
 interface AssetCapabilities {
   assetId: string;
@@ -78,21 +72,7 @@ interface CachedCapabilities {
   ongridSites: number;
   hybridSites: number;
   sitesWithSolcast: number;
-  assetBreakdown: Array<{
-    assetId: string;
-    assetName: string;
-    totalMW: number;
-    capacityKWp: number;
-    /** Genset rating in kVA (AMMP `genset_capacity` / 1000) */
-    gensetKVA?: number | null;
-    isHybrid: boolean;
-    hasSolcast: boolean;
-    deviceCount: number;
-    onboardingDate?: string | null;
-    solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
-    devices: DeviceInfo[];
-    deviceEnrichmentAttempted?: boolean;
-  }>;
+  assetBreakdown: CachedAssetBreakdown[];
   lastSynced: string;
   /** Elum 2026: per-sub-organisation grouping of the resolved assets */
   orgBreakdown?: Array<{
@@ -416,35 +396,7 @@ interface AssetGroupMember {
   asset_name: string;
 }
 
-const ELUM_TIER_FLAGS: Record<string, string> = {
-  ci_lite: 'epm_lite',
-  ci_pro: 'epm_pro',
-  utility: 'epm_utility',
-  internal: 'elum_internal',
-};
-
-interface ClassifiedOrg {
-  orgId: string;
-  orgName: string;
-  uid?: number;
-  tier: string | null;
-  hasEconf: boolean;
-}
-
-function classifyOrgRow(o: any): ClassifiedOrg {
-  const flags = o.feature_flags || {};
-  let tier: string | null = null;
-  for (const [t, flag] of Object.entries(ELUM_TIER_FLAGS)) {
-    if (flags[flag] === true && !tier) tier = t;
-  }
-  return {
-    orgId: o.org_id,
-    orgName: o.org_name || o.org_id,
-    uid: o.uid,
-    tier,
-    hasEconf: flags['remote_econf'] === true,
-  };
-}
+// Tier flags, ClassifiedOrg and classifyOrgRow live in ../_shared/elumFlags.ts
 
 /**
  * Request-level time budget. The edge gateway kills the request at 150s idle,
@@ -519,23 +471,12 @@ async function getClassifiedSubOrgs(
   return direct;
 }
 
-/**
- * Fetch assets belonging to a specific (sub-)org.
- * GET /v1/assets?org_ids=<orgId>
- * Throws on API failure — the caller must preserve the existing cache rather
- * than treating a failed fetch as "this org has no assets".
- */
+/** Fetch assets of a (sub-)org, bounded by this request's deadline. */
 async function getAssetsForOrg(token: string, orgId: string): Promise<any[]> {
-  const response = await fetchAMMPData(token, `/assets?org_ids=${encodeURIComponent(orgId)}`);
-  const assets: any[] = Array.isArray(response) ? response : (response?.assets || []);
-  if (!Array.isArray(assets)) {
-    throw new Error(`Unexpected /assets payload for org ${orgId} (${typeof response})`);
-  }
-  return assets.filter((a: any) => a?.asset_id).map((a: any) => ({
-    ...a,
-    asset_name: a.asset_name || 'Unknown',
-    org_id: a.org_id || orgId,
-  }));
+  return fetchOrgAssets(token, orgId, {
+    deadline: Number.isFinite(requestDeadline) ? requestDeadline : undefined,
+    logTag: 'ammp-sync-contract',
+  });
 }
 
 /**
@@ -1804,6 +1745,8 @@ Deno.serve(async (req) => {
         id,
         customer_id,
         package,
+        company_name,
+        contract_name,
         ammp_org_id,
         ammp_asset_group_id,
         ammp_asset_group_id_and,
@@ -1960,7 +1903,7 @@ Deno.serve(async (req) => {
       contractId,
       contract.customer_id,
       effectiveUserId,
-      contract.company_name || 'Contract',
+      contract.contract_name || contract.company_name || 'Contract',
       cachedCapabilities,
       previousCached
     );
