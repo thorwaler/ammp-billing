@@ -738,8 +738,8 @@ async function processContractSync(
       // Sibling Elum tier contracts (e.g. Lite when syncing Pro) — an asset that
       // sits in another tier's legacy asset group is already billed there.
       const siblingGroups: Array<{ tierName: string; ids: Set<string> }> = [];
-      // A sibling group that no longer exists in AMMP degrades coverage detail for
-      // this pass, but it is not truncation — the org-scoped coverage still runs.
+      // A sibling group that was deleted in AMMP is a definitive answer (no members):
+      // we self-heal the stale pointer instead of degrading coverage detail.
       const missingSiblingGroups: string[] = [];
       let siblingLookupIncomplete = false;
       if (!resolutionTruncated) {
@@ -747,6 +747,7 @@ async function processContractSync(
           .from('contracts')
           .select('id, contract_name, elum_tier, ammp_asset_group_id')
           .eq('elum_parent_org_id', elumParentOrgId)
+          .eq('contract_status', 'active')
           .not('elum_tier', 'is', null)
           .neq('id', contract.id);
         const seenGroups = new Set<string>([contract.ammp_asset_group_id].filter(Boolean) as string[]);
@@ -766,10 +767,14 @@ async function processContractSync(
             });
           } catch (e: any) {
             if (e?.groupNotFound) {
+              // Deleted in AMMP — clear the stale pointer so this never recurs.
               missingSiblingGroups.push(gid);
-              siblingLookupIncomplete = true;
+              const { error: healErr } = await supabase
+                .from('contracts')
+                .update({ ammp_asset_group_id: null, ammp_asset_group_name: null })
+                .eq('id', s.id);
               console.warn(
-                `[AMMP Sync Contract] Sibling asset group ${gid} (contract "${s.contract_name || s.elum_tier}") no longer exists in AMMP — skipped, its stale ammp_asset_group_id should be cleared`
+                `[AMMP Sync Contract] Sibling asset group ${gid} (contract "${s.contract_name || s.elum_tier}") no longer exists in AMMP — cleared stale reference${healErr ? ` (clear failed: ${healErr.message})` : ''}`
               );
               continue;
             }
@@ -779,6 +784,7 @@ async function processContractSync(
           }
         }
       }
+
 
       let totalCovered = 0;
       let totalElsewhere = 0;
