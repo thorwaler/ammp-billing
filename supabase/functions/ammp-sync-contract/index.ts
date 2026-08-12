@@ -384,8 +384,14 @@ async function getAssetGroupMembers(token: string, groupId: string): Promise<{as
   } catch (error: any) {
     const message = error?.message ?? String(error);
     console.error(`[AMMP Sync Contract] Failed to fetch group ${groupId} members: ${message}`);
+    if (/HTTP 404/.test(message) || /not found/i.test(message)) {
+      const notFound = new Error(`Asset group ${groupId} no longer exists in AMMP`);
+      (notFound as any).groupNotFound = true;
+      throw notFound;
+    }
     throw new Error(`Failed to fetch asset group ${groupId} members: ${message}`);
   }
+
 
   // API returns: { group_id, group_name, members: [...] }
   const members = response?.members || [];
