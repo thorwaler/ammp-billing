@@ -2,6 +2,11 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SupportDocumentData } from '@/lib/supportDocumentGenerator';
 import { format } from 'date-fns';
+import {
+  collectZeroCapacitySections,
+  zeroCapacityMessage,
+  zeroCapacityTotal,
+} from '@/lib/supportDocumentWarnings';
 
 const MARGIN = 14;
 const PAGE_WIDTH = 210;
@@ -45,6 +50,8 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   const doc = new jsPDF('p', 'mm', 'a4');
   const cur = data.currency;
   let y = 20;
+  const zeroSections = collectZeroCapacitySections(data);
+  const zeroCount = zeroCapacityTotal(zeroSections);
 
   // === HEADER ===
   doc.setFontSize(16);
