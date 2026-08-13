@@ -572,7 +572,12 @@ async function processContractSync(
     unassignedOrgs = subOrgs
       .filter(o => o.tier === null)
       .map(o => ({ orgId: o.orgId, orgName: o.orgName }));
-    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} without a tier flag)`);
+    // Orgs with 2+ conflicting non-internal billing flags (remote_econf and
+    // internal combinations are legitimate and never flagged).
+    tierConflictOrgs = subOrgs
+      .filter(hasTierConflict)
+      .map(o => ({ orgId: o.orgId, orgName: o.orgName, tiers: o.matchedTiers }));
+    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} without a tier flag, ${tierConflictOrgs.length} with conflicting tier flags)`);
 
     
     // Resolve assets per sub-org via the org-scoped assets endpoint.
