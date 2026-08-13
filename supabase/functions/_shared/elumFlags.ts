@@ -36,7 +36,7 @@ export interface ClassifiedOrg {
   tier: string | null;
   hasEconf: boolean;
   /** Every billing tier whose flag is present on the org. */
-  matchedTiers: string[];
+  matchedTiers?: string[];
 }
 
 /**
@@ -66,5 +66,5 @@ export function classifyOrgRow(o: any): ClassifiedOrg {
 
 /** True when an org carries 2+ non-internal tier flags (a real ambiguity). */
 export function hasTierConflict(org: ClassifiedOrg): boolean {
-  return org.matchedTiers.filter((t) => t !== 'internal').length > 1;
+  return (org.matchedTiers || []).filter((t) => t !== 'internal').length > 1;
 }
