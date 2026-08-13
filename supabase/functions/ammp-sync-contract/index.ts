@@ -1613,7 +1613,7 @@ async function generateElumAlerts(
   const siteDrop = previousSites - currentSites;
   const significantDrop = previousSites >= 5 && siteDrop > 0 && siteDrop / previousSites >= 0.1;
 
-  if (orgBreakdown.length === 0 && !(cached.unassignedOrgs?.length) && !significantDrop) return;
+  if (orgBreakdown.length === 0 && !(cached.unassignedOrgs?.length) && !(cached.tierConflictOrgs?.length) && !significantDrop) return;
 
 
   type PendingAlert = {
