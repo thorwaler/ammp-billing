@@ -1,36 +1,46 @@
-# Elum support document fixes
+# Elum: excluded-org leak fix + support document corrections
 
-Five corrections to the invoice support document (screen + PDF) for Elum-family contracts.
+Two workstreams: finish the excluded-organisation cleanup in the AMMP sync, and fix the Elum support documents.
 
-## 1. Organisation breakdown shows the real rate (C&I Lite, NEA / Enterprise eConf)
+## Part A — Excluded orgs still leaking in via legacy asset groups
 
-Today the "Rate" column prints only the base rate (e.g. €65/MWp/yr, €650/MWp/yr), even when the organisation carries the remote eConf upgrade — so both the standard and eConf rows look identical, and the rate doesn't reconcile with the row total.
+The Elum virtual-assets organisation is excluded from flag-based discovery, but 6 of its assets still reach the Internal contract because they are members of the legacy `[Tier] Internal` asset group, which is processed on a separate path that never applies the exclusion filter.
 
-Change: when eConf applies to an organisation, the Rate cell shows the combined effective rate with its composition, e.g. `€400.00/MWp/yr (€65 base + €335 eConf)`. Rows without eConf are unchanged. Same change in the PDF renderer.
+1. Apply the excluded-org filter to every asset entry path in the sync — including assets pulled from legacy asset groups and from the coverage checks — not just flag-based discovery.
+2. Record what was dropped (org name, asset count, source path) in the contract's cached capabilities, so the exclusion is auditable rather than silent.
+3. Org resolution panel on the contract page: show, per sub-organisation, whether it was resolved by feature flag or by legacy asset group, and list excluded organisations with the number of assets removed.
 
-## 2. Year-to-date summary is empty
+## Part B — Support document fixes
 
-The YTD table only lists invoices already saved for that contract in the calendar year, so it renders empty (and €0.00) while previewing a brand new invoice — and for contracts whose earlier invoices sit on a different contract record.
+### 1. Organisation breakdown shows the real rate (C&I Lite, NEA / Enterprise eConf)
 
-Change:
-- Include the invoice currently being generated as a provisional row (marked "current"), so the year total is never €0 for a real invoice.
-- When there are no other invoices in the year, show an explanatory line ("No earlier invoices for this contract in <year>") instead of a bare empty table.
+The "Rate" column prints only the base rate (€65/MWp/yr, €650/MWp/yr) even when the organisation carries the eConf upgrade, so standard and eConf rows look identical and the rate doesn't reconcile with the row total.
 
-## 3. Jubaili: kVA-based presentation and minimum reconciliation
+Change: when eConf applies, the Rate cell shows the combined effective rate with its composition, e.g. `€400.00/MWp/yr (€65 base + €335 eConf)`. Rows without eConf are unchanged. Mirrored in the PDF.
 
-- Per-site table switches from kWp to genset kVA: columns become `Genset (kVA)`, `€/kVA/yr`, `Annual fee`. Sites with no rating in AMMP are shown as "not set" and excluded from the rate column, as today.
-- Remove the misleading fixed "per site annual fee" figure from the summary block, since the fee now depends on the genset band.
-- Add a closing reconciliation block: banded annual total vs. the contracted annual minimum, the higher of the two picked, then divided by the billing frequency — so the €5k quarterly charge is traceable.
+### 2. Year-to-date summary is empty
 
-## 4. Invoice period shows the full range
+The YTD table only lists invoices already saved for the contract in the calendar year, so it renders empty (€0.00) while previewing a new invoice.
 
-The header prints a single month (e.g. "Sep 2026"). It will print the billing period range instead, e.g. `1 Jul 2026 – 30 Sep 2026`, falling back to the current single-month label when no period dates are available. Applies to every Elum support doc (and any package that carries period dates).
+Change: include the invoice being generated as a provisional "current" row so the year total is never €0, and show an explanatory line when there are no earlier invoices for that contract in the year.
+
+### 3. Jubaili: kVA-based presentation and minimum reconciliation
+
+- Per-site table switches from kWp to genset kVA: columns become `Genset (kVA)`, `€/kVA/yr`, `Annual fee`. Sites with no rating in AMMP stay flagged as "not set".
+- Remove the fixed per-site annual fee figure from the summary block — the fee now depends on the genset band.
+- Add a closing reconciliation block: banded annual total vs. the contracted annual minimum, the higher of the two picked, divided by the billing frequency, so the €5k quarterly charge is traceable.
+
+### 4. Invoice period shows the full range
+
+The header prints a single month (e.g. "Sep 2026"). It will print the billing period range instead, e.g. `1 Jul 2026 – 30 Sep 2026`, falling back to the month label when no period dates exist. Applies to all Elum support docs.
 
 ## Technical notes
 
+- `supabase/functions/ammp-sync-contract/index.ts` — filter group-sourced assets by `org_id` against the excluded set; log drops into `cached_capabilities.excludedOrgs` with source path; redeploy.
+- `src/pages/ContractDetails.tsx` — resolution source badge (flag vs legacy group) and excluded-org detail in the Org resolution panel.
 - `src/components/invoices/SupportDocument.tsx` — rate cell composition, Jubaili tables, YTD empty state, period header.
-- `src/components/invoices/PdfRenderer.tsx` — mirror the same four changes in the PDF output.
-- `src/lib/supportDocumentGenerator.ts` — build `invoicePeriod` from `periodStart`/`periodEnd`; append the current in-progress invoice to `yearInvoices`; pass genset kVA and per-kVA rate through the Jubaili breakdown; expose `minimumAnnualFee` vs `bandedCost` for the reconciliation block.
-- `src/lib/invoiceCalculations.ts` — expose a combined `effectiveRate` on each org line in `elumOrgTierBreakdown` (no pricing change; the totals already include eConf) and carry `gensetKVA` on Jubaili site lines if not already present.
+- `src/components/invoices/PdfRenderer.tsx` — mirror the same four changes.
+- `src/lib/supportDocumentGenerator.ts` — build `invoicePeriod` from `periodStart`/`periodEnd`; append the current in-progress invoice to `yearInvoices`; pass genset kVA and per-kVA rate through the Jubaili breakdown; expose minimum vs banded totals.
+- `src/lib/invoiceCalculations.ts` — expose a combined effective rate on each org line in `elumOrgTierBreakdown` (no pricing change) and carry `gensetKVA` on Jubaili site lines.
 
-No database or pricing changes; invoice amounts stay identical.
+No database schema or pricing changes; invoice amounts stay identical apart from the excluded assets already intended to be dropped.
