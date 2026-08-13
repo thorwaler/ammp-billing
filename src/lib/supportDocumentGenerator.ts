@@ -767,6 +767,17 @@ export async function generateSupportDocumentData(
 /**
  * Group invoices by billing period
  */
+function periodLabelForDate(date: Date, billingFrequency: string): string {
+  if (billingFrequency === 'quarterly') {
+    return `Q${Math.floor(date.getMonth() / 3) + 1}/${date.getFullYear()}`;
+  }
+  if (billingFrequency === 'monthly') return format(date, 'MMM yyyy');
+  if (billingFrequency === 'biannual') {
+    return `${date.getMonth() < 6 ? 'H1' : 'H2'}/${date.getFullYear()}`;
+  }
+  return date.getFullYear().toString();
+}
+
 function groupInvoicesByPeriod(
   invoices: any[],
   billingFrequency: string
@@ -775,19 +786,7 @@ function groupInvoicesByPeriod(
 
   invoices.forEach(invoice => {
     const date = new Date(invoice.invoice_date);
-    let period: string;
-
-    if (billingFrequency === 'quarterly') {
-      const quarter = Math.floor(date.getMonth() / 3) + 1;
-      period = `Q${quarter}/${date.getFullYear()}`;
-    } else if (billingFrequency === 'monthly') {
-      period = format(date, 'MMM yyyy');
-    } else if (billingFrequency === 'biannual') {
-      const half = date.getMonth() < 6 ? 'H1' : 'H2';
-      period = `${half}/${date.getFullYear()}`;
-    } else {
-      period = date.getFullYear().toString();
-    }
+    const period = periodLabelForDate(date, billingFrequency);
 
     if (!grouped[period]) {
       grouped[period] = {
