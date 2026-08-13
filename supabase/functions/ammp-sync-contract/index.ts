@@ -1354,6 +1354,7 @@ async function processContractSync(
       : undefined,
     doubleCountWarnings: doubleCountWarnings.length > 0 ? doubleCountWarnings : undefined,
     unassignedOrgs: unassignedOrgs.length > 0 ? unassignedOrgs : undefined,
+    tierConflictOrgs: tierConflictOrgs.length > 0 ? tierConflictOrgs : undefined,
     orgResolution: orgResolutionLog.length > 0 ? orgResolutionLog : undefined,
     needsDeviceEnrichment: totalExpected > 200 || 
       finalCapabilities.some(c => c.deviceCount === 0 && !existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId)?.deviceEnrichmentAttempted),
