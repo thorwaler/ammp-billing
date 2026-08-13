@@ -1692,7 +1692,13 @@ const ContractDetails = () => {
                   {excludedOrgs.length > 0 && (
                     <div className="p-3 border-t text-xs text-muted-foreground">
                       Excluded from billing (never counted, whatever their flags):{' '}
-                      {excludedOrgs.map((o: any) => o.orgName || o.orgId).join(', ')}
+                      {excludedOrgs
+                        .map((o: any) =>
+                          o.assetCount
+                            ? `${o.orgName || o.orgId} (${o.assetCount} asset${o.assetCount === 1 ? '' : 's'} removed${o.source ? `, via ${o.source}` : ''})`
+                            : (o.orgName || o.orgId)
+                        )
+                        .join(', ')}
                     </div>
                   )}
                   {unassignedOrgs.length > 0 && (() => {
