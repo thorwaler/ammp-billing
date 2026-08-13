@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runZeroPvScan } from '../_shared/zeroPvScan.ts';
 import { postJsonWithRetry as sharedPostJsonWithRetry, parseRetryAfterMs } from '../_shared/internalFetch.ts';
 import { fetchAmmpData, fetchOrgAssets } from '../_shared/ammpClient.ts';
-import { classifyOrgRow, type ClassifiedOrg } from '../_shared/elumFlags.ts';
+import { classifyOrgRow, hasTierConflict, isExcludedOrg, type ClassifiedOrg } from '../_shared/elumFlags.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
