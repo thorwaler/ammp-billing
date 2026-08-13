@@ -872,25 +872,11 @@ function generateAssetBreakdown(
     };
   }
   
-  // For Elum Jubaili - per-site fee banded by genset rating (kVA)
+  // For Elum Jubaili - pricing is per genset kVA band, so the generic per-kWp
+  // table would only render zero capacities and zero rates. The dedicated
+  // Jubaili section carries the kVA / €per kVA detail instead.
   if (packageType === 'elum_jubaili' && calculationResult.elumJubailiBreakdown) {
-    const jubBreak = calculationResult.elumJubailiBreakdown;
-
-    return {
-      assetBreakdown: jubBreak.siteLines.map(site => ({
-        assetId: site.assetId,
-        assetName: site.assetName,
-        pvCapacityKWp: 0,
-        isPV: true,
-        isHybrid: false,
-        hubActive: false,
-        portalActive: false,
-        controlActive: false,
-        reportingActive: false,
-        pricePerKWp: 0,
-        pricePerYear: site.annualFee
-      }))
-    };
+    return { assetBreakdown: [] };
   }
   
   // For Elum Internal - don't show per-asset, use tier summary
