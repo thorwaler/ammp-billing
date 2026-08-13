@@ -617,7 +617,19 @@ async function processContractSync(
       console.log(`[AMMP Sync Contract] Sub-org ${org.orgName} (${org.tier}): ${orgAssets.length} assets via ${source}`);
     }
 
-    if (contract.ammp_asset_group_id) {
+    if (contract.ammp_asset_group_id && elumTier === 'internal') {
+      // Internal is resolved from feature flags only — legacy asset groups are
+      // never billed on the internal contract.
+      console.log(
+        `[AMMP Sync Contract] Elum internal: ignoring legacy asset group ${contract.ammp_asset_group_id} (flag-only resolution)`
+      );
+      orgResolutionLog.push({
+        orgId: `ignored:${contract.ammp_asset_group_id}`,
+        orgName: contract.ammp_asset_group_name || 'Legacy asset group (ignored)',
+        assetCount: 0,
+        source: 'ignored-flag-only',
+      });
+    } else if (contract.ammp_asset_group_id) {
       // Legacy asset group members are split into two pseudo-orgs so a single
       // contract can carry both the standard tier rate and the eConf add-on
       // rate. The AND group (e.g. "[Add-on] Remote eConf") marks eConf members;
