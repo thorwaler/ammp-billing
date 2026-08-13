@@ -449,8 +449,19 @@ async function getClassifiedSubOrgs(
   }
 
 
+  // Globally excluded orgs (e.g. Elum's virtual-assets org) are dropped here so
+  // every downstream branch — tier resolution, Internal flag-first, coverage
+  // checks and conflict flagging — never sees them.
   const direct = scoped
-    .filter((o: any) => o?.org_id && o.org_id !== parentOrgId && !seen.has(o.org_id))
+    .filter((o: any) => {
+      if (!o?.org_id || o.org_id === parentOrgId || seen.has(o.org_id)) return false;
+      if (isExcludedOrg(o.org_id)) {
+        console.log(`[AMMP Sync Contract] Skipping excluded org ${o.org_name || o.org_id} (never billed)`);
+        seen.add(o.org_id);
+        return false;
+      }
+      return true;
+    })
     .map(classifyOrgRow);
 
   for (const o of direct) seen.add(o.orgId);
