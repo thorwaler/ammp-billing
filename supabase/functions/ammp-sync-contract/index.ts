@@ -90,6 +90,8 @@ interface CachedCapabilities {
   unassignedOrgs?: UnassignedOrgEntry[];
   /** Sub-orgs carrying 2+ conflicting billing tier flags (internal excluded — internal always wins) */
   tierConflictOrgs?: Array<{ orgId: string; orgName: string; tiers: string[] }>;
+  /** Orgs skipped entirely during discovery because they are never billable */
+  excludedOrgs?: Array<{ orgId: string; orgName: string }>;
 
 
   /** Per-org audit trail of how each org's assets were resolved during the last sync */
