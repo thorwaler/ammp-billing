@@ -23,7 +23,7 @@ Flow:
 4. **Exclude newly onboarded assets** (on by default) — any asset present in live data but absent from the snapshot is left out of the revision, so a correction never sneaks in sites that were onboarded after the invoice was cut. The dialog shows how many assets this excludes; unticking pulls them in.
 5. Preview the new totals and line items with a before/after delta.
 
-5. Confirm. The system then:
+6. Confirm. The system then:
    - Creates a **new invoice** for the same contract, customer, period and billing frequency, with `revised_from_invoice_id` pointing at the original, its own fresh snapshot and revision window.
    - Marks the original as superseded (it stays in history for audit, is excluded from revenue totals, and is labelled "Revised → <new invoice>").
    - Reverses the original's side effects and re-applies them on the revision: prepaid/YTD balance deltas, zero-PV incident links, site billing (onboarding/annual) markers.
