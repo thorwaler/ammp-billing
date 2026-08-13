@@ -115,15 +115,23 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   if (data.elumJubailiBreakdown) {
     y = addSectionTitle(doc, 'Elum Jubaili Pricing Breakdown (genset kVA bands)', y);
     const jub = data.elumJubailiBreakdown;
+    const jubZero = zeroSections.find(s => s.unit === 'kVA');
+    if (jubZero) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      (doc.splitTextToSize(zeroCapacityMessage(jubZero), 180) as string[]).forEach(l => {
+        y = ensureSpace(doc, 4, y); doc.text(l, MARGIN, y); y += 3.5;
+      });
+      y += 2;
+    }
     autoTable(doc, {
       startY: y, margin: { left: MARGIN, right: MARGIN },
-      head: [['Site', 'Genset (kVA)', 'Band', `${cur}/kVA/yr`, `Cost (${cur})`]],
+      head: [['Site', 'Genset (kVA)', 'Band', `Fee / year (${cur})`, `Cost (${cur})`]],
       body: [
         ...jub.sites.map(s => [
-          s.assetName,
-          s.kva != null ? s.kva.toFixed(0) : '-',
+          `${s.assetName}${s.kva == null || s.kva <= 0 ? ' — rating not set' : ''}`,
+          s.kva != null && s.kva > 0 ? s.kva.toFixed(0) : '-',
           s.status === 'unrated' ? 'Not rated — not billed' : `${s.bandLabel}${s.status === 'clamped' ? ' (clamped)' : ''}`,
-          s.kva && s.kva > 0 && s.annualFee ? (s.annualFee / s.kva).toFixed(2) : '-',
+          s.annualFee ? fmt(s.annualFee, cur) : '-',
           fmt(s.cost, cur),
         ]),
         ['Banded fees for this period', '', '', '', fmt(jub.bandedCost, cur)],
