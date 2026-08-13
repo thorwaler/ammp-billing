@@ -550,6 +550,7 @@ async function processContractSync(
   const orgResolutionLog: Array<{ orgId: string; orgName: string; assetCount: number; source: string; placeholders?: number; zeroCapacity?: number; zeroCapacityAssets?: Array<{ assetId: string; assetName: string }> }> = [];
   const doubleCountWarnings: Array<{ assetId: string; assetName: string; orgName: string }> = [];
   let resolutionTruncated = false;
+  let tierConflictOrgs: Array<{ orgId: string; orgName: string; tiers: string[] }> = [];
   // Legacy asset group resolution, hoisted so the unassigned-org coverage check can read it
   let legacyMemberIds = new Set<string>();
   let legacyEconfIds = new Set<string>();
