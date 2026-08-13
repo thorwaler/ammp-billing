@@ -1664,11 +1664,26 @@ async function generateElumAlerts(
       title: uncovered > 0
         ? `${uncovered} Elum asset${uncovered === 1 ? '' : 's'} not covered by any tier or legacy group`
         : `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag (all covered)`,
-      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
+      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal / epm_internal feature flag: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
       metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW, uncovered, uncoveredMW, coveredStandard, coveredEconf, coveredElsewhere },
 
     });
   }
+
+  // 1b. Sub-orgs carrying 2+ conflicting billing tier flags. Internal combos are
+  // resolved silently (internal wins) and remote_econf is a normal add-on.
+  const conflicts = cached.tierConflictOrgs || [];
+  if (conflicts.length > 0) {
+    pending.push({
+      alert_type: 'elum_org_tier_conflict',
+      severity: 'warning',
+      title: `${conflicts.length} Elum sub-org${conflicts.length === 1 ? '' : 's'} with conflicting billing tier flags`,
+      description: `These sub-orgs carry more than one billing tier flag, so the tier used for pricing is ambiguous: ${conflicts.map(o => `${o.orgName || o.orgId} (${o.tiers.join(' + ')})`).join(', ')}. Remove the extra flag in AMMP so each org has exactly one tier.`,
+      metadata: { contract: contractLabel, orgs: conflicts },
+    });
+  }
+
+
 
 
   // 2. Assets present in both a sub-org and the legacy asset group
