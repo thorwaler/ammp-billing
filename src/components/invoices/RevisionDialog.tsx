@@ -248,10 +248,12 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         },
       });
 
+      const userId = (await supabase.auth.getUser()).data.user?.id as string;
+
       const { data: inserted, error: insertError } = await supabase
         .from("invoices")
         .insert({
-          user_id: (await supabase.auth.getUser()).data.user?.id as string,
+          user_id: userId,
           customer_id: invoice.customer_id,
           contract_id: invoice.contract_id,
           invoice_date: invoice.invoice_date,
