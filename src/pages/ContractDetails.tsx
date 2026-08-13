@@ -134,6 +134,8 @@ const ContractDetails = () => {
   // Elum 2026: per-org resolution audit recorded by the last sync
   const orgResolution: any[] = cachedCapabilities?.orgResolution || [];
   const unassignedOrgs: any[] = cachedCapabilities?.unassignedOrgs || [];
+  const tierConflictOrgs: any[] = cachedCapabilities?.tierConflictOrgs || [];
+  const excludedOrgs: any[] = cachedCapabilities?.excludedOrgs || [];
   const emptyOrgs = orgResolution.filter((o: any) => !o.assetCount);
 
   const loadContractData = async () => {
