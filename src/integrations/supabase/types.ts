@@ -915,11 +915,14 @@ export type Database = {
           prepaid_balance_deltas_by_contract: Json | null
           revised_from_invoice_id: string | null
           revision_deadline: string | null
+          revision_reason: string | null
           sharepoint_drive_id: string | null
           sharepoint_file_id: string | null
           sharepoint_files: Json | null
           snapshot_frozen_at: string | null
           source: string | null
+          superseded_at: string | null
+          superseded_by_invoice_id: string | null
           support_document_data: Json | null
           total_mw: number
           updated_at: string | null
@@ -957,11 +960,14 @@ export type Database = {
           prepaid_balance_deltas_by_contract?: Json | null
           revised_from_invoice_id?: string | null
           revision_deadline?: string | null
+          revision_reason?: string | null
           sharepoint_drive_id?: string | null
           sharepoint_file_id?: string | null
           sharepoint_files?: Json | null
           snapshot_frozen_at?: string | null
           source?: string | null
+          superseded_at?: string | null
+          superseded_by_invoice_id?: string | null
           support_document_data?: Json | null
           total_mw: number
           updated_at?: string | null
@@ -999,11 +1005,14 @@ export type Database = {
           prepaid_balance_deltas_by_contract?: Json | null
           revised_from_invoice_id?: string | null
           revision_deadline?: string | null
+          revision_reason?: string | null
           sharepoint_drive_id?: string | null
           sharepoint_file_id?: string | null
           sharepoint_files?: Json | null
           snapshot_frozen_at?: string | null
           source?: string | null
+          superseded_at?: string | null
+          superseded_by_invoice_id?: string | null
           support_document_data?: Json | null
           total_mw?: number
           updated_at?: string | null
@@ -1035,6 +1044,13 @@ export type Database = {
           {
             foreignKeyName: "invoices_revised_from_invoice_id_fkey"
             columns: ["revised_from_invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invoices_superseded_by_invoice_id_fkey"
+            columns: ["superseded_by_invoice_id"]
             isOneToOne: false
             referencedRelation: "invoices"
             referencedColumns: ["id"]

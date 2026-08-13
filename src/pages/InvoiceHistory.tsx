@@ -18,7 +18,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter } from "date-fns";
-import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon, Lock, Unlock } from "lucide-react";
+import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon, Lock, Unlock, RotateCcw } from "lucide-react";
+import { RevisionDialog } from "@/components/invoices/RevisionDialog";
 import { daysUntilRevisionDeadline, isWithinRevisionWindow } from "@/lib/invoiceSnapshot";
 import { cn } from "@/lib/utils";
 import { formatDateCET } from "@/lib/dateUtils";
@@ -59,6 +60,10 @@ interface Invoice {
   input_snapshot: any | null;
   snapshot_frozen_at: string | null;
   revision_deadline: string | null;
+  revised_from_invoice_id: string | null;
+  superseded_by_invoice_id: string | null;
+  superseded_at: string | null;
+  revision_reason: string | null;
   customer: {
     name: string;
   } | null;
@@ -89,6 +94,8 @@ export default function InvoiceHistory() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
+  const [revisionInvoice, setRevisionInvoice] = useState<Invoice | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -367,13 +374,15 @@ export default function InvoiceHistory() {
   };
 
   // Calculate totals using EUR amounts with credits subtracted
-  const totalARR = filteredInvoices.reduce((sum, inv) => {
+  // Superseded invoices were replaced by a revision — exclude them from revenue totals.
+  const revenueInvoices = filteredInvoices.filter(inv => !inv.superseded_by_invoice_id);
+  const totalARR = revenueInvoices.reduce((sum, inv) => {
     const grossArr = inv.arr_amount_eur ?? inv.arr_amount ?? 0;
     const grossTotal = inv.invoice_amount_eur ?? inv.invoice_amount ?? 1;
     const creditEur = inv.xero_amount_credited_eur ?? inv.xero_amount_credited ?? 0;
     return sum + getNetAmount(grossArr, grossTotal, creditEur);
   }, 0);
-  const totalNRR = filteredInvoices.reduce((sum, inv) => {
+  const totalNRR = revenueInvoices.reduce((sum, inv) => {
     const grossNrr = inv.nrr_amount_eur ?? inv.nrr_amount ?? 0;
     const grossTotal = inv.invoice_amount_eur ?? inv.invoice_amount ?? 1;
     const creditEur = inv.xero_amount_credited_eur ?? inv.xero_amount_credited ?? 0;
@@ -591,6 +600,16 @@ export default function InvoiceHistory() {
                             ) : (
                               <Badge variant="secondary">Not Sent</Badge>
                             )}
+                            {invoice.superseded_by_invoice_id && (
+                              <Badge variant="destructive" className="w-fit" title={invoice.superseded_at ? `Superseded ${new Date(invoice.superseded_at).toLocaleString()}` : undefined}>
+                                Superseded
+                              </Badge>
+                            )}
+                            {invoice.revised_from_invoice_id && (
+                              <Badge variant="secondary" className="w-fit" title={invoice.revision_reason || 'Revision of an earlier invoice'}>
+                                Revised
+                              </Badge>
+                            )}
                             {invoice.snapshot_frozen_at ? (
                               <Badge variant="outline" className="w-fit gap-1" title={`Frozen ${new Date(invoice.snapshot_frozen_at).toLocaleString()}`}>
                                 <Lock className="h-3 w-3" />
@@ -628,6 +647,33 @@ export default function InvoiceHistory() {
                               }}
                             >
                               <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={
+                                !invoice.input_snapshot ||
+                                !invoice.contract_id ||
+                                !!invoice.superseded_by_invoice_id ||
+                                !isWithinRevisionWindow(invoice.revision_deadline)
+                              }
+                              title={
+                                invoice.superseded_by_invoice_id
+                                  ? "Already superseded by a revision"
+                                  : !invoice.input_snapshot
+                                    ? "No frozen snapshot — cannot revise"
+                                    : !invoice.contract_id
+                                      ? "Merged invoices cannot be revised"
+                                      : !isWithinRevisionWindow(invoice.revision_deadline)
+                                        ? "Revision window has closed"
+                                        : "Revise invoice"
+                              }
+                              onClick={() => {
+                                setRevisionInvoice(invoice);
+                                setRevisionDialogOpen(true);
+                              }}
+                            >
+                              <RotateCcw className="h-4 w-4" />
                             </Button>
                             <Button
                               variant="ghost"
@@ -691,6 +737,13 @@ export default function InvoiceHistory() {
           )}
         </>
       )}
+
+      <RevisionDialog
+        open={revisionDialogOpen}
+        onOpenChange={setRevisionDialogOpen}
+        invoice={revisionInvoice as any}
+        onRevised={fetchInvoices}
+      />
 
       <XeroSyncDialog
         open={syncDialogOpen}
