@@ -370,6 +370,11 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               {org.warnings.map((w, i) => (
                 <p key={i} className="text-xs text-destructive mb-1">{w}</p>
               ))}
+              {zeroSectionFor(org.orgName) && (
+                <p className="text-xs text-destructive mb-1">
+                  {zeroCapacityMessage(zeroSectionFor(org.orgName)!)}
+                </p>
+              )}
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-muted">
