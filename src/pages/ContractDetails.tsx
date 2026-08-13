@@ -136,7 +136,9 @@ const ContractDetails = () => {
   const unassignedOrgs: any[] = cachedCapabilities?.unassignedOrgs || [];
   const tierConflictOrgs: any[] = cachedCapabilities?.tierConflictOrgs || [];
   const excludedOrgs: any[] = cachedCapabilities?.excludedOrgs || [];
-  const emptyOrgs = orgResolution.filter((o: any) => !o.assetCount);
+  const emptyOrgs = orgResolution.filter(
+    (o: any) => !o.assetCount && !String(o.source || '').includes('ignored-flag-only')
+  );
 
   const loadContractData = async () => {
       setLoading(true);
