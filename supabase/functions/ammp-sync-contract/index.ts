@@ -1120,6 +1120,39 @@ async function processContractSync(
     };
   }
   
+  // Final safety net: whatever path resolved the assets (feature flags, legacy
+  // asset groups, org filters), assets owned by a globally excluded org are
+  // never billed. Drops are recorded for the Org resolution audit panel.
+  {
+    const before = assetsToProcess.length;
+    const kept: typeof assetsToProcess = [];
+    for (const m of assetsToProcess) {
+      const owner = assetLookup.get(m.asset_id);
+      const ownerOrgId = owner?.org_id;
+      if (isExcludedOrg(ownerOrgId)) {
+        const entry = excludedOrgLog.find(e => e.orgId === ownerOrgId);
+        if (entry) {
+          entry.assetCount = (entry.assetCount || 0) + 1;
+          if (entry.source && !entry.source.includes('assets')) entry.source = `${entry.source} + assets`;
+        } else {
+          excludedOrgLog.push({
+            orgId: ownerOrgId,
+            orgName: owner?.org_name || ownerOrgId,
+            assetCount: 1,
+            source: 'assets',
+          });
+        }
+        assetOrgMap.delete(m.asset_id);
+        continue;
+      }
+      kept.push(m);
+    }
+    if (kept.length !== before) {
+      assetsToProcess = kept;
+      console.log(`[AMMP Sync Contract] Excluded-org sweep: dropped ${before - kept.length} asset(s)`);
+    }
+  }
+
   const totalExpected = assetsToProcess.length;
   
   if (assetsToProcess.length === 0) {
