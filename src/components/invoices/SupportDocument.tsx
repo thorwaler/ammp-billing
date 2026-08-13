@@ -1,5 +1,10 @@
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { formatDateCET } from "@/lib/dateUtils";
+import {
+  collectZeroCapacitySections,
+  zeroCapacityMessage,
+  zeroCapacityTotal,
+} from "@/lib/supportDocumentWarnings";
 
 interface SupportDocumentProps {
   data: SupportDocumentData;
@@ -14,6 +19,11 @@ export function SupportDocument({ data }: SupportDocumentProps) {
       maximumFractionDigits: 2,
     }).format(amount);
   };
+
+  const zeroCapacitySections = collectZeroCapacitySections(data);
+  const zeroCapacityCount = zeroCapacityTotal(zeroCapacitySections);
+  const zeroSectionFor = (name: string) =>
+    zeroCapacitySections.find(s => s.section === name);
 
   return (
     <div id="support-document" className="bg-background p-6 max-w-7xl mx-auto text-xs" style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px' }}>
