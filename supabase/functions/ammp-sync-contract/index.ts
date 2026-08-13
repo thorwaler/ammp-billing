@@ -668,9 +668,29 @@ async function processContractSync(
       let baseCount = 0;
       let econfCount = 0;
       let excludedCount = 0;
+      let excludedOrgCount = 0;
       for (const m of members) {
         if (excludedIds.has(m.asset_id)) {
           excludedCount++;
+          continue;
+        }
+        // Globally excluded orgs (e.g. Elum virtual assets) must never enter
+        // billing — not even through a legacy asset group membership.
+        const ownerOrgId = assetLookup.get(m.asset_id)?.org_id;
+        if (isExcludedOrg(ownerOrgId)) {
+          excludedOrgCount++;
+          const entry = excludedOrgLog.find(e => e.orgId === ownerOrgId);
+          if (entry) {
+            entry.assetCount = (entry.assetCount || 0) + 1;
+            entry.source = entry.source === 'discovery' ? 'discovery + legacy-group' : entry.source || 'legacy-group';
+          } else {
+            excludedOrgLog.push({
+              orgId: ownerOrgId,
+              orgName: assetLookup.get(m.asset_id)?.org_name || ownerOrgId,
+              assetCount: 1,
+              source: 'legacy-group',
+            });
+          }
           continue;
         }
         const existing = assetOrgMap.get(m.asset_id);
@@ -684,6 +704,10 @@ async function processContractSync(
         assetOrgMap.set(m.asset_id, target);
         assetsToProcess.push({ asset_id: m.asset_id, asset_name: m.asset_name });
       }
+      if (excludedOrgCount > 0) {
+        console.log(`[AMMP Sync Contract] Legacy group: dropped ${excludedOrgCount} asset(s) belonging to globally excluded orgs`);
+      }
+
 
       const legacySegments: ClassifiedOrg[] = [];
       if (baseCount > 0) legacySegments.push(baseOrg);
