@@ -46,6 +46,12 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             )}
           </div>
         </div>
+        {zeroCapacityCount > 0 && (
+          <p className="mt-2 text-xs font-semibold text-destructive">
+            Data quality: {zeroCapacityCount} site(s) in this document have no capacity set in AMMP
+            (see the warnings in the affected sections below).
+          </p>
+        )}
       </div>
 
       {/* Year Overview */}
