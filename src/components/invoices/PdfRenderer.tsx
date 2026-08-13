@@ -80,6 +80,18 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   });
   y += Math.max(headerLeft.length, headerRight.length) * 4.5 + 4;
 
+  if (zeroCount > 0) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    (doc.splitTextToSize(
+      `Data quality: ${zeroCount} site(s) in this document have no capacity set in AMMP (see the warnings in the affected sections below).`,
+      CONTENT_WIDTH
+    ) as string[]).forEach(l => { y = ensureSpace(doc, 4, y); doc.text(l, MARGIN, y); y += 4; });
+    doc.setFont('helvetica', 'normal');
+    y += 2;
+  }
+
+
   // === YEAR OVERVIEW ===
   y = addSectionTitle(doc, 'Year-to-Date Invoice Summary', y);
   autoTable(doc, {
