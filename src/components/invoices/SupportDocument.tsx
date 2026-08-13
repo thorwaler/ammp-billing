@@ -249,7 +249,20 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                   <td className="border border-border p-1 text-right">{org.totalMWp.toFixed(3)}</td>
                   <td className="border border-border p-1">
                     {org.appliedRate != null
-                      ? `${formatCurrency(org.appliedRate)}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
+                      ? (() => {
+                          const effective = org.appliedRate + (org.econfApplied ? (org.econfRate || 0) : 0);
+                          return (
+                            <>
+                              {formatCurrency(effective)}/MWp/yr
+                              {org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}
+                              {org.econfApplied && org.econfRate ? (
+                                <div className="text-[10px] text-muted-foreground">
+                                  base {formatCurrency(org.appliedRate)} + eConf {formatCurrency(org.econfRate)}
+                                </div>
+                              ) : null}
+                            </>
+                          );
+                        })()
                       : 'Per-site size buckets'}
                   </td>
                   <td className="border border-border p-1 text-right">{formatCurrency(org.baseCost)}</td>
