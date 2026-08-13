@@ -1040,30 +1040,23 @@ async function processContractSync(
       );
     }
 
-    if (assetsToProcess.length === 0 && contract.ammp_asset_group_id) {
-      // Fallback: legacy asset group resolution
-      console.log('[AMMP Sync Contract] Elum Internal: no elum_internal sub-orgs found — falling back to asset group');
-      const primaryMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id);
-      assetsToProcess = [...primaryMembers];
-      if (contract.ammp_asset_group_id_and) {
-        const andMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_and);
-        const andIds = new Set(andMembers.map((m) => m.asset_id));
-        assetsToProcess = assetsToProcess.filter((m) => andIds.has(m.asset_id));
-      }
-      if (contract.ammp_asset_group_id_not) {
-        const notMembers = await getAssetGroupMembers(token, contract.ammp_asset_group_id_not);
-        const notIds = new Set(notMembers.map((m) => m.asset_id));
-        assetsToProcess = assetsToProcess.filter((m) => !notIds.has(m.asset_id));
-      }
+    // Flag-only resolution: the legacy asset group is never used for internal.
+    if (contract.ammp_asset_group_id) {
+      console.log(
+        `[AMMP Sync Contract] Elum Internal: ignoring legacy asset group ${contract.ammp_asset_group_id} (flag-only resolution)`
+      );
       orgResolutionLog.push({
-        orgId: `assetgroup:${contract.ammp_asset_group_id}`,
-        orgName: contract.ammp_asset_group_name || 'Asset group (fallback)',
-        assetCount: assetsToProcess.length,
-        source: 'asset-group',
+        orgId: `ignored:${contract.ammp_asset_group_id}`,
+        orgName: contract.ammp_asset_group_name || 'Legacy asset group (ignored)',
+        assetCount: 0,
+        source: 'ignored-flag-only',
       });
-      console.log(`[AMMP Sync Contract] Elum Internal asset-group fallback: ${assetsToProcess.length} assets`);
-    } else if (assetsToProcess.length === 0) {
-      console.warn('[AMMP Sync Contract] Elum Internal: no flagged sub-orgs and no asset group configured');
+    }
+
+    if (assetsToProcess.length === 0) {
+      throw new Error(
+        'Elum Internal: no sub-organisations carry the internal feature flag (elum_internal / epm_internal). Resolution is flag-only for this contract — the previous asset cache was kept.'
+      );
     }
 
   } else if (contract.ammp_asset_group_id) {
