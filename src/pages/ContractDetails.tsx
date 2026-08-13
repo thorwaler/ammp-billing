@@ -1659,7 +1659,16 @@ const ContractDetails = () => {
                             <td className={`p-2 text-right ${o.assetCount === 0 ? 'text-destructive font-medium' : ''}`}>
                               {o.assetCount}
                             </td>
-                            <td className="p-2 text-muted-foreground">{o.source}</td>
+                            <td className="p-2 text-muted-foreground">
+                              {o.source}
+                              <div className="text-[11px]">
+                                {String(o.source || '').includes('feature-flag')
+                                  ? 'feature flag'
+                                  : String(o.source || '').includes('group')
+                                    ? 'legacy asset group'
+                                    : 'organisation'}
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
