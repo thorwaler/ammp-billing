@@ -459,6 +459,9 @@ async function getClassifiedSubOrgs(
       if (!o?.org_id || o.org_id === parentOrgId || seen.has(o.org_id)) return false;
       if (isExcludedOrg(o.org_id)) {
         console.log(`[AMMP Sync Contract] Skipping excluded org ${o.org_name || o.org_id} (never billed)`);
+        if (!excludedOrgLog.some(e => e.orgId === o.org_id)) {
+          excludedOrgLog.push({ orgId: o.org_id, orgName: o.org_name || o.org_id });
+        }
         seen.add(o.org_id);
         return false;
       }
