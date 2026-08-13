@@ -34,7 +34,7 @@ Outside the window (or on an unfrozen invoice) the action is disabled with an ex
 
 ## Technical notes
 
-- New helpers in `src/lib/invoiceSnapshot.ts`: `diffSnapshotAgainstLive()` and `buildRevisionFields()`.
+- New helpers in `src/lib/invoiceSnapshot.ts`: `diffSnapshotAgainstLive()` (classifies each live asset as unchanged, zero-MW-corrected, newly onboarded, or removed) , `applySelectedCorrections()` (returns a patched asset list from the snapshot plus the ticked corrections) and `buildRevisionFields()`.
 - New `RevisionDialog.tsx` under `src/components/invoices/`, reusing the existing calculation path in `invoiceCalculations.ts` and the shared `buildPackageLineItems` from `src/lib/xeroLineItems.ts` so revised line items match freshly created ones.
 - Side-effect reversal reuses `src/lib/prepaidBalance.ts` (`reverseSingleContractDelta` / `reverseMergedDeltas`) and the SharePoint delete function already used by invoice deletion.
 - Database: add `superseded_by_invoice_id` (or a `status` marker) on `invoices` so revised originals can be filtered out of analytics, reports and ARR/NRR aggregation.
