@@ -273,8 +273,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           prepaid_balance_delta: newPrepaidDelta,
           revised_from_invoice_id: invoice.id,
           revision_reason: reason || null,
-          ...(snapshotFields || {}),
-        })
+          ...(snapshotFields ? { ...snapshotFields, input_snapshot: snapshotFields.input_snapshot as any } : {}),
+        } as any)
         .select("id")
         .single();
 
