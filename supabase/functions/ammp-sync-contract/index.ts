@@ -417,8 +417,8 @@ const REQUEST_BUDGET_MS = 110_000;
 const ASSET_LOOP_RESERVE_MS = 40_000;
 let requestDeadline = Number.POSITIVE_INFINITY;
 let discoveryDeadline = Number.POSITIVE_INFINITY;
-/** Globally excluded orgs skipped during this request's discovery (audit trail) */
-let excludedOrgLog: Array<{ orgId: string; orgName: string }> = [];
+/** Globally excluded orgs skipped during this request (audit trail) */
+let excludedOrgLog: Array<{ orgId: string; orgName: string; assetCount?: number; source?: string }> = [];
 const budgetExceeded = () => Date.now() > requestDeadline;
 /** True once discovery has used everything except the asset-loop reserve. */
 const discoveryBudgetExceeded = () => Date.now() > discoveryDeadline;
