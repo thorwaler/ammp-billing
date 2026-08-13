@@ -1756,6 +1756,7 @@ async function generateElumAlerts(
 Deno.serve(async (req) => {
   requestDeadline = Date.now() + REQUEST_BUDGET_MS;
   discoveryDeadline = requestDeadline - ASSET_LOOP_RESERVE_MS;
+  excludedOrgLog = [];
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
