@@ -34,6 +34,16 @@ Change: include the invoice being generated as a provisional "current" row so th
 
 The header prints a single month (e.g. "Sep 2026"). It will print the billing period range instead, e.g. `1 Jul 2026 – 30 Sep 2026`, falling back to the month label when no period dates exist. Applies to all Elum support docs.
 
+### 5. Flag zero-capacity assets on every Elum support doc
+
+Any asset with 0 (or missing) PV peak capacity — and, for Jubaili, 0 or unset genset kVA — is called out explicitly rather than silently billed at zero.
+
+- Site rows for those assets get a visible "capacity not set" marker.
+- Each affected section gets a warning block above the table: how many sites have no capacity/rating, their names, and a note that they are billed at the fallback rate until AMMP data is corrected (or excluded, where that is the current behaviour).
+- A single summary line near the top of the document reports the total count across all sections, so the reviewer sees it before sending the invoice.
+- Same warnings mirrored in the PDF output.
+
+
 ## Technical notes
 
 - `supabase/functions/ammp-sync-contract/index.ts` — filter group-sourced assets by `org_id` against the excluded set; log drops into `cached_capabilities.excludedOrgs` with source path; redeploy.
