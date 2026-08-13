@@ -113,14 +113,32 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
 
   // === ELUM JUBAILI ===
   if (data.elumJubailiBreakdown) {
-    y = addSectionTitle(doc, 'Elum Jubaili Pricing Breakdown', y);
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
+    y = addSectionTitle(doc, 'Elum Jubaili Pricing Breakdown (genset kVA bands)', y);
     const jub = data.elumJubailiBreakdown;
-    [`Per-Site Annual Fee: ${fmt(jub.perSiteFee, cur)}`, `Site Count: ${jub.siteCount}`, `Total Cost: ${fmt(jub.totalCost, cur)}`].forEach(l => {
-      y = ensureSpace(doc, 5, y); doc.text(l, MARGIN, y); y += 4;
+    autoTable(doc, {
+      startY: y, margin: { left: MARGIN, right: MARGIN },
+      head: [['Site', 'Genset (kVA)', 'Band', `${cur}/kVA/yr`, `Cost (${cur})`]],
+      body: [
+        ...jub.sites.map(s => [
+          s.assetName,
+          s.kva != null ? s.kva.toFixed(0) : '-',
+          s.status === 'unrated' ? 'Not rated — not billed' : `${s.bandLabel}${s.status === 'clamped' ? ' (clamped)' : ''}`,
+          s.kva && s.kva > 0 && s.annualFee ? (s.annualFee / s.kva).toFixed(2) : '-',
+          fmt(s.cost, cur),
+        ]),
+        ['Banded fees for this period', '', '', '', fmt(jub.bandedCost, cur)],
+        [`Contract minimum (${fmt(jub.minimumAnnualFee, cur)}/year, pro-rated)`, '', '', '', fmt(jub.bandedCost + jub.minimumTopUp, cur)],
+        [
+          { content: `Charged (higher of the two)${jub.minimumApplied ? ' — minimum applies' : ''}`, styles: { fontStyle: 'bold' } },
+          '', '', '',
+          { content: fmt(jub.totalCost, cur), styles: { fontStyle: 'bold' } },
+        ],
+      ],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [244, 244, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
+      columnStyles: { 1: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
     });
-    y += 2;
+    y = (doc as any).lastAutoTable.finalY + 6;
   }
 
   // === ELUM INTERNAL ===
@@ -164,7 +182,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
           String(org.siteCount),
           org.totalMWp.toFixed(3),
           org.appliedRate != null
-            ? `${fmt(org.appliedRate, cur)}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
+            ? `${fmt(org.appliedRate + (org.econfApplied ? (org.econfRate || 0) : 0), cur)}/MWp/yr${org.econfApplied && org.econfRate ? ` (base ${fmt(org.appliedRate, cur)} + eConf ${fmt(org.econfRate, cur)})` : org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
             : 'Per-site buckets',
           fmt(org.baseCost, cur),
           org.econfApplied ? fmt(org.econfCost, cur) : '-',

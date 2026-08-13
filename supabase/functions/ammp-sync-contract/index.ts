@@ -417,8 +417,8 @@ const REQUEST_BUDGET_MS = 110_000;
 const ASSET_LOOP_RESERVE_MS = 40_000;
 let requestDeadline = Number.POSITIVE_INFINITY;
 let discoveryDeadline = Number.POSITIVE_INFINITY;
-/** Globally excluded orgs skipped during this request's discovery (audit trail) */
-let excludedOrgLog: Array<{ orgId: string; orgName: string }> = [];
+/** Globally excluded orgs skipped during this request (audit trail) */
+let excludedOrgLog: Array<{ orgId: string; orgName: string; assetCount?: number; source?: string }> = [];
 const budgetExceeded = () => Date.now() > requestDeadline;
 /** True once discovery has used everything except the asset-loop reserve. */
 const discoveryBudgetExceeded = () => Date.now() > discoveryDeadline;
@@ -462,7 +462,7 @@ async function getClassifiedSubOrgs(
       if (isExcludedOrg(o.org_id)) {
         console.log(`[AMMP Sync Contract] Skipping excluded org ${o.org_name || o.org_id} (never billed)`);
         if (!excludedOrgLog.some(e => e.orgId === o.org_id)) {
-          excludedOrgLog.push({ orgId: o.org_id, orgName: o.org_name || o.org_id });
+          excludedOrgLog.push({ orgId: o.org_id, orgName: o.org_name || o.org_id, source: 'discovery' });
         }
         seen.add(o.org_id);
         return false;
@@ -668,9 +668,29 @@ async function processContractSync(
       let baseCount = 0;
       let econfCount = 0;
       let excludedCount = 0;
+      let excludedOrgCount = 0;
       for (const m of members) {
         if (excludedIds.has(m.asset_id)) {
           excludedCount++;
+          continue;
+        }
+        // Globally excluded orgs (e.g. Elum virtual assets) must never enter
+        // billing — not even through a legacy asset group membership.
+        const ownerOrgId = assetLookup.get(m.asset_id)?.org_id;
+        if (isExcludedOrg(ownerOrgId)) {
+          excludedOrgCount++;
+          const entry = excludedOrgLog.find(e => e.orgId === ownerOrgId);
+          if (entry) {
+            entry.assetCount = (entry.assetCount || 0) + 1;
+            entry.source = entry.source === 'discovery' ? 'discovery + legacy-group' : entry.source || 'legacy-group';
+          } else {
+            excludedOrgLog.push({
+              orgId: ownerOrgId,
+              orgName: assetLookup.get(m.asset_id)?.org_name || ownerOrgId,
+              assetCount: 1,
+              source: 'legacy-group',
+            });
+          }
           continue;
         }
         const existing = assetOrgMap.get(m.asset_id);
@@ -684,6 +704,10 @@ async function processContractSync(
         assetOrgMap.set(m.asset_id, target);
         assetsToProcess.push({ asset_id: m.asset_id, asset_name: m.asset_name });
       }
+      if (excludedOrgCount > 0) {
+        console.log(`[AMMP Sync Contract] Legacy group: dropped ${excludedOrgCount} asset(s) belonging to globally excluded orgs`);
+      }
+
 
       const legacySegments: ClassifiedOrg[] = [];
       if (baseCount > 0) legacySegments.push(baseOrg);
@@ -1096,6 +1120,39 @@ async function processContractSync(
     };
   }
   
+  // Final safety net: whatever path resolved the assets (feature flags, legacy
+  // asset groups, org filters), assets owned by a globally excluded org are
+  // never billed. Drops are recorded for the Org resolution audit panel.
+  {
+    const before = assetsToProcess.length;
+    const kept: typeof assetsToProcess = [];
+    for (const m of assetsToProcess) {
+      const owner = assetLookup.get(m.asset_id);
+      const ownerOrgId = owner?.org_id;
+      if (isExcludedOrg(ownerOrgId)) {
+        const entry = excludedOrgLog.find(e => e.orgId === ownerOrgId);
+        if (entry) {
+          entry.assetCount = (entry.assetCount || 0) + 1;
+          if (entry.source && !entry.source.includes('assets')) entry.source = `${entry.source} + assets`;
+        } else {
+          excludedOrgLog.push({
+            orgId: ownerOrgId,
+            orgName: owner?.org_name || ownerOrgId,
+            assetCount: 1,
+            source: 'assets',
+          });
+        }
+        assetOrgMap.delete(m.asset_id);
+        continue;
+      }
+      kept.push(m);
+    }
+    if (kept.length !== before) {
+      assetsToProcess = kept;
+      console.log(`[AMMP Sync Contract] Excluded-org sweep: dropped ${before - kept.length} asset(s)`);
+    }
+  }
+
   const totalExpected = assetsToProcess.length;
   
   if (assetsToProcess.length === 0) {

@@ -627,17 +627,45 @@ export async function generateSupportDocumentData(
   const calculatedTotalNet = calculatedTotal - spsCreditAdjustment;
   const totalsMatch = Math.abs(calculatedTotalNet - invoiceTotal) < 0.01;
 
+  // Invoice period: show the actual billed date range whenever we know it, so
+  // a quarterly Elum invoice reads "01 Jul – 30 Sep 2026" instead of "Sep 2026".
+  const periodRangeLabel = (() => {
+    if (!periodStart || !periodEnd) return null;
+    const s = new Date(periodStart);
+    const e = new Date(periodEnd);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+    const sameYear = s.getFullYear() === e.getFullYear();
+    return `${format(s, sameYear ? 'dd MMM' : 'dd MMM yyyy')} – ${format(e, 'dd MMM yyyy')}`;
+  })();
+
+  // Year-to-date summary: include the invoice being generated when it has not
+  // been saved yet, otherwise a first invoice of the year renders an empty table.
+  const currentPeriodLabel = periodLabelForDate(invoiceDate, billingFrequency);
+  const ytdRows = [...invoicesByPeriod];
+  const currentAdditionalWork = calculationResult.retainerCost || 0;
+  const currentMonitoring = calculationResult.totalPrice - solcastTotal - currentAdditionalWork;
+  let ytdTotal = yearTotal;
+  if (!ytdRows.some(r => r.period === currentPeriodLabel)) {
+    ytdRows.push({
+      period: `${currentPeriodLabel} (this invoice)`,
+      monitoringFee: currentMonitoring,
+      solcastFee: solcastTotal,
+      additionalWork: currentAdditionalWork,
+      total: calculationResult.totalPrice,
+    });
+    ytdTotal += calculationResult.totalPrice;
+  }
 
   return {
     customerName,
     contractName,
     currency,
     invoiceDate,
-    invoicePeriod: calculationResult.invoicePeriod || format(invoiceDate, 'MMM yyyy'),
+    invoicePeriod: periodRangeLabel || calculationResult.invoicePeriod || format(invoiceDate, 'MMM yyyy'),
     discountPercent,
     whtGrossUpRate,
-    yearInvoices: invoicesByPeriod,
-    yearTotal,
+    yearInvoices: ytdRows,
+    yearTotal: ytdTotal,
     assetBreakdown,
     assetBreakdownTotal,
     siteMinimumPricingSummary,
@@ -739,6 +767,17 @@ export async function generateSupportDocumentData(
 /**
  * Group invoices by billing period
  */
+function periodLabelForDate(date: Date, billingFrequency: string): string {
+  if (billingFrequency === 'quarterly') {
+    return `Q${Math.floor(date.getMonth() / 3) + 1}/${date.getFullYear()}`;
+  }
+  if (billingFrequency === 'monthly') return format(date, 'MMM yyyy');
+  if (billingFrequency === 'biannual') {
+    return `${date.getMonth() < 6 ? 'H1' : 'H2'}/${date.getFullYear()}`;
+  }
+  return date.getFullYear().toString();
+}
+
 function groupInvoicesByPeriod(
   invoices: any[],
   billingFrequency: string
@@ -747,19 +786,7 @@ function groupInvoicesByPeriod(
 
   invoices.forEach(invoice => {
     const date = new Date(invoice.invoice_date);
-    let period: string;
-
-    if (billingFrequency === 'quarterly') {
-      const quarter = Math.floor(date.getMonth() / 3) + 1;
-      period = `Q${quarter}/${date.getFullYear()}`;
-    } else if (billingFrequency === 'monthly') {
-      period = format(date, 'MMM yyyy');
-    } else if (billingFrequency === 'biannual') {
-      const half = date.getMonth() < 6 ? 'H1' : 'H2';
-      period = `${half}/${date.getFullYear()}`;
-    } else {
-      period = date.getFullYear().toString();
-    }
+    const period = periodLabelForDate(date, billingFrequency);
 
     if (!grouped[period]) {
       grouped[period] = {
@@ -845,25 +872,11 @@ function generateAssetBreakdown(
     };
   }
   
-  // For Elum Jubaili - per-site fee banded by genset rating (kVA)
+  // For Elum Jubaili - pricing is per genset kVA band, so the generic per-kWp
+  // table would only render zero capacities and zero rates. The dedicated
+  // Jubaili section carries the kVA / €per kVA detail instead.
   if (packageType === 'elum_jubaili' && calculationResult.elumJubailiBreakdown) {
-    const jubBreak = calculationResult.elumJubailiBreakdown;
-
-    return {
-      assetBreakdown: jubBreak.siteLines.map(site => ({
-        assetId: site.assetId,
-        assetName: site.assetName,
-        pvCapacityKWp: 0,
-        isPV: true,
-        isHybrid: false,
-        hubActive: false,
-        portalActive: false,
-        controlActive: false,
-        reportingActive: false,
-        pricePerKWp: 0,
-        pricePerYear: site.annualFee
-      }))
-    };
+    return { assetBreakdown: [] };
   }
   
   // For Elum Internal - don't show per-asset, use tier summary

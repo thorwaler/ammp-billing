@@ -1659,7 +1659,16 @@ const ContractDetails = () => {
                             <td className={`p-2 text-right ${o.assetCount === 0 ? 'text-destructive font-medium' : ''}`}>
                               {o.assetCount}
                             </td>
-                            <td className="p-2 text-muted-foreground">{o.source}</td>
+                            <td className="p-2 text-muted-foreground">
+                              {o.source}
+                              <div className="text-[11px]">
+                                {String(o.source || '').includes('feature-flag')
+                                  ? 'feature flag'
+                                  : String(o.source || '').includes('group')
+                                    ? 'legacy asset group'
+                                    : 'organisation'}
+                              </div>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1683,7 +1692,13 @@ const ContractDetails = () => {
                   {excludedOrgs.length > 0 && (
                     <div className="p-3 border-t text-xs text-muted-foreground">
                       Excluded from billing (never counted, whatever their flags):{' '}
-                      {excludedOrgs.map((o: any) => o.orgName || o.orgId).join(', ')}
+                      {excludedOrgs
+                        .map((o: any) =>
+                          o.assetCount
+                            ? `${o.orgName || o.orgId} (${o.assetCount} asset${o.assetCount === 1 ? '' : 's'} removed${o.source ? `, via ${o.source}` : ''})`
+                            : (o.orgName || o.orgId)
+                        )
+                        .join(', ')}
                     </div>
                   )}
                   {unassignedOrgs.length > 0 && (() => {
