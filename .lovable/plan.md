@@ -17,10 +17,13 @@ Flow:
 1. From the invoice row (and the details dialog), choose **Revise**.
 2. A dialog opens showing the stored snapshot next to today's live data — asset count, total MW, per-org rows, rates, FX — with the differences highlighted, so it is clear what changed since the invoice was cut (typically zero-PV assets that have since reported real capacity).
 3. Choose what the revision recalculates from:
-   - **Recalculate from current data** (default) — re-run the invoice using live synced assets and the same period/contract terms.
+   - **Correct zero-MW assets only** (default) — only assets that were 0 MW in the snapshot and now report a real capacity are updated to their current MW. Every other asset, rate and total stays exactly as frozen. The dialog lists these assets with old (0) vs new MW and lets you tick/untick each one.
+   - **Recalculate from current data** — re-run the invoice fully using live synced assets and the same period/contract terms.
    - **Keep snapshot, adjust manually** — start from the frozen numbers and edit only the values that were wrong.
-4. Preview the new totals and line items with a before/after delta.
-5. Confirm. The system then:
+4. **Exclude newly onboarded assets** (on by default) — any asset present in live data but absent from the snapshot is left out of the revision, so a correction never sneaks in sites that were onboarded after the invoice was cut. The dialog shows how many assets this excludes; unticking pulls them in.
+5. Preview the new totals and line items with a before/after delta.
+
+6. Confirm. The system then:
    - Creates a **new invoice** for the same contract, customer, period and billing frequency, with `revised_from_invoice_id` pointing at the original, its own fresh snapshot and revision window.
    - Marks the original as superseded (it stays in history for audit, is excluded from revenue totals, and is labelled "Revised → <new invoice>").
    - Reverses the original's side effects and re-applies them on the revision: prepaid/YTD balance deltas, zero-PV incident links, site billing (onboarding/annual) markers.
@@ -31,7 +34,7 @@ Outside the window (or on an unfrozen invoice) the action is disabled with an ex
 
 ## Technical notes
 
-- New helpers in `src/lib/invoiceSnapshot.ts`: `diffSnapshotAgainstLive()` and `buildRevisionFields()`.
+- New helpers in `src/lib/invoiceSnapshot.ts`: `diffSnapshotAgainstLive()` (classifies each live asset as unchanged, zero-MW-corrected, newly onboarded, or removed) , `applySelectedCorrections()` (returns a patched asset list from the snapshot plus the ticked corrections) and `buildRevisionFields()`.
 - New `RevisionDialog.tsx` under `src/components/invoices/`, reusing the existing calculation path in `invoiceCalculations.ts` and the shared `buildPackageLineItems` from `src/lib/xeroLineItems.ts` so revised line items match freshly created ones.
 - Side-effect reversal reuses `src/lib/prepaidBalance.ts` (`reverseSingleContractDelta` / `reverseMergedDeltas`) and the SharePoint delete function already used by invoice deletion.
 - Database: add `superseded_by_invoice_id` (or a `status` marker) on `invoices` so revised originals can be filtered out of analytics, reports and ARR/NRR aggregation.
