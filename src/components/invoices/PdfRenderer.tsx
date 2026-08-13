@@ -182,7 +182,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
           String(org.siteCount),
           org.totalMWp.toFixed(3),
           org.appliedRate != null
-            ? `${fmt(org.appliedRate, cur)}/MWp/yr${org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
+            ? `${fmt(org.appliedRate + (org.econfApplied ? (org.econfRate || 0) : 0), cur)}/MWp/yr${org.econfApplied && org.econfRate ? ` (base ${fmt(org.appliedRate, cur)} + eConf ${fmt(org.econfRate, cur)})` : org.appliedTierLabel ? ` (${org.appliedTierLabel})` : ''}`
             : 'Per-site buckets',
           fmt(org.baseCost, cur),
           org.econfApplied ? fmt(org.econfCost, cur) : '-',
