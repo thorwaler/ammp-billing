@@ -88,6 +88,9 @@ interface CachedCapabilities {
   doubleCountWarnings?: Array<{ assetId: string; assetName: string; orgName: string }>;
   /** Sub-orgs under the parent org with no tier flag set (with their impact) */
   unassignedOrgs?: UnassignedOrgEntry[];
+  /** Sub-orgs carrying 2+ conflicting billing tier flags (internal excluded — internal always wins) */
+  tierConflictOrgs?: Array<{ orgId: string; orgName: string; tiers: string[] }>;
+
 
   /** Per-org audit trail of how each org's assets were resolved during the last sync */
   orgResolution?: Array<{ orgId: string; orgName: string; assetCount: number; source: string }>;
