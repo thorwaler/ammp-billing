@@ -148,22 +148,35 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             </tbody>
           </table>
 
+          {zeroSectionFor('Elum Jubaili (genset kVA bands)') && (
+            <p className="text-xs text-destructive mb-2">
+              {zeroCapacityMessage(zeroSectionFor('Elum Jubaili (genset kVA bands)')!)}
+            </p>
+          )}
+
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="bg-muted">
                 <th className="border border-border p-1 text-left">Site</th>
                 <th className="border border-border p-1 text-right">Genset (kVA)</th>
                 <th className="border border-border p-1 text-left">Band</th>
-                <th className="border border-border p-1 text-right">{data.currency}/kVA/yr</th>
+                <th className="border border-border p-1 text-right">Fee / year ({data.currency})</th>
                 <th className="border border-border p-1 text-right">Cost</th>
               </tr>
             </thead>
             <tbody>
               {data.elumJubailiBreakdown.sites.map((site) => (
                 <tr key={site.assetId}>
-                  <td className="border border-border p-1">{site.assetName}</td>
+                  <td className="border border-border p-1">
+                    {site.assetName}
+                    {site.kva == null || site.kva <= 0 ? (
+                      <span className="text-destructive"> — rating not set</span>
+                    ) : null}
+                  </td>
                   <td className="border border-border p-1 text-right">
-                    {site.kva != null ? site.kva.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '—'}
+                    {site.kva != null && site.kva > 0
+                      ? site.kva.toLocaleString(undefined, { maximumFractionDigits: 1 })
+                      : '—'}
                   </td>
                   <td className="border border-border p-1">
                     {site.status === 'unrated'
@@ -176,9 +189,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     {site.status === 'clamped' ? ' (clamped)' : ''}
                   </td>
                   <td className="border border-border p-1 text-right">
-                    {site.kva && site.kva > 0 && site.annualFee
-                      ? (site.annualFee / site.kva).toFixed(2)
-                      : '—'}
+                    {site.annualFee ? formatCurrency(site.annualFee) : '—'}
                   </td>
                   <td className="border border-border p-1 text-right">{formatCurrency(site.cost)}</td>
                 </tr>
