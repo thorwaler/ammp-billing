@@ -627,17 +627,45 @@ export async function generateSupportDocumentData(
   const calculatedTotalNet = calculatedTotal - spsCreditAdjustment;
   const totalsMatch = Math.abs(calculatedTotalNet - invoiceTotal) < 0.01;
 
+  // Invoice period: show the actual billed date range whenever we know it, so
+  // a quarterly Elum invoice reads "01 Jul – 30 Sep 2026" instead of "Sep 2026".
+  const periodRangeLabel = (() => {
+    if (!periodStart || !periodEnd) return null;
+    const s = new Date(periodStart);
+    const e = new Date(periodEnd);
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+    const sameYear = s.getFullYear() === e.getFullYear();
+    return `${format(s, sameYear ? 'dd MMM' : 'dd MMM yyyy')} – ${format(e, 'dd MMM yyyy')}`;
+  })();
+
+  // Year-to-date summary: include the invoice being generated when it has not
+  // been saved yet, otherwise a first invoice of the year renders an empty table.
+  const currentPeriodLabel = periodLabelForDate(invoiceDate, billingFrequency);
+  const ytdRows = [...invoicesByPeriod];
+  const currentAdditionalWork = calculationResult.retainerCost || 0;
+  const currentMonitoring = calculationResult.totalPrice - solcastTotal - currentAdditionalWork;
+  let ytdTotal = yearTotal;
+  if (!ytdRows.some(r => r.period === currentPeriodLabel)) {
+    ytdRows.push({
+      period: `${currentPeriodLabel} (this invoice)`,
+      monitoringFee: currentMonitoring,
+      solcastFee: solcastTotal,
+      additionalWork: currentAdditionalWork,
+      total: calculationResult.totalPrice,
+    });
+    ytdTotal += calculationResult.totalPrice;
+  }
 
   return {
     customerName,
     contractName,
     currency,
     invoiceDate,
-    invoicePeriod: calculationResult.invoicePeriod || format(invoiceDate, 'MMM yyyy'),
+    invoicePeriod: periodRangeLabel || calculationResult.invoicePeriod || format(invoiceDate, 'MMM yyyy'),
     discountPercent,
     whtGrossUpRate,
-    yearInvoices: invoicesByPeriod,
-    yearTotal,
+    yearInvoices: ytdRows,
+    yearTotal: ytdTotal,
     assetBreakdown,
     assetBreakdownTotal,
     siteMinimumPricingSummary,
