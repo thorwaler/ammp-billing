@@ -138,6 +138,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <th className="border border-border p-1 text-left">Site</th>
                 <th className="border border-border p-1 text-right">Genset (kVA)</th>
                 <th className="border border-border p-1 text-left">Band</th>
+                <th className="border border-border p-1 text-right">{data.currency}/kVA/yr</th>
                 <th className="border border-border p-1 text-right">Cost</th>
               </tr>
             </thead>
@@ -158,11 +159,48 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                       : site.bandLabel}
                     {site.status === 'clamped' ? ' (clamped)' : ''}
                   </td>
+                  <td className="border border-border p-1 text-right">
+                    {site.kva && site.kva > 0 && site.annualFee
+                      ? (site.annualFee / site.kva).toFixed(2)
+                      : '—'}
+                  </td>
                   <td className="border border-border p-1 text-right">{formatCurrency(site.cost)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+
+          {/* Minimum annual fee reconciliation */}
+          <table className="w-full text-xs border-collapse mt-3">
+            <tbody>
+              <tr>
+                <td className="border border-border p-1">Banded fees for this period</td>
+                <td className="border border-border p-1 text-right">
+                  {formatCurrency(data.elumJubailiBreakdown.bandedCost)}
+                </td>
+              </tr>
+              <tr>
+                <td className="border border-border p-1">
+                  Contract minimum ({formatCurrency(data.elumJubailiBreakdown.minimumAnnualFee)}/year, pro-rated to this period)
+                </td>
+                <td className="border border-border p-1 text-right">
+                  {formatCurrency(
+                    data.elumJubailiBreakdown.bandedCost + data.elumJubailiBreakdown.minimumTopUp
+                  )}
+                </td>
+              </tr>
+              <tr className="font-bold">
+                <td className="border border-border p-1">
+                  Charged (higher of the two)
+                  {data.elumJubailiBreakdown.minimumApplied ? ' — minimum applies' : ' — banded fees apply'}
+                </td>
+                <td className="border border-border p-1 text-right">
+                  {formatCurrency(data.elumJubailiBreakdown.totalCost)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
 
           {(data.elumJubailiBreakdown.unratedCount > 0 || data.elumJubailiBreakdown.clampedCount > 0) && (
             <p className="text-xs mt-2">
