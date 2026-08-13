@@ -233,12 +233,20 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
       y = ensureSpace(doc, 6, y);
       doc.text(`${org.orgName} - ${org.siteCount} sites, ${org.totalMWp.toFixed(3)} MWp, ${fmt(org.totalCost, cur)}`, MARGIN, y);
       y += 4;
+      const orgZero = zeroSections.find(z => z.section === org.orgName);
+      if (orgZero) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+        (doc.splitTextToSize(zeroCapacityMessage(orgZero), CONTENT_WIDTH) as string[]).forEach(l => {
+          y = ensureSpace(doc, 4, y); doc.text(l, MARGIN, y); y += 3.5;
+        });
+        y += 1;
+      }
       autoTable(doc, {
         startY: y, margin: { left: MARGIN, right: MARGIN },
         head: [['Site', 'Asset ID', 'MWp', 'Band', `Rate/MWp/yr (${cur})`, `Cost (${cur})`]],
         body: [
           ...org.sites.map(site => [
-            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}`,
+            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}${!site.mwp || site.mwp <= 0 ? ' — capacity not set' : ''}`,
             site.assetId,
             site.mwp.toFixed(3),
             site.bucketLabel || '-',
