@@ -136,7 +136,9 @@ const ContractDetails = () => {
   const unassignedOrgs: any[] = cachedCapabilities?.unassignedOrgs || [];
   const tierConflictOrgs: any[] = cachedCapabilities?.tierConflictOrgs || [];
   const excludedOrgs: any[] = cachedCapabilities?.excludedOrgs || [];
-  const emptyOrgs = orgResolution.filter((o: any) => !o.assetCount);
+  const emptyOrgs = orgResolution.filter(
+    (o: any) => !o.assetCount && !String(o.source || '').includes('ignored-flag-only')
+  );
 
   const loadContractData = async () => {
       setLoading(true);
@@ -1662,11 +1664,13 @@ const ContractDetails = () => {
                             <td className="p-2 text-muted-foreground">
                               {o.source}
                               <div className="text-[11px]">
-                                {String(o.source || '').includes('feature-flag')
-                                  ? 'feature flag'
-                                  : String(o.source || '').includes('group')
-                                    ? 'legacy asset group'
-                                    : 'organisation'}
+                                {String(o.source || '').includes('ignored-flag-only')
+                                  ? 'ignored — internal is resolved from feature flags only'
+                                  : String(o.source || '').includes('feature-flag')
+                                    ? 'feature flag'
+                                    : String(o.source || '').includes('group')
+                                      ? 'legacy asset group'
+                                      : 'organisation'}
                               </div>
                             </td>
                           </tr>

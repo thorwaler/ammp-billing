@@ -1,5 +1,10 @@
 import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { formatDateCET } from "@/lib/dateUtils";
+import {
+  collectZeroCapacitySections,
+  zeroCapacityMessage,
+  zeroCapacityTotal,
+} from "@/lib/supportDocumentWarnings";
 
 interface SupportDocumentProps {
   data: SupportDocumentData;
@@ -14,6 +19,11 @@ export function SupportDocument({ data }: SupportDocumentProps) {
       maximumFractionDigits: 2,
     }).format(amount);
   };
+
+  const zeroCapacitySections = collectZeroCapacitySections(data);
+  const zeroCapacityCount = zeroCapacityTotal(zeroCapacitySections);
+  const zeroSectionFor = (name: string) =>
+    zeroCapacitySections.find(s => s.section === name);
 
   return (
     <div id="support-document" className="bg-background p-6 max-w-7xl mx-auto text-xs" style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px' }}>
@@ -36,6 +46,12 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             )}
           </div>
         </div>
+        {zeroCapacityCount > 0 && (
+          <p className="mt-2 text-xs font-semibold text-destructive">
+            Data quality: {zeroCapacityCount} site(s) in this document have no capacity set in AMMP
+            (see the warnings in the affected sections below).
+          </p>
+        )}
       </div>
 
       {/* Year Overview */}
@@ -132,22 +148,35 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             </tbody>
           </table>
 
+          {zeroSectionFor('Elum Jubaili (genset kVA bands)') && (
+            <p className="text-xs text-destructive mb-2">
+              {zeroCapacityMessage(zeroSectionFor('Elum Jubaili (genset kVA bands)')!)}
+            </p>
+          )}
+
           <table className="w-full text-xs border-collapse">
             <thead>
               <tr className="bg-muted">
                 <th className="border border-border p-1 text-left">Site</th>
                 <th className="border border-border p-1 text-right">Genset (kVA)</th>
                 <th className="border border-border p-1 text-left">Band</th>
-                <th className="border border-border p-1 text-right">{data.currency}/kVA/yr</th>
+                <th className="border border-border p-1 text-right">Fee / year ({data.currency})</th>
                 <th className="border border-border p-1 text-right">Cost</th>
               </tr>
             </thead>
             <tbody>
               {data.elumJubailiBreakdown.sites.map((site) => (
                 <tr key={site.assetId}>
-                  <td className="border border-border p-1">{site.assetName}</td>
+                  <td className="border border-border p-1">
+                    {site.assetName}
+                    {site.kva == null || site.kva <= 0 ? (
+                      <span className="text-destructive"> — rating not set</span>
+                    ) : null}
+                  </td>
                   <td className="border border-border p-1 text-right">
-                    {site.kva != null ? site.kva.toLocaleString(undefined, { maximumFractionDigits: 1 }) : '—'}
+                    {site.kva != null && site.kva > 0
+                      ? site.kva.toLocaleString(undefined, { maximumFractionDigits: 1 })
+                      : '—'}
                   </td>
                   <td className="border border-border p-1">
                     {site.status === 'unrated'
@@ -160,9 +189,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                     {site.status === 'clamped' ? ' (clamped)' : ''}
                   </td>
                   <td className="border border-border p-1 text-right">
-                    {site.kva && site.kva > 0 && site.annualFee
-                      ? (site.annualFee / site.kva).toFixed(2)
-                      : '—'}
+                    {site.annualFee ? formatCurrency(site.annualFee) : '—'}
                   </td>
                   <td className="border border-border p-1 text-right">{formatCurrency(site.cost)}</td>
                 </tr>
@@ -343,6 +370,11 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               {org.warnings.map((w, i) => (
                 <p key={i} className="text-xs text-destructive mb-1">{w}</p>
               ))}
+              {zeroSectionFor(org.orgName) && (
+                <p className="text-xs text-destructive mb-1">
+                  {zeroCapacityMessage(zeroSectionFor(org.orgName)!)}
+                </p>
+              )}
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-muted">
@@ -360,6 +392,9 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                       <td className="border border-border p-1">
                         {site.assetName}
                         {site.isMwhOverride ? ' (battery-only, MWh entered as capacity)' : ''}
+                        {!site.mwp || site.mwp <= 0 ? (
+                          <span className="text-destructive"> — capacity not set</span>
+                        ) : null}
                       </td>
                       <td className="border border-border p-1">{site.assetId}</td>
                       <td className="border border-border p-1 text-right">{site.mwp.toFixed(3)}</td>

@@ -2,6 +2,11 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { SupportDocumentData } from '@/lib/supportDocumentGenerator';
 import { format } from 'date-fns';
+import {
+  collectZeroCapacitySections,
+  zeroCapacityMessage,
+  zeroCapacityTotal,
+} from '@/lib/supportDocumentWarnings';
 
 const MARGIN = 14;
 const PAGE_WIDTH = 210;
@@ -45,6 +50,8 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   const doc = new jsPDF('p', 'mm', 'a4');
   const cur = data.currency;
   let y = 20;
+  const zeroSections = collectZeroCapacitySections(data);
+  const zeroCount = zeroCapacityTotal(zeroSections);
 
   // === HEADER ===
   doc.setFontSize(16);
@@ -72,6 +79,18 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     doc.text(line, PAGE_WIDTH / 2 + 10, y + i * 4.5);
   });
   y += Math.max(headerLeft.length, headerRight.length) * 4.5 + 4;
+
+  if (zeroCount > 0) {
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'bold');
+    (doc.splitTextToSize(
+      `Data quality: ${zeroCount} site(s) in this document have no capacity set in AMMP (see the warnings in the affected sections below).`,
+      CONTENT_WIDTH
+    ) as string[]).forEach(l => { y = ensureSpace(doc, 4, y); doc.text(l, MARGIN, y); y += 4; });
+    doc.setFont('helvetica', 'normal');
+    y += 2;
+  }
+
 
   // === YEAR OVERVIEW ===
   y = addSectionTitle(doc, 'Year-to-Date Invoice Summary', y);
@@ -115,15 +134,23 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   if (data.elumJubailiBreakdown) {
     y = addSectionTitle(doc, 'Elum Jubaili Pricing Breakdown (genset kVA bands)', y);
     const jub = data.elumJubailiBreakdown;
+    const jubZero = zeroSections.find(s => s.unit === 'kVA');
+    if (jubZero) {
+      doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+      (doc.splitTextToSize(zeroCapacityMessage(jubZero), 180) as string[]).forEach(l => {
+        y = ensureSpace(doc, 4, y); doc.text(l, MARGIN, y); y += 3.5;
+      });
+      y += 2;
+    }
     autoTable(doc, {
       startY: y, margin: { left: MARGIN, right: MARGIN },
-      head: [['Site', 'Genset (kVA)', 'Band', `${cur}/kVA/yr`, `Cost (${cur})`]],
+      head: [['Site', 'Genset (kVA)', 'Band', `Fee / year (${cur})`, `Cost (${cur})`]],
       body: [
         ...jub.sites.map(s => [
-          s.assetName,
-          s.kva != null ? s.kva.toFixed(0) : '-',
+          `${s.assetName}${s.kva == null || s.kva <= 0 ? ' — rating not set' : ''}`,
+          s.kva != null && s.kva > 0 ? s.kva.toFixed(0) : '-',
           s.status === 'unrated' ? 'Not rated — not billed' : `${s.bandLabel}${s.status === 'clamped' ? ' (clamped)' : ''}`,
-          s.kva && s.kva > 0 && s.annualFee ? (s.annualFee / s.kva).toFixed(2) : '-',
+          s.annualFee ? fmt(s.annualFee, cur) : '-',
           fmt(s.cost, cur),
         ]),
         ['Banded fees for this period', '', '', '', fmt(jub.bandedCost, cur)],
@@ -206,12 +233,20 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
       y = ensureSpace(doc, 6, y);
       doc.text(`${org.orgName} - ${org.siteCount} sites, ${org.totalMWp.toFixed(3)} MWp, ${fmt(org.totalCost, cur)}`, MARGIN, y);
       y += 4;
+      const orgZero = zeroSections.find(z => z.section === org.orgName);
+      if (orgZero) {
+        doc.setFontSize(7); doc.setFont('helvetica', 'normal');
+        (doc.splitTextToSize(zeroCapacityMessage(orgZero), CONTENT_WIDTH) as string[]).forEach(l => {
+          y = ensureSpace(doc, 4, y); doc.text(l, MARGIN, y); y += 3.5;
+        });
+        y += 1;
+      }
       autoTable(doc, {
         startY: y, margin: { left: MARGIN, right: MARGIN },
         head: [['Site', 'Asset ID', 'MWp', 'Band', `Rate/MWp/yr (${cur})`, `Cost (${cur})`]],
         body: [
           ...org.sites.map(site => [
-            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}`,
+            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}${!site.mwp || site.mwp <= 0 ? ' — capacity not set' : ''}`,
             site.assetId,
             site.mwp.toFixed(3),
             site.bucketLabel || '-',
