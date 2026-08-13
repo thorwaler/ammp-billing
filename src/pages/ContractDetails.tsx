@@ -1665,6 +1665,27 @@ const ContractDetails = () => {
                       </tbody>
                     </table>
                   </div>
+                  {tierConflictOrgs.length > 0 && (
+                    <div className="p-3 border-t text-xs text-muted-foreground space-y-1">
+                      <div className="font-medium text-foreground">
+                        {tierConflictOrgs.length} sub-org(s) with conflicting billing tier flags
+                      </div>
+                      <ul className="space-y-1">
+                        {tierConflictOrgs.map((o: any) => (
+                          <li key={o.orgId}>
+                            <span className="font-medium">{o.orgName || o.orgId}</span> — {(o.tiers || []).join(' + ')}
+                          </li>
+                        ))}
+                      </ul>
+                      <div>Remove the extra flag in AMMP so each org has exactly one tier.</div>
+                    </div>
+                  )}
+                  {excludedOrgs.length > 0 && (
+                    <div className="p-3 border-t text-xs text-muted-foreground">
+                      Excluded from billing (never counted, whatever their flags):{' '}
+                      {excludedOrgs.map((o: any) => o.orgName || o.orgId).join(', ')}
+                    </div>
+                  )}
                   {unassignedOrgs.length > 0 && (() => {
                     const verified = unassignedOrgs.filter((o: any) => !o.partial);
                     const unverified = unassignedOrgs.length - verified.length;
