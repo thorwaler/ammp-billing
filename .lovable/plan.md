@@ -1,36 +1,36 @@
-# Elum Internal: why the asset count didn't move (and one real leak)
+# Elum support document fixes
 
-## What I checked
+Five corrections to the invoice support document (screen + PDF) for Elum-family contracts.
 
-Live AMMP data for the Elum parent org (272 sub-orgs) and the contract's last sync (08:47 today):
+## 1. Organisation breakdown shows the real rate (C&I Lite, NEA / Enterprise eConf)
 
-- Exactly **three** sub-orgs carry an internal flag:
-  - Elum Internal (`epm_internal`) — 27 assets
-  - Assets On Hold (`epm_internal`) — 67 assets
-  - Elum Virtual Assets (`epm_internal` + `epm_pro`) — 8 assets, **globally excluded** by design
-- No sub-org uses the older `elum_internal` flag at all.
-- The contract's last sync resolved: 27 (Elum Internal, org-scoped) + 67 (Assets On Hold, org-scoped) + 6 (legacy asset group) = **100 sites / 178.7 MWp**.
+Today the "Rate" column prints only the base rate (e.g. €65/MWp/yr, €650/MWp/yr), even when the organisation carries the remote eConf upgrade — so both the standard and eConf rows look identical, and the rate doesn't reconcile with the row total.
 
-So the flag-first resolution *is* working — 94 of the 100 sites now come from feature-flagged orgs, not from the asset group. The total didn't change because the legacy group `[Tier] Internal` (33 members) already contained 27 of those same assets; the org route adds no new sites beyond what AMMP flags as internal.
+Change: when eConf applies to an organisation, the Rate cell shows the combined effective rate with its composition, e.g. `€400.00/MWp/yr (€65 base + €335 eConf)`. Rows without eConf are unchanged. Same change in the PDF renderer.
 
-## The one real problem
+## 2. Year-to-date summary is empty
 
-The 6 sites still attributed to the legacy asset group are:
+The YTD table only lists invoices already saved for that contract in the calendar year, so it renders empty (and €0.00) while previewing a brand new invoice — and for contracts whose earlier invoices sit on a different contract record.
 
-```text
-DEV ELUM - Ronflex, Pikachu, Canarticho, Abo, Abra, Goupix
-```
+Change:
+- Include the invoice currently being generated as a provisional row (marked "current"), so the year total is never €0 for a real invoice.
+- When there are no other invoices in the year, show an explanatory line ("No earlier invoices for this contract in <year>") instead of a bare empty table.
 
-All six belong to **Elum Virtual Assets** (`84864a91-…`) — the org we agreed must never be billed. The exclusion is applied during org discovery only, so assets that enter through the legacy asset-group path slip past it and are still counted and billed.
+## 3. Jubaili: kVA-based presentation and minimum reconciliation
 
-## Proposed fix
+- Per-site table switches from kWp to genset kVA: columns become `Genset (kVA)`, `€/kVA/yr`, `Annual fee`. Sites with no rating in AMMP are shown as "not set" and excluded from the rate column, as today.
+- Remove the misleading fixed "per site annual fee" figure from the summary block, since the fee now depends on the genset band.
+- Add a closing reconciliation block: banded annual total vs. the contracted annual minimum, the higher of the two picked, then divided by the billing frequency — so the €5k quarterly charge is traceable.
 
-1. In `ammp-sync-contract`, apply the excluded-org filter to **every** asset entry path, not just org discovery: after fetching legacy asset-group members (standard and eConf splits, AND/NOT groups included), drop any asset whose `org_id` is in `EXCLUDED_ORG_IDS`.
-2. Record the dropped assets in `cached_capabilities.excludedOrgs` (count + names) so the Org resolution panel shows "6 assets skipped — Elum Virtual Assets" instead of them silently disappearing.
-3. Surface in the Org resolution panel on the contract page how each tier org was resolved (feature flag vs legacy group), so it's obvious at a glance that 94/100 are flag-based.
+## 4. Invoice period shows the full range
 
-Expected result after re-sync: Elum Internal drops from 100 sites to **94 sites**, and the legacy asset-group line disappears entirely (its only remaining contribution is the excluded virtual assets).
+The header prints a single month (e.g. "Sep 2026"). It will print the billing period range instead, e.g. `1 Jul 2026 – 30 Sep 2026`, falling back to the current single-month label when no period dates are available. Applies to every Elum support doc (and any package that carries period dates).
 
-## Note
+## Technical notes
 
-Two unrelated orgs still carry conflicting flags and show in the conflict list: `Usecase4 org (Elum)` and `Demo MC with remote eConf` (both `epm_lite` + `epm_pro`). Those need fixing in AMMP, not here.
+- `src/components/invoices/SupportDocument.tsx` — rate cell composition, Jubaili tables, YTD empty state, period header.
+- `src/components/invoices/PdfRenderer.tsx` — mirror the same four changes in the PDF output.
+- `src/lib/supportDocumentGenerator.ts` — build `invoicePeriod` from `periodStart`/`periodEnd`; append the current in-progress invoice to `yearInvoices`; pass genset kVA and per-kVA rate through the Jubaili breakdown; expose `minimumAnnualFee` vs `bandedCost` for the reconciliation block.
+- `src/lib/invoiceCalculations.ts` — expose a combined `effectiveRate` on each org line in `elumOrgTierBreakdown` (no pricing change; the totals already include eConf) and carry `gensetKVA` on Jubaili site lines if not already present.
+
+No database or pricing changes; invoice amounts stay identical.
