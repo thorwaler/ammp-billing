@@ -553,12 +553,21 @@ export const calculateTieredPrice = (
 
 export type ElumOrgTier = "ci_lite" | "ci_pro" | "utility" | "internal";
 
-export const ELUM_TIER_FLAGS: Record<ElumOrgTier, string> = {
-  ci_lite: "epm_lite",
-  ci_pro: "epm_pro",
-  utility: "epm_utility",
-  internal: "elum_internal",
+/** Each tier may be marked by one of several flags. Internal always wins. */
+export const ELUM_TIER_FLAGS: Record<ElumOrgTier, string[]> = {
+  ci_lite: ["epm_lite"],
+  ci_pro: ["epm_pro"],
+  utility: ["epm_utility"],
+  internal: ["elum_internal", "epm_internal"],
 };
+
+/**
+ * Orgs that must never be billed, whatever their feature flags say.
+ * `84864a91-…` is Elum's virtual/internal-purpose assets org.
+ */
+export const ELUM_EXCLUDED_ORG_IDS: string[] = [
+  "84864a91-bfb7-4504-9d3d-bb109ffc4fec",
+];
 
 export const ELUM_TIER_LABELS: Record<ElumOrgTier, string> = {
   ci_lite: "C&I Lite",

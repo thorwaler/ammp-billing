@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { runZeroPvScan } from '../_shared/zeroPvScan.ts';
 import { postJsonWithRetry as sharedPostJsonWithRetry, parseRetryAfterMs } from '../_shared/internalFetch.ts';
 import { fetchAmmpData, fetchOrgAssets } from '../_shared/ammpClient.ts';
-import { classifyOrgRow, type ClassifiedOrg } from '../_shared/elumFlags.ts';
+import { classifyOrgRow, hasTierConflict, isExcludedOrg, type ClassifiedOrg } from '../_shared/elumFlags.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
@@ -88,6 +88,11 @@ interface CachedCapabilities {
   doubleCountWarnings?: Array<{ assetId: string; assetName: string; orgName: string }>;
   /** Sub-orgs under the parent org with no tier flag set (with their impact) */
   unassignedOrgs?: UnassignedOrgEntry[];
+  /** Sub-orgs carrying 2+ conflicting billing tier flags (internal excluded — internal always wins) */
+  tierConflictOrgs?: Array<{ orgId: string; orgName: string; tiers: string[] }>;
+  /** Orgs skipped entirely during discovery because they are never billable */
+  excludedOrgs?: Array<{ orgId: string; orgName: string }>;
+
 
   /** Per-org audit trail of how each org's assets were resolved during the last sync */
   orgResolution?: Array<{ orgId: string; orgName: string; assetCount: number; source: string }>;
@@ -412,6 +417,8 @@ const REQUEST_BUDGET_MS = 110_000;
 const ASSET_LOOP_RESERVE_MS = 40_000;
 let requestDeadline = Number.POSITIVE_INFINITY;
 let discoveryDeadline = Number.POSITIVE_INFINITY;
+/** Globally excluded orgs skipped during this request's discovery (audit trail) */
+let excludedOrgLog: Array<{ orgId: string; orgName: string }> = [];
 const budgetExceeded = () => Date.now() > requestDeadline;
 /** True once discovery has used everything except the asset-loop reserve. */
 const discoveryBudgetExceeded = () => Date.now() > discoveryDeadline;
@@ -446,8 +453,22 @@ async function getClassifiedSubOrgs(
   }
 
 
+  // Globally excluded orgs (e.g. Elum's virtual-assets org) are dropped here so
+  // every downstream branch — tier resolution, Internal flag-first, coverage
+  // checks and conflict flagging — never sees them.
   const direct = scoped
-    .filter((o: any) => o?.org_id && o.org_id !== parentOrgId && !seen.has(o.org_id))
+    .filter((o: any) => {
+      if (!o?.org_id || o.org_id === parentOrgId || seen.has(o.org_id)) return false;
+      if (isExcludedOrg(o.org_id)) {
+        console.log(`[AMMP Sync Contract] Skipping excluded org ${o.org_name || o.org_id} (never billed)`);
+        if (!excludedOrgLog.some(e => e.orgId === o.org_id)) {
+          excludedOrgLog.push({ orgId: o.org_id, orgName: o.org_name || o.org_id });
+        }
+        seen.add(o.org_id);
+        return false;
+      }
+      return true;
+    })
     .map(classifyOrgRow);
 
   for (const o of direct) seen.add(o.orgId);
@@ -536,6 +557,7 @@ async function processContractSync(
   const orgResolutionLog: Array<{ orgId: string; orgName: string; assetCount: number; source: string; placeholders?: number; zeroCapacity?: number; zeroCapacityAssets?: Array<{ assetId: string; assetName: string }> }> = [];
   const doubleCountWarnings: Array<{ assetId: string; assetName: string; orgName: string }> = [];
   let resolutionTruncated = false;
+  let tierConflictOrgs: Array<{ orgId: string; orgName: string; tiers: string[] }> = [];
   // Legacy asset group resolution, hoisted so the unassigned-org coverage check can read it
   let legacyMemberIds = new Set<string>();
   let legacyEconfIds = new Set<string>();
@@ -557,7 +579,12 @@ async function processContractSync(
     unassignedOrgs = subOrgs
       .filter(o => o.tier === null)
       .map(o => ({ orgId: o.orgId, orgName: o.orgName }));
-    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} without a tier flag)`);
+    // Orgs with 2+ conflicting non-internal billing flags (remote_econf and
+    // internal combinations are legitimate and never flagged).
+    tierConflictOrgs = subOrgs
+      .filter(hasTierConflict)
+      .map(o => ({ orgId: o.orgId, orgName: o.orgName, tiers: o.matchedTiers || [] }));
+    console.log(`[AMMP Sync Contract] Elum ${elumTier}: ${tierOrgs.length} orgs (${subOrgs.length} sub-orgs, ${unassignedOrgs.length} without a tier flag, ${tierConflictOrgs.length} with conflicting tier flags)`);
 
     
     // Resolve assets per sub-org via the org-scoped assets endpoint.
@@ -1334,6 +1361,8 @@ async function processContractSync(
       : undefined,
     doubleCountWarnings: doubleCountWarnings.length > 0 ? doubleCountWarnings : undefined,
     unassignedOrgs: unassignedOrgs.length > 0 ? unassignedOrgs : undefined,
+    tierConflictOrgs: tierConflictOrgs.length > 0 ? tierConflictOrgs : undefined,
+    excludedOrgs: excludedOrgLog.length > 0 ? [...excludedOrgLog] : undefined,
     orgResolution: orgResolutionLog.length > 0 ? orgResolutionLog : undefined,
     needsDeviceEnrichment: totalExpected > 200 || 
       finalCapabilities.some(c => c.deviceCount === 0 && !existingCached?.assetBreakdown?.find(a => a.assetId === c.assetId)?.deviceEnrichmentAttempted),
@@ -1592,7 +1621,7 @@ async function generateElumAlerts(
   const siteDrop = previousSites - currentSites;
   const significantDrop = previousSites >= 5 && siteDrop > 0 && siteDrop / previousSites >= 0.1;
 
-  if (orgBreakdown.length === 0 && !(cached.unassignedOrgs?.length) && !significantDrop) return;
+  if (orgBreakdown.length === 0 && !(cached.unassignedOrgs?.length) && !(cached.tierConflictOrgs?.length) && !significantDrop) return;
 
 
   type PendingAlert = {
@@ -1643,11 +1672,26 @@ async function generateElumAlerts(
       title: uncovered > 0
         ? `${uncovered} Elum asset${uncovered === 1 ? '' : 's'} not covered by any tier or legacy group`
         : `${unassigned.length} Elum sub-org${unassigned.length === 1 ? '' : 's'} without a tier flag (all covered)`,
-      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal feature flag: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
+      description: `These sub-orgs have no epm_lite / epm_pro / epm_utility / elum_internal / epm_internal feature flag: ${unassigned.map((o: any) => `${o.orgName || o.orgId}${o.assetCount ? ` (${o.assetCount})` : ''}`).join(', ')}.${impact}`,
       metadata: { contract: contractLabel, orgs: unassigned, strandedAssets, strandedMW, uncovered, uncoveredMW, coveredStandard, coveredEconf, coveredElsewhere },
 
     });
   }
+
+  // 1b. Sub-orgs carrying 2+ conflicting billing tier flags. Internal combos are
+  // resolved silently (internal wins) and remote_econf is a normal add-on.
+  const conflicts = cached.tierConflictOrgs || [];
+  if (conflicts.length > 0) {
+    pending.push({
+      alert_type: 'elum_org_tier_conflict',
+      severity: 'warning',
+      title: `${conflicts.length} Elum sub-org${conflicts.length === 1 ? '' : 's'} with conflicting billing tier flags`,
+      description: `These sub-orgs carry more than one billing tier flag, so the tier used for pricing is ambiguous: ${conflicts.map(o => `${o.orgName || o.orgId} (${o.tiers.join(' + ')})`).join(', ')}. Remove the extra flag in AMMP so each org has exactly one tier.`,
+      metadata: { contract: contractLabel, orgs: conflicts },
+    });
+  }
+
+
 
 
   // 2. Assets present in both a sub-org and the legacy asset group
@@ -1712,6 +1756,7 @@ async function generateElumAlerts(
 Deno.serve(async (req) => {
   requestDeadline = Date.now() + REQUEST_BUDGET_MS;
   discoveryDeadline = requestDeadline - ASSET_LOOP_RESERVE_MS;
+  excludedOrgLog = [];
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
