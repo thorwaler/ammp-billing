@@ -174,3 +174,91 @@ export function buildPackageLineItems(options: SharedLineItemOptions): XeroLineI
 
   return items;
 }
+
+export interface ContractLineItemOptions extends SharedLineItemOptions {
+  /** Implementation Fees account code (NRR), usually "1000" */
+  implementationAccountCode?: string;
+  /** 2026 trial one-off fees, taken from the contract row */
+  isTrial?: boolean;
+  trialSetupFee?: number;
+  vendorApiOnboardingFee?: number;
+}
+
+/**
+ * Full line-item set for a single contract invoice: the package-specific
+ * recurring lines plus modules, site-minimum splits, base fee, minimum
+ * adjustment, retainer, addons and 2026 trial fees.
+ *
+ * Used by the revision flow, which has to rebuild an invoice's lines from a
+ * frozen snapshot without the calculator's live UI state.
+ */
+export function buildContractLineItems(options: ContractLineItemOptions): XeroLineItem[] {
+  const {
+    result,
+    packageType,
+    currencySymbol,
+    accountCode,
+    implementationAccountCode = '1000',
+    prefix = '',
+    mwManaged,
+  } = options;
+
+  const items: XeroLineItem[] = [];
+  const isElumSummary = isElumPackage(packageType);
+  const push = (Description: string, UnitAmount: number, account = accountCode) =>
+    items.push({ Description: `${prefix}${Description}`, Quantity: 1, UnitAmount, AccountCode: account });
+
+  // Module costs — suppressed where a dedicated block already covers them.
+  const spsB = result.spsAnnualUpfrontBreakdown;
+  const suppressModules =
+    !!result.perMWAnnualUpfrontBreakdown || spsB?.cycleType === 'annual_upfront' || isElumSummary;
+  if (Array.isArray(result.moduleCosts) && !suppressModules) {
+    result.moduleCosts.forEach((mc: any) => push(mc.moduleName, mc.cost));
+  }
+
+  items.push(...buildPackageLineItems(options));
+
+  if (!isElumSummary && result.siteMinimumPricingBreakdown) {
+    const sm = result.siteMinimumPricingBreakdown;
+    if (sm.normalPricingTotal > 0) {
+      push(`Monitoring Fee - Sites Above Threshold (${sm.sitesAboveThreshold} sites)`, sm.normalPricingTotal);
+    }
+    if (sm.minimumPricingTotal > 0) {
+      push(
+        `Monitoring Fee - Sites Below Threshold (${sm.sitesBelowThreshold} sites, minimum charge)`,
+        sm.minimumPricingTotal,
+      );
+    }
+  }
+
+  if (!isElumSummary && result.basePricingCost > 0) {
+    push('Base Monthly Fee', result.basePricingCost);
+  }
+
+  if (!isElumSummary && result.minimumContractAdjustment > 0) {
+    push('Minimum Contract Adjustment', result.minimumContractAdjustment);
+  }
+
+  if (result.retainerCost > 0) {
+    push('Retainer Hours', result.retainerCost);
+  }
+
+  if (Array.isArray(result.addonCosts)) {
+    result.addonCosts.forEach((ac: any) =>
+      push(ac.name, ac.cost, ac.addonId === 'satelliteDataAPI' ? accountCode : implementationAccountCode),
+    );
+  }
+
+  if (options.isTrial) {
+    if (options.trialSetupFee) push('Trial Setup Fee', options.trialSetupFee, implementationAccountCode);
+    if (options.vendorApiOnboardingFee) {
+      push('Vendor API Onboarding Fee', options.vendorApiOnboardingFee, implementationAccountCode);
+    }
+  }
+
+  // `currencySymbol` and `mwManaged` are consumed by buildPackageLineItems.
+  void currencySymbol;
+  void mwManaged;
+
+  return items;
+}
