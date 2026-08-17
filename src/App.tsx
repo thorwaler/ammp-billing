@@ -5,7 +5,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { loadIgnoredAssets } from "@/lib/ignoredAssets";
 import AppRoutes from "./routes";
+
+// Warm the ignored-asset cache used by the support-document renderers.
+loadIgnoredAssets();
+
 
 const queryClient = new QueryClient({
   defaultOptions: {
