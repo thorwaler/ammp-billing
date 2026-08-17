@@ -141,6 +141,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
         setDiff(aggregate);
         setSelectedIds(aggregate.corrections.map((c) => c.assetId));
+        setManualInputs({});
         setIncludeNewlyOnboarded(false);
         setReason("");
         setOverrideFidelity(false);
@@ -165,9 +166,29 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     };
   }, [open, invoice?.id]);
 
+  /** Which unit an operator-entered number is expressed in, per asset. */
+  const metricById = useMemo(() => {
+    const m = new Map<string, "mw" | "kva">();
+    for (const c of diff?.corrections || []) m.set(c.assetId, c.metric);
+    for (const z of diff?.stillZero || []) m.set(z.assetId, z.metric);
+    return m;
+  }, [diff]);
+
+  const manualOverrides = useMemo(() => {
+    const out: Record<string, { mw?: number; kva?: number }> = {};
+    for (const [assetId, raw] of Object.entries(manualInputs)) {
+      const value = Number(String(raw).replace(",", "."));
+      if (!raw?.trim() || !Number.isFinite(value) || value < 0) continue;
+      out[assetId] = metricById.get(assetId) === "kva" ? { kva: value } : { mw: value };
+    }
+    return out;
+  }, [manualInputs, metricById]);
+
+  const manualCount = Object.keys(manualOverrides).length;
+
   const selection: CorrectionSelection = useMemo(
-    () => ({ mode: "zero_mw_only", selectedAssetIds: selectedIds, includeNewlyOnboarded }),
-    [selectedIds, includeNewlyOnboarded],
+    () => ({ mode: "zero_mw_only", selectedAssetIds: selectedIds, includeNewlyOnboarded, manualOverrides }),
+    [selectedIds, includeNewlyOnboarded, manualOverrides],
   );
 
   const computation = useMemo(() => {
@@ -194,6 +215,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
   const toggleAsset = (assetId: string) =>
     setSelectedIds((prev) => (prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]));
+
+  const setManual = (assetId: string, value: string) =>
+    setManualInputs((prev) => ({ ...prev, [assetId]: value }));
+
 
 
   const handleConfirm = async () => {
