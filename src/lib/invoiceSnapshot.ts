@@ -30,6 +30,26 @@ export interface SnapshotOrgRow {
   totalMW?: number;
   ratePerMWp?: number;
   cost?: number;
+  isLegacyAssetGroup?: boolean;
+  /** Asset ids belonging to this organisation — required to rebuild pricing. */
+  assetIds?: string[];
+}
+
+/**
+ * One contract inside a merged invoice. Merged invoices are priced per
+ * contract and summed, so a faithful snapshot has to keep each contract's own
+ * rates, assets, organisations and period.
+ */
+export interface SnapshotContractEntry {
+  contractId: string;
+  contractName?: string;
+  billingFrequency?: string;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  subtotal?: number;
+  contract: Record<string, unknown>;
+  assets: SnapshotAsset[];
+  orgs?: SnapshotOrgRow[];
 }
 
 export interface SnapshotLineItem {
@@ -40,6 +60,7 @@ export interface SnapshotLineItem {
   accountCode?: string;
   [key: string]: unknown;
 }
+
 
 export interface InvoiceInputSnapshot {
   version: 1;
