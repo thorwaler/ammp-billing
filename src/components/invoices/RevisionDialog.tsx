@@ -115,35 +115,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         setContractRow(primary?.contract || null);
         setContractType(primary?.contractType || primary?.contract?.contract_types || null);
 
-        // Diff each contract against its own live data, then aggregate.
-        const per = units.map((u) => {
-          const live = map[u.contractId];
-          const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
-          return {
-            contractId: u.contractId,
-            contractName: u.contractName,
-            diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || []),
-            snapshotOrgs: u.orgs?.length || 0,
-            liveOrgs: live?.orgBreakdown?.length || 0,
-          };
-        });
-        setPerContractDiff(per);
-        const aggregate: SnapshotDiff = {
-          corrections: per.flatMap((p) => p.diff.corrections),
-          newlyOnboarded: per.flatMap((p) => p.diff.newlyOnboarded),
-          removed: per.flatMap((p) => p.diff.removed),
-          changed: per.flatMap((p) => p.diff.changed),
-          unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
-          stillZeroCount: per.reduce((s, p) => s + p.diff.stillZeroCount, 0),
-          stillZero: per.flatMap((p) => p.diff.stillZero),
-          snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
-          liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
-        };
-
-        setDiff(aggregate);
-        setSelectedIds(aggregate.corrections.map((c) => c.assetId));
         setManualInputs({});
         setIncludeNewlyOnboarded(false);
+
         setReason("");
         setOverrideFidelity(false);
         setXeroAction(invoice.xero_invoice_id ? "update" : "manual");
