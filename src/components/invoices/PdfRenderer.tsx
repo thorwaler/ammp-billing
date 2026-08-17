@@ -248,7 +248,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
         head: [['Site', 'Asset ID', 'MWp', 'Band', `Rate/MWp/yr (${cur})`, `Cost (${cur})`]],
         body: [
           ...org.sites.map(site => [
-            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}${!site.mwp || site.mwp <= 0 ? ' — capacity not set' : ''}`,
+            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}${isAssetIgnored(site.assetId) ? ' — ignored (not relevant)' : !site.mwp || site.mwp <= 0 ? ' — capacity not set' : ''}`,
             site.assetId,
             site.mwp.toFixed(3),
             site.bucketLabel || '-',
