@@ -7,6 +7,8 @@ import {
   zeroCapacityMessage,
   zeroCapacityTotal,
 } from '@/lib/supportDocumentWarnings';
+import { isAssetIgnored } from '@/lib/ignoredAssets';
+
 
 const MARGIN = 14;
 const PAGE_WIDTH = 210;
