@@ -681,7 +681,18 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                                 placeholder={z.metric === "kva" ? "kVA" : "MWp"}
                                 className="h-8 w-24"
                               />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-xs whitespace-nowrap"
+                                title="Mark this site as not relevant — it stops raising zero-capacity alerts and warnings"
+                                onClick={() => toggleIgnoredAsset(z.assetId, z.assetName)}
+                              >
+                                <EyeOff className="h-3 w-3 mr-1" />
+                                {isIgnored(z.assetId) ? "Ignored" : "Ignore"}
+                              </Button>
                             </div>
+
                           ))}
                         </div>
                       ))}
