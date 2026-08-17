@@ -131,6 +131,7 @@ export function toSnapshotAssets(rawAssets: any[] | undefined | null): SnapshotA
     assetId: String(a.assetId ?? a.id ?? a.asset_id ?? ''),
     assetName: a.assetName ?? a.name ?? 'Unknown',
     totalMW: Number(a.totalMW ?? a.capacityMW ?? 0) || 0,
+    gensetKVA: a.gensetKVA != null ? Number(a.gensetKVA) : a.genset_capacity != null ? Number(a.genset_capacity) / 1000 : undefined,
     isEstimated: a.isEstimated ?? undefined,
     estimatedFromMW: a.estimatedFromMW ?? undefined,
     estimateSource: a.estimateSource ?? undefined,
