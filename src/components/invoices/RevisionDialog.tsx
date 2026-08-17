@@ -141,6 +141,47 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     };
   }, [open, invoice?.id]);
 
+  // Diff each contract against its own live data, then aggregate. Re-runs when
+  // an asset is marked as ignored so the zero lists update immediately.
+  useEffect(() => {
+    if (!open || !snapshot || Object.keys(liveByContract).length === 0) return;
+
+    const per = units.map((u) => {
+      const live = liveByContract[u.contractId];
+      const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
+      return {
+        contractId: u.contractId,
+        contractName: u.contractName,
+        diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || [], ignoredIds),
+        snapshotOrgs: u.orgs?.length || 0,
+        liveOrgs: live?.orgBreakdown?.length || 0,
+      };
+    });
+    setPerContractDiff(per);
+
+    const aggregate: SnapshotDiff = {
+      corrections: per.flatMap((p) => p.diff.corrections),
+      newlyOnboarded: per.flatMap((p) => p.diff.newlyOnboarded),
+      removed: per.flatMap((p) => p.diff.removed),
+      changed: per.flatMap((p) => p.diff.changed),
+      unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
+      stillZeroCount: per.reduce((s, p) => s + p.diff.stillZeroCount, 0),
+      stillZero: per.flatMap((p) => p.diff.stillZero),
+      snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
+      liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
+    };
+    setDiff(aggregate);
+
+    const correctionIds = new Set(aggregate.corrections.map((c) => c.assetId));
+    if (diffInitialisedFor.current === invoice?.id) {
+      setSelectedIds((prev) => prev.filter((id) => correctionIds.has(id)));
+    } else {
+      diffInitialisedFor.current = invoice?.id ?? null;
+      setSelectedIds([...correctionIds]);
+    }
+  }, [open, invoice?.id, liveByContract, ignoredKey]);
+
+
   /** Which unit an operator-entered number is expressed in, per asset. */
   const metricById = useMemo(() => {
     const m = new Map<string, "mw" | "kva">();
