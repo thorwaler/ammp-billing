@@ -502,9 +502,7 @@ export function MergedInvoiceDialog({
       // Update period dates for all included contracts and track prepaid-balance deltas
       const deltasByContract: Record<string, number> = {};
       for (const contract of selectedContractsList) {
-        const currentPeriodEnd = new Date(contract.nextInvoiceDate);
-        const nextPeriodStart = new Date(currentPeriodEnd);
-        nextPeriodStart.setDate(nextPeriodStart.getDate() + 1);
+        const { periodAfterInvoice } = await import('@/lib/invoiceScheduling');
 
         const contractUpdate: Record<string, any> = {};
         const result = calculationResults.get(contract.contractId);
@@ -533,12 +531,7 @@ export function MergedInvoiceDialog({
             billingFrequency: 'quarterly',
             annualBillingAnchorDate: anchor,
           });
-          const nextPeriodEnd = new Date(nextDate);
-          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
-
-          contractUpdate.period_start = nextPeriodStart.toISOString();
-          contractUpdate.period_end = nextPeriodEnd.toISOString();
-          contractUpdate.next_invoice_date = nextDate.toISOString();
+          Object.assign(contractUpdate, periodAfterInvoice(invoiceDt, 'quarterly', nextDate));
 
           const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
           if (wasAnnualCycle) {
@@ -559,12 +552,7 @@ export function MergedInvoiceDialog({
             billingFrequency: 'quarterly',
             annualBillingAnchorDate: anchor,
           });
-          const nextPeriodEnd = new Date(nextDate);
-          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
-
-          contractUpdate.period_start = nextPeriodStart.toISOString();
-          contractUpdate.period_end = nextPeriodEnd.toISOString();
-          contractUpdate.next_invoice_date = nextDate.toISOString();
+          Object.assign(contractUpdate, periodAfterInvoice(invoiceDt, 'quarterly', nextDate));
 
           const prevYtd = Number(contractRow?.ytd_invoiced_amount) || 0;
           if (wasAnnualCycle) {
@@ -575,26 +563,12 @@ export function MergedInvoiceDialog({
           }
           deltasByContract[contract.contractId] = Number(contractUpdate.ytd_invoiced_amount) - prevYtd;
         } else {
-          let nextPeriodEnd = new Date(nextPeriodStart);
-          switch (contract.billingFrequency) {
-            case 'monthly':
-              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
-              break;
-            case 'quarterly':
-              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 3);
-              break;
-            case 'biannual':
-              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 6);
-              break;
-            case 'annual':
-              nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
-              break;
-          }
-          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
-          contractUpdate.period_start = nextPeriodStart.toISOString();
-          contractUpdate.period_end = nextPeriodEnd.toISOString();
-          contractUpdate.next_invoice_date = nextPeriodEnd.toISOString();
+          Object.assign(
+            contractUpdate,
+            periodAfterInvoice(new Date(contract.nextInvoiceDate), contract.billingFrequency)
+          );
         }
+
 
         await supabase
           .from('contracts')
