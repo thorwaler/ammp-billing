@@ -578,12 +578,12 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                 {(diff?.corrections.length || 0) === 0 ? (
                   <p className="text-sm text-muted-foreground rounded-md border p-3">
                     No frozen site without capacity (0 MWp or no genset rating) reports a value in the current data.
-                    There is nothing to correct.
+                    Use the manual section below if you need to price one anyway.
                   </p>
                 ) : (
                   <div className="rounded-md border divide-y">
                     {diff!.corrections.map((c) => (
-                      <label key={c.assetId} className="flex items-center gap-3 p-2 text-sm cursor-pointer">
+                      <div key={c.assetId} className="flex items-center gap-3 p-2 text-sm">
                         <Checkbox
                           checked={selectedIds.includes(c.assetId)}
                           onCheckedChange={() => toggleAsset(c.assetId)}
@@ -593,17 +593,80 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                           {c.metric === "kva" && c.ratingUnknownAtFreeze && (
                             <span className="block text-xs text-muted-foreground">rating unknown at freeze</span>
                           )}
+                          {manualOverrides[c.assetId] && (
+                            <span className="block text-xs text-primary">manual value overrides the sync</span>
+                          )}
                         </span>
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground whitespace-nowrap">
                           {c.metric === "kva"
                             ? `${c.previousKVA ?? 0} → ${Number(c.newKVA || 0).toLocaleString()} kVA`
                             : `0 MW → ${c.newMW.toFixed(3)} MW`}
                         </span>
-                      </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={c.metric === "kva" ? 1 : 0.001}
+                          value={manualInputs[c.assetId] ?? ""}
+                          onChange={(e) => setManual(c.assetId, e.target.value)}
+                          placeholder={c.metric === "kva" ? "kVA" : "MWp"}
+                          className="h-8 w-24"
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
+
+              {(diff?.stillZero.length || 0) > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm font-medium">
+                      Still zero — set manually ({diff!.stillZero.length})
+                      {manualCount > 0 && (
+                        <span className="ml-1 font-normal text-muted-foreground">· {manualCount} set</span>
+                      )}
+                    </Label>
+                    {manualCount > 0 && (
+                      <Button variant="ghost" size="sm" onClick={() => setManualInputs({})}>
+                        Clear manual values
+                      </Button>
+                    )}
+                  </div>
+                  <div className="rounded-md border divide-y max-h-72 overflow-y-auto">
+                    {perContractDiff
+                      .filter((p) => p.diff.stillZero.length > 0)
+                      .map((p) => (
+                        <div key={p.contractId}>
+                          {isMerged && (
+                            <div className="bg-muted/50 px-2 py-1 text-xs font-medium">
+                              {p.contractName || p.contractId.slice(0, 8)}
+                            </div>
+                          )}
+                          {p.diff.stillZero.map((z) => (
+                            <div key={z.assetId} className="flex items-center gap-3 p-2 text-sm">
+                              <span className="flex-1 truncate">
+                                {z.assetName}
+                                <span className="block text-xs text-muted-foreground">
+                                  {z.metric === "kva" ? "no genset rating in AMMP" : "0 MWp in AMMP"}
+                                </span>
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={z.metric === "kva" ? 1 : 0.001}
+                                value={manualInputs[z.assetId] ?? ""}
+                                onChange={(e) => setManual(z.assetId, e.target.value)}
+                                placeholder={z.metric === "kva" ? "kVA" : "MWp"}
+                                className="h-8 w-24"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
 
               <Separator />
 
