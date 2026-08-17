@@ -131,6 +131,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           removed: per.flatMap((p) => p.diff.removed),
           changed: per.flatMap((p) => p.diff.changed),
           unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
+          stillZeroCount: per.reduce((s, p) => s + p.diff.stillZeroCount, 0),
           snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
           liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
         };
