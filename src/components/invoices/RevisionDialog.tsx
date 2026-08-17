@@ -470,14 +470,23 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                       <div key={p.contractId} className="flex justify-between border-b px-3 py-2 last:border-b-0">
                         <span className="truncate">{p.contractName || p.contractId.slice(0, 8)}</span>
                         <span className="text-muted-foreground">
-                          {p.diff.corrections.length} zero-MW · {p.diff.newlyOnboarded.length} new ·{" "}
-                          {unit ? fmt(unit.computation.result.totalPrice) : "—"}
+                          {p.diff.corrections.length} correctable
+                          {p.diff.stillZeroCount > 0 ? ` (${p.diff.stillZeroCount} still zero)` : ""} ·{" "}
+                          {p.diff.newlyOnboarded.length} new · {unit ? fmt(unit.computation.result.totalPrice) : "—"}
                         </span>
                       </div>
                     );
                   })}
                 </div>
               )}
+
+              <p className="text-xs text-muted-foreground">
+                "Correctable" counts only sites that were frozen without a usable capacity (0 MWp, or no genset rating
+                for Jubaili) and now report a real value in AMMP. Sites that are still zero cannot be corrected — there
+                is no new data to price them on.
+              </p>
+
+
 
 
               <div className="grid grid-cols-3 gap-3 text-sm">
