@@ -59,19 +59,29 @@ interface RevisionDialogProps {
 export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: RevisionDialogProps) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [liveAssets, setLiveAssets] = useState<LiveAsset[]>([]);
-  const [liveOrgBreakdown, setLiveOrgBreakdown] = useState<any[] | undefined>();
+  const [liveByContract, setLiveByContract] = useState<
+    Record<string, { assets: LiveAsset[]; orgBreakdown?: any[]; contract?: any; contractType?: any }>
+  >({});
   const [contractRow, setContractRow] = useState<any>(null);
   const [contractType, setContractType] = useState<any>(null);
   const [diff, setDiff] = useState<SnapshotDiff | null>(null);
+  const [perContractDiff, setPerContractDiff] = useState<
+    Array<{ contractId: string; contractName?: string; diff: SnapshotDiff; snapshotOrgs: number; liveOrgs: number }>
+  >([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [includeNewlyOnboarded, setIncludeNewlyOnboarded] = useState(false);
   const [reason, setReason] = useState("");
   const [xeroAction, setXeroAction] = useState<XeroAction>("update");
-  const [fidelity, setFidelity] = useState<{ ok: boolean; recomputed: number; frozen: number } | null>(null);
+  const [overrideFidelity, setOverrideFidelity] = useState(false);
+  const [fidelity, setFidelity] = useState<
+    { ok: boolean; recomputed: number; frozen: number; reproducible: boolean; reason?: string } | null
+  >(null);
 
   const snapshot: InvoiceInputSnapshot | null = (invoice?.input_snapshot as InvoiceInputSnapshot) || null;
   const currencySymbol = invoice?.currency === "USD" ? "$" : "€";
+  const units = useMemo(() => (snapshot ? revisionUnits(snapshot) : []), [snapshot]);
+  const isMerged = units.length > 1;
+  const legacyMerged = isLegacyMergedSnapshot(snapshot);
 
   useEffect(() => {
     if (!open || !invoice || !snapshot || !invoice.contract_id) return;
@@ -80,24 +90,58 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     (async () => {
       setLoading(true);
       try {
-        const live = await fetchLiveContractData(invoice.contract_id as string);
+        const loaded = await Promise.all(
+          units.map(async (u) => [u.contractId, await fetchLiveContractData(u.contractId)] as const),
+        );
         if (cancelled) return;
-        setLiveAssets(live.assets);
-        setLiveOrgBreakdown(live.orgBreakdown);
-        setContractRow(live.contract);
-        setContractType(live.contract?.contract_types || null);
 
-        const d = diffSnapshotAgainstLive(snapshot, live.assets);
-        setDiff(d);
-        setSelectedIds(d.corrections.map((c) => c.assetId));
+        const map: Record<string, any> = {};
+        for (const [id, live] of loaded) {
+          map[id] = {
+            assets: live.assets,
+            orgBreakdown: live.orgBreakdown,
+            contract: live.contract,
+            contractType: live.contractType,
+          };
+        }
+        setLiveByContract(map);
+        const primary = map[String(invoice.contract_id)] || loaded[0]?.[1];
+        setContractRow(primary?.contract || null);
+        setContractType(primary?.contractType || primary?.contract?.contract_types || null);
+
+        // Diff each contract against its own live data, then aggregate.
+        const per = units.map((u) => {
+          const live = map[u.contractId];
+          const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
+          return {
+            contractId: u.contractId,
+            contractName: u.contractName,
+            diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || []),
+            snapshotOrgs: u.orgs?.length || 0,
+            liveOrgs: live?.orgBreakdown?.length || 0,
+          };
+        });
+        setPerContractDiff(per);
+        const aggregate: SnapshotDiff = {
+          corrections: per.flatMap((p) => p.diff.corrections),
+          newlyOnboarded: per.flatMap((p) => p.diff.newlyOnboarded),
+          removed: per.flatMap((p) => p.diff.removed),
+          changed: per.flatMap((p) => p.diff.changed),
+          unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
+          snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
+          liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
+        };
+        setDiff(aggregate);
+        setSelectedIds(aggregate.corrections.map((c) => c.assetId));
         setIncludeNewlyOnboarded(false);
         setReason("");
+        setOverrideFidelity(false);
         setXeroAction(invoice.xero_invoice_id ? "update" : "manual");
         setFidelity(
           verifySnapshotReproduces(snapshot, {
             invoiceDate: new Date(invoice.invoice_date),
             billingFrequency: invoice.billing_frequency,
-            contractType: live.contract?.contract_types || null,
+            contractType: primary?.contractType || null,
           }),
         );
       } catch (e) {
@@ -119,9 +163,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   );
 
   const computation = useMemo(() => {
-    if (!snapshot || !invoice || loading) return null;
+    if (!snapshot || !invoice || loading || legacyMerged) return null;
     try {
-      return computeRevision(snapshot, liveAssets, liveOrgBreakdown, selection, {
+      return computeRevisionForInvoice(snapshot, liveByContract as any, selection, {
         invoiceDate: new Date(invoice.invoice_date),
         billingFrequency: invoice.billing_frequency,
         contractType,
@@ -130,9 +174,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
       console.error("[Revision] Recalculation failed:", e);
       return null;
     }
-  }, [snapshot, invoice?.id, liveAssets, liveOrgBreakdown, selection, contractType, loading]);
+  }, [snapshot, invoice?.id, liveByContract, selection, contractType, loading, legacyMerged]);
 
-  const newTotal = computation?.result?.totalPrice ?? 0;
+  const newTotal = computation?.totalPrice ?? 0;
+  const totalMW = computation?.totalMW ?? 0;
   const originalTotal = Number(invoice?.invoice_amount) || 0;
   const delta = newTotal - originalTotal;
 
@@ -141,6 +186,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
   const toggleAsset = (assetId: string) =>
     setSelectedIds((prev) => (prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]));
+
 
   const handleConfirm = async () => {
     if (!invoice || !snapshot || !computation) return;
