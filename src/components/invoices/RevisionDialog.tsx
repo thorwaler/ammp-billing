@@ -61,8 +61,12 @@ interface RevisionDialogProps {
 }
 
 export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: RevisionDialogProps) {
+  const { ignoredIds, isIgnored, toggle: toggleIgnoredAsset } = useIgnoredAssets();
+  const ignoredKey = useMemo(() => [...ignoredIds].sort().join(","), [ignoredIds]);
+  const diffInitialisedFor = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
   const [liveByContract, setLiveByContract] = useState<
     Record<string, { assets: LiveAsset[]; orgBreakdown?: any[]; contract?: any; contractType?: any }>
   >({});
