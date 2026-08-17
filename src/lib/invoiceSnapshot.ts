@@ -82,6 +82,12 @@ export interface InvoiceInputSnapshot {
   // Per-organisation tier/rate rows for Elum 2026 org-tier contracts.
   orgs?: SnapshotOrgRow[];
 
+  // For merged invoices: the per-contract inputs, each priced on its own.
+  // Absent on single-contract invoices and on merged invoices frozen before
+  // per-contract snapshots existed (those cannot be recomputed).
+  contracts?: SnapshotContractEntry[];
+
+
   // The Xero line items actually sent for this invoice.
   lineItems?: SnapshotLineItem[];
 
