@@ -152,7 +152,7 @@ export function diffSnapshotAgainstLive(
     }
 
     // Jubaili-style: no genset rating at freeze time, a real rating now.
-    if ((beforeKva == null || beforeKva === 0) && afterKva != null && afterKva > 0) {
+    if (kvaPricing && (beforeKva == null || beforeKva === 0) && afterKva != null && afterKva > 0) {
       corrections.push({
         assetId: id,
         assetName: live.assetName || snap.assetName || id,
@@ -168,18 +168,17 @@ export function diffSnapshotAgainstLive(
 
     if (before === after) {
       unchangedCount++;
-      if (before === 0 && (afterKva == null || afterKva === 0)) {
-        const kvaRelevant =
-          (snap as any).gensetKVA !== undefined || live.gensetKVA !== undefined;
+      if (before === 0 && (!kvaPricing || afterKva == null || afterKva === 0)) {
         stillZero.push({
           assetId: id,
           assetName: live.assetName || snap.assetName || id,
-          metric: kvaRelevant ? 'kva' : 'mw',
+          metric: kvaPricing ? 'kva' : 'mw',
           frozenMW: before,
           frozenKVA: beforeKva,
         });
       }
     } else {
+
       changed.push({
         assetId: id,
         assetName: live.assetName || snap.assetName || id,
