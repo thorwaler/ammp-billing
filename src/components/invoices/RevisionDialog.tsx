@@ -14,14 +14,17 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import {
-  computeRevision,
+  computeRevisionForInvoice,
   diffSnapshotAgainstLive,
   fetchLiveContractData,
+  isLegacyMergedSnapshot,
+  revisionUnits,
   verifySnapshotReproduces,
   type CorrectionSelection,
   type LiveAsset,
   type SnapshotDiff,
 } from "@/lib/invoiceRevision";
+
 import { buildContractLineItems } from "@/lib/xeroLineItems";
 import { buildSnapshotFields, type InvoiceInputSnapshot } from "@/lib/invoiceSnapshot";
 import { isPackage2026 } from "@/data/pricingData";
