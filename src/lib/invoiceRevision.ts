@@ -37,12 +37,19 @@ export interface LiveAsset {
 export interface ZeroMwCorrection {
   assetId: string;
   assetName: string;
-  previousMW: number; // always 0 for this class
+  /** Which input was missing at freeze time and now reports a value. */
+  metric: 'mw' | 'kva';
+  previousMW: number; // always 0 for the 'mw' class
   newMW: number;
+  /** kVA rating before/after (only meaningful for the 'kva' class). */
+  previousKVA?: number | null;
+  newKVA?: number | null;
+  /** True when the snapshot predates kVA capture, so "before" is unknown. */
+  ratingUnknownAtFreeze?: boolean;
 }
 
 export interface SnapshotDiff {
-  /** Assets frozen at 0 MW that now report a real capacity. */
+  /** Assets frozen without a usable capacity that now report one. */
   corrections: ZeroMwCorrection[];
   /** Assets present in live data but absent from the snapshot. */
   newlyOnboarded: LiveAsset[];
@@ -51,11 +58,14 @@ export interface SnapshotDiff {
   /** Assets whose MW changed but were not zero before. */
   changed: Array<{ assetId: string; assetName: string; previousMW: number; newMW: number }>;
   unchangedCount: number;
+  /** Assets still at 0 MW (and, for Jubaili, 0/no kVA) — nothing to correct. */
+  stillZeroCount: number;
   snapshotTotalMW: number;
   liveTotalMW: number;
 }
 
 const num = (v: any) => Number(v) || 0;
+const kva = (v: any) => (v == null || v === '' ? null : Number(v) || 0);
 
 /**
  * Classify every live asset against the frozen snapshot.
@@ -72,6 +82,7 @@ export function diffSnapshotAgainstLive(
   const changed: SnapshotDiff['changed'] = [];
   const newlyOnboarded: LiveAsset[] = [];
   let unchangedCount = 0;
+  let stillZeroCount = 0;
 
   for (const live of liveAssets || []) {
     const id = String(live.assetId);
@@ -82,15 +93,41 @@ export function diffSnapshotAgainstLive(
     }
     const before = num(snap.totalMW);
     const after = num(live.totalMW);
-    if (before === after) {
-      unchangedCount++;
-    } else if (before === 0 && after > 0) {
+    const beforeKva = kva((snap as any).gensetKVA);
+    const afterKva = kva(live.gensetKVA);
+    const ratingUnknownAtFreeze = (snap as any).gensetKVA === undefined;
+
+    if (before === 0 && after > 0) {
       corrections.push({
         assetId: id,
         assetName: live.assetName || snap.assetName || id,
+        metric: 'mw',
         previousMW: 0,
         newMW: after,
+        previousKVA: beforeKva,
+        newKVA: afterKva,
       });
+      continue;
+    }
+
+    // Jubaili-style: no genset rating at freeze time, a real rating now.
+    if ((beforeKva == null || beforeKva === 0) && afterKva != null && afterKva > 0) {
+      corrections.push({
+        assetId: id,
+        assetName: live.assetName || snap.assetName || id,
+        metric: 'kva',
+        previousMW: before,
+        newMW: after,
+        previousKVA: beforeKva,
+        newKVA: afterKva,
+        ratingUnknownAtFreeze,
+      });
+      continue;
+    }
+
+    if (before === after) {
+      unchangedCount++;
+      if (before === 0 && (afterKva == null || afterKva === 0)) stillZeroCount++;
     } else {
       changed.push({
         assetId: id,
@@ -111,6 +148,7 @@ export function diffSnapshotAgainstLive(
     removed,
     changed,
     unchangedCount,
+    stillZeroCount,
     snapshotTotalMW: snapAssets.reduce((s, a) => s + num(a.totalMW), 0),
     liveTotalMW: (liveAssets || []).reduce((s, a) => s + num(a.totalMW), 0),
   };
