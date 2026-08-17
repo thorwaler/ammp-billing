@@ -740,13 +740,18 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         <DialogFooter className="gap-2">
           <Badge variant="outline" className="mr-auto self-center">
             {selectedIds.length} correction{selectedIds.length === 1 ? "" : "s"} selected
+            {manualCount > 0 ? ` · ${manualCount} manual` : ""}
           </Badge>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!canRevise || submitting || (selectedIds.length === 0 && !includeNewlyOnboarded)}
+            disabled={
+              !canRevise ||
+              submitting ||
+              (selectedIds.length === 0 && manualCount === 0 && !includeNewlyOnboarded)
+            }
           >
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Create revised invoice
