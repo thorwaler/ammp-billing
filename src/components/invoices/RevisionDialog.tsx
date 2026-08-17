@@ -523,9 +523,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
               <p className="text-xs text-muted-foreground">
                 "Correctable" counts only sites that were frozen without a usable capacity (0 MWp, or no genset rating
-                for Jubaili) and now report a real value in AMMP. Sites that are still zero cannot be corrected — there
-                is no new data to price them on.
+                for Jubaili) and now report a real value in AMMP. Sites the sync still reports as zero can be given a
+                value by hand below — that number is used for this revision only and is not written back to AMMP.
               </p>
+
 
 
 
