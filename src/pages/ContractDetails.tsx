@@ -105,6 +105,9 @@ const ContractDetails = () => {
   const [moveTargetCustomerId, setMoveTargetCustomerId] = useState("");
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [isMoving, setIsMoving] = useState(false);
+  const { isIgnored: isAssetIgnoredLive, toggle: toggleIgnoredAsset } = useIgnoredAssets();
+
+
 
   // All contracts now use contract-level sync via cached_capabilities.
   // Elum 2026 org-tier contracts only carry elum_parent_org_id, so include it here.
