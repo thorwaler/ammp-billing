@@ -1480,12 +1480,10 @@ export function InvoiceCalculator({
             billingFrequency: 'quarterly',
             annualBillingAnchorDate: anchor,
           });
-          const nextPeriodEnd = new Date(nextDate);
-          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
-
-          contractUpdate.period_start = nextPeriodStart.toISOString();
-          contractUpdate.period_end = nextPeriodEnd.toISOString();
-          contractUpdate.next_invoice_date = nextDate.toISOString();
+          const spsPeriod = periodAfterInvoice(invoiceDate, 'quarterly', nextDate);
+          contractUpdate.period_start = spsPeriod.period_start;
+          contractUpdate.period_end = spsPeriod.period_end;
+          contractUpdate.next_invoice_date = spsPeriod.next_invoice_date;
 
           const sb = (result as any).spsAnnualUpfrontBreakdown;
           const prevYtdSps = Number(contractRow?.ytd_invoiced_amount) || 0;
@@ -1500,28 +1498,14 @@ export function InvoiceCalculator({
           }
 
         } else {
-          let nextPeriodEnd = new Date(nextPeriodStart);
-          switch (billingFrequency) {
-            case 'monthly':
-              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 1);
-              break;
-            case 'quarterly':
-              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 3);
-              break;
-            case 'biannual':
-              nextPeriodEnd.setMonth(nextPeriodEnd.getMonth() + 6);
-              break;
-            case 'annual':
-              nextPeriodEnd.setFullYear(nextPeriodEnd.getFullYear() + 1);
-              break;
-          }
-          // Subtract 1 day to get the last day of the period (not first day of next)
-          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
-
-          contractUpdate.period_start = nextPeriodStart.toISOString();
-          contractUpdate.period_end = nextPeriodEnd.toISOString();
-          contractUpdate.next_invoice_date = nextPeriodEnd.toISOString();
+          // Standard cadence: period_start = invoice date + 1 day,
+          // period_end === next_invoice_date (one frequency step later).
+          const stdPeriod = periodAfterInvoice(invoiceDate, billingFrequency);
+          contractUpdate.period_start = stdPeriod.period_start;
+          contractUpdate.period_end = stdPeriod.period_end;
+          contractUpdate.next_invoice_date = stdPeriod.next_invoice_date;
         }
+
 
 
         if (selectedCustomer.contractId) {
