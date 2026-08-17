@@ -147,7 +147,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
       head: [['Site', 'Genset (kVA)', 'Band', `Fee / year (${cur})`, `Cost (${cur})`]],
       body: [
         ...jub.sites.map(s => [
-          `${s.assetName}${s.kva == null || s.kva <= 0 ? ' — rating not set' : ''}`,
+          `${s.assetName}${isAssetIgnored(s.assetId) ? ' — ignored (not relevant)' : s.kva == null || s.kva <= 0 ? ' — rating not set' : ''}`,
           s.kva != null && s.kva > 0 ? s.kva.toFixed(0) : '-',
           s.status === 'unrated' ? 'Not rated — not billed' : `${s.bandLabel}${s.status === 'clamped' ? ' (clamped)' : ''}`,
           s.annualFee ? fmt(s.annualFee, cur) : '-',
