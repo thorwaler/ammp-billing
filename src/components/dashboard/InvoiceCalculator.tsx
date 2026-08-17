@@ -1454,12 +1454,12 @@ export function InvoiceCalculator({
             annualBillingAnchorDate: anchor,
           });
 
-          const nextPeriodEnd = new Date(nextDate);
-          nextPeriodEnd.setDate(nextPeriodEnd.getDate() - 1);
+          // period_end === next_invoice_date (shared convention).
+          const perMwPeriod = periodAfterInvoice(invoiceDate, 'quarterly', nextDate);
+          contractUpdate.period_start = perMwPeriod.period_start;
+          contractUpdate.period_end = perMwPeriod.period_end;
+          contractUpdate.next_invoice_date = perMwPeriod.next_invoice_date;
 
-          contractUpdate.period_start = nextPeriodStart.toISOString();
-          contractUpdate.period_end = nextPeriodEnd.toISOString();
-          contractUpdate.next_invoice_date = nextDate.toISOString();
 
           const prevYtdAnnual = Number(contractRow?.ytd_invoiced_amount) || 0;
           if (wasAnnualCycle) {
