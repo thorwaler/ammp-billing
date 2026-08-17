@@ -382,8 +382,20 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           xero_line_items: lineItems as any,
           prepaid_balance_delta: newPrepaidDelta,
           revised_from_invoice_id: invoice.id,
-          revision_reason: reason || null,
-          ...(snapshotFields ? { ...snapshotFields, input_snapshot: snapshotFields.input_snapshot as any } : {}),
+          revision_reason:
+            [reason, manualCount > 0 ? `${manualCount} site(s) set manually` : ""]
+              .filter(Boolean)
+              .join(" · ") || null,
+          ...(snapshotFields
+            ? {
+                ...snapshotFields,
+                input_snapshot: {
+                  ...(snapshotFields.input_snapshot as any),
+                  ...(manualCount > 0 ? { manualOverrides } : {}),
+                } as any,
+              }
+            : {}),
+
         } as any)
         .select("id")
         .single();
