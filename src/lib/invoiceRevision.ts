@@ -376,6 +376,127 @@ export interface RevisionComputation {
   totalMW: number;
 }
 
+/**
+ * A snapshot slice that can be priced on its own: either the whole
+ * single-contract snapshot or one contract of a merged invoice.
+ */
+interface RevisionUnit {
+  contractId: string;
+  contractName?: string;
+  contract: Record<string, any>;
+  assets: LiveAsset[];
+  orgs?: Array<Record<string, any>>;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  billingFrequency?: string;
+  frozenSubtotal?: number;
+}
+
+/** Split a snapshot into the units the revision has to price. */
+export function revisionUnits(snapshot: InvoiceInputSnapshot): RevisionUnit[] {
+  const entries = (snapshot as any)?.contracts;
+  if (Array.isArray(entries) && entries.length > 0) {
+    return entries.map((e: any) => ({
+      contractId: String(e.contractId),
+      contractName: e.contractName,
+      contract: (e.contract || {}) as Record<string, any>,
+      assets: (e.assets || []) as LiveAsset[],
+      orgs: e.orgs,
+      periodStart: e.periodStart ?? snapshot.periodStart,
+      periodEnd: e.periodEnd ?? snapshot.periodEnd,
+      billingFrequency: e.billingFrequency,
+      frozenSubtotal: e.subtotal,
+    }));
+  }
+  return [
+    {
+      contractId: String(snapshot.contractId),
+      contract: (snapshot.contract || {}) as Record<string, any>,
+      assets: (snapshot.assets || []) as LiveAsset[],
+      orgs: snapshot.orgs as any,
+      periodStart: snapshot.periodStart,
+      periodEnd: snapshot.periodEnd,
+      frozenSubtotal: num(snapshot?.totals?.invoiceAmount),
+    },
+  ];
+}
+
+/** True when the snapshot is a merged invoice that kept no per-contract inputs. */
+export function isLegacyMergedSnapshot(snapshot: InvoiceInputSnapshot | null | undefined): boolean {
+  if (!snapshot) return false;
+  const merged = (snapshot.contract as any)?.mergedContractIds;
+  const entries = (snapshot as any)?.contracts;
+  return Array.isArray(merged) && merged.length > 0 && !(Array.isArray(entries) && entries.length > 0);
+}
+
+function computeUnit(
+  unit: RevisionUnit,
+  liveAssets: LiveAsset[],
+  liveOrgBreakdown: OrgAssetGroup[] | undefined,
+  selection: CorrectionSelection,
+  opts: {
+    invoiceDate: Date;
+    billingFrequency: string;
+    contractType?: { modules_config?: any[]; addons_config?: any[] } | null;
+  },
+): RevisionComputation {
+  const pseudoSnapshot = {
+    assets: unit.assets,
+    contract: unit.contract,
+  } as unknown as InvoiceInputSnapshot;
+
+  const assets = applySelectedCorrections(pseudoSnapshot, liveAssets, selection);
+  const orgBreakdown = resolveOrgBreakdown(liveOrgBreakdown, unit.orgs, assets);
+  const params = buildParamsFromContractRow(unit.contract, {
+    assets,
+    orgBreakdown,
+    invoiceDate: opts.invoiceDate,
+    periodStart: unit.periodStart,
+    periodEnd: unit.periodEnd,
+    billingFrequency: unit.billingFrequency || opts.billingFrequency,
+    contractType: opts.contractType,
+  });
+  const result = calculateInvoice(params);
+  return { params, result, totalMW: params.totalMW };
+}
+
+export interface MergedRevisionComputation {
+  /** One computation per contract in the invoice (a single entry when not merged). */
+  units: Array<{ contractId: string; contractName?: string; computation: RevisionComputation }>;
+  totalPrice: number;
+  totalMW: number;
+}
+
+/**
+ * Recompute a whole invoice. Merged invoices are priced contract by contract
+ * and summed, exactly as they were when issued.
+ */
+export function computeRevisionForInvoice(
+  snapshot: InvoiceInputSnapshot,
+  liveByContract: Record<string, { assets: LiveAsset[]; orgBreakdown?: OrgAssetGroup[]; contractType?: any }>,
+  selection: CorrectionSelection,
+  opts: { invoiceDate: Date; billingFrequency: string; contractType?: any },
+): MergedRevisionComputation {
+  const units = revisionUnits(snapshot).map((unit) => {
+    const live = liveByContract[unit.contractId] || { assets: [] };
+    return {
+      contractId: unit.contractId,
+      contractName: unit.contractName,
+      computation: computeUnit(unit, live.assets || [], live.orgBreakdown, selection, {
+        invoiceDate: opts.invoiceDate,
+        billingFrequency: opts.billingFrequency,
+        contractType: live.contractType ?? opts.contractType,
+      }),
+    };
+  });
+
+  return {
+    units,
+    totalPrice: units.reduce((s, u) => s + num(u.computation.result.totalPrice), 0),
+    totalMW: units.reduce((s, u) => s + num(u.computation.totalMW), 0),
+  };
+}
+
 export function computeRevision(
   snapshot: InvoiceInputSnapshot,
   liveAssets: LiveAsset[],
@@ -387,19 +508,8 @@ export function computeRevision(
     contractType?: { modules_config?: any[]; addons_config?: any[] } | null;
   },
 ): RevisionComputation {
-  const assets = applySelectedCorrections(snapshot, liveAssets, selection);
-  const orgBreakdown = patchOrgBreakdown(liveOrgBreakdown, assets);
-  const params = buildParamsFromContractRow(snapshot.contract as Record<string, any>, {
-    assets,
-    orgBreakdown,
-    invoiceDate: opts.invoiceDate,
-    periodStart: snapshot.periodStart,
-    periodEnd: snapshot.periodEnd,
-    billingFrequency: opts.billingFrequency,
-    contractType: opts.contractType,
-  });
-  const result = calculateInvoice(params);
-  return { params, result, totalMW: params.totalMW };
+  const [unit] = revisionUnits(snapshot);
+  return computeUnit(unit, liveAssets, liveOrgBreakdown, selection, opts);
 }
 
 /**
@@ -410,22 +520,36 @@ export function computeRevision(
 export function verifySnapshotReproduces(
   snapshot: InvoiceInputSnapshot,
   opts: { invoiceDate: Date; billingFrequency: string; contractType?: any },
-): { ok: boolean; recomputed: number; frozen: number } {
+): { ok: boolean; recomputed: number; frozen: number; reproducible: boolean; reason?: string } {
   const frozen = num(snapshot?.totals?.invoiceAmount);
+  if (isLegacyMergedSnapshot(snapshot)) {
+    return {
+      ok: false,
+      recomputed: NaN,
+      frozen,
+      reproducible: false,
+      reason:
+        'This merged invoice was frozen before per-contract snapshots existed, so its inputs cannot be rebuilt.',
+    };
+  }
   try {
-    const { result } = computeRevision(
-      snapshot,
-      (snapshot.assets || []) as LiveAsset[],
-      undefined,
-      { mode: 'zero_mw_only', selectedAssetIds: [], includeNewlyOnboarded: false },
-      opts,
-    );
-    const recomputed = num(result.totalPrice);
-    return { ok: Math.abs(recomputed - frozen) < 0.51, recomputed, frozen };
+    const noCorrections: CorrectionSelection = {
+      mode: 'zero_mw_only',
+      selectedAssetIds: [],
+      includeNewlyOnboarded: false,
+    };
+    const liveByContract: Record<string, { assets: LiveAsset[]; orgBreakdown?: OrgAssetGroup[] }> = {};
+    for (const unit of revisionUnits(snapshot)) {
+      liveByContract[unit.contractId] = { assets: unit.assets };
+    }
+    const { totalPrice } = computeRevisionForInvoice(snapshot, liveByContract, noCorrections, opts);
+    const recomputed = num(totalPrice);
+    return { ok: Math.abs(recomputed - frozen) < 0.51, recomputed, frozen, reproducible: true };
   } catch {
-    return { ok: false, recomputed: NaN, frozen };
+    return { ok: false, recomputed: NaN, frozen, reproducible: true };
   }
 }
+
 
 /** Fetch the current (live) asset breakdown + org breakdown for a contract. */
 export async function fetchLiveContractData(contractId: string): Promise<{
