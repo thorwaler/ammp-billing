@@ -510,7 +510,12 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <Label className="text-sm font-medium">
-                    Zero-MW assets now reporting capacity ({diff?.corrections.length || 0})
+                    Sites now reporting capacity ({diff?.corrections.length || 0})
+                    {(diff?.stillZeroCount || 0) > 0 && (
+                      <span className="ml-1 font-normal text-muted-foreground">
+                        · {diff!.stillZeroCount} still zero
+                      </span>
+                    )}
                   </Label>
                   {(diff?.corrections.length || 0) > 0 && (
                     <div className="flex gap-2">
@@ -530,7 +535,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
                 {(diff?.corrections.length || 0) === 0 ? (
                   <p className="text-sm text-muted-foreground rounded-md border p-3">
-                    No frozen 0 MW asset has a capacity in the current data. There is nothing to correct.
+                    No frozen site without capacity (0 MWp or no genset rating) reports a value in the current data.
+                    There is nothing to correct.
                   </p>
                 ) : (
                   <div className="rounded-md border divide-y">
@@ -540,8 +546,17 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                           checked={selectedIds.includes(c.assetId)}
                           onCheckedChange={() => toggleAsset(c.assetId)}
                         />
-                        <span className="flex-1 truncate">{c.assetName}</span>
-                        <span className="text-muted-foreground">0 MW → {c.newMW.toFixed(3)} MW</span>
+                        <span className="flex-1 truncate">
+                          {c.assetName}
+                          {c.metric === "kva" && c.ratingUnknownAtFreeze && (
+                            <span className="block text-xs text-muted-foreground">rating unknown at freeze</span>
+                          )}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {c.metric === "kva"
+                            ? `${c.previousKVA ?? 0} → ${Number(c.newKVA || 0).toLocaleString()} kVA`
+                            : `0 MW → ${c.newMW.toFixed(3)} MW`}
+                        </span>
                       </label>
                     ))}
                   </div>
