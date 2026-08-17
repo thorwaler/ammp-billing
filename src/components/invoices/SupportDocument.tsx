@@ -5,6 +5,8 @@ import {
   zeroCapacityMessage,
   zeroCapacityTotal,
 } from "@/lib/supportDocumentWarnings";
+import { isAssetIgnored } from "@/lib/ignoredAssets";
+
 
 interface SupportDocumentProps {
   data: SupportDocumentData;
