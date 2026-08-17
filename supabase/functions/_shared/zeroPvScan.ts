@@ -46,13 +46,20 @@ export async function runZeroPvScan(
     contractsScanned: (contracts ?? []).length,
   };
 
+  // Assets marked as not relevant ("zombie" sites) never raise zero-PV alerts.
+  const { data: ignoredRows } = await supabase.from("ignored_assets").select("asset_id");
+  const ignored = new Set((ignoredRows ?? []).map((r: any) => String(r.asset_id)));
+
   for (const c of (contracts ?? []) as ContractRow[]) {
     const assets: any[] =
       c.cached_capabilities?.assetBreakdown ?? c.cached_capabilities?.assets ?? [];
-    const zeroAssets = assets.filter((a) => Number(a?.totalMW ?? 0) === 0 && a?.assetId);
+    const zeroAssets = assets.filter(
+      (a) => Number(a?.totalMW ?? 0) === 0 && a?.assetId && !ignored.has(String(a.assetId))
+    );
     const nonZeroIds = new Set(
       assets.filter((a) => Number(a?.totalMW ?? 0) > 0 && a?.assetId).map((a) => a.assetId)
     );
+
 
     // Resolve incidents that now have non-zero capacity.
     const { data: openIncidents } = await supabase
