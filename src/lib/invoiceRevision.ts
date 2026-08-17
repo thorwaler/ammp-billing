@@ -89,11 +89,17 @@ export function diffSnapshotAgainstLive(
   snapshot: InvoiceInputSnapshot,
   liveAssets: LiveAsset[],
   ignoredAssetIds?: Set<string> | Iterable<string>,
+  options?: { packageType?: string | null; kvaPricing?: boolean },
 ): SnapshotDiff {
+  // Genset ratings only price the Elum Jubaili package; every other contract
+  // is priced in MWp, so its zero rows must be expressed in MWp.
+  const kvaPricing =
+    options?.kvaPricing ?? options?.packageType === 'elum_jubaili';
   const ignored =
     ignoredAssetIds instanceof Set
       ? ignoredAssetIds
       : new Set([...(ignoredAssetIds || [])].map(String));
+
   const snapAssets = Array.isArray(snapshot?.assets) ? snapshot.assets : [];
   const snapById = new Map(snapAssets.map((a) => [String(a.assetId), a]));
   const liveById = new Map((liveAssets || []).map((a) => [String(a.assetId), a]));
