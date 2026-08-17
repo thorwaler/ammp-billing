@@ -499,7 +499,16 @@ export function MergedInvoiceDialog({
         description: "Merged invoice has been created as a draft.",
       });
       
+      // Capture each contract's full row BEFORE the period dates advance, so
+      // the frozen snapshot can rebuild every contract's pricing later.
+      const { data: preUpdateRows } = await supabase
+        .from('contracts')
+        .select('*')
+        .in('id', selectedContractsList.map(c => c.contractId));
+      const preUpdateById = new Map<string, any>((preUpdateRows || []).map((r: any) => [r.id, r]));
+
       // Update period dates for all included contracts and track prepaid-balance deltas
+
       const deltasByContract: Record<string, number> = {};
       for (const contract of selectedContractsList) {
         const { periodAfterInvoice } = await import('@/lib/invoiceScheduling');
