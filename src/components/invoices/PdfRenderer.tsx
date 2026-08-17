@@ -7,6 +7,8 @@ import {
   zeroCapacityMessage,
   zeroCapacityTotal,
 } from '@/lib/supportDocumentWarnings';
+import { isAssetIgnored } from '@/lib/ignoredAssets';
+
 
 const MARGIN = 14;
 const PAGE_WIDTH = 210;
@@ -147,7 +149,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
       head: [['Site', 'Genset (kVA)', 'Band', `Fee / year (${cur})`, `Cost (${cur})`]],
       body: [
         ...jub.sites.map(s => [
-          `${s.assetName}${s.kva == null || s.kva <= 0 ? ' — rating not set' : ''}`,
+          `${s.assetName}${isAssetIgnored(s.assetId) ? ' — ignored (not relevant)' : s.kva == null || s.kva <= 0 ? ' — rating not set' : ''}`,
           s.kva != null && s.kva > 0 ? s.kva.toFixed(0) : '-',
           s.status === 'unrated' ? 'Not rated — not billed' : `${s.bandLabel}${s.status === 'clamped' ? ' (clamped)' : ''}`,
           s.annualFee ? fmt(s.annualFee, cur) : '-',
@@ -246,7 +248,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
         head: [['Site', 'Asset ID', 'MWp', 'Band', `Rate/MWp/yr (${cur})`, `Cost (${cur})`]],
         body: [
           ...org.sites.map(site => [
-            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}${!site.mwp || site.mwp <= 0 ? ' — capacity not set' : ''}`,
+            `${site.assetName}${site.isMwhOverride ? ' (battery-only, MWh)' : ''}${isAssetIgnored(site.assetId) ? ' — ignored (not relevant)' : !site.mwp || site.mwp <= 0 ? ' — capacity not set' : ''}`,
             site.assetId,
             site.mwp.toFixed(3),
             site.bucketLabel || '-',

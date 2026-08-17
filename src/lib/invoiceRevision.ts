@@ -81,14 +81,23 @@ const kva = (v: any) => (v == null || v === '' ? null : Number(v) || 0);
 
 /**
  * Classify every live asset against the frozen snapshot.
+ *
+ * `ignoredAssetIds` — assets marked as not relevant ("zombie" sites). They are
+ * kept in the pricing but never surface as a correction or a still-zero row.
  */
 export function diffSnapshotAgainstLive(
   snapshot: InvoiceInputSnapshot,
   liveAssets: LiveAsset[],
+  ignoredAssetIds?: Set<string> | Iterable<string>,
 ): SnapshotDiff {
+  const ignored =
+    ignoredAssetIds instanceof Set
+      ? ignoredAssetIds
+      : new Set([...(ignoredAssetIds || [])].map(String));
   const snapAssets = Array.isArray(snapshot?.assets) ? snapshot.assets : [];
   const snapById = new Map(snapAssets.map((a) => [String(a.assetId), a]));
   const liveById = new Map((liveAssets || []).map((a) => [String(a.assetId), a]));
+
 
   const corrections: ZeroMwCorrection[] = [];
   const changed: SnapshotDiff['changed'] = [];
@@ -101,16 +110,29 @@ export function diffSnapshotAgainstLive(
     const id = String(live.assetId);
     const snap = snapById.get(id);
     if (!snap) {
-      newlyOnboarded.push(live);
+      if (!ignored.has(id)) newlyOnboarded.push(live);
       continue;
     }
+    const isIgnored = ignored.has(id);
     const before = num(snap.totalMW);
     const after = num(live.totalMW);
     const beforeKva = kva((snap as any).gensetKVA);
     const afterKva = kva(live.gensetKVA);
     const ratingUnknownAtFreeze = (snap as any).gensetKVA === undefined;
 
+    if (isIgnored) {
+      if (before === after) unchangedCount++;
+      else changed.push({
+        assetId: id,
+        assetName: live.assetName || snap.assetName || id,
+        previousMW: before,
+        newMW: after,
+      });
+      continue;
+    }
+
     if (before === 0 && after > 0) {
+
       corrections.push({
         assetId: id,
         assetName: live.assetName || snap.assetName || id,

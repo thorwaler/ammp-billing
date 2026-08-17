@@ -19,6 +19,9 @@ import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
 import { DuplicateContractDialog } from "@/components/contracts/DuplicateContractDialog";
+import { useIgnoredAssets } from "@/hooks/useIgnoredAssets";
+import { Switch } from "@/components/ui/switch";
+
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { CustomAssetPricing } from "@/lib/invoiceCalculations";
@@ -102,6 +105,9 @@ const ContractDetails = () => {
   const [moveTargetCustomerId, setMoveTargetCustomerId] = useState("");
   const [allCustomers, setAllCustomers] = useState<any[]>([]);
   const [isMoving, setIsMoving] = useState(false);
+  const { isIgnored: isAssetIgnoredLive, toggle: toggleIgnoredAsset } = useIgnoredAssets();
+
+
 
   // All contracts now use contract-level sync via cached_capabilities.
   // Elum 2026 org-tier contracts only carry elum_parent_org_id, so include it here.
@@ -1806,6 +1812,7 @@ const ContractDetails = () => {
                       <th className="text-center p-2 font-medium">Hybrid</th>
                       <th className="text-center p-2 font-medium">Solcast</th>
                       <th className="text-center p-2 font-medium">Discount</th>
+                      <th className="text-center p-2 font-medium" title="Ignore this site for zero-capacity alerts and warnings">Ignore</th>
                       <th className="text-right p-2 font-medium">Devices</th>
                     </tr>
                   </thead>
@@ -1813,13 +1820,20 @@ const ContractDetails = () => {
                     {cachedCapabilities.assetBreakdown.map((asset: any) => {
                       const discount = getAssetDiscount(asset.assetId);
                       const category = assetCategoryMap.get(asset.assetId);
+                      const ignored = isAssetIgnoredLive(asset.assetId);
                       return (
                         <tr 
                           key={asset.assetId} 
-                          className={`border-t hover:bg-muted/50 cursor-pointer ${discount ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}`}
+                          className={`border-t hover:bg-muted/50 cursor-pointer ${discount ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''} ${ignored ? 'opacity-60' : ''}`}
                           onClick={() => setSelectedAsset(asset)}
                         >
-                          <td className="p-2">{asset.assetName}</td>
+                          <td className="p-2">
+                            {asset.assetName}
+                            {ignored && (
+                              <Badge variant="outline" className="ml-2 text-xs">Ignored</Badge>
+                            )}
+                          </td>
+
                           {showCategoryColumn && (
                             <td className="p-2">
                               {category ? (
@@ -1869,7 +1883,15 @@ const ContractDetails = () => {
                               </Button>
                             )}
                           </td>
+                          <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={ignored}
+                              onCheckedChange={() => toggleIgnoredAsset(asset.assetId, asset.assetName)}
+                              aria-label={`Ignore ${asset.assetName} for alerts`}
+                            />
+                          </td>
                           <td className="p-2 text-right">{asset.deviceCount || '-'}</td>
+
                         </tr>
                       );
                     })}

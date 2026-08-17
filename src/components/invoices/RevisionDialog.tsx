@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useIgnoredAssets } from "@/hooks/useIgnoredAssets";
+
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertTriangle, RotateCcw } from "lucide-react";
+import { Loader2, AlertTriangle, RotateCcw, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -61,8 +63,12 @@ interface RevisionDialogProps {
 }
 
 export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: RevisionDialogProps) {
+  const { ignoredIds, isIgnored, toggle: toggleIgnoredAsset } = useIgnoredAssets();
+  const ignoredKey = useMemo(() => [...ignoredIds].sort().join(","), [ignoredIds]);
+  const diffInitialisedFor = useRef<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
   const [liveByContract, setLiveByContract] = useState<
     Record<string, { assets: LiveAsset[]; orgBreakdown?: any[]; contract?: any; contractType?: any }>
   >({});
@@ -115,35 +121,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         setContractRow(primary?.contract || null);
         setContractType(primary?.contractType || primary?.contract?.contract_types || null);
 
-        // Diff each contract against its own live data, then aggregate.
-        const per = units.map((u) => {
-          const live = map[u.contractId];
-          const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
-          return {
-            contractId: u.contractId,
-            contractName: u.contractName,
-            diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || []),
-            snapshotOrgs: u.orgs?.length || 0,
-            liveOrgs: live?.orgBreakdown?.length || 0,
-          };
-        });
-        setPerContractDiff(per);
-        const aggregate: SnapshotDiff = {
-          corrections: per.flatMap((p) => p.diff.corrections),
-          newlyOnboarded: per.flatMap((p) => p.diff.newlyOnboarded),
-          removed: per.flatMap((p) => p.diff.removed),
-          changed: per.flatMap((p) => p.diff.changed),
-          unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
-          stillZeroCount: per.reduce((s, p) => s + p.diff.stillZeroCount, 0),
-          stillZero: per.flatMap((p) => p.diff.stillZero),
-          snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
-          liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
-        };
-
-        setDiff(aggregate);
-        setSelectedIds(aggregate.corrections.map((c) => c.assetId));
         setManualInputs({});
         setIncludeNewlyOnboarded(false);
+
         setReason("");
         setOverrideFidelity(false);
         setXeroAction(invoice.xero_invoice_id ? "update" : "manual");
@@ -166,6 +146,47 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
       cancelled = true;
     };
   }, [open, invoice?.id]);
+
+  // Diff each contract against its own live data, then aggregate. Re-runs when
+  // an asset is marked as ignored so the zero lists update immediately.
+  useEffect(() => {
+    if (!open || !snapshot || Object.keys(liveByContract).length === 0) return;
+
+    const per = units.map((u) => {
+      const live = liveByContract[u.contractId];
+      const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
+      return {
+        contractId: u.contractId,
+        contractName: u.contractName,
+        diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || [], ignoredIds),
+        snapshotOrgs: u.orgs?.length || 0,
+        liveOrgs: live?.orgBreakdown?.length || 0,
+      };
+    });
+    setPerContractDiff(per);
+
+    const aggregate: SnapshotDiff = {
+      corrections: per.flatMap((p) => p.diff.corrections),
+      newlyOnboarded: per.flatMap((p) => p.diff.newlyOnboarded),
+      removed: per.flatMap((p) => p.diff.removed),
+      changed: per.flatMap((p) => p.diff.changed),
+      unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
+      stillZeroCount: per.reduce((s, p) => s + p.diff.stillZeroCount, 0),
+      stillZero: per.flatMap((p) => p.diff.stillZero),
+      snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
+      liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
+    };
+    setDiff(aggregate);
+
+    const correctionIds = new Set(aggregate.corrections.map((c) => c.assetId));
+    if (diffInitialisedFor.current === invoice?.id) {
+      setSelectedIds((prev) => prev.filter((id) => correctionIds.has(id)));
+    } else {
+      diffInitialisedFor.current = invoice?.id ?? null;
+      setSelectedIds([...correctionIds]);
+    }
+  }, [open, invoice?.id, liveByContract, ignoredKey]);
+
 
   /** Which unit an operator-entered number is expressed in, per asset. */
   const metricById = useMemo(() => {
@@ -660,7 +681,18 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                                 placeholder={z.metric === "kva" ? "kVA" : "MWp"}
                                 className="h-8 w-24"
                               />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-2 text-xs whitespace-nowrap"
+                                title="Mark this site as not relevant — it stops raising zero-capacity alerts and warnings"
+                                onClick={() => toggleIgnoredAsset(z.assetId, z.assetName)}
+                              >
+                                <EyeOff className="h-3 w-3 mr-1" />
+                                {isIgnored(z.assetId) ? "Ignored" : "Ignore"}
+                              </Button>
                             </div>
+
                           ))}
                         </div>
                       ))}

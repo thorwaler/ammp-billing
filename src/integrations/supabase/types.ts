@@ -784,6 +784,33 @@ export type Database = {
         }
         Relationships: []
       }
+      ignored_assets: {
+        Row: {
+          asset_id: string
+          asset_name: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          asset_id: string
+          asset_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          asset_id?: string
+          asset_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       inflation_reference_rates: {
         Row: {
           created_at: string
