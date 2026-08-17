@@ -620,6 +620,21 @@ export function MergedInvoiceDialog({
             ),
             orgBreakdown: selectedContractsList.flatMap(c => c.cachedCapabilities?.orgBreakdown || []),
           },
+          // Per-contract inputs: a merged invoice is priced contract by
+          // contract, so each one keeps its own row, assets, orgs and period.
+          contracts: selectedContractsList.map(c => {
+            const row = preUpdateById.get(c.contractId) || {};
+            return {
+              contractId: c.contractId,
+              contractName: c.contractName || c.customerName,
+              billingFrequency: c.billingFrequency,
+              periodStart: row.period_start ?? null,
+              periodEnd: row.period_end ?? c.nextInvoiceDate ?? null,
+              subtotal: calculationResults.get(c.contractId)?.totalPrice ?? 0,
+              contract: row,
+              capabilities: c.cachedCapabilities || row.cached_capabilities || {},
+            };
+          }),
           lineItems: lineItems as any,
           totals: {
             invoiceAmount: totalAmount,
@@ -628,6 +643,7 @@ export function MergedInvoiceDialog({
             totalMW,
           },
         });
+
 
         const { data: insertedMergedInvoice } = await supabase.from('invoices').insert([{
 
