@@ -387,7 +387,14 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     }
   };
 
-  const canRevise = !!snapshot && !!invoice?.contract_id && !!computation && !loading;
+  const canRevise =
+    !!snapshot &&
+    !!invoice?.contract_id &&
+    !!computation &&
+    !loading &&
+    !legacyMerged &&
+    (fidelity?.ok !== false || overrideFidelity);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
