@@ -94,7 +94,8 @@ export function diffSnapshotAgainstLive(
   const changed: SnapshotDiff['changed'] = [];
   const newlyOnboarded: LiveAsset[] = [];
   let unchangedCount = 0;
-  let stillZeroCount = 0;
+  const stillZero: StillZeroAsset[] = [];
+
 
   for (const live of liveAssets || []) {
     const id = String(live.assetId);
