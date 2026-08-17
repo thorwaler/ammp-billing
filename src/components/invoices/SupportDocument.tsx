@@ -397,10 +397,13 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                       <td className="border border-border p-1">
                         {site.assetName}
                         {site.isMwhOverride ? ' (battery-only, MWh entered as capacity)' : ''}
-                        {!site.mwp || site.mwp <= 0 ? (
+                        {isAssetIgnored(site.assetId) ? (
+                          <span className="text-muted-foreground"> — ignored (not relevant)</span>
+                        ) : !site.mwp || site.mwp <= 0 ? (
                           <span className="text-destructive"> — capacity not set</span>
                         ) : null}
                       </td>
+
                       <td className="border border-border p-1">{site.assetId}</td>
                       <td className="border border-border p-1 text-right">{site.mwp.toFixed(3)}</td>
                       <td className="border border-border p-1">{site.bucketLabel || '—'}</td>
