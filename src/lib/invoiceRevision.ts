@@ -192,12 +192,21 @@ export function applySelectedCorrections(
   const result: LiveAsset[] = snapAssets.map((snap) => {
     const id = String(snap.assetId);
     const live = liveById.get(id);
-    const useLiveMW = live && picked.has(id) && num(snap.totalMW) === 0 && num(live.totalMW) > 0;
+    const isPicked = !!live && picked.has(id);
+    const useLiveMW = isPicked && num(snap.totalMW) === 0 && num(live!.totalMW) > 0;
+    const snapKva = (snap as any).gensetKVA;
+    const liveKva = kva(live?.gensetKVA);
+    const useLiveKva =
+      isPicked && (kva(snapKva) == null || kva(snapKva) === 0) && liveKva != null && liveKva > 0;
+    // Unpicked assets keep their frozen rating; legacy snapshots without a
+    // stored rating fall back to live data (that is what was frozen).
+    const frozenKva = snapKva === undefined ? liveKva : kva(snapKva);
     return {
       ...(live || {}),
       assetId: id,
       assetName: live?.assetName || snap.assetName,
       totalMW: useLiveMW ? num(live!.totalMW) : num(snap.totalMW),
+      gensetKVA: useLiveKva ? liveKva : frozenKva,
     };
   });
 
