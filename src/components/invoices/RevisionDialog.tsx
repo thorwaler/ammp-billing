@@ -195,26 +195,38 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     if (!invoice || !snapshot || !computation) return;
     setSubmitting(true);
     try {
-      const result = computation.result;
-      const packageType = computation.params.packageType;
-      const trial = !!contractRow?.is_trial && isPackage2026(packageType);
-
-      const lineItems = buildContractLineItems({
-        result,
-        packageType,
-        currencySymbol,
-        accountCode: ACCOUNT_PLATFORM_FEES,
-        implementationAccountCode: ACCOUNT_IMPLEMENTATION_FEES,
-        mwManaged: computation.totalMW,
-        isTrial: trial,
-        trialSetupFee: trial ? Number(contractRow?.trial_setup_fee) || 0 : 0,
-        vendorApiOnboardingFee: trial ? Number(contractRow?.vendor_api_onboarding_fee) || 0 : 0,
+      // Build the Xero lines contract by contract, so merged invoices keep one
+      // labelled block per contract exactly as they were originally issued.
+      const lineItems = computation.units.flatMap(({ contractId, contractName, computation: comp }) => {
+        const row = liveByContract[contractId]?.contract || contractRow;
+        const packageType = comp.params.packageType;
+        const trial = !!row?.is_trial && isPackage2026(packageType);
+        const lines = buildContractLineItems({
+          result: comp.result,
+          packageType,
+          currencySymbol,
+          accountCode: ACCOUNT_PLATFORM_FEES,
+          implementationAccountCode: ACCOUNT_IMPLEMENTATION_FEES,
+          mwManaged: comp.totalMW,
+          isTrial: trial,
+          trialSetupFee: trial ? Number(row?.trial_setup_fee) || 0 : 0,
+          vendorApiOnboardingFee: trial ? Number(row?.vendor_api_onboarding_fee) || 0 : 0,
+        });
+        if (!isMerged) return lines;
+        const label = contractName || row?.contract_name || row?.company_name || "Contract";
+        return lines.map((li) => ({ ...li, Description: `[${label}] ${li.Description}` }));
       });
+
+      const revisedAssets = computation.units.flatMap((u) => u.computation.params.assetBreakdown || []);
+      const revisedOrgs = computation.units.flatMap(
+        (u) => (u.computation.params.orgBreakdown as any[]) || [],
+      );
 
       const sumFor = (code: string) =>
         lineItems.filter((li) => li.AccountCode === code).reduce((s, li) => s + (li.UnitAmount || 0), 0);
       const arrAmount = sumFor(ACCOUNT_PLATFORM_FEES);
       const nrrAmount = sumFor(ACCOUNT_IMPLEMENTATION_FEES);
+
 
       // Xero: update the existing invoice in place, or void it and issue a new draft.
       let newXeroInvoiceId: string | null = invoice.xero_invoice_id;
