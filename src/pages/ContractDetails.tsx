@@ -1883,7 +1883,15 @@ const ContractDetails = () => {
                               </Button>
                             )}
                           </td>
+                          <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <Switch
+                              checked={ignored}
+                              onCheckedChange={() => toggleIgnoredAsset(asset.assetId, asset.assetName)}
+                              aria-label={`Ignore ${asset.assetName} for alerts`}
+                            />
+                          </td>
                           <td className="p-2 text-right">{asset.deviceCount || '-'}</td>
+
                         </tr>
                       );
                     })}
