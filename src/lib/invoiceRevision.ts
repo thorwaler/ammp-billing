@@ -140,7 +140,17 @@ export function diffSnapshotAgainstLive(
 
     if (before === after) {
       unchangedCount++;
-      if (before === 0 && (afterKva == null || afterKva === 0)) stillZeroCount++;
+      if (before === 0 && (afterKva == null || afterKva === 0)) {
+        const kvaRelevant =
+          (snap as any).gensetKVA !== undefined || live.gensetKVA !== undefined;
+        stillZero.push({
+          assetId: id,
+          assetName: live.assetName || snap.assetName || id,
+          metric: kvaRelevant ? 'kva' : 'mw',
+          frozenMW: before,
+          frozenKVA: beforeKva,
+        });
+      }
     } else {
       changed.push({
         assetId: id,
@@ -161,11 +171,13 @@ export function diffSnapshotAgainstLive(
     removed,
     changed,
     unchangedCount,
-    stillZeroCount,
+    stillZeroCount: stillZero.length,
+    stillZero,
     snapshotTotalMW: snapAssets.reduce((s, a) => s + num(a.totalMW), 0),
     liveTotalMW: (liveAssets || []).reduce((s, a) => s + num(a.totalMW), 0),
   };
 }
+
 
 export interface CorrectionSelection {
   mode: RevisionMode;
