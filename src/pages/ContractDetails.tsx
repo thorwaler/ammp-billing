@@ -1812,6 +1812,7 @@ const ContractDetails = () => {
                       <th className="text-center p-2 font-medium">Hybrid</th>
                       <th className="text-center p-2 font-medium">Solcast</th>
                       <th className="text-center p-2 font-medium">Discount</th>
+                      <th className="text-center p-2 font-medium" title="Ignore this site for zero-capacity alerts and warnings">Ignore</th>
                       <th className="text-right p-2 font-medium">Devices</th>
                     </tr>
                   </thead>
@@ -1819,13 +1820,20 @@ const ContractDetails = () => {
                     {cachedCapabilities.assetBreakdown.map((asset: any) => {
                       const discount = getAssetDiscount(asset.assetId);
                       const category = assetCategoryMap.get(asset.assetId);
+                      const ignored = isAssetIgnoredLive(asset.assetId);
                       return (
                         <tr 
                           key={asset.assetId} 
-                          className={`border-t hover:bg-muted/50 cursor-pointer ${discount ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''}`}
+                          className={`border-t hover:bg-muted/50 cursor-pointer ${discount ? 'bg-amber-50/50 dark:bg-amber-950/10' : ''} ${ignored ? 'opacity-60' : ''}`}
                           onClick={() => setSelectedAsset(asset)}
                         >
-                          <td className="p-2">{asset.assetName}</td>
+                          <td className="p-2">
+                            {asset.assetName}
+                            {ignored && (
+                              <Badge variant="outline" className="ml-2 text-xs">Ignored</Badge>
+                            )}
+                          </td>
+
                           {showCategoryColumn && (
                             <td className="p-2">
                               {category ? (
