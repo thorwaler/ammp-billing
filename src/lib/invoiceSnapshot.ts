@@ -15,6 +15,8 @@ export interface SnapshotAsset {
   assetId: string;
   assetName: string;
   totalMW: number;
+  /** Genset rating in kVA at freeze time (Jubaili banded pricing). */
+  gensetKVA?: number | null;
   isEstimated?: boolean;
   estimatedFromMW?: number;
   estimateSource?: string;
