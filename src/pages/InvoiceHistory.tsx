@@ -273,37 +273,15 @@ export default function InvoiceHistory() {
       }
 
       if (contractIds.length > 0) {
-        const periodEnd = new Date(invoiceDate);
-        periodEnd.setDate(periodEnd.getDate() - 1);
-
-        const previousPeriodStart = new Date(periodEnd);
-        switch (billingFrequency) {
-          case 'monthly':
-            previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 1);
-            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
-            break;
-          case 'quarterly':
-            previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 3);
-            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
-            break;
-          case 'biannual':
-            previousPeriodStart.setMonth(previousPeriodStart.getMonth() - 6);
-            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
-            break;
-          case 'annual':
-            previousPeriodStart.setFullYear(previousPeriodStart.getFullYear() - 1);
-            previousPeriodStart.setDate(previousPeriodStart.getDate() + 1);
-            break;
-        }
+        // Restore the period this invoice closed: period_end === next_invoice_date === invoice date.
+        const { periodForInvoiceDate } = await import('@/lib/invoiceScheduling');
+        const restored = periodForInvoiceDate(invoiceDate, billingFrequency);
 
         const { error: updateError } = await supabase
           .from('contracts')
-          .update({
-            next_invoice_date: invoiceDate.toISOString(),
-            period_start: previousPeriodStart.toISOString(),
-            period_end: periodEnd.toISOString()
-          })
+          .update(restored)
           .in('id', contractIds);
+
 
         if (updateError) {
           console.error('Error updating contracts:', updateError);
