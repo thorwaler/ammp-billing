@@ -122,3 +122,82 @@ export function monthsInPeriod(periodStart?: string | null, periodEnd?: string |
   return Math.max(1, months);
 }
 
+/* ------------------------------------------------------------------ *
+ * Billing-period convention (single source of truth)
+ *
+ *   period_end  === next_invoice_date   (the invoice date closes the period)
+ *   period_start === previous invoice date + 1 day
+ *
+ * All arithmetic is done on UTC components so a stored UTC-midnight
+ * timestamp always keeps its calendar day, regardless of the client's
+ * local timezone.
+ * ------------------------------------------------------------------ */
+
+export interface ContractPeriodDates {
+  period_start: string;
+  period_end: string;
+  next_invoice_date: string;
+}
+
+function toUtcDate(value: string | Date): Date {
+  return typeof value === "string" ? new Date(value) : new Date(value.getTime());
+}
+
+function addUtcDays(date: Date, days: number): Date {
+  const d = new Date(date.getTime());
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+
+/** Shift a UTC date by one billing frequency (positive or negative). */
+export function shiftUtcByFrequency(date: Date, frequency: string, direction: 1 | -1 = 1): Date {
+  const d = new Date(date.getTime());
+  switch (frequency) {
+    case "monthly": d.setUTCMonth(d.getUTCMonth() + 1 * direction); break;
+    case "quarterly": d.setUTCMonth(d.getUTCMonth() + 3 * direction); break;
+    case "biannual": d.setUTCMonth(d.getUTCMonth() + 6 * direction); break;
+    case "annual":
+    default: d.setUTCFullYear(d.getUTCFullYear() + 1 * direction); break;
+  }
+  return d;
+}
+
+/**
+ * Dates to store on a contract AFTER an invoice was issued on `invoiceDate`.
+ * `nextInvoiceDate` may be supplied by dual-cadence schedulers; otherwise the
+ * regular frequency step is used.
+ */
+export function periodAfterInvoice(
+  invoiceDate: string | Date,
+  frequency: string,
+  nextInvoiceDate?: string | Date | null
+): ContractPeriodDates {
+  const invoiced = toUtcDate(invoiceDate);
+  const next = nextInvoiceDate
+    ? toUtcDate(nextInvoiceDate)
+    : shiftUtcByFrequency(invoiced, frequency, 1);
+  return {
+    period_start: addUtcDays(invoiced, 1).toISOString(),
+    period_end: next.toISOString(),
+    next_invoice_date: next.toISOString(),
+  };
+}
+
+/**
+ * Dates to restore on a contract when the invoice issued on `invoiceDate`
+ * is deleted — i.e. the period that this invoice closed becomes current again.
+ */
+export function periodForInvoiceDate(
+  invoiceDate: string | Date,
+  frequency: string
+): ContractPeriodDates {
+  const invoiced = toUtcDate(invoiceDate);
+  const start = addUtcDays(shiftUtcByFrequency(invoiced, frequency, -1), 1);
+  return {
+    period_start: start.toISOString(),
+    period_end: invoiced.toISOString(),
+    next_invoice_date: invoiced.toISOString(),
+  };
+}
+
+
