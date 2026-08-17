@@ -293,7 +293,25 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         currency: invoice.currency,
         exchangeRateEUR: snapshot.exchangeRateEUR ?? null,
         contract: snapshot.contract,
-        capabilities: { assets: computation.params.assetBreakdown, orgBreakdown: liveOrgBreakdown },
+        capabilities: { assets: revisedAssets, orgBreakdown: revisedOrgs },
+        // Keep per-contract inputs on the revised invoice too, so it stays
+        // revisable in turn.
+        contracts: computation.units.map(({ contractId, contractName, computation: comp }) => {
+          const unit = units.find((u) => u.contractId === contractId);
+          return {
+            contractId,
+            contractName,
+            billingFrequency: unit?.billingFrequency || invoice.billing_frequency,
+            periodStart: unit?.periodStart ?? snapshot.periodStart,
+            periodEnd: unit?.periodEnd ?? snapshot.periodEnd,
+            subtotal: comp.result.totalPrice,
+            contract: (unit?.contract || {}) as Record<string, unknown>,
+            capabilities: {
+              assets: comp.params.assetBreakdown,
+              orgBreakdown: comp.params.orgBreakdown,
+            },
+          };
+        }),
         lineItems: lineItems.map((li) => ({
           description: li.Description,
           quantity: li.Quantity,
@@ -305,8 +323,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           arrAmount,
           nrrAmount,
           totalMW: computation.totalMW,
-          siteCount: computation.params.assetBreakdown?.length,
+          siteCount: revisedAssets.length,
         },
+
       });
 
       const userId = (await supabase.auth.getUser()).data.user?.id as string;
