@@ -48,6 +48,15 @@ export interface ZeroMwCorrection {
   ratingUnknownAtFreeze?: boolean;
 }
 
+export interface StillZeroAsset {
+  assetId: string;
+  assetName: string;
+  /** Which input is missing: MW capacity, or the Jubaili genset rating. */
+  metric: 'mw' | 'kva';
+  frozenMW: number;
+  frozenKVA: number | null;
+}
+
 export interface SnapshotDiff {
   /** Assets frozen without a usable capacity that now report one. */
   corrections: ZeroMwCorrection[];
@@ -60,9 +69,12 @@ export interface SnapshotDiff {
   unchangedCount: number;
   /** Assets still at 0 MW (and, for Jubaili, 0/no kVA) — nothing to correct. */
   stillZeroCount: number;
+  /** The still-zero assets themselves, so a value can be entered manually. */
+  stillZero: StillZeroAsset[];
   snapshotTotalMW: number;
   liveTotalMW: number;
 }
+
 
 const num = (v: any) => Number(v) || 0;
 const kva = (v: any) => (v == null || v === '' ? null : Number(v) || 0);
