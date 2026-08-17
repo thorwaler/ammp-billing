@@ -194,6 +194,53 @@ export function patchOrgBreakdown(
 }
 
 /**
+ * Rebuild an org breakdown purely from the frozen snapshot. Only possible when
+ * the snapshot stored per-org asset membership (`assetIds`).
+ */
+export function orgBreakdownFromSnapshot(
+  orgs: Array<Record<string, any>> | undefined,
+  assets: LiveAsset[],
+): OrgAssetGroup[] | undefined {
+  if (!Array.isArray(orgs) || orgs.length === 0) return undefined;
+  if (!orgs.some((o) => Array.isArray(o?.assetIds) && o.assetIds.length > 0)) return undefined;
+  const byId = new Map(assets.map((a) => [String(a.assetId), a]));
+  return orgs.map((o, idx) => ({
+    orgId: String(o.orgId ?? `snap-${idx}`),
+    orgName: o.orgName || 'Unknown organisation',
+    tier: o.tier ?? null,
+    hasEconf: !!o.econf,
+    isLegacyAssetGroup: !!o.isLegacyAssetGroup,
+    assets: (o.assetIds || [])
+      .map((id: string) => byId.get(String(id)))
+      .filter(Boolean)
+      .map((a: LiveAsset) => ({
+        assetId: String(a.assetId),
+        assetName: a.assetName,
+        totalMW: num(a.totalMW),
+      })),
+  }));
+}
+
+/**
+ * Choose the org breakdown to price on. Live data is preferred, but when it is
+ * missing or covers fewer organisations than the snapshot (the org resolution
+ * changed since the invoice was frozen) the snapshot's own structure wins so
+ * the frozen total stays reproducible.
+ */
+export function resolveOrgBreakdown(
+  liveOrgBreakdown: OrgAssetGroup[] | undefined,
+  snapshotOrgs: Array<Record<string, any>> | undefined,
+  patchedAssets: LiveAsset[],
+): OrgAssetGroup[] | undefined {
+  const fromSnapshot = orgBreakdownFromSnapshot(snapshotOrgs, patchedAssets);
+  const fromLive = patchOrgBreakdown(liveOrgBreakdown, patchedAssets);
+  if (!fromSnapshot) return fromLive;
+  if (!fromLive) return fromSnapshot;
+  return fromLive.length >= fromSnapshot.length ? fromLive : fromSnapshot;
+}
+
+
+/**
  * Build `CalculationParams` from a stored contract row (as captured in the
  * snapshot) plus a resolved asset list. Mirrors the mapping the invoice
  * calculator does from live contract state.
