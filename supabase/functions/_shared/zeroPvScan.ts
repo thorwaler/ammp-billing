@@ -69,7 +69,7 @@ export async function runZeroPvScan(
       .is("resolved_at", null);
 
     for (const inc of openIncidents ?? []) {
-      if (nonZeroIds.has(inc.asset_id)) {
+      if (nonZeroIds.has(inc.asset_id) || ignored.has(String(inc.asset_id))) {
         await supabase
           .from("zero_pv_incidents")
           .update({ resolved_at: new Date().toISOString() })
