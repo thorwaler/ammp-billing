@@ -81,14 +81,23 @@ const kva = (v: any) => (v == null || v === '' ? null : Number(v) || 0);
 
 /**
  * Classify every live asset against the frozen snapshot.
+ *
+ * `ignoredAssetIds` — assets marked as not relevant ("zombie" sites). They are
+ * kept in the pricing but never surface as a correction or a still-zero row.
  */
 export function diffSnapshotAgainstLive(
   snapshot: InvoiceInputSnapshot,
   liveAssets: LiveAsset[],
+  ignoredAssetIds?: Set<string> | Iterable<string>,
 ): SnapshotDiff {
+  const ignored =
+    ignoredAssetIds instanceof Set
+      ? ignoredAssetIds
+      : new Set([...(ignoredAssetIds || [])].map(String));
   const snapAssets = Array.isArray(snapshot?.assets) ? snapshot.assets : [];
   const snapById = new Map(snapAssets.map((a) => [String(a.assetId), a]));
   const liveById = new Map((liveAssets || []).map((a) => [String(a.assetId), a]));
+
 
   const corrections: ZeroMwCorrection[] = [];
   const changed: SnapshotDiff['changed'] = [];
