@@ -267,7 +267,7 @@ export function applySelectedCorrections(
   if (selection.includeNewlyOnboarded) {
     for (const live of liveAssets || []) {
       if (!snapIds.has(String(live.assetId))) {
-        result.push({ ...live, totalMW: num(live.totalMW) });
+        result.push(withOverride({ ...live, totalMW: num(live.totalMW) }));
       }
     }
   }
