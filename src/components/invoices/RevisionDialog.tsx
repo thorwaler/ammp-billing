@@ -14,14 +14,17 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import {
-  computeRevision,
+  computeRevisionForInvoice,
   diffSnapshotAgainstLive,
   fetchLiveContractData,
+  isLegacyMergedSnapshot,
+  revisionUnits,
   verifySnapshotReproduces,
   type CorrectionSelection,
   type LiveAsset,
   type SnapshotDiff,
 } from "@/lib/invoiceRevision";
+
 import { buildContractLineItems } from "@/lib/xeroLineItems";
 import { buildSnapshotFields, type InvoiceInputSnapshot } from "@/lib/invoiceSnapshot";
 import { isPackage2026 } from "@/data/pricingData";
@@ -59,19 +62,29 @@ interface RevisionDialogProps {
 export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: RevisionDialogProps) {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [liveAssets, setLiveAssets] = useState<LiveAsset[]>([]);
-  const [liveOrgBreakdown, setLiveOrgBreakdown] = useState<any[] | undefined>();
+  const [liveByContract, setLiveByContract] = useState<
+    Record<string, { assets: LiveAsset[]; orgBreakdown?: any[]; contract?: any; contractType?: any }>
+  >({});
   const [contractRow, setContractRow] = useState<any>(null);
   const [contractType, setContractType] = useState<any>(null);
   const [diff, setDiff] = useState<SnapshotDiff | null>(null);
+  const [perContractDiff, setPerContractDiff] = useState<
+    Array<{ contractId: string; contractName?: string; diff: SnapshotDiff; snapshotOrgs: number; liveOrgs: number }>
+  >([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [includeNewlyOnboarded, setIncludeNewlyOnboarded] = useState(false);
   const [reason, setReason] = useState("");
   const [xeroAction, setXeroAction] = useState<XeroAction>("update");
-  const [fidelity, setFidelity] = useState<{ ok: boolean; recomputed: number; frozen: number } | null>(null);
+  const [overrideFidelity, setOverrideFidelity] = useState(false);
+  const [fidelity, setFidelity] = useState<
+    { ok: boolean; recomputed: number; frozen: number; reproducible: boolean; reason?: string } | null
+  >(null);
 
   const snapshot: InvoiceInputSnapshot | null = (invoice?.input_snapshot as InvoiceInputSnapshot) || null;
   const currencySymbol = invoice?.currency === "USD" ? "$" : "€";
+  const units = useMemo(() => (snapshot ? revisionUnits(snapshot) : []), [snapshot]);
+  const isMerged = units.length > 1;
+  const legacyMerged = isLegacyMergedSnapshot(snapshot);
 
   useEffect(() => {
     if (!open || !invoice || !snapshot || !invoice.contract_id) return;
@@ -80,24 +93,58 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     (async () => {
       setLoading(true);
       try {
-        const live = await fetchLiveContractData(invoice.contract_id as string);
+        const loaded = await Promise.all(
+          units.map(async (u) => [u.contractId, await fetchLiveContractData(u.contractId)] as const),
+        );
         if (cancelled) return;
-        setLiveAssets(live.assets);
-        setLiveOrgBreakdown(live.orgBreakdown);
-        setContractRow(live.contract);
-        setContractType(live.contract?.contract_types || null);
 
-        const d = diffSnapshotAgainstLive(snapshot, live.assets);
-        setDiff(d);
-        setSelectedIds(d.corrections.map((c) => c.assetId));
+        const map: Record<string, any> = {};
+        for (const [id, live] of loaded) {
+          map[id] = {
+            assets: live.assets,
+            orgBreakdown: live.orgBreakdown,
+            contract: live.contract,
+            contractType: live.contractType,
+          };
+        }
+        setLiveByContract(map);
+        const primary = map[String(invoice.contract_id)] || loaded[0]?.[1];
+        setContractRow(primary?.contract || null);
+        setContractType(primary?.contractType || primary?.contract?.contract_types || null);
+
+        // Diff each contract against its own live data, then aggregate.
+        const per = units.map((u) => {
+          const live = map[u.contractId];
+          const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
+          return {
+            contractId: u.contractId,
+            contractName: u.contractName,
+            diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || []),
+            snapshotOrgs: u.orgs?.length || 0,
+            liveOrgs: live?.orgBreakdown?.length || 0,
+          };
+        });
+        setPerContractDiff(per);
+        const aggregate: SnapshotDiff = {
+          corrections: per.flatMap((p) => p.diff.corrections),
+          newlyOnboarded: per.flatMap((p) => p.diff.newlyOnboarded),
+          removed: per.flatMap((p) => p.diff.removed),
+          changed: per.flatMap((p) => p.diff.changed),
+          unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
+          snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
+          liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
+        };
+        setDiff(aggregate);
+        setSelectedIds(aggregate.corrections.map((c) => c.assetId));
         setIncludeNewlyOnboarded(false);
         setReason("");
+        setOverrideFidelity(false);
         setXeroAction(invoice.xero_invoice_id ? "update" : "manual");
         setFidelity(
           verifySnapshotReproduces(snapshot, {
             invoiceDate: new Date(invoice.invoice_date),
             billingFrequency: invoice.billing_frequency,
-            contractType: live.contract?.contract_types || null,
+            contractType: primary?.contractType || null,
           }),
         );
       } catch (e) {
@@ -119,9 +166,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   );
 
   const computation = useMemo(() => {
-    if (!snapshot || !invoice || loading) return null;
+    if (!snapshot || !invoice || loading || legacyMerged) return null;
     try {
-      return computeRevision(snapshot, liveAssets, liveOrgBreakdown, selection, {
+      return computeRevisionForInvoice(snapshot, liveByContract as any, selection, {
         invoiceDate: new Date(invoice.invoice_date),
         billingFrequency: invoice.billing_frequency,
         contractType,
@@ -130,9 +177,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
       console.error("[Revision] Recalculation failed:", e);
       return null;
     }
-  }, [snapshot, invoice?.id, liveAssets, liveOrgBreakdown, selection, contractType, loading]);
+  }, [snapshot, invoice?.id, liveByContract, selection, contractType, loading, legacyMerged]);
 
-  const newTotal = computation?.result?.totalPrice ?? 0;
+  const newTotal = computation?.totalPrice ?? 0;
+  const totalMW = computation?.totalMW ?? 0;
   const originalTotal = Number(invoice?.invoice_amount) || 0;
   const delta = newTotal - originalTotal;
 
@@ -142,30 +190,43 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   const toggleAsset = (assetId: string) =>
     setSelectedIds((prev) => (prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]));
 
+
   const handleConfirm = async () => {
     if (!invoice || !snapshot || !computation) return;
     setSubmitting(true);
     try {
-      const result = computation.result;
-      const packageType = computation.params.packageType;
-      const trial = !!contractRow?.is_trial && isPackage2026(packageType);
-
-      const lineItems = buildContractLineItems({
-        result,
-        packageType,
-        currencySymbol,
-        accountCode: ACCOUNT_PLATFORM_FEES,
-        implementationAccountCode: ACCOUNT_IMPLEMENTATION_FEES,
-        mwManaged: computation.totalMW,
-        isTrial: trial,
-        trialSetupFee: trial ? Number(contractRow?.trial_setup_fee) || 0 : 0,
-        vendorApiOnboardingFee: trial ? Number(contractRow?.vendor_api_onboarding_fee) || 0 : 0,
+      // Build the Xero lines contract by contract, so merged invoices keep one
+      // labelled block per contract exactly as they were originally issued.
+      const lineItems = computation.units.flatMap(({ contractId, contractName, computation: comp }) => {
+        const row = liveByContract[contractId]?.contract || contractRow;
+        const packageType = comp.params.packageType;
+        const trial = !!row?.is_trial && isPackage2026(packageType);
+        const lines = buildContractLineItems({
+          result: comp.result,
+          packageType,
+          currencySymbol,
+          accountCode: ACCOUNT_PLATFORM_FEES,
+          implementationAccountCode: ACCOUNT_IMPLEMENTATION_FEES,
+          mwManaged: comp.totalMW,
+          isTrial: trial,
+          trialSetupFee: trial ? Number(row?.trial_setup_fee) || 0 : 0,
+          vendorApiOnboardingFee: trial ? Number(row?.vendor_api_onboarding_fee) || 0 : 0,
+        });
+        if (!isMerged) return lines;
+        const label = contractName || row?.contract_name || row?.company_name || "Contract";
+        return lines.map((li) => ({ ...li, Description: `[${label}] ${li.Description}` }));
       });
+
+      const revisedAssets = computation.units.flatMap((u) => u.computation.params.assetBreakdown || []);
+      const revisedOrgs = computation.units.flatMap(
+        (u) => (u.computation.params.orgBreakdown as any[]) || [],
+      );
 
       const sumFor = (code: string) =>
         lineItems.filter((li) => li.AccountCode === code).reduce((s, li) => s + (li.UnitAmount || 0), 0);
       const arrAmount = sumFor(ACCOUNT_PLATFORM_FEES);
       const nrrAmount = sumFor(ACCOUNT_IMPLEMENTATION_FEES);
+
 
       // Xero: update the existing invoice in place, or void it and issue a new draft.
       let newXeroInvoiceId: string | null = invoice.xero_invoice_id;
@@ -232,7 +293,25 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         currency: invoice.currency,
         exchangeRateEUR: snapshot.exchangeRateEUR ?? null,
         contract: snapshot.contract,
-        capabilities: { assets: computation.params.assetBreakdown, orgBreakdown: liveOrgBreakdown },
+        capabilities: { assets: revisedAssets, orgBreakdown: revisedOrgs },
+        // Keep per-contract inputs on the revised invoice too, so it stays
+        // revisable in turn.
+        contracts: computation.units.map(({ contractId, contractName, computation: comp }) => {
+          const unit = units.find((u) => u.contractId === contractId);
+          return {
+            contractId,
+            contractName,
+            billingFrequency: unit?.billingFrequency || invoice.billing_frequency,
+            periodStart: unit?.periodStart ?? snapshot.periodStart,
+            periodEnd: unit?.periodEnd ?? snapshot.periodEnd,
+            subtotal: comp.result.totalPrice,
+            contract: (unit?.contract || {}) as Record<string, unknown>,
+            capabilities: {
+              assets: comp.params.assetBreakdown,
+              orgBreakdown: comp.params.orgBreakdown,
+            },
+          };
+        }),
         lineItems: lineItems.map((li) => ({
           description: li.Description,
           quantity: li.Quantity,
@@ -244,8 +323,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           arrAmount,
           nrrAmount,
           totalMW: computation.totalMW,
-          siteCount: computation.params.assetBreakdown?.length,
+          siteCount: revisedAssets.length,
         },
+
       });
 
       const userId = (await supabase.auth.getUser()).data.user?.id as string;
@@ -307,7 +387,14 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     }
   };
 
-  const canRevise = !!snapshot && !!invoice?.contract_id && !!computation && !loading;
+  const canRevise =
+    !!snapshot &&
+    !!invoice?.contract_id &&
+    !!computation &&
+    !loading &&
+    !legacyMerged &&
+    (fidelity?.ok !== false || overrideFidelity);
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -334,25 +421,63 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
               This invoice has no frozen input snapshot, so it cannot be revised. Delete and recreate it instead.
             </AlertDescription>
           </Alert>
-        ) : !invoice?.contract_id ? (
+        ) : legacyMerged ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Merged invoices cannot be revised yet — delete and recreate the merged invoice instead.
+              This merged invoice was frozen before per-contract snapshots existed, so its contracts' rates cannot be
+              reproduced. Delete and re-issue the merged invoice instead of revising it.
             </AlertDescription>
           </Alert>
         ) : (
           <ScrollArea className="flex-1 pr-4">
             <div className="space-y-4">
+              {isMerged && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Merged invoice — {computation?.units.length || units.length} contracts are recomputed individually
+                    and summed.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {fidelity && !fidelity.ok && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
                     Recomputing the untouched snapshot gives {fmt(fidelity.recomputed)} instead of the frozen{" "}
-                    {fmt(fidelity.frozen)}. Review the revised total carefully before confirming.
+                    {fmt(fidelity.frozen)}
+                    {fidelity.reason ? ` (${fidelity.reason})` : ""}. Review the revised total carefully before
+                    confirming.
+                    <label className="mt-2 flex items-center gap-2 text-xs">
+                      <Checkbox
+                        checked={overrideFidelity}
+                        onCheckedChange={(v) => setOverrideFidelity(!!v)}
+                      />
+                      I understand and want to revise anyway
+                    </label>
                   </AlertDescription>
                 </Alert>
               )}
+
+              {isMerged && perContractDiff.length > 0 && (
+                <div className="rounded-md border text-xs">
+                  {perContractDiff.map((p) => {
+                    const unit = computation?.units.find((u) => u.contractId === p.contractId);
+                    return (
+                      <div key={p.contractId} className="flex justify-between border-b px-3 py-2 last:border-b-0">
+                        <span className="truncate">{p.contractName || p.contractId.slice(0, 8)}</span>
+                        <span className="text-muted-foreground">
+                          {p.diff.corrections.length} zero-MW · {p.diff.newlyOnboarded.length} new ·{" "}
+                          {unit ? fmt(unit.computation.result.totalPrice) : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
 
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="rounded-md border p-3">
