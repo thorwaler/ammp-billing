@@ -89,11 +89,17 @@ export function diffSnapshotAgainstLive(
   snapshot: InvoiceInputSnapshot,
   liveAssets: LiveAsset[],
   ignoredAssetIds?: Set<string> | Iterable<string>,
+  options?: { packageType?: string | null; kvaPricing?: boolean },
 ): SnapshotDiff {
+  // Genset ratings only price the Elum Jubaili package; every other contract
+  // is priced in MWp, so its zero rows must be expressed in MWp.
+  const kvaPricing =
+    options?.kvaPricing ?? options?.packageType === 'elum_jubaili';
   const ignored =
     ignoredAssetIds instanceof Set
       ? ignoredAssetIds
       : new Set([...(ignoredAssetIds || [])].map(String));
+
   const snapAssets = Array.isArray(snapshot?.assets) ? snapshot.assets : [];
   const snapById = new Map(snapAssets.map((a) => [String(a.assetId), a]));
   const liveById = new Map((liveAssets || []).map((a) => [String(a.assetId), a]));
@@ -146,7 +152,7 @@ export function diffSnapshotAgainstLive(
     }
 
     // Jubaili-style: no genset rating at freeze time, a real rating now.
-    if ((beforeKva == null || beforeKva === 0) && afterKva != null && afterKva > 0) {
+    if (kvaPricing && (beforeKva == null || beforeKva === 0) && afterKva != null && afterKva > 0) {
       corrections.push({
         assetId: id,
         assetName: live.assetName || snap.assetName || id,
@@ -162,18 +168,17 @@ export function diffSnapshotAgainstLive(
 
     if (before === after) {
       unchangedCount++;
-      if (before === 0 && (afterKva == null || afterKva === 0)) {
-        const kvaRelevant =
-          (snap as any).gensetKVA !== undefined || live.gensetKVA !== undefined;
+      if (before === 0 && (!kvaPricing || afterKva == null || afterKva === 0)) {
         stillZero.push({
           assetId: id,
           assetName: live.assetName || snap.assetName || id,
-          metric: kvaRelevant ? 'kva' : 'mw',
+          metric: kvaPricing ? 'kva' : 'mw',
           frozenMW: before,
           frozenKVA: beforeKva,
         });
       }
     } else {
+
       changed.push({
         assetId: id,
         assetName: live.assetName || snap.assetName || id,
