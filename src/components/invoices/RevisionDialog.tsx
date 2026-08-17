@@ -155,14 +155,18 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     const per = units.map((u) => {
       const live = liveByContract[u.contractId];
       const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
+      // Only Jubaili prices on genset kVA; everything else is MWp.
+      const packageType =
+        (u.contract as any)?.package ?? (live?.contract as any)?.package ?? null;
       return {
         contractId: u.contractId,
         contractName: u.contractName,
-        diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || [], ignoredIds),
+        diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || [], ignoredIds, { packageType }),
         snapshotOrgs: u.orgs?.length || 0,
         liveOrgs: live?.orgBreakdown?.length || 0,
       };
     });
+
     setPerContractDiff(per);
 
     const aggregate: SnapshotDiff = {
