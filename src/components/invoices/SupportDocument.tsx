@@ -171,10 +171,13 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <tr key={site.assetId}>
                   <td className="border border-border p-1">
                     {site.assetName}
-                    {site.kva == null || site.kva <= 0 ? (
+                    {isAssetIgnored(site.assetId) ? (
+                      <span className="text-muted-foreground"> — ignored (not relevant)</span>
+                    ) : site.kva == null || site.kva <= 0 ? (
                       <span className="text-destructive"> — rating not set</span>
                     ) : null}
                   </td>
+
                   <td className="border border-border p-1 text-right">
                     {site.kva != null && site.kva > 0
                       ? site.kva.toLocaleString(undefined, { maximumFractionDigits: 1 })
