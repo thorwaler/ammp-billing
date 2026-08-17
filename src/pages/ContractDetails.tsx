@@ -19,6 +19,9 @@ import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
 import { DuplicateContractDialog } from "@/components/contracts/DuplicateContractDialog";
+import { useIgnoredAssets } from "@/hooks/useIgnoredAssets";
+import { Switch } from "@/components/ui/switch";
+
 import { toast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import type { CustomAssetPricing } from "@/lib/invoiceCalculations";
