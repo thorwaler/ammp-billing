@@ -72,8 +72,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     Array<{ contractId: string; contractName?: string; diff: SnapshotDiff; snapshotOrgs: number; liveOrgs: number }>
   >([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
   const [includeNewlyOnboarded, setIncludeNewlyOnboarded] = useState(false);
   const [reason, setReason] = useState("");
+
   const [xeroAction, setXeroAction] = useState<XeroAction>("update");
   const [overrideFidelity, setOverrideFidelity] = useState(false);
   const [fidelity, setFidelity] = useState<
