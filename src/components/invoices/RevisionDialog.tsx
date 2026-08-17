@@ -414,25 +414,63 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
               This invoice has no frozen input snapshot, so it cannot be revised. Delete and recreate it instead.
             </AlertDescription>
           </Alert>
-        ) : !invoice?.contract_id ? (
+        ) : legacyMerged ? (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              Merged invoices cannot be revised yet — delete and recreate the merged invoice instead.
+              This merged invoice was frozen before per-contract snapshots existed, so its contracts' rates cannot be
+              reproduced. Delete and re-issue the merged invoice instead of revising it.
             </AlertDescription>
           </Alert>
         ) : (
           <ScrollArea className="flex-1 pr-4">
             <div className="space-y-4">
+              {isMerged && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>
+                    Merged invoice — {computation?.units.length || units.length} contracts are recomputed individually
+                    and summed.
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {fidelity && !fidelity.ok && (
                 <Alert variant="destructive">
                   <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
                     Recomputing the untouched snapshot gives {fmt(fidelity.recomputed)} instead of the frozen{" "}
-                    {fmt(fidelity.frozen)}. Review the revised total carefully before confirming.
+                    {fmt(fidelity.frozen)}
+                    {fidelity.reason ? ` (${fidelity.reason})` : ""}. Review the revised total carefully before
+                    confirming.
+                    <label className="mt-2 flex items-center gap-2 text-xs">
+                      <Checkbox
+                        checked={overrideFidelity}
+                        onCheckedChange={(v) => setOverrideFidelity(!!v)}
+                      />
+                      I understand and want to revise anyway
+                    </label>
                   </AlertDescription>
                 </Alert>
               )}
+
+              {isMerged && perContractDiff.length > 0 && (
+                <div className="rounded-md border text-xs">
+                  {perContractDiff.map((p) => {
+                    const unit = computation?.units.find((u) => u.contractId === p.contractId);
+                    return (
+                      <div key={p.contractId} className="flex justify-between border-b px-3 py-2 last:border-b-0">
+                        <span className="truncate">{p.contractName || p.contractId.slice(0, 8)}</span>
+                        <span className="text-muted-foreground">
+                          {p.diff.corrections.length} zero-MW · {p.diff.newlyOnboarded.length} new ·{" "}
+                          {unit ? fmt(unit.computation.result.totalPrice) : "—"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
 
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="rounded-md border p-3">
