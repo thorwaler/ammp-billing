@@ -48,6 +48,15 @@ export interface ZeroMwCorrection {
   ratingUnknownAtFreeze?: boolean;
 }
 
+export interface StillZeroAsset {
+  assetId: string;
+  assetName: string;
+  /** Which input is missing: MW capacity, or the Jubaili genset rating. */
+  metric: 'mw' | 'kva';
+  frozenMW: number;
+  frozenKVA: number | null;
+}
+
 export interface SnapshotDiff {
   /** Assets frozen without a usable capacity that now report one. */
   corrections: ZeroMwCorrection[];
@@ -60,9 +69,12 @@ export interface SnapshotDiff {
   unchangedCount: number;
   /** Assets still at 0 MW (and, for Jubaili, 0/no kVA) — nothing to correct. */
   stillZeroCount: number;
+  /** The still-zero assets themselves, so a value can be entered manually. */
+  stillZero: StillZeroAsset[];
   snapshotTotalMW: number;
   liveTotalMW: number;
 }
+
 
 const num = (v: any) => Number(v) || 0;
 const kva = (v: any) => (v == null || v === '' ? null : Number(v) || 0);
@@ -82,7 +94,8 @@ export function diffSnapshotAgainstLive(
   const changed: SnapshotDiff['changed'] = [];
   const newlyOnboarded: LiveAsset[] = [];
   let unchangedCount = 0;
-  let stillZeroCount = 0;
+  const stillZero: StillZeroAsset[] = [];
+
 
   for (const live of liveAssets || []) {
     const id = String(live.assetId);
@@ -127,7 +140,17 @@ export function diffSnapshotAgainstLive(
 
     if (before === after) {
       unchangedCount++;
-      if (before === 0 && (afterKva == null || afterKva === 0)) stillZeroCount++;
+      if (before === 0 && (afterKva == null || afterKva === 0)) {
+        const kvaRelevant =
+          (snap as any).gensetKVA !== undefined || live.gensetKVA !== undefined;
+        stillZero.push({
+          assetId: id,
+          assetName: live.assetName || snap.assetName || id,
+          metric: kvaRelevant ? 'kva' : 'mw',
+          frozenMW: before,
+          frozenKVA: beforeKva,
+        });
+      }
     } else {
       changed.push({
         assetId: id,
@@ -148,10 +171,17 @@ export function diffSnapshotAgainstLive(
     removed,
     changed,
     unchangedCount,
-    stillZeroCount,
+    stillZeroCount: stillZero.length,
+    stillZero,
     snapshotTotalMW: snapAssets.reduce((s, a) => s + num(a.totalMW), 0),
     liveTotalMW: (liveAssets || []).reduce((s, a) => s + num(a.totalMW), 0),
   };
+}
+
+
+export interface ManualOverride {
+  mw?: number;
+  kva?: number;
 }
 
 export interface CorrectionSelection {
@@ -160,6 +190,11 @@ export interface CorrectionSelection {
   selectedAssetIds: string[];
   /** When false (default) assets absent from the snapshot are left out. */
   includeNewlyOnboarded: boolean;
+  /**
+   * Operator-entered values, keyed by asset id. They win over both the frozen
+   * and the live value — used for sites the sync still reports as zero.
+   */
+  manualOverrides?: Record<string, ManualOverride>;
 }
 
 /**
@@ -168,6 +203,8 @@ export interface CorrectionSelection {
  * - `zero_mw_only`: snapshot assets, with the ticked zero-MW assets lifted to
  *   their live capacity. Nothing else moves.
  * - `full_recalc`: live assets (optionally minus the newly onboarded ones).
+ *
+ * Manual overrides are applied last, on top of either mode.
  *
  * Live asset metadata (devices, solcast, genset kVA…) is preferred wherever a
  * live row exists so the recalculation uses current site attributes.
@@ -181,12 +218,28 @@ export function applySelectedCorrections(
   const snapAssets = Array.isArray(snapshot?.assets) ? snapshot.assets : [];
   const snapIds = new Set(snapAssets.map((a) => String(a.assetId)));
   const picked = new Set(selection.selectedAssetIds.map(String));
+  const overrides = selection.manualOverrides || {};
+
+  const withOverride = (asset: LiveAsset): LiveAsset => {
+    const o = overrides[String(asset.assetId)];
+    if (!o) return asset;
+    const next = { ...asset };
+    if (typeof o.mw === 'number' && Number.isFinite(o.mw) && o.mw >= 0) {
+      next.totalMW = o.mw;
+      next.capacityKWp = o.mw * 1000;
+    }
+    if (typeof o.kva === 'number' && Number.isFinite(o.kva) && o.kva >= 0) {
+      next.gensetKVA = o.kva;
+    }
+    next.manualOverride = true;
+    return next;
+  };
 
   if (selection.mode === 'full_recalc') {
     const base = selection.includeNewlyOnboarded
       ? liveAssets || []
       : (liveAssets || []).filter((a) => snapIds.has(String(a.assetId)));
-    return base.map((a) => ({ ...a, totalMW: num(a.totalMW) }));
+    return base.map((a) => withOverride({ ...a, totalMW: num(a.totalMW) }));
   }
 
   const result: LiveAsset[] = snapAssets.map((snap) => {
@@ -201,19 +254,20 @@ export function applySelectedCorrections(
     // Unpicked assets keep their frozen rating; legacy snapshots without a
     // stored rating fall back to live data (that is what was frozen).
     const frozenKva = snapKva === undefined ? liveKva : kva(snapKva);
-    return {
+    return withOverride({
       ...(live || {}),
       assetId: id,
       assetName: live?.assetName || snap.assetName,
       totalMW: useLiveMW ? num(live!.totalMW) : num(snap.totalMW),
       gensetKVA: useLiveKva ? liveKva : frozenKva,
-    };
+    });
   });
+
 
   if (selection.includeNewlyOnboarded) {
     for (const live of liveAssets || []) {
       if (!snapIds.has(String(live.assetId))) {
-        result.push({ ...live, totalMW: num(live.totalMW) });
+        result.push(withOverride({ ...live, totalMW: num(live.totalMW) }));
       }
     }
   }

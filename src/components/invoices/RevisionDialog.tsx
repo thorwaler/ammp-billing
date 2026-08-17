@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -72,8 +73,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     Array<{ contractId: string; contractName?: string; diff: SnapshotDiff; snapshotOrgs: number; liveOrgs: number }>
   >([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
   const [includeNewlyOnboarded, setIncludeNewlyOnboarded] = useState(false);
   const [reason, setReason] = useState("");
+
   const [xeroAction, setXeroAction] = useState<XeroAction>("update");
   const [overrideFidelity, setOverrideFidelity] = useState(false);
   const [fidelity, setFidelity] = useState<
@@ -132,11 +135,14 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           changed: per.flatMap((p) => p.diff.changed),
           unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
           stillZeroCount: per.reduce((s, p) => s + p.diff.stillZeroCount, 0),
+          stillZero: per.flatMap((p) => p.diff.stillZero),
           snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
           liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
         };
+
         setDiff(aggregate);
         setSelectedIds(aggregate.corrections.map((c) => c.assetId));
+        setManualInputs({});
         setIncludeNewlyOnboarded(false);
         setReason("");
         setOverrideFidelity(false);
@@ -161,9 +167,29 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     };
   }, [open, invoice?.id]);
 
+  /** Which unit an operator-entered number is expressed in, per asset. */
+  const metricById = useMemo(() => {
+    const m = new Map<string, "mw" | "kva">();
+    for (const c of diff?.corrections || []) m.set(c.assetId, c.metric);
+    for (const z of diff?.stillZero || []) m.set(z.assetId, z.metric);
+    return m;
+  }, [diff]);
+
+  const manualOverrides = useMemo(() => {
+    const out: Record<string, { mw?: number; kva?: number }> = {};
+    for (const [assetId, raw] of Object.entries(manualInputs)) {
+      const value = Number(String(raw).replace(",", "."));
+      if (!raw?.trim() || !Number.isFinite(value) || value < 0) continue;
+      out[assetId] = metricById.get(assetId) === "kva" ? { kva: value } : { mw: value };
+    }
+    return out;
+  }, [manualInputs, metricById]);
+
+  const manualCount = Object.keys(manualOverrides).length;
+
   const selection: CorrectionSelection = useMemo(
-    () => ({ mode: "zero_mw_only", selectedAssetIds: selectedIds, includeNewlyOnboarded }),
-    [selectedIds, includeNewlyOnboarded],
+    () => ({ mode: "zero_mw_only", selectedAssetIds: selectedIds, includeNewlyOnboarded, manualOverrides }),
+    [selectedIds, includeNewlyOnboarded, manualOverrides],
   );
 
   const computation = useMemo(() => {
@@ -190,6 +216,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
   const toggleAsset = (assetId: string) =>
     setSelectedIds((prev) => (prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]));
+
+  const setManual = (assetId: string, value: string) =>
+    setManualInputs((prev) => ({ ...prev, [assetId]: value }));
+
 
 
   const handleConfirm = async () => {
@@ -353,8 +383,20 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           xero_line_items: lineItems as any,
           prepaid_balance_delta: newPrepaidDelta,
           revised_from_invoice_id: invoice.id,
-          revision_reason: reason || null,
-          ...(snapshotFields ? { ...snapshotFields, input_snapshot: snapshotFields.input_snapshot as any } : {}),
+          revision_reason:
+            [reason, manualCount > 0 ? `${manualCount} site(s) set manually` : ""]
+              .filter(Boolean)
+              .join(" · ") || null,
+          ...(snapshotFields
+            ? {
+                ...snapshotFields,
+                input_snapshot: {
+                  ...(snapshotFields.input_snapshot as any),
+                  ...(manualCount > 0 ? { manualOverrides } : {}),
+                } as any,
+              }
+            : {}),
+
         } as any)
         .select("id")
         .single();
@@ -482,9 +524,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
               <p className="text-xs text-muted-foreground">
                 "Correctable" counts only sites that were frozen without a usable capacity (0 MWp, or no genset rating
-                for Jubaili) and now report a real value in AMMP. Sites that are still zero cannot be corrected — there
-                is no new data to price them on.
+                for Jubaili) and now report a real value in AMMP. Sites the sync still reports as zero can be given a
+                value by hand below — that number is used for this revision only and is not written back to AMMP.
               </p>
+
 
 
 
@@ -536,12 +579,12 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                 {(diff?.corrections.length || 0) === 0 ? (
                   <p className="text-sm text-muted-foreground rounded-md border p-3">
                     No frozen site without capacity (0 MWp or no genset rating) reports a value in the current data.
-                    There is nothing to correct.
+                    Use the manual section below if you need to price one anyway.
                   </p>
                 ) : (
                   <div className="rounded-md border divide-y">
                     {diff!.corrections.map((c) => (
-                      <label key={c.assetId} className="flex items-center gap-3 p-2 text-sm cursor-pointer">
+                      <div key={c.assetId} className="flex items-center gap-3 p-2 text-sm">
                         <Checkbox
                           checked={selectedIds.includes(c.assetId)}
                           onCheckedChange={() => toggleAsset(c.assetId)}
@@ -551,17 +594,80 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                           {c.metric === "kva" && c.ratingUnknownAtFreeze && (
                             <span className="block text-xs text-muted-foreground">rating unknown at freeze</span>
                           )}
+                          {manualOverrides[c.assetId] && (
+                            <span className="block text-xs text-primary">manual value overrides the sync</span>
+                          )}
                         </span>
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground whitespace-nowrap">
                           {c.metric === "kva"
                             ? `${c.previousKVA ?? 0} → ${Number(c.newKVA || 0).toLocaleString()} kVA`
                             : `0 MW → ${c.newMW.toFixed(3)} MW`}
                         </span>
-                      </label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={c.metric === "kva" ? 1 : 0.001}
+                          value={manualInputs[c.assetId] ?? ""}
+                          onChange={(e) => setManual(c.assetId, e.target.value)}
+                          placeholder={c.metric === "kva" ? "kVA" : "MWp"}
+                          className="h-8 w-24"
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
               </div>
+
+              {(diff?.stillZero.length || 0) > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm font-medium">
+                      Still zero — set manually ({diff!.stillZero.length})
+                      {manualCount > 0 && (
+                        <span className="ml-1 font-normal text-muted-foreground">· {manualCount} set</span>
+                      )}
+                    </Label>
+                    {manualCount > 0 && (
+                      <Button variant="ghost" size="sm" onClick={() => setManualInputs({})}>
+                        Clear manual values
+                      </Button>
+                    )}
+                  </div>
+                  <div className="rounded-md border divide-y max-h-72 overflow-y-auto">
+                    {perContractDiff
+                      .filter((p) => p.diff.stillZero.length > 0)
+                      .map((p) => (
+                        <div key={p.contractId}>
+                          {isMerged && (
+                            <div className="bg-muted/50 px-2 py-1 text-xs font-medium">
+                              {p.contractName || p.contractId.slice(0, 8)}
+                            </div>
+                          )}
+                          {p.diff.stillZero.map((z) => (
+                            <div key={z.assetId} className="flex items-center gap-3 p-2 text-sm">
+                              <span className="flex-1 truncate">
+                                {z.assetName}
+                                <span className="block text-xs text-muted-foreground">
+                                  {z.metric === "kva" ? "no genset rating in AMMP" : "0 MWp in AMMP"}
+                                </span>
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={z.metric === "kva" ? 1 : 0.001}
+                                value={manualInputs[z.assetId] ?? ""}
+                                onChange={(e) => setManual(z.assetId, e.target.value)}
+                                placeholder={z.metric === "kva" ? "kVA" : "MWp"}
+                                className="h-8 w-24"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
 
               <Separator />
 
@@ -634,13 +740,18 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         <DialogFooter className="gap-2">
           <Badge variant="outline" className="mr-auto self-center">
             {selectedIds.length} correction{selectedIds.length === 1 ? "" : "s"} selected
+            {manualCount > 0 ? ` · ${manualCount} manual` : ""}
           </Badge>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
           </Button>
           <Button
             onClick={handleConfirm}
-            disabled={!canRevise || submitting || (selectedIds.length === 0 && !includeNewlyOnboarded)}
+            disabled={
+              !canRevise ||
+              submitting ||
+              (selectedIds.length === 0 && manualCount === 0 && !includeNewlyOnboarded)
+            }
           >
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Create revised invoice
