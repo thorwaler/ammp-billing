@@ -76,3 +76,27 @@ export function zeroCapacityMessage(section: ZeroCapacitySection): string {
     section.billed ? 'billed at zero' : 'excluded from billing'
   } until the data is corrected: ${section.siteNames.join(', ')}`;
 }
+
+export type SiteCapacityStatus = 'ok' | 'ignored' | 'missing';
+
+/**
+ * Single source of truth for the per-site suffix shown next to an asset name
+ * in support documents (screen and PDF) — ignored "zombie" sites, and sites
+ * with no usable capacity for the given unit.
+ */
+export function siteCapacityLabel(
+  assetId: any,
+  value: number | null | undefined,
+  unit: 'MWp' | 'kVA' = 'MWp'
+): { status: SiteCapacityStatus; suffix: string } {
+  if (isAssetIgnored(assetId)) {
+    return { status: 'ignored', suffix: ' — ignored (not relevant)' };
+  }
+  if (isZero(value)) {
+    return {
+      status: 'missing',
+      suffix: unit === 'kVA' ? ' — rating not set' : ' — capacity not set',
+    };
+  }
+  return { status: 'ok', suffix: '' };
+}
