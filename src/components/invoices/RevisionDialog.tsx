@@ -676,7 +676,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                               <span className="flex-1 truncate">
                                 {z.assetName}
                                 <span className="block text-xs text-muted-foreground">
-                                  {z.metric === "kva" ? "no genset rating in AMMP" : "0 MWp in AMMP"}
+                                  ID: {z.assetId} · {z.metric === "kva" ? "no genset rating in AMMP" : "0 MWp in AMMP"}
                                 </span>
                               </span>
                               <Input
@@ -699,7 +699,6 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                                 {isIgnored(z.assetId) ? "Ignored" : "Ignore"}
                               </Button>
                             </div>
-
                           ))}
                         </div>
                       ))}
