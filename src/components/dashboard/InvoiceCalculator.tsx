@@ -60,7 +60,7 @@ import {
 } from "@/lib/invoiceCalculations";
 import { monitorMWAndNotify } from "@/utils/mwMonitoring";
 import { uploadToSharePoint } from "@/utils/sharePointUpload";
-import { isAnnualUpfrontCycle, monthsInPeriod, periodAfterInvoice } from "@/lib/invoiceScheduling";
+import { isAnnualUpfrontCycle, monthsInPeriod, periodAfterInvoice, getNextInvoiceDate } from "@/lib/invoiceScheduling";
 import { buildSnapshotFields } from "@/lib/invoiceSnapshot";
 // Asset group filtering now handled server-side in ammp-sync-contract
 
@@ -1441,7 +1441,6 @@ export function InvoiceCalculator({
 
         if (isAnnualUpfrontContract && selectedCustomer.contractId) {
           // Per-MW dual-cadence: pull anchor + YTD from DB, then compute next via shared helper.
-          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
 
           const anchor = contractRow?.annual_billing_anchor_date ?? null;
           const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
@@ -1469,7 +1468,6 @@ export function InvoiceCalculator({
         } else if (isSpsDualCadence && selectedCustomer.contractId) {
           // SPS dual-cadence: ytd_invoiced_amount tracks REMAINING PREPAID BALANCE.
           // Annual cycle → set to annualUpfrontAmount. Quarterly → decrement by credit applied.
-          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
           const anchor = contractRow?.annual_billing_anchor_date ?? null;
           const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDate, anchor);
           const nextDate = getNextInvoiceDate(invoiceDate, {

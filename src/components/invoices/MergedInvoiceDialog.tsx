@@ -19,6 +19,7 @@ import { buildPackageLineItems } from "@/lib/xeroLineItems";
 import { uploadMultipleToSharePoint } from "@/utils/sharePointUpload";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { buildSnapshotFields } from "@/lib/invoiceSnapshot";
+import { periodAfterInvoice, getNextInvoiceDate, isAnnualUpfrontCycle } from "@/lib/invoiceScheduling";
 
 interface ContractForMerge {
   contractId: string;
@@ -511,8 +512,6 @@ export function MergedInvoiceDialog({
 
       const deltasByContract: Record<string, number> = {};
       for (const contract of selectedContractsList) {
-        const { periodAfterInvoice } = await import('@/lib/invoiceScheduling');
-
         const contractUpdate: Record<string, any> = {};
         const result = calculationResults.get(contract.contractId);
         const spsB: any = (result as any)?.spsAnnualUpfrontBreakdown;
@@ -531,7 +530,6 @@ export function MergedInvoiceDialog({
 
         if (perMwB) {
           // Per-MW dual-cadence
-          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
           const anchor = contractRow?.annual_billing_anchor_date ?? null;
           const invoiceDt = new Date(contract.nextInvoiceDate);
           const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDt, anchor);
@@ -552,7 +550,6 @@ export function MergedInvoiceDialog({
           deltasByContract[contract.contractId] = Number(contractUpdate.ytd_invoiced_amount) - prevYtd;
         } else if (spsB && contractRow?.annual_billing_anchor_date) {
           // SPS dual-cadence: ytd_invoiced_amount tracks REMAINING PREPAID BALANCE
-          const { getNextInvoiceDate, isAnnualUpfrontCycle } = await import('@/lib/invoiceScheduling');
           const anchor = contractRow.annual_billing_anchor_date;
           const invoiceDt = new Date(contract.nextInvoiceDate);
           const wasAnnualCycle = isAnnualUpfrontCycle(invoiceDt, anchor);
