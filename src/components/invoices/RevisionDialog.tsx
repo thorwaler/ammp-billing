@@ -616,6 +616,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                         />
                         <span className="flex-1 truncate">
                           {c.assetName}
+                          <span className="block text-xs text-muted-foreground">
+                            ID: {c.assetId}
+                          </span>
                           {c.metric === "kva" && c.ratingUnknownAtFreeze && (
                             <span className="block text-xs text-muted-foreground">rating unknown at freeze</span>
                           )}
