@@ -5,7 +5,7 @@ import {
   zeroCapacityMessage,
   zeroCapacityTotal,
 } from "@/lib/supportDocumentWarnings";
-import { isAssetIgnored } from "@/lib/ignoredAssets";
+import { siteCapacityLabel } from "@/lib/supportDocumentWarnings";
 
 
 interface SupportDocumentProps {
@@ -171,11 +171,15 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <tr key={site.assetId}>
                   <td className="border border-border p-1">
                     {site.assetName}
-                    {isAssetIgnored(site.assetId) ? (
-                      <span className="text-muted-foreground"> — ignored (not relevant)</span>
-                    ) : site.kva == null || site.kva <= 0 ? (
-                      <span className="text-destructive"> — rating not set</span>
-                    ) : null}
+                    {(() => {
+                      const label = siteCapacityLabel(site.assetId, site.kva, 'kVA');
+                      if (label.status === 'ok') return null;
+                      return (
+                        <span className={label.status === 'ignored' ? 'text-muted-foreground' : 'text-destructive'}>
+                          {label.suffix}
+                        </span>
+                      );
+                    })()}
                   </td>
 
                   <td className="border border-border p-1 text-right">
@@ -397,11 +401,15 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                       <td className="border border-border p-1">
                         {site.assetName}
                         {site.isMwhOverride ? ' (battery-only, MWh entered as capacity)' : ''}
-                        {isAssetIgnored(site.assetId) ? (
-                          <span className="text-muted-foreground"> — ignored (not relevant)</span>
-                        ) : !site.mwp || site.mwp <= 0 ? (
-                          <span className="text-destructive"> — capacity not set</span>
-                        ) : null}
+                        {(() => {
+                          const label = siteCapacityLabel(site.assetId, site.mwp, 'MWp');
+                          if (label.status === 'ok') return null;
+                          return (
+                            <span className={label.status === 'ignored' ? 'text-muted-foreground' : 'text-destructive'}>
+                              {label.suffix}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       <td className="border border-border p-1">{site.assetId}</td>
