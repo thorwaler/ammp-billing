@@ -5,6 +5,7 @@ import {
   fetchIgnoredAssets,
   ignoreAsset,
   unignoreAsset,
+  invalidateIgnoredAssets,
   type IgnoredAsset,
 } from '@/lib/ignoredAssets';
 
@@ -24,10 +25,13 @@ export function useIgnoredAssets() {
   const rows: IgnoredAsset[] = data || [];
   const ignoredIds = new Set(rows.map((r) => r.asset_id));
 
-  const refresh = useCallback(
-    () => queryClient.invalidateQueries({ queryKey: ['ignored-assets'] }),
-    [queryClient]
-  );
+  // `fetchIgnoredAssets` also refreshes the module-level cache that backs the
+  // synchronous `isAssetIgnored` used by the PDF/support-document renderers,
+  // so both views always agree after a refresh.
+  const refresh = useCallback(() => {
+    invalidateIgnoredAssets();
+    return queryClient.invalidateQueries({ queryKey: ['ignored-assets'] });
+  }, [queryClient]);
 
   const toggle = useCallback(
     async (assetId: string, assetName?: string | null, reason?: string | null) => {
