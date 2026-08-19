@@ -10,7 +10,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { path, method = 'GET', token } = await req.json();
+    const { path, method = 'GET', token, body } = await req.json();
 
     if (!path || !token) {
       return new Response(
@@ -38,9 +38,12 @@ Deno.serve(async (req) => {
         headers: {
           'accept': 'application/json',
           'Authorization': `Bearer ${token}`,
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal,
       });
+
     } catch (fetchError) {
       clearTimeout(timeoutId);
       const errorMessage = fetchError instanceof Error ? fetchError.message : 'Unknown fetch error';

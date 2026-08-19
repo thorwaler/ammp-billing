@@ -1,11 +1,15 @@
 // On-demand sanity check for registered PV capacity.
 //
-// For every asset in a contract's cached capabilities we pull the peak daily
-// PV output over the last 365 days from the AMMP data API, convert it to an
-// implied kWp (peak daily kWh / 5 effective sun hours) and compare it to the
-// registered capacity. Ratios far below or above 1 mean the registered value
-// is unrealistic. Assets that return no data are reported separately — a very
-// common case, so they are never treated as failures.
+// AMMP has no asset-level `/data` endpoint (that path 404s). Time series live
+// per device: `GET /v1/devices/{device_id}/historic-data/pv-inverter` with
+// ISO-8601 `date_from` / `date_to` and a 5m or 15m `interval`. We take the peak
+// `pv_inverter_ac_P_total` over a short recent window for every PV inverter of
+// an asset, sum the per-device peaks, and compare the implied kWp against the
+// registered capacity.
+//
+// Those responses are megabytes each, so a run handles a slice of the contract's
+// assets (`offset` / `limit`) and the caller pages through until `nextOffset` is
+// null.
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { fetchAmmpData } from "../_shared/ammpClient.ts";
@@ -18,12 +22,14 @@ const corsHeaders = {
 
 const LOW_RATIO = 0.3;
 const HIGH_RATIO = 1.2;
-const SUN_HOURS = 5;
-const MAX_ASSETS = 250;
-const CONCURRENCY = 5;
-const TIME_BUDGET_MS = 110_000;
+const DEFAULT_WINDOW_DAYS = 7;
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 40;
+const MAX_DEVICES_PER_ASSET = 8;
+const CONCURRENCY = 3;
+const TIME_BUDGET_MS = 100_000;
 
-type Verdict = "ok" | "too_low" | "too_high" | "no_data";
+type Verdict = "ok" | "too_low" | "too_high" | "no_data" | "error";
 
 interface AssetVerdict {
   assetId: string;
@@ -32,6 +38,9 @@ interface AssetVerdict {
   observedKWp: number | null;
   ratio: number | null;
   verdict: Verdict;
+  error?: string;
+  /** How many PV inverters contributed to the observed peak. */
+  devices?: number;
 }
 
 async function getToken(apiKey: string): Promise<string> {
@@ -48,11 +57,44 @@ async function getToken(apiKey: string): Promise<string> {
   return data.access_token;
 }
 
+/** Peak value of `pv_inverter_ac_P_total` (W) across all datasets of a device. */
+function peakPowerW(payload: any): number {
+  const datasets = payload?.pv_inverter_ac_P_total?.datasets ?? [];
+  let peak = 0;
+  for (const ds of datasets) {
+    for (const dp of ds?.data ?? []) {
+      const v = dp?.value;
+      if (typeof v === "number" && Number.isFinite(v) && v > peak) peak = v;
+    }
+  }
+  return peak;
+}
+
+/** PV inverter device IDs for an asset — cached list first, live fetch as fallback. */
+async function pvInverterDeviceIds(token: string, asset: any): Promise<string[]> {
+  const cached: any[] = Array.isArray(asset?.devices) ? asset.devices : [];
+  const fromCache = cached
+    .filter((d) => d?.deviceType === "pv_inverter" && d?.deviceId)
+    .map((d) => String(d.deviceId));
+  if (fromCache.length > 0) return fromCache.slice(0, MAX_DEVICES_PER_ASSET);
+
+  const payload = await fetchAmmpData(token, `/assets/${asset.assetId}/devices?include_virtual=true`, {
+    maxAttempts: 2,
+    logTag: "ammp-capacity-sanity-check",
+  });
+  const devices: any[] = payload?.devices ?? [];
+  return devices
+    .filter((d) => d?.device_type === "pv_inverter" && d?.device_id)
+    .map((d) => String(d.device_id))
+    .slice(0, MAX_DEVICES_PER_ASSET);
+}
+
 async function checkAsset(
   token: string,
   asset: any,
   dateFrom: string,
   dateTo: string,
+  logFirst: { done: boolean },
 ): Promise<AssetVerdict> {
   const registeredKWp = Number(asset.capacityKWp ?? (asset.totalMW ?? 0) * 1000) || 0;
   const base: AssetVerdict = {
@@ -64,38 +106,65 @@ async function checkAsset(
     verdict: "no_data",
   };
 
-  let payload: any;
+  let deviceIds: string[];
   try {
-    payload = await fetchAmmpData(token, `/assets/${asset.assetId}/data`, {
-      method: "POST",
-      body: {
-        asset_ids: [asset.assetId],
-        interval: "1d",
-        date_from: dateFrom,
-        date_to: dateTo,
-      },
-      maxAttempts: 2,
-      logTag: "ammp-capacity-sanity-check",
-    });
-  } catch (_err) {
-    return base;
+    deviceIds = await pvInverterDeviceIds(token, asset);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ...base, verdict: "error", error: message };
   }
 
-  const series = payload?.pv_energy_out?.data ?? [];
-  let peakKwh = 0;
-  for (const dp of series) {
-    if (typeof dp?.value === "number" && dp.value > peakKwh) peakKwh = dp.value;
-  }
-  if (peakKwh <= 0) return base;
+  if (deviceIds.length === 0) return { ...base, verdict: "no_data", devices: 0 };
 
-  const observedKWp = peakKwh / SUN_HOURS;
+  let totalPeakW = 0;
+  let contributing = 0;
+  let lastError: string | undefined;
+
+  for (const deviceId of deviceIds) {
+    const path = `/devices/${deviceId}/historic-data/pv-inverter?date_from=${encodeURIComponent(
+      dateFrom,
+    )}&date_to=${encodeURIComponent(dateTo)}&interval=15m`;
+    try {
+      const payload = await fetchAmmpData(token, path, {
+        maxAttempts: 2,
+        logTag: "ammp-capacity-sanity-check",
+      });
+      if (!logFirst.done) {
+        logFirst.done = true;
+        console.log(
+          `[ammp-capacity-sanity-check] first device response ${path} keys=${JSON.stringify(
+            Object.keys(payload ?? {}).slice(0, 25),
+          )} datasets=${payload?.pv_inverter_ac_P_total?.datasets?.length ?? 0}`,
+        );
+      }
+      const peak = peakPowerW(payload);
+      if (peak > 0) {
+        totalPeakW += peak;
+        contributing++;
+      }
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
+      console.warn(`[ammp-capacity-sanity-check] ${path} failed: ${lastError}`);
+    }
+  }
+
+  if (totalPeakW <= 0) {
+    return {
+      ...base,
+      devices: deviceIds.length,
+      verdict: lastError ? "error" : "no_data",
+      error: lastError,
+    };
+  }
+
+  const observedKWp = totalPeakW / 1000;
   if (registeredKWp <= 0) {
-    return { ...base, observedKWp, ratio: null, verdict: "too_low" };
+    return { ...base, devices: contributing, observedKWp, ratio: null, verdict: "too_low" };
   }
 
   const ratio = observedKWp / registeredKWp;
   const verdict: Verdict = ratio < LOW_RATIO ? "too_low" : ratio > HIGH_RATIO ? "too_high" : "ok";
-  return { ...base, observedKWp, ratio, verdict };
+  return { ...base, devices: contributing, observedKWp, ratio, verdict };
 }
 
 Deno.serve(async (req) => {
@@ -143,6 +212,13 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const offset = Number.isFinite(body?.offset) ? Math.max(0, Math.floor(body.offset)) : 0;
+    const limit = Number.isFinite(body?.limit)
+      ? Math.min(MAX_LIMIT, Math.max(1, Math.floor(body.limit)))
+      : DEFAULT_LIMIT;
+    const windowDays = Number.isFinite(body?.windowDays)
+      ? Math.min(30, Math.max(1, Math.floor(body.windowDays)))
+      : DEFAULT_WINDOW_DAYS;
 
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
@@ -161,16 +237,13 @@ Deno.serve(async (req) => {
     const { data: ignoredRows } = await supabase.from("ignored_assets").select("asset_id");
     const ignored = new Set((ignoredRows ?? []).map((r: any) => String(r.asset_id)));
 
-    const allAssets: any[] = (contract as any).cached_capabilities?.assetBreakdown ?? [];
-    const assets = allAssets
-      .filter((a) => a?.assetId && !ignored.has(String(a.assetId)) && a?.isBatteryOnly !== true)
-      .slice(0, MAX_ASSETS);
+    const allAssets: any[] = ((contract as any).cached_capabilities?.assetBreakdown ?? []).filter(
+      (a: any) => a?.assetId && !ignored.has(String(a.assetId)) && a?.isBatteryOnly !== true,
+    );
+    const assets = allAssets.slice(offset, offset + limit);
 
-    const dateTo = new Date();
-    const dateFrom = new Date();
-    dateFrom.setDate(dateFrom.getDate() - 365);
-    const from = dateFrom.toISOString().slice(0, 10);
-    const to = dateTo.toISOString().slice(0, 10);
+    const dateTo = new Date().toISOString().slice(0, 19) + "Z";
+    const dateFrom = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 19) + "Z";
 
     const apiKeyRow = await supabase
       .from("ammp_connections")
@@ -183,6 +256,7 @@ Deno.serve(async (req) => {
     const token = await getToken(apiKey);
 
     const results: AssetVerdict[] = [];
+    const logFirst = { done: false };
     let truncated = false;
 
     for (let i = 0; i < assets.length; i += CONCURRENCY) {
@@ -191,12 +265,22 @@ Deno.serve(async (req) => {
         break;
       }
       const batch = assets.slice(i, i + CONCURRENCY);
-      const batchResults = await Promise.all(batch.map((a) => checkAsset(token, a, from, to)));
+      const batchResults = await Promise.all(
+        batch.map((a) => checkAsset(token, a, dateFrom, dateTo, logFirst)),
+      );
       results.push(...batchResults);
     }
 
     const suspicious = results.filter((r) => r.verdict === "too_low" || r.verdict === "too_high");
     const noData = results.filter((r) => r.verdict === "no_data");
+    const errors = results.filter((r) => r.verdict === "error");
+    const errorSample = Array.from(new Set(errors.map((r) => r.error ?? "unknown error"))).slice(0, 3);
+    const processed = offset + results.length;
+    const nextOffset = processed < allAssets.length ? processed : null;
+
+    console.log(
+      `[ammp-capacity-sanity-check] contract=${contractId} offset=${offset} checked=${results.length}/${allAssets.length} suspicious=${suspicious.length} noData=${noData.length} errors=${errors.length} sample=${JSON.stringify(errorSample)}`,
+    );
 
     if (suspicious.length > 0) {
       const assetIds = suspicious.map((r) => r.assetId).sort();
@@ -222,7 +306,7 @@ Deno.serve(async (req) => {
           title: `${suspicious.length} site(s) with unrealistic PV capacity — ${
             (contract as any).contract_name || (contract as any).company_name
           }`,
-          description: `Observed peak output does not match the registered capacity (expected ratio between ${LOW_RATIO} and ${HIGH_RATIO}): ${suspicious
+          description: `Observed peak output over the last ${windowDays} days does not match the registered capacity (expected ratio between ${LOW_RATIO} and ${HIGH_RATIO}): ${suspicious
             .slice(0, 10)
             .map(
               (r) =>
@@ -235,6 +319,7 @@ Deno.serve(async (req) => {
             asset_ids: assetIds,
             low_ratio: LOW_RATIO,
             high_ratio: HIGH_RATIO,
+            window_days: windowDays,
             assets: suspicious.slice(0, 50).map((r) => ({
               asset_id: r.assetId,
               asset_name: r.assetName,
@@ -252,10 +337,15 @@ Deno.serve(async (req) => {
       JSON.stringify({
         ok: true,
         checked: results.length,
-        totalAssets: assets.length,
+        totalAssets: allAssets.length,
+        offset,
+        nextOffset,
+        windowDays,
         truncated,
         suspiciousCount: suspicious.length,
         noDataCount: noData.length,
+        errorCount: errors.length,
+        errorSample,
         results,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
