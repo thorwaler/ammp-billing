@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
     const pv = linked.filter((l: any) => l.rel.includes("pv-inverter")).slice(0, 1);
     for (const l of pv) {
       const rel = String(l.href).split("/v1")[1];
-      for (const days of [30, 90, 365]) {
+      for (const days of [14]) {
         const f = new Date(Date.now() - days * 864e5).toISOString().slice(0, 19) + "Z";
         attempts.push({ path: `${rel}?date_from=${encodeURIComponent(f)}&date_to=${encodeURIComponent(to)}&interval=15m`, method: "GET" });
       }
