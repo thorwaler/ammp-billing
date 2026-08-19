@@ -75,6 +75,7 @@ const elumTierLabel = (tier?: string | null) => {
 // Helper function to format date in CET timezone
 import { formatDateCET } from "@/lib/dateUtils";
 import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
+import { registerBatteryOnlyAssets, isBatteryOnlyAsset } from "@/lib/batteryOnlyAssets";
 const formatDate = (dateString: string) => {
   try {
     return formatDateCET(dateString, 'MMM d, yyyy');
