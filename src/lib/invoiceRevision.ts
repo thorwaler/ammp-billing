@@ -693,6 +693,7 @@ export async function fetchLiveContractData(contractId: string): Promise<{
     .maybeSingle();
 
   const caps: any = (data as any)?.cached_capabilities || {};
+  registerBatteryOnlyAssets(caps);
   const rawAssets: any[] = caps.assetBreakdown || caps.assets || [];
   return {
     assets: rawAssets.map((a: any) => ({ ...a, assetId: String(a.assetId ?? a.id), totalMW: num(a.totalMW) })),
