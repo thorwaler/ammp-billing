@@ -53,12 +53,23 @@ export async function runZeroPvScan(
   for (const c of (contracts ?? []) as ContractRow[]) {
     const assets: any[] =
       c.cached_capabilities?.assetBreakdown ?? c.cached_capabilities?.assets ?? [];
+    // Battery-only sites legitimately report 0 PV — they get their own alert.
+    const batteryOnlyAssets = assets.filter(
+      (a) => a?.isBatteryOnly === true && a?.assetId && !ignored.has(String(a.assetId))
+    );
+    const batteryOnlyIds = new Set(batteryOnlyAssets.map((a) => String(a.assetId)));
     const zeroAssets = assets.filter(
-      (a) => Number(a?.totalMW ?? 0) === 0 && a?.assetId && !ignored.has(String(a.assetId))
+      (a) =>
+        Number(a?.totalMW ?? 0) === 0 &&
+        a?.assetId &&
+        !ignored.has(String(a.assetId)) &&
+        !batteryOnlyIds.has(String(a.assetId))
     );
     const nonZeroIds = new Set(
       assets.filter((a) => Number(a?.totalMW ?? 0) > 0 && a?.assetId).map((a) => a.assetId)
     );
+
+    await raiseBatteryOnlyAlert(supabase, c, batteryOnlyAssets, result);
 
 
     // Resolve incidents that now have non-zero capacity.
@@ -69,7 +80,11 @@ export async function runZeroPvScan(
       .is("resolved_at", null);
 
     for (const inc of openIncidents ?? []) {
-      if (nonZeroIds.has(inc.asset_id) || ignored.has(String(inc.asset_id))) {
+      if (
+        nonZeroIds.has(inc.asset_id) ||
+        ignored.has(String(inc.asset_id)) ||
+        batteryOnlyIds.has(String(inc.asset_id))
+      ) {
         await supabase
           .from("zero_pv_incidents")
           .update({ resolved_at: new Date().toISOString() })
@@ -142,4 +157,57 @@ export async function runZeroPvScan(
   }
 
   return result;
+}
+
+/**
+ * Sites with storage devices but no PV inverter: 0 PV capacity is expected, so
+ * they should be priced on battery capacity instead of being chased as a data
+ * error. One open alert per contract, refreshed when the asset set changes.
+ */
+async function raiseBatteryOnlyAlert(
+  supabase: any,
+  c: ContractRow,
+  batteryOnlyAssets: any[],
+  result: ZeroPvScanResult
+): Promise<void> {
+  if (batteryOnlyAssets.length === 0) return;
+
+  const assetIds = batteryOnlyAssets.map((a) => String(a.assetId)).sort();
+
+  const { data: existingAlerts } = await supabase
+    .from("invoice_alerts")
+    .select("id, metadata")
+    .eq("contract_id", c.id)
+    .eq("alert_type", "battery_only_site")
+    .eq("is_acknowledged", false);
+
+  const duplicate = (existingAlerts ?? []).some((al: any) => {
+    const ids = Array.isArray(al?.metadata?.asset_ids) ? [...al.metadata.asset_ids].sort() : [];
+    return ids.length === assetIds.length && ids.every((v, i) => v === assetIds[i]);
+  });
+  if (duplicate) return;
+
+  const { error } = await supabase.from("invoice_alerts").insert({
+    user_id: c.user_id,
+    contract_id: c.id,
+    customer_id: c.customer_id,
+    alert_type: "battery_only_site",
+    severity: "info",
+    title: `${batteryOnlyAssets.length} battery-only site(s) — ${
+      c.contract_name || c.company_name
+    }`,
+    description: `These sites have storage devices but no PV inverter, so their 0 MWp PV capacity is expected. Review whether they should be billed on battery capacity: ${batteryOnlyAssets
+      .slice(0, 10)
+      .map((a) => a.assetName ?? a.assetId)
+      .join(", ")}.`,
+    metadata: {
+      asset_ids: assetIds,
+      assets: batteryOnlyAssets.slice(0, 50).map((a) => ({
+        asset_id: a.assetId,
+        asset_name: a.assetName ?? a.assetId,
+        battery_capacity_kwh: a.batteryCapacityKWh ?? null,
+      })),
+    },
+  });
+  if (!error) result.alertsRaised++;
 }

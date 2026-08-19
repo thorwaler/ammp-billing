@@ -18,6 +18,8 @@ export const AMMP_TIMEOUT_MS = 25_000;
 
 export interface AmmpFetchOptions {
   method?: string;
+  /** JSON request body (POST endpoints such as `/assets/{id}/data`). */
+  body?: unknown;
   /** Epoch ms after which retries are pointless — never wait past the caller's budget. */
   deadline?: number;
   maxAttempts?: number;
@@ -55,7 +57,7 @@ export async function fetchAmmpData(
   path: string,
   options: AmmpFetchOptions = {},
 ): Promise<any> {
-  const { method = 'GET', deadline, maxAttempts = 3, logTag = 'ammp' } = options;
+  const { method = 'GET', body, deadline, maxAttempts = 3, logTag = 'ammp' } = options;
   let lastError = `AMMP API call for ${path} failed`;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -69,7 +71,9 @@ export async function fetchAmmpData(
         headers: {
           accept: 'application/json',
           Authorization: `Bearer ${token}`,
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
         signal: controller.signal,
       });
     } catch (err: any) {
