@@ -2,9 +2,9 @@
 //
 // AMMP has no asset-level `/data` endpoint. Series live per device:
 // `GET /v1/devices/{device_id}/historic-data/pv-inverter` with ISO-8601
-// `date_from` / `date_to` and a 5m/15m `interval`. We fetch every PV inverter of
-// the asset, align points on timestamp, sum across devices and downsample before
-// returning (raw responses are megabytes).
+// `date_from` / `date_to`. AMMP only accepts `5m` or `15m` intervals, so long
+// windows are assembled from short sub-requests and aggregated here (raw
+// downsample, or one daily-peak point per UTC day).
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { fetchAmmpData } from "../_shared/ammpClient.ts";
@@ -18,7 +18,10 @@ const corsHeaders = {
 const MAX_DEVICES_PER_ASSET = 8;
 const MAX_POINTS = 500;
 const DEFAULT_WINDOW_DAYS = 7;
-const ALLOWED_WINDOWS = [7, 30, 90];
+const INTERVAL = "15m"; // AMMP only accepts '5m' or '15m'
+const SUB_REQUEST_DAYS = 7; // per-device request span
+const MAX_SLICE_DAYS = 31; // largest window a single invocation will attempt
+const TIME_BUDGET_MS = 100_000;
 
 async function getToken(apiKey: string): Promise<string> {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -96,8 +99,37 @@ function downsample(points: Array<[number, number]>): Array<{ t: number; kW: num
     .map(({ t, w }) => ({ t, kW: Math.round((w / 1000) * 1000) / 1000 }));
 }
 
+/** One max point per UTC day. */
+function dailyPeaks(points: Array<[number, number]>): Array<{ t: number; kW: number }> {
+  const byDay = new Map<number, number>();
+  for (const [t, w] of points) {
+    const day = Math.floor(t / 86_400_000) * 86_400_000;
+    const prev = byDay.get(day);
+    if (prev == null || w > prev) byDay.set(day, w);
+  }
+  return [...byDay.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([t, w]) => ({ t, kW: Math.round((w / 1000) * 1000) / 1000 }));
+}
+
+function ammpDate(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19) + "Z";
+}
+
+/** Split [from, to] into sub-ranges of at most SUB_REQUEST_DAYS. */
+function subRanges(fromMs: number, toMs: number): Array<[number, number]> {
+  const step = SUB_REQUEST_DAYS * 86_400_000;
+  const out: Array<[number, number]> = [];
+  for (let start = fromMs; start < toMs; start += step) {
+    out.push([start, Math.min(start + step, toMs)]);
+  }
+  return out;
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const startedAt = Date.now();
 
   try {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -137,10 +169,33 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const windowDays = ALLOWED_WINDOWS.includes(Number(body?.windowDays))
-      ? Number(body.windowDays)
-      : DEFAULT_WINDOW_DAYS;
-    const interval = windowDays > 7 ? "1h" : "15m";
+
+    const granularity: "raw" | "daily" = body?.granularity === "daily" ? "daily" : "raw";
+
+    // Explicit slice range wins; otherwise fall back to a trailing windowDays window.
+    let fromMs: number;
+    let toMs: number;
+    if (typeof body?.dateFrom === "string" && typeof body?.dateTo === "string") {
+      fromMs = Date.parse(body.dateFrom);
+      toMs = Date.parse(body.dateTo);
+      if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs <= fromMs) {
+        return new Response(JSON.stringify({ error: "Invalid dateFrom / dateTo" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      // Cap the slice span so one invocation stays within its execution budget.
+      const maxSpan = MAX_SLICE_DAYS * 86_400_000;
+      if (toMs - fromMs > maxSpan) fromMs = toMs - maxSpan;
+    } else {
+      const requested = Number(body?.windowDays);
+      const windowDays = Number.isFinite(requested) && requested > 0
+        ? Math.min(requested, MAX_SLICE_DAYS)
+        : DEFAULT_WINDOW_DAYS;
+      toMs = Date.now();
+      fromMs = toMs - windowDays * 86_400_000;
+    }
+    const windowDays = Math.round((toMs - fromMs) / 86_400_000);
 
     const { data: contract, error: contractError } = await supabase
       .from("contracts")
@@ -178,6 +233,10 @@ Deno.serve(async (req) => {
           assetId,
           assetName: asset?.assetName ?? assetId,
           windowDays,
+          granularity,
+          interval: INTERVAL,
+          dateFrom: ammpDate(fromMs),
+          dateTo: ammpDate(toMs),
           registeredKWp,
           peakKW: null,
           ratio: null,
@@ -191,9 +250,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const dateTo = new Date().toISOString().slice(0, 19) + "Z";
-    const dateFrom = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 19) + "Z";
-
+    const ranges = subRanges(fromMs, toMs);
     const combined = new Map<number, number>();
     const perDevice: Array<{
       deviceId: string;
@@ -203,48 +260,59 @@ Deno.serve(async (req) => {
       error?: string;
     }> = [];
     let lastError: string | undefined;
+    let truncated = false;
+    let earliestFetched: number | null = null;
 
     for (const device of devices) {
-      const path = `/devices/${device.deviceId}/historic-data/pv-inverter?date_from=${encodeURIComponent(
-        dateFrom,
-      )}&date_to=${encodeURIComponent(dateTo)}&interval=${interval}`;
-      try {
-        const payload = await fetchAmmpData(token, path, {
-          maxAttempts: 2,
-          logTag: "ammp-asset-historic-data",
-        });
-        const series = extractSeries(payload);
-        let peak = 0;
-        for (const [t, w] of series) {
-          if (w > peak) peak = w;
-          combined.set(t, (combined.get(t) ?? 0) + w);
+      let peak = 0;
+      let count = 0;
+      let deviceError: string | undefined;
+
+      for (const [rFrom, rTo] of ranges) {
+        if (Date.now() - startedAt > TIME_BUDGET_MS) {
+          truncated = true;
+          break;
         }
-        perDevice.push({
-          deviceId: device.deviceId,
-          deviceName: device.deviceName,
-          peakKW: series.length > 0 ? Math.round((peak / 1000) * 100) / 100 : null,
-          points: series.length,
-        });
-      } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err);
-        perDevice.push({
-          deviceId: device.deviceId,
-          deviceName: device.deviceName,
-          peakKW: null,
-          points: 0,
-          error: lastError,
-        });
+        const path = `/devices/${device.deviceId}/historic-data/pv-inverter?date_from=${encodeURIComponent(
+          ammpDate(rFrom),
+        )}&date_to=${encodeURIComponent(ammpDate(rTo))}&interval=${INTERVAL}`;
+        try {
+          const payload = await fetchAmmpData(token, path, {
+            maxAttempts: 2,
+            logTag: "ammp-asset-historic-data",
+          });
+          const series = extractSeries(payload);
+          for (const [t, w] of series) {
+            if (w > peak) peak = w;
+            combined.set(t, (combined.get(t) ?? 0) + w);
+            if (earliestFetched == null || t < earliestFetched) earliestFetched = t;
+          }
+          count += series.length;
+        } catch (err) {
+          deviceError = err instanceof Error ? err.message : String(err);
+          lastError = deviceError;
+        }
       }
+
+      perDevice.push({
+        deviceId: device.deviceId,
+        deviceName: device.deviceName,
+        peakKW: count > 0 ? Math.round((peak / 1000) * 100) / 100 : null,
+        points: count,
+        error: deviceError,
+      });
+
+      if (truncated) break;
     }
 
     const merged = [...combined.entries()].sort((a, b) => a[0] - b[0]);
-    const points = downsample(merged);
+    const points = granularity === "daily" ? dailyPeaks(merged) : downsample(merged);
     const peakW = merged.reduce((max, [, w]) => (w > max ? w : max), 0);
     const peakKW = merged.length > 0 ? Math.round((peakW / 1000) * 100) / 100 : null;
     const ratio = peakKW != null && registeredKWp > 0 ? Math.round((peakKW / registeredKWp) * 100) / 100 : null;
 
     console.log(
-      `[ammp-asset-historic-data] asset=${assetId} window=${windowDays}d devices=${devices.length} points=${points.length} peakKW=${peakKW}`,
+      `[ammp-asset-historic-data] asset=${assetId} range=${ammpDate(fromMs)}..${ammpDate(toMs)} granularity=${granularity} devices=${devices.length} points=${points.length} peakKW=${peakKW} truncated=${truncated}`,
     );
 
     return new Response(
@@ -253,7 +321,12 @@ Deno.serve(async (req) => {
         assetId,
         assetName: asset?.assetName ?? assetId,
         windowDays,
-        interval,
+        granularity,
+        interval: INTERVAL,
+        dateFrom: ammpDate(fromMs),
+        dateTo: ammpDate(toMs),
+        truncated,
+        coveredFrom: earliestFetched != null ? ammpDate(earliestFetched) : null,
         registeredKWp,
         peakKW,
         ratio,
