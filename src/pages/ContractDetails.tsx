@@ -1837,6 +1837,29 @@ const ContractDetails = () => {
                             {ignored && (
                               <Badge variant="outline" className="ml-2 text-xs">Ignored</Badge>
                             )}
+                            {asset.isBatteryOnly && (
+                              <Badge
+                                variant="outline"
+                                className="ml-2 text-xs"
+                                title="Storage devices but no PV inverter — 0 MWp is expected here"
+                              >
+                                Battery-only
+                                {asset.batteryCapacityKWh != null
+                                  ? ` · ${Number(asset.batteryCapacityKWh).toFixed(0)} kWh`
+                                  : ''}
+                              </Badge>
+                            )}
+                            {capacityCheckByAsset.get(asset.assetId) && (
+                              <Badge
+                                variant="outline"
+                                className="ml-2 text-xs text-destructive border-destructive/40"
+                                title={`Observed ~${(capacityCheckByAsset.get(asset.assetId)!.observedKWp ?? 0).toFixed(1)} kWp vs ${capacityCheckByAsset.get(asset.assetId)!.registeredKWp.toFixed(1)} kWp registered`}
+                              >
+                                {capacityCheckByAsset.get(asset.assetId)!.verdict === 'too_low'
+                                  ? 'Capacity looks too high'
+                                  : 'Capacity looks too low'}
+                              </Badge>
+                            )}
                           </td>
 
                           {showCategoryColumn && (
