@@ -82,12 +82,12 @@ export function zeroCapacityMessage(section: ZeroCapacitySection): string {
   } until the data is corrected: ${section.siteNames.join(', ')}`;
 }
 
-export type SiteCapacityStatus = 'ok' | 'ignored' | 'missing';
+export type SiteCapacityStatus = 'ok' | 'ignored' | 'missing' | 'battery-only';
 
 /**
  * Single source of truth for the per-site suffix shown next to an asset name
- * in support documents (screen and PDF) — ignored "zombie" sites, and sites
- * with no usable capacity for the given unit.
+ * in support documents (screen and PDF) — ignored "zombie" sites, battery-only
+ * sites, and sites with no usable capacity for the given unit.
  */
 export function siteCapacityLabel(
   assetId: any,
@@ -97,6 +97,15 @@ export function siteCapacityLabel(
   if (isAssetIgnored(assetId)) {
     return { status: 'ignored', suffix: ' — ignored (not relevant)' };
   }
+  if (isBatteryOnlyAsset(assetId)) {
+    const kwh = batteryCapacityKWh(assetId);
+    return {
+      status: 'battery-only',
+      suffix: kwh != null
+        ? ` — battery-only (${kwh.toFixed(0)} kWh, no PV inverter)`
+        : ' — battery-only (no PV inverter)',
+    };
+  }
   if (isZero(value)) {
     return {
       status: 'missing',
@@ -104,4 +113,19 @@ export function siteCapacityLabel(
     };
   }
   return { status: 'ok', suffix: '' };
+}
+
+/** Battery-only sites in a support document, for a summary note. */
+export function collectBatteryOnlySites(data: SupportDocumentData): string[] {
+  const names = new Map<string, string>();
+  const add = (assetId: any, assetName: string) => {
+    if (isBatteryOnlyAsset(assetId)) names.set(String(assetId), assetName);
+  };
+
+  for (const org of data.elumOrgTierBreakdown?.orgs ?? []) {
+    for (const s of org.sites) add(s.assetId, s.assetName);
+  }
+  for (const a of data.assetBreakdown ?? []) add((a as any).assetId, a.assetName);
+
+  return [...names.values()];
 }
