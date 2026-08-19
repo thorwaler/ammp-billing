@@ -31,6 +31,7 @@ import {
 import { buildContractLineItems } from "@/lib/xeroLineItems";
 import { buildSnapshotFields, type InvoiceInputSnapshot } from "@/lib/invoiceSnapshot";
 import { isPackage2026 } from "@/data/pricingData";
+import { isBatteryOnlyAsset, batteryCapacityKWh } from "@/lib/batteryOnlyAssets";
 
 const ACCOUNT_PLATFORM_FEES = "1002";
 const ACCOUNT_IMPLEMENTATION_FEES = "1000";
