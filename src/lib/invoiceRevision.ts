@@ -24,6 +24,7 @@ import {
 import { SPS_ADDONS, isSpsPackage, isSolarAfricaPackage } from '@/data/pricingData';
 import { monthsInPeriod, isAnnualUpfrontCycle } from '@/lib/invoiceScheduling';
 import type { InvoiceInputSnapshot } from '@/lib/invoiceSnapshot';
+import { registerBatteryOnlyAssets } from '@/lib/batteryOnlyAssets';
 
 export type RevisionMode = 'zero_mw_only' | 'full_recalc';
 
