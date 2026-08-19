@@ -108,6 +108,57 @@ const ContractDetails = () => {
   const [isMoving, setIsMoving] = useState(false);
   const { isIgnored: isAssetIgnoredLive, toggle: toggleIgnoredAsset } = useIgnoredAssets();
 
+  // PV capacity sanity check (observed peak output vs registered capacity)
+  interface CapacityCheckResult {
+    assetId: string;
+    assetName: string;
+    registeredKWp: number;
+    observedKWp: number | null;
+    ratio: number | null;
+    verdict: 'ok' | 'too_low' | 'too_high' | 'no_data';
+  }
+  const [isCheckingCapacity, setIsCheckingCapacity] = useState(false);
+  const [capacityCheck, setCapacityCheck] = useState<{
+    checked: number;
+    totalAssets: number;
+    truncated: boolean;
+    suspiciousCount: number;
+    noDataCount: number;
+    results: CapacityCheckResult[];
+  } | null>(null);
+
+  const capacityCheckByAsset = useMemo(() => {
+    const map = new Map<string, CapacityCheckResult>();
+    for (const r of capacityCheck?.results ?? []) {
+      if (r.verdict === 'too_low' || r.verdict === 'too_high') map.set(r.assetId, r);
+    }
+    return map;
+  }, [capacityCheck]);
+
+  const runCapacitySanityCheck = async () => {
+    setIsCheckingCapacity(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ammp-capacity-sanity-check', {
+        body: { contractId: id },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Capacity check failed');
+      setCapacityCheck(data);
+      toast({
+        title: 'Capacity check complete',
+        description: `${data.suspiciousCount} suspicious site(s), ${data.noDataCount} without data (of ${data.checked} checked).`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Capacity check failed',
+        description: err?.message || 'Could not reach the AMMP data API',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCheckingCapacity(false);
+    }
+  };
+
 
 
   // All contracts now use contract-level sync via cached_capabilities.
