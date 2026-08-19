@@ -2008,6 +2008,18 @@ const ContractDetails = () => {
                                   : 'Capacity looks too low'}
                               </Badge>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="ml-1 h-6 w-6 align-middle"
+                              title="View historic PV data"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setHistoricAsset(asset);
+                              }}
+                            >
+                              <LineChart className="h-3.5 w-3.5" />
+                            </Button>
                           </td>
 
                           {showCategoryColumn && (
