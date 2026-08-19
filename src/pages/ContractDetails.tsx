@@ -99,6 +99,7 @@ const ContractDetails = () => {
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
   const [showAllAssets, setShowAllAssets] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
+  const [historicAsset, setHistoricAsset] = useState<any | null>(null);
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [discountEditAsset, setDiscountEditAsset] = useState<any | null>(null);
   const [isEnrichingDevices, setIsEnrichingDevices] = useState(false);
