@@ -60,6 +60,8 @@ const NOTIFICATION_TYPES: NotificationTypeOption[] = [
   { id: 'elum_utility_site_too_small', label: 'Elum Utility Site < 2 MWp', group: 'Elum & Alerts' },
   { id: 'elum_combined_minimum_shortfall', label: 'Elum Combined Minimum Shortfall', group: 'Elum & Alerts' },
   { id: 'zero_pv_capacity', label: 'Zero PV Capacity', group: 'Elum & Alerts' },
+  { id: 'battery_only_site', label: 'Battery-Only Site', group: 'Elum & Alerts' },
+  { id: 'pv_capacity_ratio', label: 'Unrealistic PV Capacity', group: 'Elum & Alerts' },
   { id: 'asset_reappeared_suspicious', label: 'Suspicious Asset Return', group: 'Elum & Alerts' },
   { id: 'ammp_site_count_drop', label: 'AMMP Site Count Drop', group: 'Elum & Alerts' },
 ];
