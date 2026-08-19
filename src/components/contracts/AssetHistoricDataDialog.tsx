@@ -218,7 +218,7 @@ export function AssetHistoricDataDialog({ open, onOpenChange, contractId, asset 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl">
         <DialogHeader>
-          <DialogTitle>{asset?.assetName || data?.['assetName' as never] || 'Historic data'}</DialogTitle>
+          <DialogTitle>{asset?.assetName || 'Historic data'}</DialogTitle>
           <DialogDescription>
             PV AC power measured in AMMP, summed across the site's PV inverters.
           </DialogDescription>
