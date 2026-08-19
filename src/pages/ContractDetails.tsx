@@ -2097,6 +2097,14 @@ const ContractDetails = () => {
                 onSave={handleSaveAssetDiscount}
               />
 
+              {/* Historic data viewer */}
+              <AssetHistoricDataDialog
+                open={!!historicAsset}
+                onOpenChange={(open) => !open && setHistoricAsset(null)}
+                contractId={contract?.id ?? ''}
+                asset={historicAsset}
+              />
+
               {/* Device Details Dialog */}
               <Dialog open={!!selectedAsset} onOpenChange={() => setSelectedAsset(null)}>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
