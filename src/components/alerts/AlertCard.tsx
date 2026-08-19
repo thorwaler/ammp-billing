@@ -166,6 +166,8 @@ const alertTypeLabels: Record<string, string> = {
   asset_disappeared_individual: "Asset Disappeared",
   asset_reappeared_suspicious: "Suspicious Asset Return",
   zero_pv_capacity: "Zero PV Capacity",
+  battery_only_site: "Battery-Only Site",
+  pv_capacity_ratio: "Unrealistic PV Capacity",
   elum_org_unassigned: "Elum Sub-org Without Tier",
   elum_asset_double_count: "Elum Asset Double Count",
   elum_utility_site_too_small: "Elum Utility Site < 2 MWp",
