@@ -1,5 +1,6 @@
 import type { SupportDocumentData } from './supportDocumentGenerator';
 import { isAssetIgnored } from './ignoredAssets';
+import { batteryCapacityKWh, isBatteryOnlyAsset } from './batteryOnlyAssets';
 
 export interface ZeroCapacitySection {
   /** Section heading the affected sites belong to */
@@ -12,7 +13,11 @@ export interface ZeroCapacitySection {
 }
 
 const isZero = (v: number | null | undefined) => v == null || v <= 0;
-const relevant = (assetId: any) => !isAssetIgnored(assetId);
+/**
+ * Ignored "zombie" sites and battery-only sites are never zero-capacity
+ * warnings: the first is out of scope, the second has no PV by design.
+ */
+const relevant = (assetId: any) => !isAssetIgnored(assetId) && !isBatteryOnlyAsset(assetId);
 
 /**
  * Collect every site in a support document with no usable capacity
