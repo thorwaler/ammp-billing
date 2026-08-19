@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle, ArrowRightLeft, Copy } from "lucide-react";
+import { FileText, Download, Edit, Clock, Calculator, MoreVertical, RefreshCw, Trash2, Percent, Zap, AlertCircle, ArrowRightLeft, Copy, LineChart } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import ContractForm from "@/components/contracts/ContractForm";
@@ -19,6 +19,7 @@ import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
 import { DuplicateContractDialog } from "@/components/contracts/DuplicateContractDialog";
+import { AssetHistoricDataDialog } from "@/components/contracts/AssetHistoricDataDialog";
 import { useIgnoredAssets } from "@/hooks/useIgnoredAssets";
 import { Switch } from "@/components/ui/switch";
 
@@ -98,6 +99,7 @@ const ContractDetails = () => {
   const [isRefreshingAssets, setIsRefreshingAssets] = useState(false);
   const [showAllAssets, setShowAllAssets] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<any | null>(null);
+  const [historicAsset, setHistoricAsset] = useState<any | null>(null);
   const [discountDialogOpen, setDiscountDialogOpen] = useState(false);
   const [discountEditAsset, setDiscountEditAsset] = useState<any | null>(null);
   const [isEnrichingDevices, setIsEnrichingDevices] = useState(false);
@@ -2006,6 +2008,18 @@ const ContractDetails = () => {
                                   : 'Capacity looks too low'}
                               </Badge>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="ml-1 h-6 w-6 align-middle"
+                              title="View historic PV data"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setHistoricAsset(asset);
+                              }}
+                            >
+                              <LineChart className="h-3.5 w-3.5" />
+                            </Button>
                           </td>
 
                           {showCategoryColumn && (
@@ -2081,6 +2095,14 @@ const ContractDetails = () => {
                 currentDiscount={discountEditAsset ? getAssetDiscount(discountEditAsset.assetId) : undefined}
                 currency={(contract?.currency || 'EUR') as 'EUR' | 'USD'}
                 onSave={handleSaveAssetDiscount}
+              />
+
+              {/* Historic data viewer */}
+              <AssetHistoricDataDialog
+                open={!!historicAsset}
+                onOpenChange={(open) => !open && setHistoricAsset(null)}
+                contractId={contract?.id ?? ''}
+                asset={historicAsset}
               />
 
               {/* Device Details Dialog */}
