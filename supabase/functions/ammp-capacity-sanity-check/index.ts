@@ -23,7 +23,7 @@ const MAX_ASSETS = 250;
 const CONCURRENCY = 5;
 const TIME_BUDGET_MS = 110_000;
 
-type Verdict = "ok" | "too_low" | "too_high" | "no_data";
+type Verdict = "ok" | "too_low" | "too_high" | "no_data" | "error";
 
 interface AssetVerdict {
   assetId: string;
@@ -32,6 +32,18 @@ interface AssetVerdict {
   observedKWp: number | null;
   ratio: number | null;
   verdict: Verdict;
+  error?: string;
+  /** Which metric produced the observed value. */
+  source?: "pv_energy_out" | "pv_power" | null;
+}
+
+/** Diagnostics captured from the first response of a run. */
+interface RunDiag {
+  logged: boolean;
+  path?: string;
+  body?: unknown;
+  payloadKeys?: string[];
+  sample?: string;
 }
 
 async function getToken(apiKey: string): Promise<string> {
@@ -48,11 +60,90 @@ async function getToken(apiKey: string): Promise<string> {
   return data.access_token;
 }
 
+/**
+ * Pull a numeric time series out of whatever shape AMMP returns for a metric.
+ * Accepts `{ <metric>: { data: [...] } }`, `{ data: { <metric>: [...] } }`,
+ * a bare array, and both `{ date, value }` objects and `[ts, value]` pairs.
+ */
+function extractSeries(payload: any, metric: string): number[] {
+  const candidates: any[] = [
+    payload?.[metric]?.data,
+    payload?.[metric],
+    payload?.data?.[metric]?.data,
+    payload?.data?.[metric],
+    payload?.series?.[metric],
+    Array.isArray(payload?.data) ? payload.data : undefined,
+  ];
+
+  for (const candidate of candidates) {
+    if (!Array.isArray(candidate)) continue;
+    const values: number[] = [];
+    for (const dp of candidate) {
+      if (typeof dp === "number") values.push(dp);
+      else if (Array.isArray(dp) && typeof dp[1] === "number") values.push(dp[1]);
+      else if (dp && typeof dp === "object") {
+        const v = (dp as any).value ?? (dp as any)[metric] ?? (dp as any).v;
+        if (typeof v === "number") values.push(v);
+      }
+    }
+    if (values.length > 0) return values;
+  }
+  return [];
+}
+
+function peakOf(values: number[]): number {
+  let peak = 0;
+  for (const v of values) if (Number.isFinite(v) && v > peak) peak = v;
+  return peak;
+}
+
+async function fetchMetric(
+  token: string,
+  assetId: string,
+  metric: string,
+  interval: string,
+  dateFrom: string,
+  dateTo: string,
+  diag: RunDiag,
+): Promise<any> {
+  const path = `/assets/${assetId}/data`;
+  const body = {
+    asset_ids: [assetId],
+    fields: [metric],
+    metrics: [metric],
+    interval,
+    date_from: dateFrom,
+    date_to: dateTo,
+  };
+  const payload = await fetchAmmpData(token, path, {
+    method: "POST",
+    body,
+    maxAttempts: 2,
+    logTag: "ammp-capacity-sanity-check",
+  });
+
+  if (!diag.logged) {
+    diag.logged = true;
+    diag.path = path;
+    diag.body = body;
+    diag.payloadKeys = payload && typeof payload === "object" ? Object.keys(payload).slice(0, 20) : [];
+    diag.sample = JSON.stringify(payload ?? null).slice(0, 600);
+    console.log(
+      `[ammp-capacity-sanity-check] first response for ${path} body=${JSON.stringify(body)} keys=${JSON.stringify(
+        diag.payloadKeys,
+      )} sample=${diag.sample}`,
+    );
+  }
+
+  return payload;
+}
+
 async function checkAsset(
   token: string,
   asset: any,
   dateFrom: string,
   dateTo: string,
+  diag: RunDiag,
 ): Promise<AssetVerdict> {
   const registeredKWp = Number(asset.capacityKWp ?? (asset.totalMW ?? 0) * 1000) || 0;
   const base: AssetVerdict = {
@@ -62,41 +153,57 @@ async function checkAsset(
     observedKWp: null,
     ratio: null,
     verdict: "no_data",
+    source: null,
   };
 
-  let payload: any;
+  let observedKWp: number | null = null;
+  let source: AssetVerdict["source"] = null;
+
+  // 1) Daily energy → implied kWp via effective sun hours.
   try {
-    payload = await fetchAmmpData(token, `/assets/${asset.assetId}/data`, {
-      method: "POST",
-      body: {
-        asset_ids: [asset.assetId],
-        interval: "1d",
-        date_from: dateFrom,
-        date_to: dateTo,
-      },
-      maxAttempts: 2,
-      logTag: "ammp-capacity-sanity-check",
-    });
-  } catch (_err) {
-    return base;
+    const payload = await fetchMetric(token, asset.assetId, "pv_energy_out", "1d", dateFrom, dateTo, diag);
+    const peakKwh = peakOf(extractSeries(payload, "pv_energy_out"));
+    if (peakKwh > 0) {
+      observedKWp = peakKwh / SUN_HOURS;
+      source = "pv_energy_out";
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn(`[ammp-capacity-sanity-check] energy fetch failed for ${asset.assetId}: ${message}`);
+    // Fall through to the power metric; only report an error if that fails too.
+    base.error = message;
   }
 
-  const series = payload?.pv_energy_out?.data ?? [];
-  let peakKwh = 0;
-  for (const dp of series) {
-    if (typeof dp?.value === "number" && dp.value > peakKwh) peakKwh = dp.value;
+  // 2) Fallback: peak instantaneous PV power is already kW.
+  if (observedKWp == null) {
+    try {
+      const payload = await fetchMetric(token, asset.assetId, "pv_power", "1h", dateFrom, dateTo, diag);
+      const peakKw = peakOf(extractSeries(payload, "pv_power"));
+      if (peakKw > 0) {
+        observedKWp = peakKw;
+        source = "pv_power";
+        base.error = undefined;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[ammp-capacity-sanity-check] power fetch failed for ${asset.assetId}: ${message}`);
+      base.error = base.error ?? message;
+    }
   }
-  if (peakKwh <= 0) return base;
 
-  const observedKWp = peakKwh / SUN_HOURS;
+  if (observedKWp == null) {
+    return { ...base, verdict: base.error ? "error" : "no_data" };
+  }
+
   if (registeredKWp <= 0) {
-    return { ...base, observedKWp, ratio: null, verdict: "too_low" };
+    return { ...base, error: undefined, observedKWp, source, ratio: null, verdict: "too_low" };
   }
 
   const ratio = observedKWp / registeredKWp;
   const verdict: Verdict = ratio < LOW_RATIO ? "too_low" : ratio > HIGH_RATIO ? "too_high" : "ok";
-  return { ...base, observedKWp, ratio, verdict };
+  return { ...base, error: undefined, observedKWp, source, ratio, verdict };
 }
+
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -183,6 +290,7 @@ Deno.serve(async (req) => {
     const token = await getToken(apiKey);
 
     const results: AssetVerdict[] = [];
+    const diag: RunDiag = { logged: false };
     let truncated = false;
 
     for (let i = 0; i < assets.length; i += CONCURRENCY) {
@@ -191,12 +299,18 @@ Deno.serve(async (req) => {
         break;
       }
       const batch = assets.slice(i, i + CONCURRENCY);
-      const batchResults = await Promise.all(batch.map((a) => checkAsset(token, a, from, to)));
+      const batchResults = await Promise.all(batch.map((a) => checkAsset(token, a, from, to, diag)));
       results.push(...batchResults);
     }
 
     const suspicious = results.filter((r) => r.verdict === "too_low" || r.verdict === "too_high");
     const noData = results.filter((r) => r.verdict === "no_data");
+    const errors = results.filter((r) => r.verdict === "error");
+    const errorSample = Array.from(new Set(errors.map((r) => r.error ?? "unknown error"))).slice(0, 3);
+    console.log(
+      `[ammp-capacity-sanity-check] contract=${contractId} checked=${results.length} suspicious=${suspicious.length} noData=${noData.length} errors=${errors.length} errorSample=${JSON.stringify(errorSample)}`,
+    );
+
 
     if (suspicious.length > 0) {
       const assetIds = suspicious.map((r) => r.assetId).sort();
@@ -256,7 +370,11 @@ Deno.serve(async (req) => {
         truncated,
         suspiciousCount: suspicious.length,
         noDataCount: noData.length,
+        errorCount: errors.length,
+        errorSample,
+        diagnostics: { payloadKeys: diag.payloadKeys ?? [], sample: diag.sample ?? null },
         results,
+
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );

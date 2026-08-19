@@ -115,7 +115,9 @@ const ContractDetails = () => {
     registeredKWp: number;
     observedKWp: number | null;
     ratio: number | null;
-    verdict: 'ok' | 'too_low' | 'too_high' | 'no_data';
+    verdict: 'ok' | 'too_low' | 'too_high' | 'no_data' | 'error';
+    error?: string;
+    source?: 'pv_energy_out' | 'pv_power' | null;
   }
   const [isCheckingCapacity, setIsCheckingCapacity] = useState(false);
   const [capacityCheck, setCapacityCheck] = useState<{
@@ -124,8 +126,11 @@ const ContractDetails = () => {
     truncated: boolean;
     suspiciousCount: number;
     noDataCount: number;
+    errorCount?: number;
+    errorSample?: string[];
     results: CapacityCheckResult[];
   } | null>(null);
+
 
   const capacityCheckByAsset = useMemo(() => {
     const map = new Map<string, CapacityCheckResult>();
@@ -146,8 +151,11 @@ const ContractDetails = () => {
       setCapacityCheck(data);
       toast({
         title: 'Capacity check complete',
-        description: `${data.suspiciousCount} suspicious site(s), ${data.noDataCount} without data (of ${data.checked} checked).`,
+        description: `${data.suspiciousCount} suspicious site(s), ${data.noDataCount} without data${
+          data.errorCount ? `, ${data.errorCount} failed` : ''
+        } (of ${data.checked} checked).`,
       });
+
     } catch (err: any) {
       toast({
         title: 'Capacity check failed',
@@ -1879,8 +1887,16 @@ const ContractDetails = () => {
                     <div className="text-muted-foreground">
                       {capacityCheck.checked} of {capacityCheck.totalAssets} site(s) checked ·{' '}
                       {capacityCheck.suspiciousCount} suspicious · {capacityCheck.noDataCount} without data
+                      {capacityCheck.errorCount ? ` · ${capacityCheck.errorCount} failed` : ''}
                       {capacityCheck.truncated ? ' · stopped early (time budget)' : ''}
                     </div>
+                    {(capacityCheck.errorSample?.length ?? 0) > 0 && (
+                      <ul className="space-y-0.5 text-destructive">
+                        {capacityCheck.errorSample!.map((m, i) => (
+                          <li key={i}>Request failed: {m}</li>
+                        ))}
+                      </ul>
+                    )}
                     {capacityCheck.suspiciousCount > 0 && (
                       <ul className="space-y-0.5">
                         {capacityCheck.results
@@ -1897,6 +1913,7 @@ const ContractDetails = () => {
                     )}
                   </div>
                 )}
+
               </div>
 
               {/* Asset Table */}
