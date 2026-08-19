@@ -28,6 +28,10 @@ interface AssetCapabilities {
   hasGenset: boolean;
   hasHybridEMS: boolean;
   hasHybridMeter: boolean;
+  /** Battery/storage present but no PV inverter (and no EMS reporting PV) */
+  isBatteryOnly: boolean;
+  /** Battery capacity in kWh when AMMP reports one */
+  batteryCapacityKWh: number | null;
   onboardingDate?: string | null;
   solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
   deviceCount: number;
@@ -129,6 +133,8 @@ function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'
     hasGenset: false,
     hasHybridEMS: false,
     hasHybridMeter: false,
+    isBatteryOnly: stored.isBatteryOnly === true,
+    batteryCapacityKWh: stored.batteryCapacityKWh ?? null,
     onboardingDate: stored.onboardingDate,
     solcastOnboardingDate: stored.solcastOnboardingDate,
     deviceCount: stored.deviceCount,
@@ -323,6 +329,35 @@ function calculateCapabilities(
       ? Number(asset.genset_capacity) / 1000
       : null;
 
+  // Battery-only detection: storage present, no PV inverter, and no EMS/meter
+  // that could still be delivering PV data. Only meaningful when we actually
+  // have a device list — an empty list means "unknown", not "battery-only".
+  const hasPvInverter = devices.some(d => {
+    const type = (d.device_type || '').toLowerCase();
+    if (type === 'battery_inverter') return false;
+    return type === 'pv_inverter' || type === 'inverter' || type.includes('pv');
+  });
+  const hasPvCapablePeripheral = devices.some(d => {
+    const type = (d.device_type || '').toLowerCase();
+    const name = (d.device_name || '').toLowerCase();
+    if (type !== 'ems' && type !== 'meter' && type !== 'satellite') return false;
+    return type === 'satellite' || name.includes('pv') || name.includes('solar');
+  });
+  const isBatteryOnly =
+    devices.length > 0 &&
+    hasBattery &&
+    !hasPvInverter &&
+    !hasPvCapablePeripheral &&
+    capacityKWp === 0;
+
+  // Battery capacity: AMMP reports Wh on the asset when configured.
+  const rawBatteryCapacity =
+    asset.total_battery_capacity ?? asset.battery_capacity ?? null;
+  const batteryCapacityKWh =
+    rawBatteryCapacity != null && Number.isFinite(Number(rawBatteryCapacity))
+      ? Number(rawBatteryCapacity) / 1000
+      : null;
+
   return {
     assetId: asset.asset_id,
     assetName: asset.asset_name,
@@ -334,6 +369,8 @@ function calculateCapabilities(
     hasGenset,
     hasHybridEMS,
     hasHybridMeter,
+    isBatteryOnly,
+    batteryCapacityKWh,
     onboardingDate,
     solcastOnboardingDate,
     deviceCount: devices.length,
@@ -1308,6 +1345,8 @@ async function processContractSync(
           hasGenset: false,
           hasHybridEMS: false,
           hasHybridMeter: false,
+          isBatteryOnly: false,
+          batteryCapacityKWh: null,
           onboardingDate: cachedDates[member.asset_id] || null,
           solcastOnboardingDate: cachedSolcastDates[member.asset_id] || null,
           deviceCount: 0,
@@ -1402,6 +1441,10 @@ async function processContractSync(
         devices: useExisting ? existingAsset.devices : c.devices,
         deviceEnrichmentAttempted: existingAsset?.deviceEnrichmentAttempted || false,
         deviceEnrichmentConfirmedEmpty: useExisting ? existingAsset.deviceEnrichmentConfirmedEmpty : undefined,
+        isBatteryOnly: useExisting ? existingAsset.isBatteryOnly === true : c.isBatteryOnly,
+        batteryCapacityKWh: useExisting
+          ? existingAsset.batteryCapacityKWh ?? null
+          : c.batteryCapacityKWh ?? existingAsset?.batteryCapacityKWh ?? null,
       };
     }),
     lastSynced: new Date().toISOString(),

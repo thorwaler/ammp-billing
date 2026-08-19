@@ -31,6 +31,7 @@ import {
 import { buildContractLineItems } from "@/lib/xeroLineItems";
 import { buildSnapshotFields, type InvoiceInputSnapshot } from "@/lib/invoiceSnapshot";
 import { isPackage2026 } from "@/data/pricingData";
+import { isBatteryOnlyAsset, batteryCapacityKWh } from "@/lib/batteryOnlyAssets";
 
 const ACCOUNT_PLATFORM_FEES = "1002";
 const ACCOUNT_IMPLEMENTATION_FEES = "1000";
@@ -671,12 +672,25 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                               {p.contractName || p.contractId.slice(0, 8)}
                             </div>
                           )}
-                          {p.diff.stillZero.map((z) => (
+                          {p.diff.stillZero.map((z) => {
+                            const batteryOnly = isBatteryOnlyAsset(z.assetId);
+                            const batteryKWh = batteryCapacityKWh(z.assetId);
+                            return (
                             <div key={z.assetId} className="flex items-center gap-3 p-2 text-sm">
                               <span className="flex-1 truncate">
                                 {z.assetName}
+                                {batteryOnly && (
+                                  <Badge variant="outline" className="ml-2 text-xs">Battery-only</Badge>
+                                )}
                                 <span className="block text-xs text-muted-foreground">
-                                  ID: {z.assetId} · {z.metric === "kva" ? "no genset rating in AMMP" : "0 MWp in AMMP"}
+                                  ID: {z.assetId} ·{" "}
+                                  {batteryOnly
+                                    ? `no PV inverter — 0 MWp expected${
+                                        batteryKWh != null ? `, ${batteryKWh.toFixed(0)} kWh battery` : ""
+                                      }`
+                                    : z.metric === "kva"
+                                      ? "no genset rating in AMMP"
+                                      : "0 MWp in AMMP"}
                                 </span>
                               </span>
                               <Input
@@ -688,6 +702,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                                 placeholder={z.metric === "kva" ? "kVA" : "MWp"}
                                 className="h-8 w-24"
                               />
+
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -699,7 +714,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                                 {isIgnored(z.assetId) ? "Ignored" : "Ignore"}
                               </Button>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ))}
                   </div>

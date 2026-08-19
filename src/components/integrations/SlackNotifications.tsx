@@ -60,6 +60,8 @@ const NOTIFICATION_TYPES: NotificationTypeOption[] = [
   { id: 'elum_utility_site_too_small', label: 'Elum Utility Site < 2 MWp', group: 'Elum & Alerts' },
   { id: 'elum_combined_minimum_shortfall', label: 'Elum Combined Minimum Shortfall', group: 'Elum & Alerts' },
   { id: 'zero_pv_capacity', label: 'Zero PV Capacity', group: 'Elum & Alerts' },
+  { id: 'battery_only_site', label: 'Battery-Only Site', group: 'Elum & Alerts' },
+  { id: 'pv_capacity_ratio', label: 'Unrealistic PV Capacity', group: 'Elum & Alerts' },
   { id: 'asset_reappeared_suspicious', label: 'Suspicious Asset Return', group: 'Elum & Alerts' },
   { id: 'ammp_site_count_drop', label: 'AMMP Site Count Drop', group: 'Elum & Alerts' },
 ];
@@ -204,6 +206,33 @@ const SAMPLE_PAYLOADS: Record<string, SamplePayload> = {
     title: 'Site reporting 0 MWp PV capacity',
     description: 'Site "Kano Rooftop 2" reports 0 MWp in AMMP (last known 1.24 MWp). It will be billed on the last known value until corrected.',
     metadata: { site: 'Kano Rooftop 2', asset_id: 'asset_sample_9876', current_mwp: 0, last_known_mwp: 1.24, detected_at: '2026-08-04' },
+  },
+  battery_only_site: {
+    severity: 'info',
+    title: '3 battery-only site(s) — Elum C&I Pro',
+    description: 'These sites have storage devices but no PV inverter, so their 0 MWp PV capacity is expected. Review whether they should be billed on battery capacity: Abuja BESS 1, Kaduna Storage, Ikeja Backup.',
+    metadata: {
+      asset_ids: ['asset_sample_1111', 'asset_sample_2222', 'asset_sample_3333'],
+      assets: [
+        { asset_id: 'asset_sample_1111', asset_name: 'Abuja BESS 1', battery_capacity_kwh: 215 },
+        { asset_id: 'asset_sample_2222', asset_name: 'Kaduna Storage', battery_capacity_kwh: 120 },
+        { asset_id: 'asset_sample_3333', asset_name: 'Ikeja Backup', battery_capacity_kwh: null },
+      ],
+    },
+  },
+  pv_capacity_ratio: {
+    severity: 'warning',
+    title: '2 site(s) with unrealistic PV capacity — Elum C&I Lite',
+    description: 'Observed peak output does not match the registered capacity (expected ratio between 0.3 and 1.2): Lagos Hub A (1200.0 kWp registered, ~180.0 kWp observed), Kano Rooftop 2 (55.0 kWp registered, ~140.0 kWp observed).',
+    metadata: {
+      asset_ids: ['asset_sample_4444', 'asset_sample_5555'],
+      low_ratio: 0.3,
+      high_ratio: 1.2,
+      assets: [
+        { asset_id: 'asset_sample_4444', asset_name: 'Lagos Hub A', registered_kwp: 1200, observed_kwp: 180, ratio: 0.15, verdict: 'too_low' },
+        { asset_id: 'asset_sample_5555', asset_name: 'Kano Rooftop 2', registered_kwp: 55, observed_kwp: 140, ratio: 2.55, verdict: 'too_high' },
+      ],
+    },
   },
   asset_reappeared_suspicious: {
     severity: 'critical',

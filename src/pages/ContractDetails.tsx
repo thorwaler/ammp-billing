@@ -75,6 +75,7 @@ const elumTierLabel = (tier?: string | null) => {
 // Helper function to format date in CET timezone
 import { formatDateCET } from "@/lib/dateUtils";
 import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
+import { registerBatteryOnlyAssets, isBatteryOnlyAsset } from "@/lib/batteryOnlyAssets";
 const formatDate = (dateString: string) => {
   try {
     return formatDateCET(dateString, 'MMM d, yyyy');
@@ -107,6 +108,57 @@ const ContractDetails = () => {
   const [isMoving, setIsMoving] = useState(false);
   const { isIgnored: isAssetIgnoredLive, toggle: toggleIgnoredAsset } = useIgnoredAssets();
 
+  // PV capacity sanity check (observed peak output vs registered capacity)
+  interface CapacityCheckResult {
+    assetId: string;
+    assetName: string;
+    registeredKWp: number;
+    observedKWp: number | null;
+    ratio: number | null;
+    verdict: 'ok' | 'too_low' | 'too_high' | 'no_data';
+  }
+  const [isCheckingCapacity, setIsCheckingCapacity] = useState(false);
+  const [capacityCheck, setCapacityCheck] = useState<{
+    checked: number;
+    totalAssets: number;
+    truncated: boolean;
+    suspiciousCount: number;
+    noDataCount: number;
+    results: CapacityCheckResult[];
+  } | null>(null);
+
+  const capacityCheckByAsset = useMemo(() => {
+    const map = new Map<string, CapacityCheckResult>();
+    for (const r of capacityCheck?.results ?? []) {
+      if (r.verdict === 'too_low' || r.verdict === 'too_high') map.set(r.assetId, r);
+    }
+    return map;
+  }, [capacityCheck]);
+
+  const runCapacitySanityCheck = async () => {
+    setIsCheckingCapacity(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('ammp-capacity-sanity-check', {
+        body: { contractId: id },
+      });
+      if (error) throw error;
+      if (!data?.ok) throw new Error(data?.error || 'Capacity check failed');
+      setCapacityCheck(data);
+      toast({
+        title: 'Capacity check complete',
+        description: `${data.suspiciousCount} suspicious site(s), ${data.noDataCount} without data (of ${data.checked} checked).`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Capacity check failed',
+        description: err?.message || 'Could not reach the AMMP data API',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCheckingCapacity(false);
+    }
+  };
+
 
 
   // All contracts now use contract-level sync via cached_capabilities.
@@ -118,6 +170,10 @@ const ContractDetails = () => {
     contract.elum_parent_org_id
   );
   const cachedCapabilities = contract?.cached_capabilities;
+  useEffect(() => {
+    registerBatteryOnlyAssets(cachedCapabilities);
+  }, [cachedCapabilities]);
+
 
 
   // Elum 2026: map each asset to the sub-org (and tier) it was resolved from
@@ -1798,6 +1854,51 @@ const ContractDetails = () => {
                 );
               })()}
 
+              {/* PV capacity sanity check */}
+              <div className="mb-3 rounded-lg border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="font-medium text-sm">PV capacity sanity check</div>
+                    <p className="text-xs text-muted-foreground">
+                      Compares the registered kWp against the peak output observed in AMMP over the last 365 days.
+                      Sites without data are reported separately — that is common and not an error.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={runCapacitySanityCheck}
+                    disabled={isCheckingCapacity}
+                  >
+                    {isCheckingCapacity ? 'Checking…' : 'Run capacity sanity check'}
+                  </Button>
+                </div>
+
+                {capacityCheck && (
+                  <div className="text-xs space-y-1">
+                    <div className="text-muted-foreground">
+                      {capacityCheck.checked} of {capacityCheck.totalAssets} site(s) checked ·{' '}
+                      {capacityCheck.suspiciousCount} suspicious · {capacityCheck.noDataCount} without data
+                      {capacityCheck.truncated ? ' · stopped early (time budget)' : ''}
+                    </div>
+                    {capacityCheck.suspiciousCount > 0 && (
+                      <ul className="space-y-0.5">
+                        {capacityCheck.results
+                          .filter(r => r.verdict === 'too_low' || r.verdict === 'too_high')
+                          .slice(0, 20)
+                          .map(r => (
+                            <li key={r.assetId} className="text-destructive">
+                              {r.assetName}: {r.registeredKWp.toFixed(1)} kWp registered vs ~
+                              {(r.observedKWp ?? 0).toFixed(1)} kWp observed
+                              {r.ratio != null ? ` (ratio ${r.ratio.toFixed(2)})` : ''}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Asset Table */}
               <div className={`${showAllAssets ? '' : 'max-h-96'} overflow-auto border rounded-lg`}>
                 <table className="w-full text-sm">
@@ -1831,6 +1932,29 @@ const ContractDetails = () => {
                             {asset.assetName}
                             {ignored && (
                               <Badge variant="outline" className="ml-2 text-xs">Ignored</Badge>
+                            )}
+                            {asset.isBatteryOnly && (
+                              <Badge
+                                variant="outline"
+                                className="ml-2 text-xs"
+                                title="Storage devices but no PV inverter — 0 MWp is expected here"
+                              >
+                                Battery-only
+                                {asset.batteryCapacityKWh != null
+                                  ? ` · ${Number(asset.batteryCapacityKWh).toFixed(0)} kWh`
+                                  : ''}
+                              </Badge>
+                            )}
+                            {capacityCheckByAsset.get(asset.assetId) && (
+                              <Badge
+                                variant="outline"
+                                className="ml-2 text-xs text-destructive border-destructive/40"
+                                title={`Observed ~${(capacityCheckByAsset.get(asset.assetId)!.observedKWp ?? 0).toFixed(1)} kWp vs ${capacityCheckByAsset.get(asset.assetId)!.registeredKWp.toFixed(1)} kWp registered`}
+                              >
+                                {capacityCheckByAsset.get(asset.assetId)!.verdict === 'too_low'
+                                  ? 'Capacity looks too high'
+                                  : 'Capacity looks too low'}
+                              </Badge>
                             )}
                           </td>
 

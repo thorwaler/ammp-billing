@@ -24,6 +24,7 @@ import {
 import { SPS_ADDONS, isSpsPackage, isSolarAfricaPackage } from '@/data/pricingData';
 import { monthsInPeriod, isAnnualUpfrontCycle } from '@/lib/invoiceScheduling';
 import type { InvoiceInputSnapshot } from '@/lib/invoiceSnapshot';
+import { registerBatteryOnlyAssets } from '@/lib/batteryOnlyAssets';
 
 export type RevisionMode = 'zero_mw_only' | 'full_recalc';
 
@@ -693,6 +694,7 @@ export async function fetchLiveContractData(contractId: string): Promise<{
     .maybeSingle();
 
   const caps: any = (data as any)?.cached_capabilities || {};
+  registerBatteryOnlyAssets(caps);
   const rawAssets: any[] = caps.assetBreakdown || caps.assets || [];
   return {
     assets: rawAssets.map((a: any) => ({ ...a, assetId: String(a.assetId ?? a.id), totalMW: num(a.totalMW) })),

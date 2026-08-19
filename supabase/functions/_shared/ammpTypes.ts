@@ -31,4 +31,12 @@ export interface CachedAssetBreakdown {
   deviceEnrichmentAttempted?: boolean;
   /** True when AMMP confirmed the asset genuinely has no devices */
   deviceEnrichmentConfirmedEmpty?: boolean;
+  /**
+   * Site has battery/storage devices but no PV inverter (and no EMS that could
+   * be reporting PV) — PV capacity of 0 is expected here, so it should be
+   * billed on battery capacity rather than flagged as a zero-PV data error.
+   */
+  isBatteryOnly?: boolean;
+  /** Battery capacity in kWh when AMMP reports one */
+  batteryCapacityKWh?: number | null;
 }

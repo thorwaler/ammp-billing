@@ -62,6 +62,7 @@ import { monitorMWAndNotify } from "@/utils/mwMonitoring";
 import { uploadToSharePoint } from "@/utils/sharePointUpload";
 import { isAnnualUpfrontCycle, monthsInPeriod, periodAfterInvoice, getNextInvoiceDate } from "@/lib/invoiceScheduling";
 import { buildSnapshotFields } from "@/lib/invoiceSnapshot";
+import { registerBatteryOnlyAssets } from "@/lib/batteryOnlyAssets";
 // Asset group filtering now handled server-side in ammp-sync-contract
 
 // Simplified interfaces - complex types moved to shared files
@@ -356,6 +357,8 @@ export function InvoiceCalculator({
           
           // Use contract-level cached_capabilities as primary source (contract-centric architecture)
           const cachedCaps = (contract as any).cached_capabilities;
+          // Make battery-only sites known to the support-document helpers
+          registerBatteryOnlyAssets(cachedCaps);
           
           return {
             id: c.id,
