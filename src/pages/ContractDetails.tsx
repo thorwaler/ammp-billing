@@ -119,6 +119,10 @@ const ContractDetails = () => {
     contract.elum_parent_org_id
   );
   const cachedCapabilities = contract?.cached_capabilities;
+  useEffect(() => {
+    registerBatteryOnlyAssets(cachedCapabilities);
+  }, [cachedCapabilities]);
+
 
 
   // Elum 2026: map each asset to the sub-org (and tier) it was resolved from
