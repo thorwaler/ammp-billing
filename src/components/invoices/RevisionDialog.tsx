@@ -713,7 +713,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                                 {isIgnored(z.assetId) ? "Ignored" : "Ignore"}
                               </Button>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ))}
                   </div>
