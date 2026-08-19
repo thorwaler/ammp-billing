@@ -1854,6 +1854,51 @@ const ContractDetails = () => {
                 );
               })()}
 
+              {/* PV capacity sanity check */}
+              <div className="mb-3 rounded-lg border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div>
+                    <div className="font-medium text-sm">PV capacity sanity check</div>
+                    <p className="text-xs text-muted-foreground">
+                      Compares the registered kWp against the peak output observed in AMMP over the last 365 days.
+                      Sites without data are reported separately — that is common and not an error.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={runCapacitySanityCheck}
+                    disabled={isCheckingCapacity}
+                  >
+                    {isCheckingCapacity ? 'Checking…' : 'Run capacity sanity check'}
+                  </Button>
+                </div>
+
+                {capacityCheck && (
+                  <div className="text-xs space-y-1">
+                    <div className="text-muted-foreground">
+                      {capacityCheck.checked} of {capacityCheck.totalAssets} site(s) checked ·{' '}
+                      {capacityCheck.suspiciousCount} suspicious · {capacityCheck.noDataCount} without data
+                      {capacityCheck.truncated ? ' · stopped early (time budget)' : ''}
+                    </div>
+                    {capacityCheck.suspiciousCount > 0 && (
+                      <ul className="space-y-0.5">
+                        {capacityCheck.results
+                          .filter(r => r.verdict === 'too_low' || r.verdict === 'too_high')
+                          .slice(0, 20)
+                          .map(r => (
+                            <li key={r.assetId} className="text-destructive">
+                              {r.assetName}: {r.registeredKWp.toFixed(1)} kWp registered vs ~
+                              {(r.observedKWp ?? 0).toFixed(1)} kWp observed
+                              {r.ratio != null ? ` (ratio ${r.ratio.toFixed(2)})` : ''}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* Asset Table */}
               <div className={`${showAllAssets ? '' : 'max-h-96'} overflow-auto border rounded-lg`}>
                 <table className="w-full text-sm">
