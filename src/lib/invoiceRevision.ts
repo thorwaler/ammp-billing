@@ -199,14 +199,14 @@ export function diffSnapshotAgainstLive(
           frozenMW: before,
           frozenKVA: beforeKva,
           batteryInverterKW:
-            (live as any).batteryInverterKW != null && Number((live as any).batteryInverterKW) > 0
-              ? Number((live as any).batteryInverterKW)
+            live.batteryInverterKW != null && Number(live.batteryInverterKW) > 0
+              ? Number(live.batteryInverterKW)
               : null,
           batteryCapacityKWh:
-            (live as any).batteryCapacityKWh != null && Number((live as any).batteryCapacityKWh) > 0
-              ? Number((live as any).batteryCapacityKWh)
+            live.batteryCapacityKWh != null && Number(live.batteryCapacityKWh) > 0
+              ? Number(live.batteryCapacityKWh)
               : null,
-          isBatteryOnly: (live as any).isBatteryOnly === true,
+          isBatteryOnly: live.isBatteryOnly === true,
         });
       }
     } else {
@@ -218,6 +218,7 @@ export function diffSnapshotAgainstLive(
         newMW: after,
       });
     }
+
   }
 
   const removed = snapAssets
