@@ -1486,6 +1486,11 @@ async function processContractSync(
         batteryCapacityKWh: useExisting
           ? existingAsset.batteryCapacityKWh ?? null
           : c.batteryCapacityKWh ?? existingAsset?.batteryCapacityKWh ?? null,
+        // Never let a sync that could not read asset_specific_params (the org
+        // list endpoint always returns it null) clear a captured rating.
+        batteryInverterKW:
+          c.batteryInverterKW ?? (existingAsset as any)?.batteryInverterKW ?? null,
+        pvSanity: c.pvSanity ?? (existingAsset as any)?.pvSanity ?? null,
       };
     }),
     lastSynced: new Date().toISOString(),
@@ -1502,7 +1507,13 @@ async function processContractSync(
           isLegacyAssetGroup: (org as any).isLegacyAssetGroup === true,
           assets: finalCapabilities
             .filter(c => assetOrgMap.get(c.assetId)?.orgId === org.orgId)
-            .map(c => ({ assetId: c.assetId, assetName: c.assetName, totalMW: c.totalMW })),
+            .map(c => ({
+              assetId: c.assetId,
+              assetName: c.assetName,
+              totalMW: c.totalMW,
+              batteryInverterKW: c.batteryInverterKW ?? null,
+              pvSanity: c.pvSanity ?? null,
+            })),
         }))
       : undefined,
     doubleCountWarnings: doubleCountWarnings.length > 0 ? doubleCountWarnings : undefined,
