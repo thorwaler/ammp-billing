@@ -435,12 +435,36 @@ Deno.serve(async (req) => {
               `/assets/${asset.assetId}/devices?include_virtual=true`
             );
             const devices = devicesResponse.devices || devicesResponse || [];
+            let envelope: any = devicesResponse;
+            // The devices response does not always carry `asset_specific_params`
+            // (where `battery_inverter_power` lives). Fall back to the
+            // single-asset endpoint only when we still have no rating cached,
+            // so full enrichment runs don't double their API calls.
+            if (
+              batteryInverterKWFromAsset(envelope) == null &&
+              (asset as any).batteryInverterKW == null
+            ) {
+              try {
+                const assetResponse = await fetchAMMPData(token, `/assets/${asset.assetId}`);
+                const assetObj = assetResponse?.asset ?? assetResponse;
+                if (batteryInverterKWFromAsset(assetObj) != null) {
+                  envelope = { ...(envelope || {}), ...(assetObj || {}) };
+                }
+              } catch (e) {
+                console.warn(
+                  `[AMMP Device Enrichment] asset fetch for ${asset.assetId} failed: ${
+                    e instanceof Error ? e.message : String(e)
+                  }`,
+                );
+              }
+            }
             return {
               assetId: asset.assetId,
               devices: Array.isArray(devices) ? devices : [],
-              envelope: devicesResponse,
+              envelope,
               failed: false,
             };
+
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.warn(`[AMMP Device Enrichment] Failed to fetch devices for ${asset.assetId}: ${message}`);
