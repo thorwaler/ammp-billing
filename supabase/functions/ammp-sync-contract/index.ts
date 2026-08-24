@@ -269,7 +269,10 @@ function calculateCapabilities(
   asset: any,
   devices: any[],
   cachedOnboardingDate?: string | null,
-  cachedSolcastOnboardingDate?: string | null
+  cachedSolcastOnboardingDate?: string | null,
+  cachedBatteryInverterKW?: number | null,
+  cachedPvSanity?: any,
+
 ): AssetCapabilities {
   // Correct Solcast detection: data_provider === 'solcast' OR device_type === 'satellite'
   const hasSolcast = devices.some(d => 
