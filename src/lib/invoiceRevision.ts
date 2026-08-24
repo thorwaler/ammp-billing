@@ -26,6 +26,9 @@ import { SPS_ADDONS, isSpsPackage, isSolarAfricaPackage } from '@/data/pricingDa
 import { monthsInPeriod, isAnnualUpfrontCycle } from '@/lib/invoiceScheduling';
 import type { InvoiceInputSnapshot } from '@/lib/invoiceSnapshot';
 import { registerBatteryOnlyAssets } from '@/lib/batteryOnlyAssets';
+import { buildContractLineItems } from '@/lib/xeroLineItems';
+import { buildSnapshotFields } from '@/lib/invoiceSnapshot';
+import { isPackage2026 } from '@/data/pricingData';
 
 export type RevisionMode = 'zero_mw_only' | 'full_recalc';
 
@@ -605,7 +608,7 @@ export interface RevisionComputation {
  * A snapshot slice that can be priced on its own: either the whole
  * single-contract snapshot or one contract of a merged invoice.
  */
-interface RevisionUnit {
+export interface RevisionUnit {
   contractId: string;
   contractName?: string;
   contract: Record<string, any>;
@@ -824,7 +827,7 @@ export interface RevisedLineItems {
  * labelled block per contract exactly as they were originally issued.
  */
 export function buildRevisedLineItems(args: {
-  computation: RevisionComputation;
+  computation: MergedRevisionComputation;
   liveByContract: Record<string, { contract?: any }>;
   fallbackContract?: any;
   currencySymbol: string;
@@ -878,7 +881,7 @@ export function buildRevisedInvoiceRow(args: {
   };
   snapshot: InvoiceInputSnapshot;
   units: RevisionUnit[];
-  computation: RevisionComputation;
+  computation: MergedRevisionComputation;
   lines: RevisedLineItems;
   userId: string;
   xeroInvoiceId: string | null;
