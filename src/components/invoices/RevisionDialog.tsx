@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertTriangle, RotateCcw, EyeOff } from "lucide-react";
+import { Loader2, AlertTriangle, RotateCcw, EyeOff, BatteryCharging } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -26,6 +26,7 @@ import {
   type CorrectionSelection,
   type LiveAsset,
   type SnapshotDiff,
+  type StillZeroAsset,
 } from "@/lib/invoiceRevision";
 
 import { buildContractLineItems } from "@/lib/xeroLineItems";
@@ -81,6 +82,10 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   >([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
+  /** Asset ids whose manual value was filled from the battery inverter rating. */
+  const [batterySourced, setBatterySourced] = useState<Set<string>>(new Set());
+  const [fetchingBattery, setFetchingBattery] = useState(false);
+  const [batteryFetched, setBatteryFetched] = useState(false);
   const [includeNewlyOnboarded, setIncludeNewlyOnboarded] = useState(false);
   const [reason, setReason] = useState("");
 
@@ -123,6 +128,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         setContractType(primary?.contractType || primary?.contract?.contract_types || null);
 
         setManualInputs({});
+        setBatterySourced(new Set());
+        setBatteryFetched(false);
         setIncludeNewlyOnboarded(false);
 
         setReason("");
@@ -202,16 +209,19 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   }, [diff]);
 
   const manualOverrides = useMemo(() => {
-    const out: Record<string, { mw?: number; kva?: number }> = {};
+    const out: Record<string, { mw?: number; kva?: number; source?: "manual" | "battery" }> = {};
     for (const [assetId, raw] of Object.entries(manualInputs)) {
       const value = Number(String(raw).replace(",", "."));
       if (!raw?.trim() || !Number.isFinite(value) || value < 0) continue;
-      out[assetId] = metricById.get(assetId) === "kva" ? { kva: value } : { mw: value };
+      const source = batterySourced.has(assetId) ? "battery" : "manual";
+      out[assetId] =
+        metricById.get(assetId) === "kva" ? { kva: value, source } : { mw: value, source };
     }
     return out;
-  }, [manualInputs, metricById]);
+  }, [manualInputs, metricById, batterySourced]);
 
   const manualCount = Object.keys(manualOverrides).length;
+  const batteryCount = Object.keys(manualOverrides).filter((id) => batterySourced.has(id)).length;
 
   const selection: CorrectionSelection = useMemo(
     () => ({ mode: "zero_mw_only", selectedAssetIds: selectedIds, includeNewlyOnboarded, manualOverrides }),
@@ -243,8 +253,104 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   const toggleAsset = (assetId: string) =>
     setSelectedIds((prev) => (prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]));
 
-  const setManual = (assetId: string, value: string) =>
+  const setManual = (assetId: string, value: string) => {
     setManualInputs((prev) => ({ ...prev, [assetId]: value }));
+    // Typing over a battery-filled value makes it a hand-entered value again.
+    setBatterySourced((prev) => {
+      if (!prev.has(assetId)) return prev;
+      const next = new Set(prev);
+      next.delete(assetId);
+      return next;
+    });
+  };
+
+  /** Battery inverter rating (kW) usable as a capacity for a still-zero site. */
+  const batteryKWFor = (z: StillZeroAsset): number | null => {
+    if (z.metric !== "mw") return null;
+    const kw = z.batteryInverterKW;
+    return kw != null && Number.isFinite(Number(kw)) && Number(kw) > 0 ? Number(kw) : null;
+  };
+
+  const useBatteryValue = (z: StillZeroAsset) => {
+    const kw = batteryKWFor(z);
+    if (kw == null) return;
+    const mw = kw / 1000;
+    setManualInputs((prev) => ({ ...prev, [z.assetId]: String(Number(mw.toFixed(6))) }));
+    setBatterySourced((prev) => new Set(prev).add(z.assetId));
+  };
+
+  const batteryEligible = useMemo(
+    () => (diff?.stillZero || []).filter((z) => batteryKWFor(z) != null),
+    [diff],
+  );
+
+  const useBatteryForAll = () => {
+    if (batteryEligible.length === 0) return;
+    setManualInputs((prev) => {
+      const next = { ...prev };
+      for (const z of batteryEligible) {
+        const kw = batteryKWFor(z)!;
+        next[z.assetId] = String(Number((kw / 1000).toFixed(6)));
+      }
+      return next;
+    });
+    setBatterySourced((prev) => {
+      const next = new Set(prev);
+      for (const z of batteryEligible) next.add(z.assetId);
+      return next;
+    });
+  };
+
+  const clearManual = () => {
+    setManualInputs({});
+    setBatterySourced(new Set());
+  };
+
+  /**
+   * Battery inverter ratings live in AMMP's `asset_specific_params`, which only
+   * the single-asset endpoints return — org-resolved contracts never see them.
+   * This pulls them for the still-zero sites only, then reloads the diff.
+   */
+  const fetchBatteryData = async () => {
+    const targets = perContractDiff
+      .map((p) => ({ contractId: p.contractId, ids: p.diff.stillZero.map((z) => z.assetId) }))
+      .filter((t) => t.ids.length > 0);
+    if (targets.length === 0) return;
+
+    setFetchingBattery(true);
+    try {
+      await Promise.all(
+        targets.map((t) =>
+          supabase.functions.invoke("ammp-device-enrichment", {
+            body: { contractId: t.contractId, assetIds: t.ids, batchSize: t.ids.length },
+          }),
+        ),
+      );
+
+      const loaded = await Promise.all(
+        units.map(async (u) => [u.contractId, await fetchLiveContractData(u.contractId)] as const),
+      );
+      const map: Record<string, any> = {};
+      for (const [id, live] of loaded) {
+        map[id] = {
+          assets: live.assets,
+          orgBreakdown: live.orgBreakdown,
+          contract: live.contract,
+          contractType: live.contractType,
+        };
+      }
+      setLiveByContract(map);
+      setBatteryFetched(true);
+      toast.success("Battery data refreshed for the zero-capacity sites");
+    } catch (e) {
+      console.error("[Revision] Battery data fetch failed:", e);
+      toast.error("Could not fetch battery data from AMMP");
+    } finally {
+      setFetchingBattery(false);
+    }
+  };
+
+
 
 
 
@@ -649,18 +755,43 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
               {(diff?.stillZero.length || 0) > 0 && (
                 <div>
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <Label className="text-sm font-medium">
                       Still zero — set manually ({diff!.stillZero.length})
                       {manualCount > 0 && (
-                        <span className="ml-1 font-normal text-muted-foreground">· {manualCount} set</span>
+                        <span className="ml-1 font-normal text-muted-foreground">
+                          · {manualCount} set{batteryCount > 0 ? ` (${batteryCount} from battery)` : ""}
+                        </span>
                       )}
                     </Label>
-                    {manualCount > 0 && (
-                      <Button variant="ghost" size="sm" onClick={() => setManualInputs({})}>
-                        Clear manual values
+                    <div className="flex items-center gap-1">
+                      {batteryEligible.length > 0 && (
+                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={useBatteryForAll}>
+                          <BatteryCharging className="h-3 w-3 mr-1" />
+                          Use battery capacity for all ({batteryEligible.length})
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 text-xs"
+                        disabled={fetchingBattery}
+                        title="Ask AMMP for the battery inverter rating of these sites"
+                        onClick={fetchBatteryData}
+                      >
+                        {fetchingBattery ? (
+                          <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        ) : (
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                        )}
+                        Fetch battery data
                       </Button>
-                    )}
+                      {manualCount > 0 && (
+                        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearManual}>
+                          Clear manual values
+                        </Button>
+                      )}
+                    </div>
                   </div>
                   <div className="rounded-md border divide-y max-h-72 overflow-y-auto">
                     {perContractDiff
@@ -673,8 +804,16 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                             </div>
                           )}
                           {p.diff.stillZero.map((z) => {
-                            const batteryOnly = isBatteryOnlyAsset(z.assetId);
-                            const batteryKWh = batteryCapacityKWh(z.assetId);
+                            const batteryOnly = z.isBatteryOnly || isBatteryOnlyAsset(z.assetId);
+                            const batteryKWh = z.batteryCapacityKWh ?? batteryCapacityKWh(z.assetId);
+                            const batteryKW = batteryKWFor(z);
+                            const fromBattery = batterySourced.has(z.assetId);
+                            const batteryText = [
+                              batteryKW != null ? `battery inverter ${batteryKW.toFixed(0)} kW` : null,
+                              batteryKWh != null ? `${batteryKWh.toFixed(0)} kWh battery` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ");
                             return (
                             <div key={z.assetId} className="flex items-center gap-3 p-2 text-sm">
                               <span className="flex-1 truncate">
@@ -682,17 +821,33 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                                 {batteryOnly && (
                                   <Badge variant="outline" className="ml-2 text-xs">Battery-only</Badge>
                                 )}
+                                {fromBattery && (
+                                  <Badge variant="secondary" className="ml-2 text-xs">
+                                    manual value (battery)
+                                  </Badge>
+                                )}
                                 <span className="block text-xs text-muted-foreground">
                                   ID: {z.assetId} ·{" "}
                                   {batteryOnly
-                                    ? `no PV inverter — 0 MWp expected${
-                                        batteryKWh != null ? `, ${batteryKWh.toFixed(0)} kWh battery` : ""
-                                      }`
+                                    ? "no PV inverter — 0 MWp expected"
                                     : z.metric === "kva"
                                       ? "no genset rating in AMMP"
                                       : "0 MWp in AMMP"}
+                                  {batteryText ? ` · ${batteryText}` : ""}
                                 </span>
                               </span>
+                              {batteryKW != null && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 px-2 text-xs whitespace-nowrap"
+                                  title={`Bill this site on its battery inverter rating (${batteryKW.toFixed(0)} kW = ${(batteryKW / 1000).toFixed(3)} MWp)`}
+                                  onClick={() => useBatteryValue(z)}
+                                >
+                                  <BatteryCharging className="h-3 w-3 mr-1" />
+                                  Use battery
+                                </Button>
+                              )}
                               <Input
                                 type="number"
                                 min={0}
@@ -719,6 +874,11 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                         </div>
                       ))}
                   </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {batteryFetched && batteryEligible.length === 0
+                      ? "AMMP holds no battery inverter rating for these sites, so there is nothing to take over automatically — enter a capacity by hand, or ignore the site."
+                      : 'Battery inverter ratings come from AMMP\u2019s single-asset data. If none are shown, use "Fetch battery data" to pull them for these sites.'}
+                  </p>
                 </div>
               )}
 
@@ -747,7 +907,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                 )}
                 {(diff?.removed.length || 0) > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {diff!.removed.length} frozen asset(s) no longer exist in AMMP — they stay billed as frozen.
+                    {diff!.removed.length} frozen asset(s) no longer exist in AMMP — they stay billed as frozen,
+                    in the organisation they belonged to when the invoice was frozen.
                   </p>
                 )}
               </div>

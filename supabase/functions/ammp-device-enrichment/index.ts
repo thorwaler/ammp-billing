@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceKey);
     
-    const { contractId, batchSize = 500, forceRecalculate = false, forceRefetch = false, userId } = await req.json();
+    const { contractId, batchSize = 500, forceRecalculate = false, forceRefetch = false, userId, assetIds } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -356,6 +356,19 @@ Deno.serve(async (req) => {
       const confirmedEmptyCount = cachedCapabilities.assetBreakdown.filter((a) => a.deviceEnrichmentConfirmedEmpty).length;
       console.log(`[AMMP Device Enrichment] Found ${assetsNeedingEnrichment.length} assets to refetch (${confirmedEmptyCount} confirmed empty, skipped)`);
     }
+
+    // Targeted refetch: an explicit asset list always wins, regardless of the
+    // enrichment flags. Used to pull battery-inverter ratings (only returned by
+    // the single-asset endpoints) for a handful of zero-capacity sites.
+    if (Array.isArray(assetIds) && assetIds.length > 0) {
+      const wanted = new Set(assetIds.map((id: any) => String(id)));
+      assetsNeedingEnrichment = cachedCapabilities.assetBreakdown.filter((a) =>
+        wanted.has(String(a.assetId)),
+      );
+      console.log(
+        `[AMMP Device Enrichment] Targeted refetch of ${assetsNeedingEnrichment.length}/${wanted.size} requested assets`,
+      );
+    }
     
     if (assetsNeedingEnrichment.length === 0) {
       console.log('[AMMP Device Enrichment] All assets already have device data');
@@ -422,12 +435,38 @@ Deno.serve(async (req) => {
               `/assets/${asset.assetId}/devices?include_virtual=true`
             );
             const devices = devicesResponse.devices || devicesResponse || [];
+            let envelope: any = devicesResponse;
+            // The devices response does not always carry `asset_specific_params`
+            // (where `battery_inverter_power` lives). Fall back to the
+            // single-asset endpoint only when we still have no rating cached,
+            // so full enrichment runs don't double their API calls.
+            if (
+              batteryInverterKWFromAsset(envelope) == null &&
+              (asset as any).batteryInverterKW == null
+            ) {
+              try {
+                const assetResponse = await fetchAMMPData(token, `/assets/${asset.assetId}`);
+                const assetObj = assetResponse?.asset ?? assetResponse;
+                if (batteryInverterKWFromAsset(assetObj) != null) {
+                  envelope = { ...(envelope || {}), ...(assetObj || {}) };
+                }
+
+
+              } catch (e) {
+                console.warn(
+                  `[AMMP Device Enrichment] asset fetch for ${asset.assetId} failed: ${
+                    e instanceof Error ? e.message : String(e)
+                  }`,
+                );
+              }
+            }
             return {
               assetId: asset.assetId,
               devices: Array.isArray(devices) ? devices : [],
-              envelope: devicesResponse,
+              envelope,
               failed: false,
             };
+
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.warn(`[AMMP Device Enrichment] Failed to fetch devices for ${asset.assetId}: ${message}`);

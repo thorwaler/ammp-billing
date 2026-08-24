@@ -57,6 +57,12 @@ export interface StillZeroAsset {
   metric: 'mw' | 'kva';
   frozenMW: number;
   frozenKVA: number | null;
+  /** Battery inverter rating in kW, when AMMP reports one (usable as MWp/1000). */
+  batteryInverterKW?: number | null;
+  /** Battery storage capacity in kWh, when AMMP reports one (informational). */
+  batteryCapacityKWh?: number | null;
+  /** Site has storage devices but no PV inverter. */
+  isBatteryOnly?: boolean;
 }
 
 export interface SnapshotDiff {
@@ -181,6 +187,15 @@ export function diffSnapshotAgainstLive(
           metric: kvaPricing ? 'kva' : 'mw',
           frozenMW: before,
           frozenKVA: beforeKva,
+          batteryInverterKW:
+            (live as any).batteryInverterKW != null && Number((live as any).batteryInverterKW) > 0
+              ? Number((live as any).batteryInverterKW)
+              : null,
+          batteryCapacityKWh:
+            (live as any).batteryCapacityKWh != null && Number((live as any).batteryCapacityKWh) > 0
+              ? Number((live as any).batteryCapacityKWh)
+              : null,
+          isBatteryOnly: (live as any).isBatteryOnly === true,
         });
       }
     } else {
@@ -215,6 +230,8 @@ export function diffSnapshotAgainstLive(
 export interface ManualOverride {
   mw?: number;
   kva?: number;
+  /** Where the value came from: typed by hand, or taken from the battery inverter rating. */
+  source?: 'manual' | 'battery';
 }
 
 export interface CorrectionSelection {
@@ -265,6 +282,7 @@ export function applySelectedCorrections(
       next.gensetKVA = o.kva;
     }
     next.manualOverride = true;
+    next.manualOverrideSource = o.source || 'manual';
     return next;
   };
 
@@ -312,19 +330,80 @@ export function applySelectedCorrections(
  * Rebuild the Elum org breakdown so per-org MW reflects the patched assets.
  * Orgs are taken from live capabilities (structure/tiers) but each asset's MW
  * and membership come from the patched list.
+ *
+ * Sites that have disappeared from AMMP since the invoice was frozen are no
+ * longer members of any live org. Because Elum pricing runs off the org
+ * breakdown, dropping them would silently lower the recomputed total even when
+ * nothing was corrected — so they are re-attached to the organisation they
+ * belonged to in the snapshot.
  */
 export function patchOrgBreakdown(
   liveOrgBreakdown: OrgAssetGroup[] | undefined,
   patchedAssets: LiveAsset[],
+  snapshotOrgs?: Array<Record<string, any>>,
 ): OrgAssetGroup[] | undefined {
   if (!Array.isArray(liveOrgBreakdown) || liveOrgBreakdown.length === 0) return undefined;
   const byId = new Map(patchedAssets.map((a) => [String(a.assetId), a]));
-  return liveOrgBreakdown.map((org) => ({
+
+  const patched = liveOrgBreakdown.map((org) => ({
     ...org,
     assets: (org.assets || [])
       .filter((a) => byId.has(String(a.assetId)))
       .map((a) => ({ ...a, totalMW: num(byId.get(String(a.assetId))!.totalMW) })),
   }));
+
+  const covered = new Set(patched.flatMap((o) => (o.assets || []).map((a) => String(a.assetId))));
+  const orphans = patchedAssets.filter((a) => !covered.has(String(a.assetId)));
+  if (orphans.length === 0 || !Array.isArray(snapshotOrgs) || snapshotOrgs.length === 0) return patched;
+
+  // Which snapshot org did each orphan belong to?
+  const snapshotOrgByAsset = new Map<string, Record<string, any>>();
+  for (const o of snapshotOrgs) {
+    for (const id of (o?.assetIds || []) as string[]) snapshotOrgByAsset.set(String(id), o);
+  }
+
+  const byOrgId = new Map(patched.map((o) => [String(o.orgId), o]));
+  for (const orphan of orphans) {
+    const snapOrg = snapshotOrgByAsset.get(String(orphan.assetId));
+    if (!snapOrg) continue;
+    const row = {
+      assetId: String(orphan.assetId),
+      assetName: orphan.assetName,
+      totalMW: num(orphan.totalMW),
+    };
+    const target = byOrgId.get(String(snapOrg.orgId));
+    if (target) {
+      target.assets = [...(target.assets || []), row];
+    } else {
+      const created: OrgAssetGroup = {
+        orgId: String(snapOrg.orgId ?? `snap-${byOrgId.size}`),
+        orgName: snapOrg.orgName || 'Unknown organisation',
+        tier: snapOrg.tier ?? null,
+        hasEconf: !!snapOrg.econf,
+        isLegacyAssetGroup: !!snapOrg.isLegacyAssetGroup,
+        assets: [row],
+      };
+      byOrgId.set(created.orgId, created);
+      patched.push(created);
+    }
+  }
+
+  return patched;
+}
+
+/**
+ * Assets that are in the priced list but no longer present in any live
+ * organisation — i.e. sites that vanished from AMMP after the freeze.
+ */
+export function reattachedAssetIds(
+  liveOrgBreakdown: OrgAssetGroup[] | undefined,
+  patchedAssets: LiveAsset[],
+): string[] {
+  if (!Array.isArray(liveOrgBreakdown) || liveOrgBreakdown.length === 0) return [];
+  const covered = new Set(
+    liveOrgBreakdown.flatMap((o) => (o.assets || []).map((a) => String(a.assetId))),
+  );
+  return patchedAssets.map((a) => String(a.assetId)).filter((id) => !covered.has(id));
 }
 
 /**
@@ -367,7 +446,7 @@ export function resolveOrgBreakdown(
   patchedAssets: LiveAsset[],
 ): OrgAssetGroup[] | undefined {
   const fromSnapshot = orgBreakdownFromSnapshot(snapshotOrgs, patchedAssets);
-  const fromLive = patchOrgBreakdown(liveOrgBreakdown, patchedAssets);
+  const fromLive = patchOrgBreakdown(liveOrgBreakdown, patchedAssets, snapshotOrgs);
   if (!fromSnapshot) return fromLive;
   if (!fromLive) return fromSnapshot;
   return fromLive.length >= fromSnapshot.length ? fromLive : fromSnapshot;
