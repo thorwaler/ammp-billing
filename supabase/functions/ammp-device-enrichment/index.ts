@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, serviceKey);
     
-    const { contractId, batchSize = 500, forceRecalculate = false, forceRefetch = false, userId } = await req.json();
+    const { contractId, batchSize = 500, forceRecalculate = false, forceRefetch = false, userId, assetIds } = await req.json();
     
     if (!contractId) {
       return new Response(
@@ -355,6 +355,19 @@ Deno.serve(async (req) => {
       );
       const confirmedEmptyCount = cachedCapabilities.assetBreakdown.filter((a) => a.deviceEnrichmentConfirmedEmpty).length;
       console.log(`[AMMP Device Enrichment] Found ${assetsNeedingEnrichment.length} assets to refetch (${confirmedEmptyCount} confirmed empty, skipped)`);
+    }
+
+    // Targeted refetch: an explicit asset list always wins, regardless of the
+    // enrichment flags. Used to pull battery-inverter ratings (only returned by
+    // the single-asset endpoints) for a handful of zero-capacity sites.
+    if (Array.isArray(assetIds) && assetIds.length > 0) {
+      const wanted = new Set(assetIds.map((id: any) => String(id)));
+      assetsNeedingEnrichment = cachedCapabilities.assetBreakdown.filter((a) =>
+        wanted.has(String(a.assetId)),
+      );
+      console.log(
+        `[AMMP Device Enrichment] Targeted refetch of ${assetsNeedingEnrichment.length}/${wanted.size} requested assets`,
+      );
     }
     
     if (assetsNeedingEnrichment.length === 0) {
