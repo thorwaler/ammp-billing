@@ -361,6 +361,11 @@ function calculateCapabilities(
       ? Number(rawBatteryCapacity) / 1000
       : null;
 
+  // Battery inverter rating (W) — only present on single-asset endpoints, so a
+  // null here means "not read this time", never "cleared in AMMP".
+  const freshBatteryInverterKW = batteryInverterKWFromAsset(asset);
+  const batteryInverterKW = freshBatteryInverterKW ?? cachedBatteryInverterKW ?? null;
+
   return {
     assetId: asset.asset_id,
     assetName: asset.asset_name,
@@ -374,8 +379,11 @@ function calculateCapabilities(
     hasHybridMeter,
     isBatteryOnly,
     batteryCapacityKWh,
+    batteryInverterKW,
+    pvSanity: cachedPvSanity ?? null,
     onboardingDate,
     solcastOnboardingDate,
+
     deviceCount: devices.length,
     devices: devices.map(d => ({
       deviceId: d.device_id,
