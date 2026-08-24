@@ -447,9 +447,15 @@ Deno.serve(async (req) => {
               try {
                 const assetResponse = await fetchAMMPData(token, `/assets/${asset.assetId}`);
                 const assetObj = assetResponse?.asset ?? assetResponse;
+                console.log(
+                  `[AMMP Device Enrichment] asset_specific_params for ${asset.assetId}: ${JSON.stringify(
+                    assetObj?.asset_specific_params ?? null,
+                  )}`,
+                );
                 if (batteryInverterKWFromAsset(assetObj) != null) {
                   envelope = { ...(envelope || {}), ...(assetObj || {}) };
                 }
+
               } catch (e) {
                 console.warn(
                   `[AMMP Device Enrichment] asset fetch for ${asset.assetId} failed: ${
