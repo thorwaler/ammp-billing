@@ -3,6 +3,7 @@ import { runZeroPvScan } from '../_shared/zeroPvScan.ts';
 import { postJsonWithRetry as sharedPostJsonWithRetry, parseRetryAfterMs } from '../_shared/internalFetch.ts';
 import { fetchAmmpData, fetchOrgAssets } from '../_shared/ammpClient.ts';
 import { classifyOrgRow, hasTierConflict, isExcludedOrg, type ClassifiedOrg } from '../_shared/elumFlags.ts';
+import { batteryInverterKWFromAsset } from '../_shared/effectiveCapacity.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
@@ -32,6 +33,10 @@ interface AssetCapabilities {
   isBatteryOnly: boolean;
   /** Battery capacity in kWh when AMMP reports one */
   batteryCapacityKWh: number | null;
+  /** Battery inverter rating in kW (AMMP `asset_specific_params.battery_inverter_power` / 1000) */
+  batteryInverterKW: number | null;
+  /** Last stored PV capacity sanity-check verdict */
+  pvSanity?: { verdict?: string | null; ratio?: number | null; checkedAt?: string | null } | null;
   onboardingDate?: string | null;
   solcastOnboardingDate?: string | null; // Date when satellite/solcast device was created
   deviceCount: number;
@@ -135,6 +140,8 @@ function convertStoredToCapabilities(stored: CachedCapabilities['assetBreakdown'
     hasHybridMeter: false,
     isBatteryOnly: stored.isBatteryOnly === true,
     batteryCapacityKWh: stored.batteryCapacityKWh ?? null,
+    batteryInverterKW: (stored as any).batteryInverterKW ?? null,
+    pvSanity: (stored as any).pvSanity ?? null,
     onboardingDate: stored.onboardingDate,
     solcastOnboardingDate: stored.solcastOnboardingDate,
     deviceCount: stored.deviceCount,
@@ -1322,11 +1329,16 @@ async function processContractSync(
         
         // Fetch devices for capability detection (skip for large syncs)
         let devices: any[] = [];
+        let assetEnvelope: any = null;
         if (!skipDevices) {
           try {
             const devicesResponse = await fetchAMMPData(token, `/assets/${member.asset_id}/devices?include_virtual=true`);
             devices = devicesResponse.devices || devicesResponse || [];
             if (!Array.isArray(devices)) devices = [];
+            // Only this endpoint (and /assets/{id}) populates asset_specific_params.
+            if (devicesResponse?.asset_specific_params) {
+              assetEnvelope = devicesResponse;
+            }
           } catch (deviceError) {
             console.warn(`[AMMP Sync Contract] No devices for ${member.asset_id}`);
           }
@@ -1345,10 +1357,14 @@ async function processContractSync(
             genset_capacity: gensetCapacityByAsset.has(member.asset_id)
               ? gensetCapacityByAsset.get(member.asset_id)
               : assetData.genset_capacity ?? null,
+            asset_specific_params:
+              assetEnvelope?.asset_specific_params ?? assetData.asset_specific_params ?? null,
           },
           devices,
           cachedDate,
-          cachedSolcastDate
+          cachedSolcastDate,
+          cachedBatteryInverterKW[member.asset_id] ?? null,
+          cachedPvSanity[member.asset_id] ?? null
         );
       } catch (error) {
         console.error(`[AMMP Sync Contract] Error processing asset ${member.asset_id}:`, error);
@@ -1365,6 +1381,8 @@ async function processContractSync(
           hasHybridMeter: false,
           isBatteryOnly: false,
           batteryCapacityKWh: null,
+          batteryInverterKW: cachedBatteryInverterKW[member.asset_id] ?? null,
+          pvSanity: cachedPvSanity[member.asset_id] ?? null,
           onboardingDate: cachedDates[member.asset_id] || null,
           solcastOnboardingDate: cachedSolcastDates[member.asset_id] || null,
           deviceCount: 0,
@@ -1404,6 +1422,11 @@ async function processContractSync(
       await Promise.all(batch.map(async (asset) => {
         try {
           const metadata = await fetchAMMPData(token, `/assets/${asset.assetId}`);
+          const binvKW = batteryInverterKWFromAsset(metadata);
+          if (binvKW != null) {
+            asset.batteryInverterKW = binvKW;
+            uniqueAssets.set(asset.assetId, asset);
+          }
           if (metadata?.created) {
             asset.onboardingDate = metadata.created;
             // Update in the map too
