@@ -875,8 +875,9 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                       ))}
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Battery inverter ratings come from AMMP's single-asset data. If none are shown, use "Fetch
-                    battery data" to pull them for these sites.
+                    {batteryFetched && batteryEligible.length === 0
+                      ? "AMMP holds no battery inverter rating for these sites, so there is nothing to take over automatically — enter a capacity by hand, or ignore the site."
+                      : 'Battery inverter ratings come from AMMP\u2019s single-asset data. If none are shown, use "Fetch battery data" to pull them for these sites.'}
                   </p>
                 </div>
               )}
