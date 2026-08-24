@@ -39,4 +39,16 @@ export interface CachedAssetBreakdown {
   isBatteryOnly?: boolean;
   /** Battery capacity in kWh when AMMP reports one */
   batteryCapacityKWh?: number | null;
+  /**
+   * Battery inverter rating in kW (AMMP `asset_specific_params.battery_inverter_power`,
+   * watts). Only the single-asset endpoints populate it; used as the billed
+   * capacity proxy when PV is missing, zero, or implausible.
+   */
+  batteryInverterKW?: number | null;
+  /** Last capacity sanity-check verdict for the registered PV capacity */
+  pvSanity?: {
+    verdict?: string | null;
+    ratio?: number | null;
+    checkedAt?: string | null;
+  } | null;
 }
