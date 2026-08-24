@@ -573,7 +573,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <RotateCcw className="h-4 w-4" />
@@ -605,7 +605,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
             </AlertDescription>
           </Alert>
         ) : (
-          <ScrollArea className="flex-1 pr-4">
+          <ScrollArea className="flex-1 min-h-0 pr-4">
             <div className="space-y-4">
               {isMerged && (
                 <Alert>
@@ -793,7 +793,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                       )}
                     </div>
                   </div>
-                  <div className="rounded-md border divide-y max-h-72 overflow-y-auto">
+                  <div className="rounded-md border divide-y">
                     {perContractDiff
                       .filter((p) => p.diff.stillZero.length > 0)
                       .map((p) => (
