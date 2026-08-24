@@ -6,7 +6,10 @@
 // - Raises one `zero_pv_capacity` alert per contract, skipping insertion when
 //   an unacknowledged alert already covers the same asset set.
 
+import { hasBatteryProxy } from './effectiveCapacity.ts';
+
 interface ContractRow {
+
   id: string;
   user_id: string;
   customer_id: string;
