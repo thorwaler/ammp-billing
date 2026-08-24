@@ -85,6 +85,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   /** Asset ids whose manual value was filled from the battery inverter rating. */
   const [batterySourced, setBatterySourced] = useState<Set<string>>(new Set());
   const [fetchingBattery, setFetchingBattery] = useState(false);
+  const [batteryFetched, setBatteryFetched] = useState(false);
   const [includeNewlyOnboarded, setIncludeNewlyOnboarded] = useState(false);
   const [reason, setReason] = useState("");
 
