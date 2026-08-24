@@ -77,6 +77,7 @@ const elumTierLabel = (tier?: string | null) => {
 import { formatDateCET } from "@/lib/dateUtils";
 import { mapContractRowToFormValues } from "@/lib/contractFormMapping";
 import { registerBatteryOnlyAssets, isBatteryOnlyAsset } from "@/lib/batteryOnlyAssets";
+import { resolveEffectiveCapacity, usesBatteryCapacityProxy } from "@/lib/effectiveCapacity";
 const formatDate = (dateString: string) => {
   try {
     return formatDateCET(dateString, 'MMM d, yyyy');
@@ -1997,6 +1998,18 @@ const ContractDetails = () => {
                                   : ''}
                               </Badge>
                             )}
+                            {usesBatteryCapacityProxy(contract?.package) &&
+                              resolveEffectiveCapacity(asset as any).source === 'battery_inverter' && (
+                                <Badge
+                                  variant="outline"
+                                  className="ml-2 text-xs"
+                                  title={`No usable PV capacity — billed on the battery inverter rating (${(
+                                    (asset as any).batteryInverterKW ?? 0
+                                  ).toFixed(1)} kW)`}
+                                >
+                                  Battery proxy · {((asset as any).batteryInverterKW ?? 0).toFixed(1)} kW
+                                </Badge>
+                              )}
                             {capacityCheckByAsset.get(asset.assetId) && (
                               <Badge
                                 variant="outline"
