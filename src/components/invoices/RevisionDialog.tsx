@@ -793,7 +793,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                       )}
                     </div>
                   </div>
-                  <div className="rounded-md border divide-y max-h-72 overflow-y-auto">
+                  <div className="rounded-md border divide-y">
                     {perContractDiff
                       .filter((p) => p.diff.stillZero.length > 0)
                       .map((p) => (
