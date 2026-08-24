@@ -63,8 +63,11 @@ export async function runZeroPvScan(
         Number(a?.totalMW ?? 0) === 0 &&
         a?.assetId &&
         !ignored.has(String(a.assetId)) &&
-        !batteryOnlyIds.has(String(a.assetId))
+        !batteryOnlyIds.has(String(a.assetId)) &&
+        // A battery-inverter rating already gives the site a billable capacity.
+        !hasBatteryProxy(a)
     );
+
     const nonZeroIds = new Set(
       assets.filter((a) => Number(a?.totalMW ?? 0) > 0 && a?.assetId).map((a) => a.assetId)
     );
