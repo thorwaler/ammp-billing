@@ -33,8 +33,19 @@ export interface LiveAsset {
   assetId: string;
   assetName: string;
   totalMW: number;
+  gensetKVA?: number | null;
+  /**
+   * Battery inverter rating in kW (AMMP `asset_specific_params.battery_inverter_power`,
+   * watts / 1000) — a power rating, usable as a capacity proxy.
+   */
+  batteryInverterKW?: number | null;
+  /** Battery storage energy in kWh (AMMP `battery_capacity`, Wh / 1000). */
+  batteryCapacityKWh?: number | null;
+  /** Site has storage devices but no PV inverter. */
+  isBatteryOnly?: boolean;
   [key: string]: any;
 }
+
 
 export interface ZeroMwCorrection {
   assetId: string;
