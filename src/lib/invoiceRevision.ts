@@ -104,10 +104,7 @@ export function diffSnapshotAgainstLive(
 
   // On packages that bill battery-inverter ratings when PV is unusable, diff
   // against the effective capacity so proxied sites are not "still zero".
-  const effectiveLive = (applyCapacityProxy(liveAssets || [], options?.packageType) ??
-    liveAssets ||
-    []) as LiveAsset[];
-  liveAssets = effectiveLive;
+  liveAssets = (applyCapacityProxy(liveAssets || [], options?.packageType) ?? liveAssets ?? []) as LiveAsset[];
 
   const snapAssets = Array.isArray(snapshot?.assets) ? snapshot.assets : [];
   const snapById = new Map(snapAssets.map((a) => [String(a.assetId), a]));
