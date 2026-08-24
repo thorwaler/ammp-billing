@@ -129,6 +129,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
         setManualInputs({});
         setBatterySourced(new Set());
+        setBatteryFetched(false);
         setIncludeNewlyOnboarded(false);
 
         setReason("");
