@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { postJsonWithRetry, isRateLimited } from '../_shared/internalFetch.ts';
 import { fetchAmmpData } from '../_shared/ammpClient.ts';
 import { batteryInverterKWFromAsset } from '../_shared/effectiveCapacity.ts';
+import { hasHybridMeter as detectHybridMeter, isBatteryOnlySite } from '../_shared/deviceDetection.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -170,39 +171,16 @@ function calculateCapabilitiesFromDevices(
   );
   
   // Detect hybrid via meter names (genset/battery meters)
-  const hasHybridMeter = devices.some((d: any) => {
-    if (d.device_type !== 'meter') return false;
-    const name = (d.device_name || '').toLowerCase();
-    return name.includes('gen') || 
-           name.includes('genset') || 
-           name.includes('generator') ||
-           name.includes('battery') || 
-           name.includes('batt') || 
-           name.includes('bess');
-  });
+  const hasHybridMeter = detectHybridMeter(devices);
   
   const isHybrid = hasBattery || hasGenset || hasHybridEMS || hasHybridMeter;
 
-  // Battery-only: storage present, no PV inverter and nothing else that could
-  // be reporting PV. Only decided when the asset has a registered PV capacity
-  // of zero — otherwise the PV data exists and the site is a normal PV site.
-  const hasPvInverter = devices.some((d: any) => {
-    const type = (d.device_type || '').toLowerCase();
-    if (type === 'battery_inverter') return false;
-    return type === 'pv_inverter' || type === 'inverter' || type.includes('pv');
+  // Battery-only detection (shared with the AMMP sync).
+  const isBatteryOnly = isBatteryOnlySite({
+    devices,
+    hasBattery,
+    capacityKWp: Number(assetBreakdown.capacityKWp ?? 0),
   });
-  const hasPvCapablePeripheral = devices.some((d: any) => {
-    const type = (d.device_type || '').toLowerCase();
-    const name = (d.device_name || '').toLowerCase();
-    if (type !== 'ems' && type !== 'meter' && type !== 'satellite') return false;
-    return type === 'satellite' || name.includes('pv') || name.includes('solar');
-  });
-  const isBatteryOnly =
-    devices.length > 0 &&
-    hasBattery &&
-    !hasPvInverter &&
-    !hasPvCapablePeripheral &&
-    Number(assetBreakdown.capacityKWp ?? 0) === 0;
 
   // Mark if AMMP confirmed this asset has no devices
   const confirmedEmpty = devices.length === 0;
