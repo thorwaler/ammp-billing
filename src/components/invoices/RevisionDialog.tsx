@@ -340,6 +340,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         };
       }
       setLiveByContract(map);
+      setBatteryFetched(true);
       toast.success("Battery data refreshed for the zero-capacity sites");
     } catch (e) {
       console.error("[Revision] Battery data fetch failed:", e);
