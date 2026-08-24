@@ -116,8 +116,3 @@ export function applyCapacityProxy<T extends CapacityAssetLike>(
   if (!assets || !usesBatteryCapacityProxy(packageType)) return assets;
   return assets.map((a) => withEffectiveCapacity(a)) as T[];
 }
-
-/** Assets whose billed capacity comes from the battery inverter proxy. */
-export function proxiedAssets<T extends CapacityAssetLike>(assets: T[] | undefined): T[] {
-  return (assets ?? []).filter((a) => resolveEffectiveCapacity(a).source === 'battery_inverter');
-}

@@ -358,7 +358,7 @@ export function InvoiceCalculator({
           // Use contract-level cached_capabilities as primary source (contract-centric architecture)
           const cachedCaps = (contract as any).cached_capabilities;
           // Make battery-only sites known to the support-document helpers
-          registerBatteryOnlyAssets(cachedCaps);
+          registerBatteryOnlyAssets(contract.id, cachedCaps);
           
           return {
             id: c.id,

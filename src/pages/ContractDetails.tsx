@@ -215,8 +215,8 @@ const ContractDetails = () => {
   );
   const cachedCapabilities = contract?.cached_capabilities;
   useEffect(() => {
-    registerBatteryOnlyAssets(cachedCapabilities);
-  }, [cachedCapabilities]);
+    if (id) registerBatteryOnlyAssets(id, cachedCapabilities);
+  }, [id, cachedCapabilities]);
 
 
 

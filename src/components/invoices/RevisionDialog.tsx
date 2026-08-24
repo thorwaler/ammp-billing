@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useIgnoredAssets } from "@/hooks/useIgnoredAssets";
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,36 +6,27 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Loader2, AlertTriangle, RotateCcw, EyeOff, BatteryCharging } from "lucide-react";
+import { Loader2, AlertTriangle, RotateCcw, BatteryCharging } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import {
+  buildRevisedInvoiceRow,
+  buildRevisedLineItems,
   computeRevisionForInvoice,
-  diffSnapshotAgainstLive,
-  fetchLiveContractData,
   isLegacyMergedSnapshot,
-  revisionUnits,
-  verifySnapshotReproduces,
   type CorrectionSelection,
-  type LiveAsset,
-  type SnapshotDiff,
-  type StillZeroAsset,
 } from "@/lib/invoiceRevision";
-
-import { buildContractLineItems } from "@/lib/xeroLineItems";
-import { buildSnapshotFields, type InvoiceInputSnapshot } from "@/lib/invoiceSnapshot";
-import { isPackage2026 } from "@/data/pricingData";
-import { isBatteryOnlyAsset, batteryCapacityKWh } from "@/lib/batteryOnlyAssets";
-
-const ACCOUNT_PLATFORM_FEES = "1002";
-const ACCOUNT_IMPLEMENTATION_FEES = "1000";
+import type { InvoiceInputSnapshot } from "@/lib/invoiceSnapshot";
+import { useRevisionData } from "./revision/useRevisionData";
+import { useManualCorrections } from "./revision/useManualCorrections";
+import { CorrectionsList } from "./revision/CorrectionsList";
+import { StillZeroList } from "./revision/StillZeroList";
 
 type XeroAction = "update" | "void_new" | "manual";
 
@@ -66,166 +57,54 @@ interface RevisionDialogProps {
 
 export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: RevisionDialogProps) {
   const { ignoredIds, isIgnored, toggle: toggleIgnoredAsset } = useIgnoredAssets();
-  const ignoredKey = useMemo(() => [...ignoredIds].sort().join(","), [ignoredIds]);
-  const diffInitialisedFor = useRef<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  const [liveByContract, setLiveByContract] = useState<
-    Record<string, { assets: LiveAsset[]; orgBreakdown?: any[]; contract?: any; contractType?: any }>
-  >({});
-  const [contractRow, setContractRow] = useState<any>(null);
-  const [contractType, setContractType] = useState<any>(null);
-  const [diff, setDiff] = useState<SnapshotDiff | null>(null);
-  const [perContractDiff, setPerContractDiff] = useState<
-    Array<{ contractId: string; contractName?: string; diff: SnapshotDiff; snapshotOrgs: number; liveOrgs: number }>
-  >([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [manualInputs, setManualInputs] = useState<Record<string, string>>({});
-  /** Asset ids whose manual value was filled from the battery inverter rating. */
-  const [batterySourced, setBatterySourced] = useState<Set<string>>(new Set());
-  const [fetchingBattery, setFetchingBattery] = useState(false);
-  const [batteryFetched, setBatteryFetched] = useState(false);
   const [includeNewlyOnboarded, setIncludeNewlyOnboarded] = useState(false);
   const [reason, setReason] = useState("");
-
   const [xeroAction, setXeroAction] = useState<XeroAction>("update");
   const [overrideFidelity, setOverrideFidelity] = useState(false);
-  const [fidelity, setFidelity] = useState<
-    { ok: boolean; recomputed: number; frozen: number; reproducible: boolean; reason?: string } | null
-  >(null);
 
   const snapshot: InvoiceInputSnapshot | null = (invoice?.input_snapshot as InvoiceInputSnapshot) || null;
   const currencySymbol = invoice?.currency === "USD" ? "$" : "€";
-  const units = useMemo(() => (snapshot ? revisionUnits(snapshot) : []), [snapshot]);
-  const isMerged = units.length > 1;
   const legacyMerged = isLegacyMergedSnapshot(snapshot);
 
-  useEffect(() => {
-    if (!open || !invoice || !snapshot || !invoice.contract_id) return;
-    let cancelled = false;
+  const {
+    units,
+    loading,
+    liveByContract,
+    contractRow,
+    contractType,
+    diff,
+    perContractDiff,
+    selectedIds,
+    setSelectedIds,
+    toggleAsset,
+    fidelity,
+    reloadLiveData,
+  } = useRevisionData({
+    open,
+    invoice,
+    snapshot,
+    ignoredIds,
+    onFreshLoad: () => {
+      manual.reset();
+      setIncludeNewlyOnboarded(false);
+      setReason("");
+      setOverrideFidelity(false);
+      setXeroAction(invoice?.xero_invoice_id ? "update" : "manual");
+    },
+  });
 
-    (async () => {
-      setLoading(true);
-      try {
-        const loaded = await Promise.all(
-          units.map(async (u) => [u.contractId, await fetchLiveContractData(u.contractId)] as const),
-        );
-        if (cancelled) return;
-
-        const map: Record<string, any> = {};
-        for (const [id, live] of loaded) {
-          map[id] = {
-            assets: live.assets,
-            orgBreakdown: live.orgBreakdown,
-            contract: live.contract,
-            contractType: live.contractType,
-          };
-        }
-        setLiveByContract(map);
-        const primary = map[String(invoice.contract_id)] || loaded[0]?.[1];
-        setContractRow(primary?.contract || null);
-        setContractType(primary?.contractType || primary?.contract?.contract_types || null);
-
-        setManualInputs({});
-        setBatterySourced(new Set());
-        setBatteryFetched(false);
-        setIncludeNewlyOnboarded(false);
-
-        setReason("");
-        setOverrideFidelity(false);
-        setXeroAction(invoice.xero_invoice_id ? "update" : "manual");
-        setFidelity(
-          verifySnapshotReproduces(snapshot, {
-            invoiceDate: new Date(invoice.invoice_date),
-            billingFrequency: invoice.billing_frequency,
-            contractType: primary?.contractType || null,
-          }),
-        );
-      } catch (e) {
-        console.error("[Revision] Failed to load live data:", e);
-        toast.error("Could not load current asset data for this contract");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, invoice?.id]);
-
-  // Diff each contract against its own live data, then aggregate. Re-runs when
-  // an asset is marked as ignored so the zero lists update immediately.
-  useEffect(() => {
-    if (!open || !snapshot || Object.keys(liveByContract).length === 0) return;
-
-    const per = units.map((u) => {
-      const live = liveByContract[u.contractId];
-      const unitSnapshot = { assets: u.assets } as unknown as InvoiceInputSnapshot;
-      // Only Jubaili prices on genset kVA; everything else is MWp.
-      const packageType =
-        (u.contract as any)?.package ?? (live?.contract as any)?.package ?? null;
-      return {
-        contractId: u.contractId,
-        contractName: u.contractName,
-        diff: diffSnapshotAgainstLive(unitSnapshot, live?.assets || [], ignoredIds, { packageType }),
-        snapshotOrgs: u.orgs?.length || 0,
-        liveOrgs: live?.orgBreakdown?.length || 0,
-      };
-    });
-
-    setPerContractDiff(per);
-
-    const aggregate: SnapshotDiff = {
-      corrections: per.flatMap((p) => p.diff.corrections),
-      newlyOnboarded: per.flatMap((p) => p.diff.newlyOnboarded),
-      removed: per.flatMap((p) => p.diff.removed),
-      changed: per.flatMap((p) => p.diff.changed),
-      unchangedCount: per.reduce((s, p) => s + p.diff.unchangedCount, 0),
-      stillZeroCount: per.reduce((s, p) => s + p.diff.stillZeroCount, 0),
-      stillZero: per.flatMap((p) => p.diff.stillZero),
-      snapshotTotalMW: per.reduce((s, p) => s + p.diff.snapshotTotalMW, 0),
-      liveTotalMW: per.reduce((s, p) => s + p.diff.liveTotalMW, 0),
-    };
-    setDiff(aggregate);
-
-    const correctionIds = new Set(aggregate.corrections.map((c) => c.assetId));
-    if (diffInitialisedFor.current === invoice?.id) {
-      setSelectedIds((prev) => prev.filter((id) => correctionIds.has(id)));
-    } else {
-      diffInitialisedFor.current = invoice?.id ?? null;
-      setSelectedIds([...correctionIds]);
-    }
-  }, [open, invoice?.id, liveByContract, ignoredKey]);
-
-
-  /** Which unit an operator-entered number is expressed in, per asset. */
-  const metricById = useMemo(() => {
-    const m = new Map<string, "mw" | "kva">();
-    for (const c of diff?.corrections || []) m.set(c.assetId, c.metric);
-    for (const z of diff?.stillZero || []) m.set(z.assetId, z.metric);
-    return m;
-  }, [diff]);
-
-  const manualOverrides = useMemo(() => {
-    const out: Record<string, { mw?: number; kva?: number; source?: "manual" | "battery" }> = {};
-    for (const [assetId, raw] of Object.entries(manualInputs)) {
-      const value = Number(String(raw).replace(",", "."));
-      if (!raw?.trim() || !Number.isFinite(value) || value < 0) continue;
-      const source = batterySourced.has(assetId) ? "battery" : "manual";
-      out[assetId] =
-        metricById.get(assetId) === "kva" ? { kva: value, source } : { mw: value, source };
-    }
-    return out;
-  }, [manualInputs, metricById, batterySourced]);
-
-  const manualCount = Object.keys(manualOverrides).length;
-  const batteryCount = Object.keys(manualOverrides).filter((id) => batterySourced.has(id)).length;
+  const manual = useManualCorrections({ diff, perContractDiff, reloadLiveData });
+  const isMerged = units.length > 1;
 
   const selection: CorrectionSelection = useMemo(
-    () => ({ mode: "zero_mw_only", selectedAssetIds: selectedIds, includeNewlyOnboarded, manualOverrides }),
-    [selectedIds, includeNewlyOnboarded, manualOverrides],
+    () => ({
+      mode: "zero_mw_only",
+      selectedAssetIds: selectedIds,
+      includeNewlyOnboarded,
+      manualOverrides: manual.manualOverrides,
+    }),
+    [selectedIds, includeNewlyOnboarded, manual.manualOverrides],
   );
 
   const computation = useMemo(() => {
@@ -243,153 +122,23 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   }, [snapshot, invoice?.id, liveByContract, selection, contractType, loading, legacyMerged]);
 
   const newTotal = computation?.totalPrice ?? 0;
-  const totalMW = computation?.totalMW ?? 0;
   const originalTotal = Number(invoice?.invoice_amount) || 0;
   const delta = newTotal - originalTotal;
 
   const fmt = (n: number) =>
     `${currencySymbol}${Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
-  const toggleAsset = (assetId: string) =>
-    setSelectedIds((prev) => (prev.includes(assetId) ? prev.filter((id) => id !== assetId) : [...prev, assetId]));
-
-  const setManual = (assetId: string, value: string) => {
-    setManualInputs((prev) => ({ ...prev, [assetId]: value }));
-    // Typing over a battery-filled value makes it a hand-entered value again.
-    setBatterySourced((prev) => {
-      if (!prev.has(assetId)) return prev;
-      const next = new Set(prev);
-      next.delete(assetId);
-      return next;
-    });
-  };
-
-  /** Battery inverter rating (kW) usable as a capacity for a still-zero site. */
-  const batteryKWFor = (z: StillZeroAsset): number | null => {
-    if (z.metric !== "mw") return null;
-    const kw = z.batteryInverterKW;
-    return kw != null && Number.isFinite(Number(kw)) && Number(kw) > 0 ? Number(kw) : null;
-  };
-
-  const useBatteryValue = (z: StillZeroAsset) => {
-    const kw = batteryKWFor(z);
-    if (kw == null) return;
-    const mw = kw / 1000;
-    setManualInputs((prev) => ({ ...prev, [z.assetId]: String(Number(mw.toFixed(6))) }));
-    setBatterySourced((prev) => new Set(prev).add(z.assetId));
-  };
-
-  const batteryEligible = useMemo(
-    () => (diff?.stillZero || []).filter((z) => batteryKWFor(z) != null),
-    [diff],
-  );
-
-  const useBatteryForAll = () => {
-    if (batteryEligible.length === 0) return;
-    setManualInputs((prev) => {
-      const next = { ...prev };
-      for (const z of batteryEligible) {
-        const kw = batteryKWFor(z)!;
-        next[z.assetId] = String(Number((kw / 1000).toFixed(6)));
-      }
-      return next;
-    });
-    setBatterySourced((prev) => {
-      const next = new Set(prev);
-      for (const z of batteryEligible) next.add(z.assetId);
-      return next;
-    });
-  };
-
-  const clearManual = () => {
-    setManualInputs({});
-    setBatterySourced(new Set());
-  };
-
-  /**
-   * Battery inverter ratings live in AMMP's `asset_specific_params`, which only
-   * the single-asset endpoints return — org-resolved contracts never see them.
-   * This pulls them for the still-zero sites only, then reloads the diff.
-   */
-  const fetchBatteryData = async () => {
-    const targets = perContractDiff
-      .map((p) => ({ contractId: p.contractId, ids: p.diff.stillZero.map((z) => z.assetId) }))
-      .filter((t) => t.ids.length > 0);
-    if (targets.length === 0) return;
-
-    setFetchingBattery(true);
-    try {
-      await Promise.all(
-        targets.map((t) =>
-          supabase.functions.invoke("ammp-device-enrichment", {
-            body: { contractId: t.contractId, assetIds: t.ids, batchSize: t.ids.length },
-          }),
-        ),
-      );
-
-      const loaded = await Promise.all(
-        units.map(async (u) => [u.contractId, await fetchLiveContractData(u.contractId)] as const),
-      );
-      const map: Record<string, any> = {};
-      for (const [id, live] of loaded) {
-        map[id] = {
-          assets: live.assets,
-          orgBreakdown: live.orgBreakdown,
-          contract: live.contract,
-          contractType: live.contractType,
-        };
-      }
-      setLiveByContract(map);
-      setBatteryFetched(true);
-      toast.success("Battery data refreshed for the zero-capacity sites");
-    } catch (e) {
-      console.error("[Revision] Battery data fetch failed:", e);
-      toast.error("Could not fetch battery data from AMMP");
-    } finally {
-      setFetchingBattery(false);
-    }
-  };
-
-
-
-
-
   const handleConfirm = async () => {
     if (!invoice || !snapshot || !computation) return;
     setSubmitting(true);
     try {
-      // Build the Xero lines contract by contract, so merged invoices keep one
-      // labelled block per contract exactly as they were originally issued.
-      const lineItems = computation.units.flatMap(({ contractId, contractName, computation: comp }) => {
-        const row = liveByContract[contractId]?.contract || contractRow;
-        const packageType = comp.params.packageType;
-        const trial = !!row?.is_trial && isPackage2026(packageType);
-        const lines = buildContractLineItems({
-          result: comp.result,
-          packageType,
-          currencySymbol,
-          accountCode: ACCOUNT_PLATFORM_FEES,
-          implementationAccountCode: ACCOUNT_IMPLEMENTATION_FEES,
-          mwManaged: comp.totalMW,
-          isTrial: trial,
-          trialSetupFee: trial ? Number(row?.trial_setup_fee) || 0 : 0,
-          vendorApiOnboardingFee: trial ? Number(row?.vendor_api_onboarding_fee) || 0 : 0,
-        });
-        if (!isMerged) return lines;
-        const label = contractName || row?.contract_name || row?.company_name || "Contract";
-        return lines.map((li) => ({ ...li, Description: `[${label}] ${li.Description}` }));
+      const lines = buildRevisedLineItems({
+        computation,
+        liveByContract,
+        fallbackContract: contractRow,
+        currencySymbol,
+        isMerged,
       });
-
-      const revisedAssets = computation.units.flatMap((u) => u.computation.params.assetBreakdown || []);
-      const revisedOrgs = computation.units.flatMap(
-        (u) => (u.computation.params.orgBreakdown as any[]) || [],
-      );
-
-      const sumFor = (code: string) =>
-        lineItems.filter((li) => li.AccountCode === code).reduce((s, li) => s + (li.UnitAmount || 0), 0);
-      const arrAmount = sumFor(ACCOUNT_PLATFORM_FEES);
-      const nrrAmount = sumFor(ACCOUNT_IMPLEMENTATION_FEES);
-
 
       // Xero: update the existing invoice in place, or void it and issue a new draft.
       let newXeroInvoiceId: string | null = invoice.xero_invoice_id;
@@ -399,7 +148,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           Type: "ACCREC",
           Contact: { Name: contactName },
           Date: format(new Date(invoice.invoice_date), "yyyy-MM-dd"),
-          LineItems: lineItems,
+          LineItems: lines.lineItems,
           CurrencyCode: invoice.currency,
           Status: "DRAFT",
         };
@@ -435,101 +184,27 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           .eq("id", invoice.contract_id)
           .maybeSingle();
         const nextYtd = (Number(c?.ytd_invoiced_amount) || 0) + delta;
-        await supabase
-          .from("contracts")
-          .update({ ytd_invoiced_amount: nextYtd })
-          .eq("id", invoice.contract_id);
+        await supabase.from("contracts").update({ ytd_invoiced_amount: nextYtd }).eq("id", invoice.contract_id);
       }
-
-      const eurRatio =
-        invoice.invoice_amount_eur != null && originalTotal > 0
-          ? Number(invoice.invoice_amount_eur) / originalTotal
-          : null;
-
-      const snapshotFields = buildSnapshotFields({
-        freezeEnabled: true,
-        contractId: invoice.contract_id as string,
-        customerId: invoice.customer_id,
-        invoiceDate: new Date(invoice.invoice_date),
-        periodStart: snapshot.periodStart,
-        periodEnd: snapshot.periodEnd,
-        currency: invoice.currency,
-        exchangeRateEUR: snapshot.exchangeRateEUR ?? null,
-        contract: snapshot.contract,
-        capabilities: { assets: revisedAssets, orgBreakdown: revisedOrgs },
-        // Keep per-contract inputs on the revised invoice too, so it stays
-        // revisable in turn.
-        contracts: computation.units.map(({ contractId, contractName, computation: comp }) => {
-          const unit = units.find((u) => u.contractId === contractId);
-          return {
-            contractId,
-            contractName,
-            billingFrequency: unit?.billingFrequency || invoice.billing_frequency,
-            periodStart: unit?.periodStart ?? snapshot.periodStart,
-            periodEnd: unit?.periodEnd ?? snapshot.periodEnd,
-            subtotal: comp.result.totalPrice,
-            contract: (unit?.contract || {}) as Record<string, unknown>,
-            capabilities: {
-              assets: comp.params.assetBreakdown,
-              orgBreakdown: comp.params.orgBreakdown,
-            },
-          };
-        }),
-        lineItems: lineItems.map((li) => ({
-          description: li.Description,
-          quantity: li.Quantity,
-          unitAmount: li.UnitAmount,
-          accountCode: li.AccountCode,
-        })),
-        totals: {
-          invoiceAmount: newTotal,
-          arrAmount,
-          nrrAmount,
-          totalMW: computation.totalMW,
-          siteCount: revisedAssets.length,
-        },
-
-      });
 
       const userId = (await supabase.auth.getUser()).data.user?.id as string;
 
       const { data: inserted, error: insertError } = await supabase
         .from("invoices")
-        .insert({
-          user_id: userId,
-          customer_id: invoice.customer_id,
-          contract_id: invoice.contract_id,
-          invoice_date: invoice.invoice_date,
-          billing_frequency: invoice.billing_frequency,
-          currency: invoice.currency,
-          mw_managed: computation.totalMW,
-          total_mw: computation.totalMW,
-          invoice_amount: newTotal,
-          invoice_amount_eur: eurRatio != null ? newTotal * eurRatio : null,
-          arr_amount: arrAmount,
-          arr_amount_eur: eurRatio != null ? arrAmount * eurRatio : null,
-          nrr_amount: nrrAmount,
-          nrr_amount_eur: eurRatio != null ? nrrAmount * eurRatio : null,
-          source: "internal",
-          xero_invoice_id: newXeroInvoiceId,
-          xero_line_items: lineItems as any,
-          prepaid_balance_delta: newPrepaidDelta,
-          revised_from_invoice_id: invoice.id,
-          revision_reason:
-            [reason, manualCount > 0 ? `${manualCount} site(s) set manually` : ""]
-              .filter(Boolean)
-              .join(" · ") || null,
-          ...(snapshotFields
-            ? {
-                ...snapshotFields,
-                input_snapshot: {
-                  ...(snapshotFields.input_snapshot as any),
-                  ...(manualCount > 0 ? { manualOverrides } : {}),
-                } as any,
-              }
-            : {}),
-
-        } as any)
+        .insert(
+          buildRevisedInvoiceRow({
+            invoice,
+            snapshot,
+            units,
+            computation,
+            lines,
+            userId,
+            xeroInvoiceId: newXeroInvoiceId,
+            prepaidDelta: newPrepaidDelta,
+            reason,
+            manualOverrides: manual.manualOverrides,
+          }) as any,
+        )
         .select("id")
         .single();
 
@@ -569,7 +244,6 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
     !loading &&
     !legacyMerged &&
     (fidelity?.ok !== false || overrideFidelity);
-
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -626,10 +300,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                     {fidelity.reason ? ` (${fidelity.reason})` : ""}. Review the revised total carefully before
                     confirming.
                     <label className="mt-2 flex items-center gap-2 text-xs">
-                      <Checkbox
-                        checked={overrideFidelity}
-                        onCheckedChange={(v) => setOverrideFidelity(!!v)}
-                      />
+                      <Checkbox checked={overrideFidelity} onCheckedChange={(v) => setOverrideFidelity(!!v)} />
                       I understand and want to revise anyway
                     </label>
                   </AlertDescription>
@@ -659,10 +330,6 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                 for Jubaili) and now report a real value in AMMP. Sites the sync still reports as zero can be given a
                 value by hand below — that number is used for this revision only and is not written back to AMMP.
               </p>
-
-
-
-
 
               <div className="grid grid-cols-3 gap-3 text-sm">
                 <div className="rounded-md border p-3">
@@ -708,49 +375,14 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                   )}
                 </div>
 
-                {(diff?.corrections.length || 0) === 0 ? (
-                  <p className="text-sm text-muted-foreground rounded-md border p-3">
-                    No frozen site without capacity (0 MWp or no genset rating) reports a value in the current data.
-                    Use the manual section below if you need to price one anyway.
-                  </p>
-                ) : (
-                  <div className="rounded-md border divide-y">
-                    {diff!.corrections.map((c) => (
-                      <div key={c.assetId} className="flex items-center gap-3 p-2 text-sm">
-                        <Checkbox
-                          checked={selectedIds.includes(c.assetId)}
-                          onCheckedChange={() => toggleAsset(c.assetId)}
-                        />
-                        <span className="flex-1 truncate">
-                          {c.assetName}
-                          <span className="block text-xs text-muted-foreground">
-                            ID: {c.assetId}
-                          </span>
-                          {c.metric === "kva" && c.ratingUnknownAtFreeze && (
-                            <span className="block text-xs text-muted-foreground">rating unknown at freeze</span>
-                          )}
-                          {manualOverrides[c.assetId] && (
-                            <span className="block text-xs text-primary">manual value overrides the sync</span>
-                          )}
-                        </span>
-                        <span className="text-muted-foreground whitespace-nowrap">
-                          {c.metric === "kva"
-                            ? `${c.previousKVA ?? 0} → ${Number(c.newKVA || 0).toLocaleString()} kVA`
-                            : `0 MW → ${c.newMW.toFixed(3)} MW`}
-                        </span>
-                        <Input
-                          type="number"
-                          min={0}
-                          step={c.metric === "kva" ? 1 : 0.001}
-                          value={manualInputs[c.assetId] ?? ""}
-                          onChange={(e) => setManual(c.assetId, e.target.value)}
-                          placeholder={c.metric === "kva" ? "kVA" : "MWp"}
-                          className="h-8 w-24"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <CorrectionsList
+                  corrections={diff?.corrections || []}
+                  selectedIds={selectedIds}
+                  manualInputs={manual.manualInputs}
+                  hasManualOverride={(id) => !!manual.manualOverrides[id]}
+                  onToggle={toggleAsset}
+                  onManualChange={manual.setManual}
+                />
               </div>
 
               {(diff?.stillZero.length || 0) > 0 && (
@@ -758,130 +390,67 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                   <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                     <Label className="text-sm font-medium">
                       Still zero — set manually ({diff!.stillZero.length})
-                      {manualCount > 0 && (
+                      {manual.manualCount > 0 && (
                         <span className="ml-1 font-normal text-muted-foreground">
-                          · {manualCount} set{batteryCount > 0 ? ` (${batteryCount} from battery)` : ""}
+                          · {manual.manualCount} set
+                          {manual.batteryCount > 0 ? ` (${manual.batteryCount} from battery)` : ""}
                         </span>
                       )}
                     </Label>
                     <div className="flex items-center gap-1">
-                      {batteryEligible.length > 0 && (
-                        <Button variant="outline" size="sm" className="h-8 text-xs" onClick={useBatteryForAll}>
+                      {manual.batteryEligible.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={manual.useBatteryForAll}
+                        >
                           <BatteryCharging className="h-3 w-3 mr-1" />
-                          Use battery capacity for all ({batteryEligible.length})
+                          Use battery capacity for all ({manual.batteryEligible.length})
                         </Button>
                       )}
                       <Button
                         variant="ghost"
                         size="sm"
                         className="h-8 text-xs"
-                        disabled={fetchingBattery}
+                        disabled={manual.fetchingBattery}
                         title="Ask AMMP for the battery inverter rating of these sites"
-                        onClick={fetchBatteryData}
+                        onClick={manual.fetchBatteryData}
                       >
-                        {fetchingBattery ? (
+                        {manual.fetchingBattery ? (
                           <Loader2 className="h-3 w-3 mr-1 animate-spin" />
                         ) : (
                           <RotateCcw className="h-3 w-3 mr-1" />
                         )}
                         Fetch battery data
                       </Button>
-                      {manualCount > 0 && (
-                        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={clearManual}>
+                      {manual.manualCount > 0 && (
+                        <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={manual.clearManual}>
                           Clear manual values
                         </Button>
                       )}
                     </div>
                   </div>
-                  <div className="rounded-md border divide-y">
-                    {perContractDiff
-                      .filter((p) => p.diff.stillZero.length > 0)
-                      .map((p) => (
-                        <div key={p.contractId}>
-                          {isMerged && (
-                            <div className="bg-muted/50 px-2 py-1 text-xs font-medium">
-                              {p.contractName || p.contractId.slice(0, 8)}
-                            </div>
-                          )}
-                          {p.diff.stillZero.map((z) => {
-                            const batteryOnly = z.isBatteryOnly || isBatteryOnlyAsset(z.assetId);
-                            const batteryKWh = z.batteryCapacityKWh ?? batteryCapacityKWh(z.assetId);
-                            const batteryKW = batteryKWFor(z);
-                            const fromBattery = batterySourced.has(z.assetId);
-                            const batteryText = [
-                              batteryKW != null ? `battery inverter ${batteryKW.toFixed(0)} kW` : null,
-                              batteryKWh != null ? `${batteryKWh.toFixed(0)} kWh battery` : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" · ");
-                            return (
-                            <div key={z.assetId} className="flex items-center gap-3 p-2 text-sm">
-                              <span className="flex-1 truncate">
-                                {z.assetName}
-                                {batteryOnly && (
-                                  <Badge variant="outline" className="ml-2 text-xs">Battery-only</Badge>
-                                )}
-                                {fromBattery && (
-                                  <Badge variant="secondary" className="ml-2 text-xs">
-                                    manual value (battery)
-                                  </Badge>
-                                )}
-                                <span className="block text-xs text-muted-foreground">
-                                  ID: {z.assetId} ·{" "}
-                                  {batteryOnly
-                                    ? "no PV inverter — 0 MWp expected"
-                                    : z.metric === "kva"
-                                      ? "no genset rating in AMMP"
-                                      : "0 MWp in AMMP"}
-                                  {batteryText ? ` · ${batteryText}` : ""}
-                                </span>
-                              </span>
-                              {batteryKW != null && (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-8 px-2 text-xs whitespace-nowrap"
-                                  title={`Bill this site on its battery inverter rating (${batteryKW.toFixed(0)} kW = ${(batteryKW / 1000).toFixed(3)} MWp)`}
-                                  onClick={() => useBatteryValue(z)}
-                                >
-                                  <BatteryCharging className="h-3 w-3 mr-1" />
-                                  Use battery
-                                </Button>
-                              )}
-                              <Input
-                                type="number"
-                                min={0}
-                                step={z.metric === "kva" ? 1 : 0.001}
-                                value={manualInputs[z.assetId] ?? ""}
-                                onChange={(e) => setManual(z.assetId, e.target.value)}
-                                placeholder={z.metric === "kva" ? "kVA" : "MWp"}
-                                className="h-8 w-24"
-                              />
 
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 px-2 text-xs whitespace-nowrap"
-                                title="Mark this site as not relevant — it stops raising zero-capacity alerts and warnings"
-                                onClick={() => toggleIgnoredAsset(z.assetId, z.assetName)}
-                              >
-                                <EyeOff className="h-3 w-3 mr-1" />
-                                {isIgnored(z.assetId) ? "Ignored" : "Ignore"}
-                              </Button>
-                            </div>
-                            );
-                          })}
-                        </div>
-                      ))}
-                  </div>
+                  <StillZeroList
+                    perContractDiff={perContractDiff}
+                    isMerged={isMerged}
+                    manualInputs={manual.manualInputs}
+                    batterySourced={manual.batterySourced}
+                    batteryKWFor={manual.batteryKWFor}
+                    onManualChange={manual.setManual}
+                    onUseBattery={manual.useBatteryValue}
+                    isIgnored={isIgnored}
+                    onToggleIgnored={toggleIgnoredAsset}
+                  />
+
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {batteryFetched && batteryEligible.length === 0
+                    {manual.batteryFetched && manual.batteryEligible.length === 0
                       ? "AMMP holds no battery inverter rating for these sites, so there is nothing to take over automatically — enter a capacity by hand, or ignore the site."
                       : 'Battery inverter ratings come from AMMP\u2019s single-asset data. If none are shown, use "Fetch battery data" to pull them for these sites.'}
                   </p>
                 </div>
               )}
-
 
               <Separator />
 
@@ -907,8 +476,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                 )}
                 {(diff?.removed.length || 0) > 0 && (
                   <p className="text-xs text-muted-foreground">
-                    {diff!.removed.length} frozen asset(s) no longer exist in AMMP — they stay billed as frozen,
-                    in the organisation they belonged to when the invoice was frozen.
+                    {diff!.removed.length} frozen asset(s) no longer exist in AMMP — they stay billed as frozen, in the
+                    organisation they belonged to when the invoice was frozen.
                   </p>
                 )}
               </div>
@@ -955,7 +524,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         <DialogFooter className="gap-2">
           <Badge variant="outline" className="mr-auto self-center">
             {selectedIds.length} correction{selectedIds.length === 1 ? "" : "s"} selected
-            {manualCount > 0 ? ` · ${manualCount} manual` : ""}
+            {manual.manualCount > 0 ? ` · ${manual.manualCount} manual` : ""}
           </Badge>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={submitting}>
             Cancel
@@ -965,7 +534,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
             disabled={
               !canRevise ||
               submitting ||
-              (selectedIds.length === 0 && manualCount === 0 && !includeNewlyOnboarded)
+              (selectedIds.length === 0 && manual.manualCount === 0 && !includeNewlyOnboarded)
             }
           >
             {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

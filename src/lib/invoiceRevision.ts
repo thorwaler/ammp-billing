@@ -26,6 +26,9 @@ import { SPS_ADDONS, isSpsPackage, isSolarAfricaPackage } from '@/data/pricingDa
 import { monthsInPeriod, isAnnualUpfrontCycle } from '@/lib/invoiceScheduling';
 import type { InvoiceInputSnapshot } from '@/lib/invoiceSnapshot';
 import { registerBatteryOnlyAssets } from '@/lib/batteryOnlyAssets';
+import { buildContractLineItems } from '@/lib/xeroLineItems';
+import { buildSnapshotFields } from '@/lib/invoiceSnapshot';
+import { isPackage2026 } from '@/data/pricingData';
 
 export type RevisionMode = 'zero_mw_only' | 'full_recalc';
 
@@ -33,8 +36,19 @@ export interface LiveAsset {
   assetId: string;
   assetName: string;
   totalMW: number;
+  gensetKVA?: number | null;
+  /**
+   * Battery inverter rating in kW (AMMP `asset_specific_params.battery_inverter_power`,
+   * watts / 1000) — a power rating, usable as a capacity proxy.
+   */
+  batteryInverterKW?: number | null;
+  /** Battery storage energy in kWh (AMMP `battery_capacity`, Wh / 1000). */
+  batteryCapacityKWh?: number | null;
+  /** Site has storage devices but no PV inverter. */
+  isBatteryOnly?: boolean;
   [key: string]: any;
 }
+
 
 export interface ZeroMwCorrection {
   assetId: string;
@@ -188,14 +202,14 @@ export function diffSnapshotAgainstLive(
           frozenMW: before,
           frozenKVA: beforeKva,
           batteryInverterKW:
-            (live as any).batteryInverterKW != null && Number((live as any).batteryInverterKW) > 0
-              ? Number((live as any).batteryInverterKW)
+            live.batteryInverterKW != null && Number(live.batteryInverterKW) > 0
+              ? Number(live.batteryInverterKW)
               : null,
           batteryCapacityKWh:
-            (live as any).batteryCapacityKWh != null && Number((live as any).batteryCapacityKWh) > 0
-              ? Number((live as any).batteryCapacityKWh)
+            live.batteryCapacityKWh != null && Number(live.batteryCapacityKWh) > 0
+              ? Number(live.batteryCapacityKWh)
               : null,
-          isBatteryOnly: (live as any).isBatteryOnly === true,
+          isBatteryOnly: live.isBatteryOnly === true,
         });
       }
     } else {
@@ -207,6 +221,7 @@ export function diffSnapshotAgainstLive(
         newMW: after,
       });
     }
+
   }
 
   const removed = snapAssets
@@ -593,7 +608,7 @@ export interface RevisionComputation {
  * A snapshot slice that can be priced on its own: either the whole
  * single-contract snapshot or one contract of a merged invoice.
  */
-interface RevisionUnit {
+export interface RevisionUnit {
   contractId: string;
   contractName?: string;
   contract: Record<string, any>;
@@ -778,12 +793,182 @@ export async function fetchLiveContractData(contractId: string): Promise<{
     .maybeSingle();
 
   const caps: any = (data as any)?.cached_capabilities || {};
-  registerBatteryOnlyAssets(caps);
+  registerBatteryOnlyAssets(contractId, caps);
   const rawAssets: any[] = caps.assetBreakdown || caps.assets || [];
   return {
     assets: rawAssets.map((a: any) => ({ ...a, assetId: String(a.assetId ?? a.id), totalMW: num(a.totalMW) })),
     orgBreakdown: Array.isArray(caps.orgBreakdown) ? caps.orgBreakdown : undefined,
     contract: data,
     contractType: (data as any)?.contract_types || null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Revised invoice payload construction
+//
+// Kept next to the recomputation logic so the revision dialog stays a view: it
+// collects the operator's choices, these helpers turn a recomputation into the
+// Xero line items and the `invoices` row of the revised invoice.
+// ---------------------------------------------------------------------------
+
+export const ACCOUNT_PLATFORM_FEES = '1002';
+export const ACCOUNT_IMPLEMENTATION_FEES = '1000';
+
+export interface RevisedLineItems {
+  lineItems: any[];
+  arrAmount: number;
+  nrrAmount: number;
+  revisedAssets: any[];
+  revisedOrgs: any[];
+}
+
+/**
+ * Build the Xero lines contract by contract, so merged invoices keep one
+ * labelled block per contract exactly as they were originally issued.
+ */
+export function buildRevisedLineItems(args: {
+  computation: MergedRevisionComputation;
+  liveByContract: Record<string, { contract?: any }>;
+  fallbackContract?: any;
+  currencySymbol: string;
+  isMerged: boolean;
+}): RevisedLineItems {
+  const { computation, liveByContract, fallbackContract, currencySymbol, isMerged } = args;
+
+  const lineItems = computation.units.flatMap(({ contractId, contractName, computation: comp }) => {
+    const row = liveByContract[contractId]?.contract || fallbackContract;
+    const packageType = comp.params.packageType;
+    const trial = !!row?.is_trial && isPackage2026(packageType);
+    const lines = buildContractLineItems({
+      result: comp.result,
+      packageType,
+      currencySymbol,
+      accountCode: ACCOUNT_PLATFORM_FEES,
+      implementationAccountCode: ACCOUNT_IMPLEMENTATION_FEES,
+      mwManaged: comp.totalMW,
+      isTrial: trial,
+      trialSetupFee: trial ? Number(row?.trial_setup_fee) || 0 : 0,
+      vendorApiOnboardingFee: trial ? Number(row?.vendor_api_onboarding_fee) || 0 : 0,
+    });
+    if (!isMerged) return lines;
+    const label = contractName || row?.contract_name || row?.company_name || 'Contract';
+    return lines.map((li: any) => ({ ...li, Description: `[${label}] ${li.Description}` }));
+  });
+
+  const sumFor = (code: string) =>
+    lineItems.filter((li: any) => li.AccountCode === code).reduce((s: number, li: any) => s + (li.UnitAmount || 0), 0);
+
+  return {
+    lineItems,
+    arrAmount: sumFor(ACCOUNT_PLATFORM_FEES),
+    nrrAmount: sumFor(ACCOUNT_IMPLEMENTATION_FEES),
+    revisedAssets: computation.units.flatMap((u) => u.computation.params.assetBreakdown || []),
+    revisedOrgs: computation.units.flatMap((u) => (u.computation.params.orgBreakdown as any[]) || []),
+  };
+}
+
+/** Build the `invoices` insert row for a revised invoice. */
+export function buildRevisedInvoiceRow(args: {
+  invoice: {
+    id: string;
+    invoice_date: string;
+    customer_id: string;
+    contract_id: string | null;
+    billing_frequency: string;
+    currency: string;
+    invoice_amount: number;
+    invoice_amount_eur: number | null;
+  };
+  snapshot: InvoiceInputSnapshot;
+  units: RevisionUnit[];
+  computation: MergedRevisionComputation;
+  lines: RevisedLineItems;
+  userId: string;
+  xeroInvoiceId: string | null;
+  prepaidDelta: number | null;
+  reason: string;
+  manualOverrides: Record<string, { mw?: number; kva?: number; source?: string }>;
+}): Record<string, any> {
+  const { invoice, snapshot, units, computation, lines, userId, xeroInvoiceId, prepaidDelta, reason, manualOverrides } =
+    args;
+
+  const newTotal = computation.totalPrice;
+  const originalTotal = Number(invoice.invoice_amount) || 0;
+  const eurRatio =
+    invoice.invoice_amount_eur != null && originalTotal > 0 ? Number(invoice.invoice_amount_eur) / originalTotal : null;
+  const manualCount = Object.keys(manualOverrides).length;
+
+  const snapshotFields = buildSnapshotFields({
+    freezeEnabled: true,
+    contractId: invoice.contract_id as string,
+    customerId: invoice.customer_id,
+    invoiceDate: new Date(invoice.invoice_date),
+    periodStart: snapshot.periodStart,
+    periodEnd: snapshot.periodEnd,
+    currency: invoice.currency,
+    exchangeRateEUR: snapshot.exchangeRateEUR ?? null,
+    contract: snapshot.contract,
+    capabilities: { assets: lines.revisedAssets, orgBreakdown: lines.revisedOrgs },
+    // Keep per-contract inputs on the revised invoice too, so it stays
+    // revisable in turn.
+    contracts: computation.units.map(({ contractId, contractName, computation: comp }) => {
+      const unit = units.find((u) => u.contractId === contractId);
+      return {
+        contractId,
+        contractName,
+        billingFrequency: unit?.billingFrequency || invoice.billing_frequency,
+        periodStart: unit?.periodStart ?? snapshot.periodStart,
+        periodEnd: unit?.periodEnd ?? snapshot.periodEnd,
+        subtotal: comp.result.totalPrice,
+        contract: (unit?.contract || {}) as Record<string, unknown>,
+        capabilities: { assets: comp.params.assetBreakdown, orgBreakdown: comp.params.orgBreakdown },
+      };
+    }),
+    lineItems: lines.lineItems.map((li: any) => ({
+      description: li.Description,
+      quantity: li.Quantity,
+      unitAmount: li.UnitAmount,
+      accountCode: li.AccountCode,
+    })),
+    totals: {
+      invoiceAmount: newTotal,
+      arrAmount: lines.arrAmount,
+      nrrAmount: lines.nrrAmount,
+      totalMW: computation.totalMW,
+      siteCount: lines.revisedAssets.length,
+    },
+  });
+
+  return {
+    user_id: userId,
+    customer_id: invoice.customer_id,
+    contract_id: invoice.contract_id,
+    invoice_date: invoice.invoice_date,
+    billing_frequency: invoice.billing_frequency,
+    currency: invoice.currency,
+    mw_managed: computation.totalMW,
+    total_mw: computation.totalMW,
+    invoice_amount: newTotal,
+    invoice_amount_eur: eurRatio != null ? newTotal * eurRatio : null,
+    arr_amount: lines.arrAmount,
+    arr_amount_eur: eurRatio != null ? lines.arrAmount * eurRatio : null,
+    nrr_amount: lines.nrrAmount,
+    nrr_amount_eur: eurRatio != null ? lines.nrrAmount * eurRatio : null,
+    source: 'internal',
+    xero_invoice_id: xeroInvoiceId,
+    xero_line_items: lines.lineItems as any,
+    prepaid_balance_delta: prepaidDelta,
+    revised_from_invoice_id: invoice.id,
+    revision_reason:
+      [reason, manualCount > 0 ? `${manualCount} site(s) set manually` : ''].filter(Boolean).join(' · ') || null,
+    ...(snapshotFields
+      ? {
+          ...snapshotFields,
+          input_snapshot: {
+            ...(snapshotFields.input_snapshot as any),
+            ...(manualCount > 0 ? { manualOverrides } : {}),
+          } as any,
+        }
+      : {}),
   };
 }

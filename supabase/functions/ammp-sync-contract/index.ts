@@ -4,6 +4,7 @@ import { postJsonWithRetry as sharedPostJsonWithRetry, parseRetryAfterMs } from 
 import { fetchAmmpData, fetchOrgAssets } from '../_shared/ammpClient.ts';
 import { classifyOrgRow, hasTierConflict, isExcludedOrg, type ClassifiedOrg } from '../_shared/elumFlags.ts';
 import { batteryInverterKWFromAsset } from '../_shared/effectiveCapacity.ts';
+import { hasHybridMeter as detectHybridMeter, isBatteryOnlySite } from '../_shared/deviceDetection.ts';
 
 // Declare EdgeRuntime for Supabase Edge Functions (auto-continuation support)
 declare const EdgeRuntime: {
@@ -315,16 +316,7 @@ function calculateCapabilities(
   );
   
   // Detect hybrid via meter names (genset/battery meters)
-  const hasHybridMeter = devices.some(d => {
-    if (d.device_type !== 'meter') return false;
-    const name = (d.device_name || '').toLowerCase();
-    return name.includes('gen') || 
-           name.includes('genset') || 
-           name.includes('generator') ||
-           name.includes('battery') || 
-           name.includes('batt') || 
-           name.includes('bess');
-  });
+  const hasHybridMeter = detectHybridMeter(devices);
   
   // Use cached date first, then asset.created
   const onboardingDate = cachedOnboardingDate || asset.created || null;
@@ -339,26 +331,8 @@ function calculateCapabilities(
       ? Number(asset.genset_capacity) / 1000
       : null;
 
-  // Battery-only detection: storage present, no PV inverter, and no EMS/meter
-  // that could still be delivering PV data. Only meaningful when we actually
-  // have a device list — an empty list means "unknown", not "battery-only".
-  const hasPvInverter = devices.some(d => {
-    const type = (d.device_type || '').toLowerCase();
-    if (type === 'battery_inverter') return false;
-    return type === 'pv_inverter' || type === 'inverter' || type.includes('pv');
-  });
-  const hasPvCapablePeripheral = devices.some(d => {
-    const type = (d.device_type || '').toLowerCase();
-    const name = (d.device_name || '').toLowerCase();
-    if (type !== 'ems' && type !== 'meter' && type !== 'satellite') return false;
-    return type === 'satellite' || name.includes('pv') || name.includes('solar');
-  });
-  const isBatteryOnly =
-    devices.length > 0 &&
-    hasBattery &&
-    !hasPvInverter &&
-    !hasPvCapablePeripheral &&
-    capacityKWp === 0;
+  // Battery-only detection (shared with the device enrichment).
+  const isBatteryOnly = isBatteryOnlySite({ devices, hasBattery, capacityKWp });
 
   // Battery capacity: AMMP reports Wh on the asset when configured.
   const rawBatteryCapacity =
