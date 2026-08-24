@@ -12,6 +12,7 @@
  * excluded by default so a correction never sneaks in newly onboarded sites.
  */
 
+import { applyCapacityProxy } from './effectiveCapacity';
 import { supabase } from '@/integrations/supabase/client';
 import {
   calculateInvoice,
@@ -100,6 +101,10 @@ export function diffSnapshotAgainstLive(
     ignoredAssetIds instanceof Set
       ? ignoredAssetIds
       : new Set([...(ignoredAssetIds || [])].map(String));
+
+  // On packages that bill battery-inverter ratings when PV is unusable, diff
+  // against the effective capacity so proxied sites are not "still zero".
+  liveAssets = (applyCapacityProxy(liveAssets || [], options?.packageType) ?? liveAssets ?? []) as LiveAsset[];
 
   const snapAssets = Array.isArray(snapshot?.assets) ? snapshot.assets : [];
   const snapById = new Map(snapAssets.map((a) => [String(a.assetId), a]));

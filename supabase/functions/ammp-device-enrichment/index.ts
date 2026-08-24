@@ -1,6 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { postJsonWithRetry, isRateLimited } from '../_shared/internalFetch.ts';
 import { fetchAmmpData } from '../_shared/ammpClient.ts';
+import { batteryInverterKWFromAsset } from '../_shared/effectiveCapacity.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -127,7 +128,8 @@ async function fetchAMMPData(token: string, path: string): Promise<any> {
  */
 function calculateCapabilitiesFromDevices(
   assetBreakdown: AssetBreakdown,
-  devices: any[]
+  devices: any[],
+  assetEnvelope?: any
 ): AssetBreakdown {
   const deviceInfoList: DeviceInfo[] = devices.map((d: any) => ({
     deviceId: d.device_id,
@@ -214,6 +216,10 @@ function calculateCapabilitiesFromDevices(
     devices: deviceInfoList,
     deviceEnrichmentAttempted: true,
     deviceEnrichmentConfirmedEmpty: confirmedEmpty,
+    // `/assets/{id}/devices` is one of the two endpoints that populate
+    // asset_specific_params — never clear a cached rating when it is absent.
+    batteryInverterKW:
+      batteryInverterKWFromAsset(assetEnvelope) ?? (assetBreakdown as any).batteryInverterKW ?? null,
   };
 }
 
@@ -416,13 +422,18 @@ Deno.serve(async (req) => {
               `/assets/${asset.assetId}/devices?include_virtual=true`
             );
             const devices = devicesResponse.devices || devicesResponse || [];
-            return { assetId: asset.assetId, devices: Array.isArray(devices) ? devices : [], failed: false };
+            return {
+              assetId: asset.assetId,
+              devices: Array.isArray(devices) ? devices : [],
+              envelope: devicesResponse,
+              failed: false,
+            };
           } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             console.warn(`[AMMP Device Enrichment] Failed to fetch devices for ${asset.assetId}: ${message}`);
             // Never treat a failed fetch as an empty device list — that would be
             // written back to the cache and permanently mark the asset empty.
-            return { assetId: asset.assetId, devices: [], failed: true, message };
+            return { assetId: asset.assetId, devices: [], envelope: null, failed: true, message };
           }
         })
       );
@@ -432,8 +443,8 @@ Deno.serve(async (req) => {
           failedCount++;
           continue;
         }
-        const { assetId, devices, failed, message } = result.value as {
-          assetId: string; devices: any[]; failed: boolean; message?: string;
+        const { assetId, devices, envelope, failed, message } = result.value as {
+          assetId: string; devices: any[]; envelope: any; failed: boolean; message?: string;
         };
         if (failed) {
           failedCount++;
@@ -442,7 +453,7 @@ Deno.serve(async (req) => {
         }
         const originalAsset = cachedCapabilities.assetBreakdown.find(a => a.assetId === assetId);
         if (originalAsset) {
-          const enriched = calculateCapabilitiesFromDevices(originalAsset, devices);
+          const enriched = calculateCapabilitiesFromDevices(originalAsset, devices, envelope);
           enrichedAssets.set(assetId, enriched);
         }
       }

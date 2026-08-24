@@ -1,4 +1,5 @@
 // Shared invoice calculation logic
+import { applyCapacityProxy, usesBatteryCapacityProxy } from './effectiveCapacity';
 import { 
   MODULES, 
   ADDONS, 
@@ -1295,7 +1296,26 @@ function filterNonDiscountedAssets(
 /**
  * Main calculation function
  */
-export function calculateInvoice(params: CalculationParams): CalculationResult {
+export function calculateInvoice(rawParams: CalculationParams): CalculationResult {
+  // Substitute battery-inverter ratings for sites whose registered PV capacity
+  // is missing, zero, or flagged implausible (Elum 2026 / Enterprise eConf only).
+  const params: CalculationParams = usesBatteryCapacityProxy(rawParams.packageType)
+    ? (() => {
+        const assetBreakdown = applyCapacityProxy(rawParams.assetBreakdown, rawParams.packageType);
+        const orgBreakdown = rawParams.orgBreakdown?.map((org) => ({
+          ...org,
+          assets: applyCapacityProxy(org.assets as any, rawParams.packageType) as typeof org.assets,
+        }));
+        const proxiedMW = (assetBreakdown ?? []).reduce((sum, a) => sum + (a.totalMW || 0), 0);
+        return {
+          ...rawParams,
+          assetBreakdown,
+          orgBreakdown,
+          totalMW: assetBreakdown && assetBreakdown.length > 0 ? proxiedMW : rawParams.totalMW,
+        };
+      })()
+    : rawParams;
+
   const {
     packageType,
     totalMW,

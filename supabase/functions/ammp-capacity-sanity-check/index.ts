@@ -271,6 +271,39 @@ Deno.serve(async (req) => {
       results.push(...batchResults);
     }
 
+    // Persist each verdict on the asset so pricing and support documents can
+    // fall back to the battery-inverter proxy for implausible PV capacities.
+    if (results.length > 0) {
+      const verdictById = new Map(results.map((r) => [r.assetId, r]));
+      const checkedAt = new Date().toISOString();
+      const caps = ((contract as any).cached_capabilities ?? {}) as any;
+      const breakdown: any[] = Array.isArray(caps.assetBreakdown) ? caps.assetBreakdown : [];
+      let changed = false;
+      const updatedBreakdown = breakdown.map((a: any) => {
+        const r = verdictById.get(String(a?.assetId));
+        if (!r) return a;
+        changed = true;
+        return {
+          ...a,
+          pvSanity: {
+            verdict: r.verdict,
+            ratio: r.ratio ?? null,
+            observedKWp: r.observedKWp ?? null,
+            checkedAt,
+          },
+        };
+      });
+      if (changed) {
+        const { error: persistError } = await supabase
+          .from("contracts")
+          .update({ cached_capabilities: { ...caps, assetBreakdown: updatedBreakdown } })
+          .eq("id", contract.id);
+        if (persistError) {
+          console.error("[ammp-capacity-sanity-check] Failed to persist verdicts:", persistError);
+        }
+      }
+    }
+
     const suspicious = results.filter((r) => r.verdict === "too_low" || r.verdict === "too_high");
     const noData = results.filter((r) => r.verdict === "no_data");
     const errors = results.filter((r) => r.verdict === "error");

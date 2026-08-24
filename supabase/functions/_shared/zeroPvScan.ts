@@ -6,7 +6,10 @@
 // - Raises one `zero_pv_capacity` alert per contract, skipping insertion when
 //   an unacknowledged alert already covers the same asset set.
 
+import { hasBatteryProxy } from './effectiveCapacity.ts';
+
 interface ContractRow {
+
   id: string;
   user_id: string;
   customer_id: string;
@@ -63,8 +66,11 @@ export async function runZeroPvScan(
         Number(a?.totalMW ?? 0) === 0 &&
         a?.assetId &&
         !ignored.has(String(a.assetId)) &&
-        !batteryOnlyIds.has(String(a.assetId))
+        !batteryOnlyIds.has(String(a.assetId)) &&
+        // A battery-inverter rating already gives the site a billable capacity.
+        !hasBatteryProxy(a)
     );
+
     const nonZeroIds = new Set(
       assets.filter((a) => Number(a?.totalMW ?? 0) > 0 && a?.assetId).map((a) => a.assetId)
     );
