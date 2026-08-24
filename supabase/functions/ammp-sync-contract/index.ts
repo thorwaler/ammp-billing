@@ -565,6 +565,10 @@ async function processContractSync(
   // Build sets for continuation and date preservation
   const cachedDates: Record<string, string | null> = {};
   const cachedSolcastDates: Record<string, string | null> = {};
+  // `battery_inverter_power` only comes back on single-asset endpoints, so a
+  // previously captured value must survive syncs that could not read it again.
+  const cachedBatteryInverterKW: Record<string, number | null> = {};
+  const cachedPvSanity: Record<string, any> = {};
   const alreadySyncedIds = new Set<string>();
   const existingCapabilities: AssetCapabilities[] = [];
   
@@ -573,6 +577,8 @@ async function processContractSync(
       if (asset.assetId) {
         cachedDates[asset.assetId] = asset.onboardingDate || null;
         cachedSolcastDates[asset.assetId] = asset.solcastOnboardingDate || null;
+        cachedBatteryInverterKW[asset.assetId] = (asset as any).batteryInverterKW ?? null;
+        cachedPvSanity[asset.assetId] = (asset as any).pvSanity ?? null;
         // Only use existing data for continuation if we're resuming a partial sync
         if (existingSyncStatus === 'partial') {
           alreadySyncedIds.add(asset.assetId);
@@ -581,6 +587,7 @@ async function processContractSync(
       }
     }
   }
+
   
   if (alreadySyncedIds.size > 0) {
     console.log(`[AMMP Sync Contract] Resuming partial sync, ${alreadySyncedIds.size} assets already synced`);
