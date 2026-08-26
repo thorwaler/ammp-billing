@@ -247,8 +247,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-3xl h-[90vh] max-h-[90vh] !flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <RotateCcw className="h-4 w-4" />
             Revise invoice
@@ -279,8 +279,8 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
             </AlertDescription>
           </Alert>
         ) : (
-          <ScrollArea className="flex-1 min-h-0 pr-4">
-            <div className="space-y-4">
+          <ScrollArea className="flex-1 min-h-0 overflow-hidden">
+            <div className="space-y-4 pr-4 pb-2">
               {isMerged && (
                 <Alert>
                   <AlertTriangle className="h-4 w-4" />
@@ -521,7 +521,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
           </ScrollArea>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 shrink-0">
           <Badge variant="outline" className="mr-auto self-center">
             {selectedIds.length} correction{selectedIds.length === 1 ? "" : "s"} selected
             {manual.manualCount > 0 ? ` · ${manual.manualCount} manual` : ""}
