@@ -2188,6 +2188,23 @@ export function InvoiceCalculator({
                 </div>
               )}
 
+              {/* Elum ePM one-time setup fee */}
+              {selectedCustomer.package === 'elum_epm' && selectedCustomer.onboardingSetupFee ? (
+                <div className="p-3 border rounded-lg bg-muted/50 space-y-3">
+                  <h4 className="font-semibold text-sm">One-time Fees</h4>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="include-onboarding-fee-epm"
+                      checked={includeOnboardingFee}
+                      onCheckedChange={(checked) => setIncludeOnboardingFee(checked === true)}
+                    />
+                    <Label htmlFor="include-onboarding-fee-epm" className="text-sm cursor-pointer">
+                      Include Setup Fee ({currencySymbol}{selectedCustomer.onboardingSetupFee.toLocaleString()})
+                    </Label>
+                  </div>
+                </div>
+              ) : null}
+
               {/* Matriarch API section */}
               {isMatriarchApiPackage(selectedCustomer.package) && (
                 <div className="p-3 border rounded-lg bg-muted/50 space-y-3">
