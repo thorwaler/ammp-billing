@@ -1141,8 +1141,8 @@ export function InvoiceCalculator({
         }
       }
       
-      // Enterprise eConf: one-time onboarding fee (NRR)
-      if (selectedCustomer.package === 'enterprise_econf' && includeOnboardingFee && selectedCustomer.onboardingSetupFee) {
+      // Enterprise eConf / Elum ePM: one-time onboarding fee (NRR)
+      if ((selectedCustomer.package === 'enterprise_econf' || selectedCustomer.package === 'elum_epm') && includeOnboardingFee && selectedCustomer.onboardingSetupFee) {
         lineItems.push({
           Description: "Onboarding Setup Fee",
           Quantity: 1,
