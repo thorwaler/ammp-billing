@@ -1223,7 +1223,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         // Matriarch API fields
         irradiance_per_site_tiers: data.package === 'matriarch_api' ? irradianceSiteTiers : [],
         performance_per_mwp_tiers: data.package === 'matriarch_api' ? performanceMwpTiers : [],
-        onboarding_setup_fee: (data.package === 'matriarch_api' || data.package === 'enterprise_econf') ? onboardingSetupFee : null,
+        onboarding_setup_fee: (data.package === 'matriarch_api' || data.package === 'enterprise_econf' || data.package === 'elum_epm') ? onboardingSetupFee : null,
         vendor_api_fee: data.package === 'matriarch_api' ? vendorApiFee : null,
         // Custom contract type reference
         contract_type_id: selectedContractTypeId || null,
