@@ -1361,8 +1361,8 @@ export function InvoiceCalculator({
         nrrAmount += (result.starterPackageCost || 0) + (result.retainerCost || 0);
       }
       
-      // Enterprise eConf: onboarding fee is NRR
-      if (selectedCustomer.package === 'enterprise_econf' && includeOnboardingFee) {
+      // Enterprise eConf / Elum ePM: onboarding fee is NRR
+      if ((selectedCustomer.package === 'enterprise_econf' || selectedCustomer.package === 'elum_epm') && includeOnboardingFee) {
         nrrAmount += (selectedCustomer.onboardingSetupFee || 0);
       }
 
