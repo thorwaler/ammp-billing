@@ -458,6 +458,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         setHourlyRate(existingContract.hourlyRate);
       }
       
+      // One-time setup fee (Matriarch / Enterprise eConf / Elum ePM)
+      if (existingContract.onboardingSetupFee !== undefined) {
+        setOnboardingSetupFee(existingContract.onboardingSetupFee);
+      } else if (existingContract.package === 'elum_epm') {
+        setOnboardingSetupFee(0);
+      }
+
       // Initialize SPS Monitoring discount state
       if (existingContract.package === 'sps_monitoring') {
         setUpfrontDiscountPercent(existingContract.upfrontDiscountPercent || 5);
