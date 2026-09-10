@@ -799,6 +799,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
       form.setValue("belowThresholdPricePerMWp", 50);
       form.setValue("aboveThresholdPricePerMWp", 30);
       form.setValue("modules", []);
+      setOnboardingSetupFee(existingContract?.onboardingSetupFee ?? 0);
       setShowCustomPricing(false);
     } else if (value === "elum_jubaili") {
       // Elum Jubaili - per-site pricing banded by genset rating (kVA)
