@@ -2330,11 +2330,49 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
                       </FormItem>
                     )}
                   />
-                </div>
-              </>
-            )}
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <FormField
+                     control={form.control}
+                     name="minimumAnnualValue"
+                     render={({ field }) => (
+                       <FormItem>
+                         <FormLabel>Minimum Annual Value ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                         <FormControl>
+                           <Input
+                             type="number"
+                             step="0.01"
+                             placeholder="0"
+                             {...field}
+                             value={field.value ?? ''}
+                             onChange={e => field.onChange(e.target.valueAsNumber || 0)}
+                           />
+                         </FormControl>
+                         <FormDescription>
+                           Contract-wide floor, pro-rated per billing period (e.g. €5,000/year = €1,250 per quarter)
+                         </FormDescription>
+                         <FormMessage />
+                       </FormItem>
+                     )}
+                   />
+                   <div className="space-y-2">
+                     <FormLabel>One-time setup fee ({form.watch("currency") === 'USD' ? '$' : '€'})</FormLabel>
+                     <Input
+                       type="number"
+                       step="1"
+                       min="0"
+                       value={onboardingSetupFee}
+                       onChange={(e) => setOnboardingSetupFee(Number(e.target.value) || 0)}
+                     />
+                     <p className="text-xs text-muted-foreground">
+                       Onboarding / dashboards / KPI customisation. Added to an invoice only when selected in the calculator.
+                     </p>
+                   </div>
+                 </div>
+               </>
+             )}
 
-            {/* Elum Jubaili package fields */}
+             {/* Elum Jubaili package fields */}
             {watchPackage === "elum_jubaili" && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
