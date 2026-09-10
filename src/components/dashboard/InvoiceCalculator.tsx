@@ -1141,8 +1141,8 @@ export function InvoiceCalculator({
         }
       }
       
-      // Enterprise eConf: one-time onboarding fee (NRR)
-      if (selectedCustomer.package === 'enterprise_econf' && includeOnboardingFee && selectedCustomer.onboardingSetupFee) {
+      // Enterprise eConf / Elum ePM: one-time onboarding fee (NRR)
+      if ((selectedCustomer.package === 'enterprise_econf' || selectedCustomer.package === 'elum_epm') && includeOnboardingFee && selectedCustomer.onboardingSetupFee) {
         lineItems.push({
           Description: "Onboarding Setup Fee",
           Quantity: 1,
@@ -1361,8 +1361,8 @@ export function InvoiceCalculator({
         nrrAmount += (result.starterPackageCost || 0) + (result.retainerCost || 0);
       }
       
-      // Enterprise eConf: onboarding fee is NRR
-      if (selectedCustomer.package === 'enterprise_econf' && includeOnboardingFee) {
+      // Enterprise eConf / Elum ePM: onboarding fee is NRR
+      if ((selectedCustomer.package === 'enterprise_econf' || selectedCustomer.package === 'elum_epm') && includeOnboardingFee) {
         nrrAmount += (selectedCustomer.onboardingSetupFee || 0);
       }
 
@@ -2187,6 +2187,23 @@ export function InvoiceCalculator({
                   ) : null}
                 </div>
               )}
+
+              {/* Elum ePM one-time setup fee */}
+              {selectedCustomer.package === 'elum_epm' && selectedCustomer.onboardingSetupFee ? (
+                <div className="p-3 border rounded-lg bg-muted/50 space-y-3">
+                  <h4 className="font-semibold text-sm">One-time Fees</h4>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="include-onboarding-fee-epm"
+                      checked={includeOnboardingFee}
+                      onCheckedChange={(checked) => setIncludeOnboardingFee(checked === true)}
+                    />
+                    <Label htmlFor="include-onboarding-fee-epm" className="text-sm cursor-pointer">
+                      Include Setup Fee ({currencySymbol}{selectedCustomer.onboardingSetupFee.toLocaleString()})
+                    </Label>
+                  </div>
+                </div>
+              ) : null}
 
               {/* Matriarch API section */}
               {isMatriarchApiPackage(selectedCustomer.package) && (

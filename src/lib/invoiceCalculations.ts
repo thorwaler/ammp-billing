@@ -1802,7 +1802,7 @@ export function calculateInvoice(rawParams: CalculationParams): CalculationResul
   let baseCost = result.starterPackageCost + result.totalMWCost + result.minimumCharges;
   
   // Apply minimum annual value to BASE COST only (for Pro, Custom, 2026, and Elum packages - not SolarAfrica)
-  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal' || packageType === 'ammp_os_2026' || packageType === 'enterprise_econf') && minimumAnnualValue) {
+  if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal' || packageType === 'ammp_os_2026' || packageType === 'enterprise_econf' || packageType === 'elum_epm') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
     if (baseCost < minimumForPeriod) {
       const adjustment = minimumForPeriod - baseCost;
