@@ -301,6 +301,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [addonCustomPrices, setAddonCustomPrices] = useState<{[key: string]: number | undefined}>({});
   const [addonQuantities, setAddonQuantities] = useState<{[key: string]: number | undefined}>({});
   const [addonCustomTiers, setAddonCustomTiers] = useState<Record<string, PricingTier[]>>({});
+  // Contract-level custom recurring annual fees (available on every package)
+  const [customRecurringAddons, setCustomRecurringAddons] = useState<CustomRecurringAddon[]>(
+    (existingContract as any)?.customRecurringAddons || []
+  );
   const [portfolioDiscountTiers, setPortfolioDiscountTiers] = useState<DiscountTier[]>(DEFAULT_PORTFOLIO_DISCOUNT_TIERS);
   const [minimumChargeTiers, setMinimumChargeTiers] = useState<MinimumChargeTier[]>(DEFAULT_MINIMUM_CHARGE_TIERS);
   const [graduatedMWTiers, setGraduatedMWTiers] = useState<GraduatedMWTier[]>(DEFAULT_GRADUATED_MW_TIERS);
