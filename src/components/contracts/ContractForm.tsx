@@ -667,6 +667,11 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         setAddonCustomPrices(customPriceMap);
         setAddonQuantities(quantityMap);
         setAddonCustomTiers(customTiersMap);
+        setCustomRecurringAddons(
+          Array.isArray((contract as any).custom_recurring_addons)
+            ? ((contract as any).custom_recurring_addons as CustomRecurringAddon[])
+            : []
+        );
         
         // Load portfolio discount tiers
         if ((contract as any).portfolio_discount_tiers && Array.isArray((contract as any).portfolio_discount_tiers)) {
