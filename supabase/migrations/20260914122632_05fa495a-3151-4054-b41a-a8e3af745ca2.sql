@@ -1,0 +1,1 @@
+ALTER TABLE public.contracts ADD COLUMN IF NOT EXISTS custom_recurring_addons jsonb NOT NULL DEFAULT '[]'::jsonb;

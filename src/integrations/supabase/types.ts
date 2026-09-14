@@ -418,6 +418,7 @@ export type Database = {
           currency: string | null
           custom_asset_pricing: Json | null
           custom_pricing: Json | null
+          custom_recurring_addons: Json
           customer_id: string
           elum_parent_org_id: string | null
           elum_tier: string | null
@@ -507,6 +508,7 @@ export type Database = {
           currency?: string | null
           custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
+          custom_recurring_addons?: Json
           customer_id: string
           elum_parent_org_id?: string | null
           elum_tier?: string | null
@@ -596,6 +598,7 @@ export type Database = {
           currency?: string | null
           custom_asset_pricing?: Json | null
           custom_pricing?: Json | null
+          custom_recurring_addons?: Json
           customer_id?: string
           elum_parent_org_id?: string | null
           elum_tier?: string | null
