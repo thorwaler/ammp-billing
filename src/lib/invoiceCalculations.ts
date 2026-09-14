@@ -1821,6 +1821,12 @@ export function calculateInvoice(rawParams: CalculationParams): CalculationResul
     params.periodEnd,
     params.customAddonDefinitions
   );
+
+  // Contract-level custom annual fees (all packages) — spread over the cycle
+  result.addonCosts = [
+    ...result.addonCosts,
+    ...calculateCustomRecurringAddonCosts(params.customRecurringAddons, frequencyMultiplier),
+  ];
   
   // Calculate minimum charges (with tier support) - only if not already set by site-level pricing
   // Skip for elum_epm as minimum is applied per-site as a floor in the breakdown
