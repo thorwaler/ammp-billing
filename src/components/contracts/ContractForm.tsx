@@ -1169,6 +1169,10 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         period_end: data.periodEnd || null,
         modules: (data.package === 'poc' || data.package === 'per_site') ? [] : (data.modules || []),
         addons: (data.package === 'poc' || data.package === 'per_site') ? [] : enhancedAddons,
+        // Custom annual fees apply to every package, including POC / per-site
+        custom_recurring_addons: customRecurringAddons
+          .filter(f => (f.name || '').trim().length > 0 && Number(f.annualAmount) > 0)
+          .map(f => ({ id: f.id, name: f.name.trim(), annualAmount: Number(f.annualAmount) })),
         custom_pricing: (data.package === 'poc' || data.package === 'per_site') ? {} : (data.customPricing || {}),
         volume_discounts: (data.package === 'poc' || data.package === 'per_site') ? {} : (data.volumeDiscounts || {}),
         portfolio_discount_tiers: (data.package === 'poc' || data.package === 'per_site') ? [] : portfolioDiscountTiers,
