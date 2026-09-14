@@ -87,6 +87,39 @@ export interface PerSiteCalculationResult {
   siteBreakdown: SiteBillingItem[];
 }
 
+/**
+ * Contract-level custom recurring fee. Title and yearly amount are entered on
+ * the contract; the calculator spreads the amount across the billing cycle and
+ * books it as recurring revenue (ARR).
+ */
+export interface CustomRecurringAddon {
+  id: string;
+  name: string;
+  annualAmount: number;
+}
+
+/** Line-item id prefix used to recognise custom recurring fees downstream. */
+export const CUSTOM_RECURRING_ADDON_PREFIX = 'custom_annual:';
+
+export const isCustomRecurringAddonId = (addonId?: string): boolean =>
+  !!addonId && addonId.startsWith(CUSTOM_RECURRING_ADDON_PREFIX);
+
+/** Build `addonCosts` entries for the contract's custom annual fees. */
+export function calculateCustomRecurringAddonCosts(
+  fees: CustomRecurringAddon[] | undefined,
+  frequencyMultiplier: number,
+): CalculationResult['addonCosts'] {
+  return (fees || [])
+    .filter(f => f && Number(f.annualAmount) > 0 && (f.name || '').trim().length > 0)
+    .map(f => ({
+      addonId: `${CUSTOM_RECURRING_ADDON_PREFIX}${f.id}`,
+      addonName: f.name.trim(),
+      cost: Number(f.annualAmount) * frequencyMultiplier,
+      quantity: 1,
+      pricePerUnit: Number(f.annualAmount),
+    }));
+}
+
 export interface CalculationParams {
   packageType: string;
   totalMW: number;
