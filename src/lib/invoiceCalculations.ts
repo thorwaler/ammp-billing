@@ -172,6 +172,11 @@ export interface CalculationParams {
   // Custom contract type fields
   customModuleDefinitions?: ModuleDefinition[];
   customAddonDefinitions?: AddonDefinition[];
+  /**
+   * Free-form recurring annual fees defined per contract (any package).
+   * The annual amount is spread across the billing cycle via `frequencyMultiplier`.
+   */
+  customRecurringAddons?: CustomRecurringAddon[];
   // SPS Monitoring discount fields
   upfrontDiscountPercent?: number;
   commitmentDiscountPercent?: number;
