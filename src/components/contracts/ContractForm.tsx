@@ -3084,6 +3084,13 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               </div>
             )}
             
+            {/* Custom recurring annual fees - available on every package */}
+            <CustomAnnualFeeEditor
+              fees={customRecurringAddons}
+              onChange={setCustomRecurringAddons}
+              currency={form.watch("currency")}
+            />
+
             {/* Package Selector Component - Modules & Addons (hidden for capped and poc) */}
             {watchPackage !== "capped" && watchPackage !== "poc" && (
             <ContractPackageSelector
