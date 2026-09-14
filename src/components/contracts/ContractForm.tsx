@@ -12,6 +12,8 @@ import { MinimumChargeTierEditor } from "@/components/contracts/MinimumChargeTie
 import { GraduatedMWTierEditor } from "@/components/contracts/GraduatedMWTierEditor";
 import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
 import { MoveContractDialog } from "@/components/contracts/MoveContractDialog";
+import { CustomAnnualFeeEditor } from "@/components/contracts/CustomAnnualFeeEditor";
+import type { CustomRecurringAddon } from "@/lib/invoiceCalculations";
 import { SelectSeparator } from "@/components/ui/select";
 import { 
   MODULES, 
