@@ -1848,10 +1848,16 @@ export function calculateInvoice(rawParams: CalculationParams): CalculationResul
   // Apply minimum annual value to BASE COST only (for Pro, Custom, 2026, and Elum packages - not SolarAfrica)
   if ((packageType === 'pro' || packageType === 'custom' || packageType === 'elum_portfolio_os' || packageType === 'elum_internal' || packageType === 'ammp_os_2026' || packageType === 'enterprise_econf' || packageType === 'elum_epm') && minimumAnnualValue) {
     const minimumForPeriod = minimumAnnualValue * frequencyMultiplier;
-    if (baseCost < minimumForPeriod) {
-      const adjustment = minimumForPeriod - baseCost;
+    // Custom annual fees count toward the minimum: the top-up only covers the
+    // remaining gap, never re-bills what the fee already pays for.
+    const customFeesForPeriod = result.addonCosts
+      .filter(item => isCustomRecurringAddonId(item.addonId))
+      .reduce((sum, item) => sum + item.cost, 0);
+    const coveredByBaseAndFees = baseCost + customFeesForPeriod;
+    if (coveredByBaseAndFees < minimumForPeriod) {
+      const adjustment = minimumForPeriod - coveredByBaseAndFees;
       result.minimumContractAdjustment = adjustment;
-      baseCost = minimumForPeriod;
+      baseCost = minimumForPeriod - customFeesForPeriod;
     }
   }
   
