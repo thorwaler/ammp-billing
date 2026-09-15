@@ -8,6 +8,11 @@
  * is how `zero_pv_alert_enabled` kept resetting itself.
  */
 
+import {
+  parseCustomRecurringAddons,
+  type CustomRecurringAddon,
+} from "@/lib/invoiceCalculations";
+
 type AnyRow = Record<string, any>;
 
 export interface ContractFormValues {
@@ -85,6 +90,7 @@ export interface ContractFormValues {
   inflationCapEnabled?: boolean;
   anniversaryNoticeDays?: number;
   contractTypeId?: string;
+  customRecurringAddons?: CustomRecurringAddon[];
 }
 
 /** Normalise `null` to `undefined` while preserving valid `0` / `false`. */
@@ -190,6 +196,9 @@ export function mapContractRowToFormValues(row: AnyRow): ContractFormValues {
     anniversaryNoticeDays: v(row.anniversary_notice_days),
 
     contractTypeId: v(row.contract_type_id),
+
+    // Contract-level custom recurring annual fees
+    customRecurringAddons: parseCustomRecurringAddons(row.custom_recurring_addons),
   };
 }
 

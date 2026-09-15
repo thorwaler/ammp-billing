@@ -98,6 +98,31 @@ export interface CustomRecurringAddon {
   annualAmount: number;
 }
 
+/**
+ * Normalise the raw `contracts.custom_recurring_addons` JSON into a typed list.
+ * Single source of truth for every read path (form, calculator, revisions).
+ */
+export function parseCustomRecurringAddons(raw: unknown): CustomRecurringAddon[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((f: any) => f && typeof f === 'object')
+    .map((f: any) => ({
+      id: String(f.id ?? ''),
+      name: String(f.name ?? '').trim(),
+      annualAmount: Number(f.annualAmount) || 0,
+    }))
+    .filter(f => f.id.length > 0);
+}
+
+/** Drop incomplete rows before persisting the fee list on a contract. */
+export function normalizeCustomRecurringAddonsForSave(
+  fees: CustomRecurringAddon[] | undefined,
+): CustomRecurringAddon[] {
+  return (fees || [])
+    .filter(f => f && (f.name || '').trim().length > 0 && Number(f.annualAmount) > 0)
+    .map(f => ({ id: f.id, name: f.name.trim(), annualAmount: Number(f.annualAmount) }));
+}
+
 /** Line-item id prefix used to recognise custom recurring fees downstream. */
 export const CUSTOM_RECURRING_ADDON_PREFIX = 'custom_annual:';
 

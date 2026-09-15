@@ -3,7 +3,7 @@ import { CustomerInvoiceGroup } from "./CustomerInvoiceGroup";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { calculateInvoice } from "@/lib/invoiceCalculations";
+import { calculateInvoice, parseCustomRecurringAddons } from "@/lib/invoiceCalculations";
 import { getNextInvoiceDate, isAnnualUpfrontCycle, periodAfterInvoice } from "@/lib/invoiceScheduling";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier, IrradianceSiteTier, PerformanceMWpTier } from "@/data/pricingData";
 
@@ -195,9 +195,7 @@ export function UpcomingInvoicesList({
             minimumChargeTiers,
             portfolioDiscountTiers,
             minimumAnnualValue: Number(c.minimum_annual_value) || 0,
-            customRecurringAddons: Array.isArray((c as any).custom_recurring_addons)
-              ? (c as any).custom_recurring_addons
-              : [],
+            customRecurringAddons: parseCustomRecurringAddons((c as any).custom_recurring_addons),
             customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {},
             cachedCapabilities: (c as any).cached_capabilities || null,
             invoicingType: (c.invoicing_type as 'standard' | 'manual' | 'automated') || 'standard',

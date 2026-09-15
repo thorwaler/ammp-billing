@@ -13,7 +13,11 @@ import { GraduatedMWTierEditor } from "@/components/contracts/GraduatedMWTierEdi
 import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
 import { MoveContractDialog } from "@/components/contracts/MoveContractDialog";
 import { CustomAnnualFeeEditor } from "@/components/contracts/CustomAnnualFeeEditor";
-import type { CustomRecurringAddon } from "@/lib/invoiceCalculations";
+import {
+  parseCustomRecurringAddons,
+  normalizeCustomRecurringAddonsForSave,
+  type CustomRecurringAddon,
+} from "@/lib/invoiceCalculations";
 import { SelectSeparator } from "@/components/ui/select";
 import { 
   MODULES, 
@@ -281,6 +285,7 @@ interface ContractFormProps {
     inflationCapEnabled?: boolean;
     anniversaryNoticeDays?: number;
     contractTypeId?: string;
+    customRecurringAddons?: CustomRecurringAddon[];
   };
   onComplete?: () => void;
   onCancel?: () => void;
@@ -303,7 +308,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
   const [addonCustomTiers, setAddonCustomTiers] = useState<Record<string, PricingTier[]>>({});
   // Contract-level custom recurring annual fees (available on every package)
   const [customRecurringAddons, setCustomRecurringAddons] = useState<CustomRecurringAddon[]>(
-    (existingContract as any)?.customRecurringAddons || []
+    existingContract?.customRecurringAddons || []
   );
   const [portfolioDiscountTiers, setPortfolioDiscountTiers] = useState<DiscountTier[]>(DEFAULT_PORTFOLIO_DISCOUNT_TIERS);
   const [minimumChargeTiers, setMinimumChargeTiers] = useState<MinimumChargeTier[]>(DEFAULT_MINIMUM_CHARGE_TIERS);
@@ -446,6 +451,9 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
     if (existingContract) {
       setSelectedPackage(existingContract.package);
       setSelectedModules(existingContract.modules || []);
+      // Keep custom annual fees in sync with the loaded contract; without this
+      // an edit opened before the data arrived would save an empty list back.
+      setCustomRecurringAddons(existingContract.customRecurringAddons || []);
       
       // Initialize trial state from existing contract
       if (existingContract.isTrial !== undefined) {
@@ -667,11 +675,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         setAddonCustomPrices(customPriceMap);
         setAddonQuantities(quantityMap);
         setAddonCustomTiers(customTiersMap);
-        setCustomRecurringAddons(
-          Array.isArray((contract as any).custom_recurring_addons)
-            ? ((contract as any).custom_recurring_addons as CustomRecurringAddon[])
-            : []
-        );
+        setCustomRecurringAddons(parseCustomRecurringAddons((contract as any).custom_recurring_addons));
         
         // Load portfolio discount tiers
         if ((contract as any).portfolio_discount_tiers && Array.isArray((contract as any).portfolio_discount_tiers)) {
@@ -1170,9 +1174,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
         modules: (data.package === 'poc' || data.package === 'per_site') ? [] : (data.modules || []),
         addons: (data.package === 'poc' || data.package === 'per_site') ? [] : enhancedAddons,
         // Custom annual fees apply to every package, including POC / per-site
-        custom_recurring_addons: customRecurringAddons
-          .filter(f => (f.name || '').trim().length > 0 && Number(f.annualAmount) > 0)
-          .map(f => ({ id: f.id, name: f.name.trim(), annualAmount: Number(f.annualAmount) })),
+        custom_recurring_addons: normalizeCustomRecurringAddonsForSave(customRecurringAddons),
         custom_pricing: (data.package === 'poc' || data.package === 'per_site') ? {} : (data.customPricing || {}),
         volume_discounts: (data.package === 'poc' || data.package === 'per_site') ? {} : (data.volumeDiscounts || {}),
         portfolio_discount_tiers: (data.package === 'poc' || data.package === 'per_site') ? [] : portfolioDiscountTiers,
