@@ -1189,13 +1189,15 @@ export function InvoiceCalculator({
         ? result.addonCosts.filter(ac => ac.addonId !== 'satelliteDataAPI')
         : result.addonCosts;
       xeroAddonCosts.forEach(ac => {
-        // Solcast (Satellite Data API) is recurring revenue - ARR
-        const accountCode = ac.addonId === 'satelliteDataAPI' 
+        // Solcast (Satellite Data API) and custom annual fees are recurring revenue - ARR
+        const isCustomAnnual = isCustomRecurringAddonId(ac.addonId);
+        const accountCode = ac.addonId === 'satelliteDataAPI' || isCustomAnnual
           ? ACCOUNT_PLATFORM_FEES  // 1002 - ARR
           : (xeroConfig?.addons?.accountCode || ACCOUNT_IMPLEMENTATION_FEES);  // 1000 - NRR
         
         lineItems.push({
-          Description: xeroConfig?.addons?.description || ac.addonName,
+          // Custom fees keep their contract-defined title
+          Description: isCustomAnnual ? ac.addonName : (xeroConfig?.addons?.description || ac.addonName),
           Quantity: 1,
           UnitAmount: ac.cost,
           AccountCode: accountCode
