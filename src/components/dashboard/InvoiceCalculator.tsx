@@ -13,7 +13,7 @@ import { exportToExcel, exportToPDF, generateFilename } from "@/lib/supportDocum
 import { SupportDocument } from "@/components/invoices/SupportDocument";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
-import { getApplicableDiscount, SiteBillingItem } from "@/lib/invoiceCalculations";
+import { getApplicableDiscount, SiteBillingItem, isCustomRecurringAddonId, type CustomRecurringAddon } from "@/lib/invoiceCalculations";
 import { SiteBillingSelector } from "@/components/invoices/SiteBillingSelector";
 import { 
   Select,
@@ -127,6 +127,7 @@ interface Customer {
   portfolioDiscountTiers?: any[];
   customPricing?: any;
   minimumAnnualValue?: number;
+  customRecurringAddons?: CustomRecurringAddon[];
   volumeDiscounts?: any;
   currency: 'USD' | 'EUR';
   sites?: number;
@@ -375,6 +376,9 @@ export function InvoiceCalculator({
             minimumChargeTiers,
             portfolioDiscountTiers,
             minimumAnnualValue: Number(contract.minimum_annual_value) || 0,
+            customRecurringAddons: Array.isArray((contract as any).custom_recurring_addons)
+              ? ((contract as any).custom_recurring_addons as CustomRecurringAddon[])
+              : [],
             customPricing,
             volumeDiscounts,
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
@@ -872,6 +876,7 @@ export function InvoiceCalculator({
       })),
       customPricing: selectedCustomer.customPricing,
       minimumAnnualValue: selectedCustomer.minimumAnnualValue,
+      customRecurringAddons: selectedCustomer.customRecurringAddons,
       minimumCharge: selectedCustomer.minimumCharge,
       minimumChargeTiers: selectedCustomer.minimumChargeTiers,
       portfolioDiscountTiers: selectedCustomer.portfolioDiscountTiers,
