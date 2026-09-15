@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Loader2, Send, FileText, Download, Layers } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { calculateInvoice, CalculationResult } from "@/lib/invoiceCalculations";
+import { calculateInvoice, CalculationResult, isCustomRecurringAddonId, type CustomRecurringAddon } from "@/lib/invoiceCalculations";
 import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { SupportDocumentDownloadDialog } from "./SupportDocumentDownloadDialog";
@@ -38,6 +38,7 @@ interface ContractForMerge {
   minimumChargeTiers?: MinimumChargeTier[];
   portfolioDiscountTiers?: DiscountTier[];
   minimumAnnualValue?: number;
+  customRecurringAddons?: CustomRecurringAddon[];
   customPricing?: any;
   cachedCapabilities?: any;
   baseMonthlyPrice?: number;
@@ -169,6 +170,7 @@ export function MergedInvoiceDialog({
       minimumChargeTiers: contract.minimumChargeTiers || [],
       portfolioDiscountTiers: contract.portfolioDiscountTiers || [],
       minimumAnnualValue: contract.minimumAnnualValue || 0,
+      customRecurringAddons: contract.customRecurringAddons || [],
       frequencyMultiplier: multiplier,
       ammpCapabilities: contract.cachedCapabilities,
       assetBreakdown,

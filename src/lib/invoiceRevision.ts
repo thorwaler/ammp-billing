@@ -516,6 +516,7 @@ export function buildParamsFromContractRow(
       customTiers: a.customTiers,
     })),
     customPricing: c.custom_pricing || {},
+    customRecurringAddons: Array.isArray(c.custom_recurring_addons) ? c.custom_recurring_addons : [],
     minimumAnnualValue: num(c.minimum_annual_value),
     minimumCharge: num(c.minimum_charge),
     minimumChargeTiers: Array.isArray(c.minimum_charge_tiers) ? c.minimum_charge_tiers : [],
