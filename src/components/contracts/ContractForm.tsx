@@ -13,7 +13,11 @@ import { GraduatedMWTierEditor } from "@/components/contracts/GraduatedMWTierEdi
 import { AssetGroupSelector } from "@/components/contracts/AssetGroupSelector";
 import { MoveContractDialog } from "@/components/contracts/MoveContractDialog";
 import { CustomAnnualFeeEditor } from "@/components/contracts/CustomAnnualFeeEditor";
-import type { CustomRecurringAddon } from "@/lib/invoiceCalculations";
+import {
+  parseCustomRecurringAddons,
+  normalizeCustomRecurringAddonsForSave,
+  type CustomRecurringAddon,
+} from "@/lib/invoiceCalculations";
 import { SelectSeparator } from "@/components/ui/select";
 import { 
   MODULES, 
@@ -281,6 +285,7 @@ interface ContractFormProps {
     inflationCapEnabled?: boolean;
     anniversaryNoticeDays?: number;
     contractTypeId?: string;
+    customRecurringAddons?: CustomRecurringAddon[];
   };
   onComplete?: () => void;
   onCancel?: () => void;

@@ -377,9 +377,7 @@ export function InvoiceCalculator({
             minimumChargeTiers,
             portfolioDiscountTiers,
             minimumAnnualValue: Number(contract.minimum_annual_value) || 0,
-            customRecurringAddons: Array.isArray((contract as any).custom_recurring_addons)
-              ? ((contract as any).custom_recurring_addons as CustomRecurringAddon[])
-              : [],
+            customRecurringAddons: parseCustomRecurringAddons((contract as any).custom_recurring_addons),
             customPricing,
             volumeDiscounts,
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
