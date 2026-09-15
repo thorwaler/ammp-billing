@@ -18,6 +18,7 @@ import {
   calculateInvoice,
   getFrequencyMultiplier,
   getPeriodMonthsMultiplier,
+  parseCustomRecurringAddons,
   type CalculationParams,
   type CalculationResult,
   type OrgAssetGroup,
