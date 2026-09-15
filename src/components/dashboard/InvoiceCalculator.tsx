@@ -284,6 +284,7 @@ export function InvoiceCalculator({
             modules,
             addons,
             custom_pricing,
+            custom_recurring_addons,
             minimum_charge,
             minimum_charge_tiers,
             site_charge_frequency,
