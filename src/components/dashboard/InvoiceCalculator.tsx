@@ -1311,6 +1311,11 @@ export function InvoiceCalculator({
         ? 0
         : (result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0);
 
+      // Contract-level custom annual fees are recurring revenue
+      const customAnnualCost = result.addonCosts
+        .filter(ac => isCustomRecurringAddonId(ac.addonId))
+        .reduce((sum, ac) => sum + ac.cost, 0);
+
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
       const isMatriarch = isMatriarchApiPackage(selectedCustomer.package);
