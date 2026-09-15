@@ -380,7 +380,9 @@ export function MergedInvoiceDialog({
             Description: `[${contractLabel}] ${ac.name}`,
             Quantity: 1,
             UnitAmount: ac.cost,
-            AccountCode: ac.addonId === 'satelliteDataAPI' ? ACCOUNT_PLATFORM_FEES : ACCOUNT_IMPLEMENTATION_FEES
+            AccountCode: ac.addonId === 'satelliteDataAPI' || isCustomRecurringAddonId(ac.addonId)
+              ? ACCOUNT_PLATFORM_FEES
+              : ACCOUNT_IMPLEMENTATION_FEES
           });
         });
       }
@@ -461,10 +463,14 @@ export function MergedInvoiceDialog({
           (result.discountedAssetsTotal || 0) +
           (result.perSiteBreakdown?.onboardingCost || 0) +
           (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
-          solcastCost;
+          solcastCost +
+          // Custom annual fees are recurring revenue
+          ((result.addonCosts || [])
+            .filter(ac => isCustomRecurringAddonId(ac.addonId))
+            .reduce((sum, ac) => sum + ac.cost, 0));
         
         let contractNRR = (result.addonCosts || [])
-          .filter(ac => ac.addonId !== 'satelliteDataAPI')
+          .filter(ac => ac.addonId !== 'satelliteDataAPI' && !isCustomRecurringAddonId(ac.addonId))
           .reduce((sum, ac) => sum + ac.cost, 0);
         
         // Add trial fees to NRR for 2026 trial contracts
