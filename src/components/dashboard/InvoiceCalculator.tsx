@@ -13,7 +13,7 @@ import { exportToExcel, exportToPDF, generateFilename } from "@/lib/supportDocum
 import { SupportDocument } from "@/components/invoices/SupportDocument";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
-import { getApplicableDiscount, SiteBillingItem, isCustomRecurringAddonId, type CustomRecurringAddon } from "@/lib/invoiceCalculations";
+import { getApplicableDiscount, SiteBillingItem, isCustomRecurringAddonId, parseCustomRecurringAddons, type CustomRecurringAddon } from "@/lib/invoiceCalculations";
 import { SiteBillingSelector } from "@/components/invoices/SiteBillingSelector";
 import { 
   Select,

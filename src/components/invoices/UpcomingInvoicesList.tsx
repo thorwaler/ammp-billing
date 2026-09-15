@@ -3,7 +3,7 @@ import { CustomerInvoiceGroup } from "./CustomerInvoiceGroup";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import { calculateInvoice } from "@/lib/invoiceCalculations";
+import { calculateInvoice, parseCustomRecurringAddons } from "@/lib/invoiceCalculations";
 import { getNextInvoiceDate, isAnnualUpfrontCycle, periodAfterInvoice } from "@/lib/invoiceScheduling";
 import type { MinimumChargeTier, DiscountTier, GraduatedMWTier, IrradianceSiteTier, PerformanceMWpTier } from "@/data/pricingData";
 
