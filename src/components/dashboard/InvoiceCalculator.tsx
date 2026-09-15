@@ -13,7 +13,7 @@ import { exportToExcel, exportToPDF, generateFilename } from "@/lib/supportDocum
 import { SupportDocument } from "@/components/invoices/SupportDocument";
 import { SupportDocumentDownloadDialog } from "@/components/invoices/SupportDocumentDownloadDialog";
 import { renderSupportDocumentToPdf } from "@/components/invoices/PdfRenderer";
-import { getApplicableDiscount, SiteBillingItem } from "@/lib/invoiceCalculations";
+import { getApplicableDiscount, SiteBillingItem, isCustomRecurringAddonId, type CustomRecurringAddon } from "@/lib/invoiceCalculations";
 import { SiteBillingSelector } from "@/components/invoices/SiteBillingSelector";
 import { 
   Select,
@@ -127,6 +127,7 @@ interface Customer {
   portfolioDiscountTiers?: any[];
   customPricing?: any;
   minimumAnnualValue?: number;
+  customRecurringAddons?: CustomRecurringAddon[];
   volumeDiscounts?: any;
   currency: 'USD' | 'EUR';
   sites?: number;
@@ -283,6 +284,7 @@ export function InvoiceCalculator({
             modules,
             addons,
             custom_pricing,
+            custom_recurring_addons,
             minimum_charge,
             minimum_charge_tiers,
             site_charge_frequency,
@@ -375,6 +377,9 @@ export function InvoiceCalculator({
             minimumChargeTiers,
             portfolioDiscountTiers,
             minimumAnnualValue: Number(contract.minimum_annual_value) || 0,
+            customRecurringAddons: Array.isArray((contract as any).custom_recurring_addons)
+              ? ((contract as any).custom_recurring_addons as CustomRecurringAddon[])
+              : [],
             customPricing,
             volumeDiscounts,
             currency: (contract.currency as 'USD' | 'EUR') || 'EUR',
@@ -872,6 +877,7 @@ export function InvoiceCalculator({
       })),
       customPricing: selectedCustomer.customPricing,
       minimumAnnualValue: selectedCustomer.minimumAnnualValue,
+      customRecurringAddons: selectedCustomer.customRecurringAddons,
       minimumCharge: selectedCustomer.minimumCharge,
       minimumChargeTiers: selectedCustomer.minimumChargeTiers,
       portfolioDiscountTiers: selectedCustomer.portfolioDiscountTiers,
@@ -1189,13 +1195,15 @@ export function InvoiceCalculator({
         ? result.addonCosts.filter(ac => ac.addonId !== 'satelliteDataAPI')
         : result.addonCosts;
       xeroAddonCosts.forEach(ac => {
-        // Solcast (Satellite Data API) is recurring revenue - ARR
-        const accountCode = ac.addonId === 'satelliteDataAPI' 
+        // Solcast (Satellite Data API) and custom annual fees are recurring revenue - ARR
+        const isCustomAnnual = isCustomRecurringAddonId(ac.addonId);
+        const accountCode = ac.addonId === 'satelliteDataAPI' || isCustomAnnual
           ? ACCOUNT_PLATFORM_FEES  // 1002 - ARR
           : (xeroConfig?.addons?.accountCode || ACCOUNT_IMPLEMENTATION_FEES);  // 1000 - NRR
         
         lineItems.push({
-          Description: xeroConfig?.addons?.description || ac.addonName,
+          // Custom fees keep their contract-defined title
+          Description: isCustomAnnual ? ac.addonName : (xeroConfig?.addons?.description || ac.addonName),
           Quantity: 1,
           UnitAmount: ac.cost,
           AccountCode: accountCode
@@ -1311,6 +1319,11 @@ export function InvoiceCalculator({
         ? 0
         : (result.addonCosts.find(ac => ac.addonId === 'satelliteDataAPI')?.cost || 0);
 
+      // Contract-level custom annual fees are recurring revenue
+      const customAnnualCost = result.addonCosts
+        .filter(ac => isCustomRecurringAddonId(ac.addonId))
+        .reduce((sum, ac) => sum + ac.cost, 0);
+
       // Calculate ARR (Platform Fees - all MW-based pricing + Solcast)
       const isSolarAfrica = isSolarAfricaPackage(selectedCustomer.package);
       const isMatriarch = isMatriarchApiPackage(selectedCustomer.package);
@@ -1344,11 +1357,13 @@ export function InvoiceCalculator({
         (result.perSiteBreakdown?.onboardingCost || 0) +
         (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
         // Solcast is recurring revenue - ARR
-        solcastCost;
+        solcastCost +
+        // Custom annual fees are recurring revenue - ARR
+        customAnnualCost;
 
-      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast + trial fees + SolarAfrica one-time costs)
+      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast/custom annual fees + trial fees + SolarAfrica one-time costs)
       let nrrAmount = result.addonCosts
-        .filter(ac => ac.addonId !== 'satelliteDataAPI')
+        .filter(ac => ac.addonId !== 'satelliteDataAPI' && !isCustomRecurringAddonId(ac.addonId))
         .reduce((sum, ac) => sum + ac.cost, 0);
       
       // Add trial fees to NRR

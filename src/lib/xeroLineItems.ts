@@ -1,4 +1,5 @@
 import { isElumPackage, elumPackageLabel } from "@/data/pricingData";
+import { isCustomRecurringAddonId } from "@/lib/invoiceCalculations";
 
 /**
  * Shared Xero line-item builders.
@@ -244,8 +245,15 @@ export function buildContractLineItems(options: ContractLineItemOptions): XeroLi
   }
 
   if (Array.isArray(result.addonCosts)) {
+    // Solcast and contract-level custom annual fees are recurring (ARR); other add-ons are NRR.
     result.addonCosts.forEach((ac: any) =>
-      push(ac.name, ac.cost, ac.addonId === 'satelliteDataAPI' ? accountCode : implementationAccountCode),
+      push(
+        ac.name ?? ac.addonName,
+        ac.cost,
+        ac.addonId === 'satelliteDataAPI' || isCustomRecurringAddonId(ac.addonId)
+          ? accountCode
+          : implementationAccountCode,
+      ),
     );
   }
 

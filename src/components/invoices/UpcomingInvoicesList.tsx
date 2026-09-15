@@ -24,6 +24,7 @@ export interface UpcomingInvoice {
   minimumChargeTiers: MinimumChargeTier[];
   portfolioDiscountTiers: DiscountTier[];
   minimumAnnualValue: number;
+  customRecurringAddons: any[];
   customPricing: any;
   cachedCapabilities: any;
   invoicingType: 'standard' | 'manual' | 'automated';
@@ -114,6 +115,7 @@ export function UpcomingInvoicesList({
           portfolio_discount_tiers,
           minimum_annual_value,
           custom_pricing,
+          custom_recurring_addons,
           initial_mw,
           invoicing_type,
           base_monthly_price,
@@ -193,6 +195,9 @@ export function UpcomingInvoicesList({
             minimumChargeTiers,
             portfolioDiscountTiers,
             minimumAnnualValue: Number(c.minimum_annual_value) || 0,
+            customRecurringAddons: Array.isArray((c as any).custom_recurring_addons)
+              ? (c as any).custom_recurring_addons
+              : [],
             customPricing: typeof c.custom_pricing === 'object' ? c.custom_pricing : {},
             cachedCapabilities: (c as any).cached_capabilities || null,
             invoicingType: (c.invoicing_type as 'standard' | 'manual' | 'automated') || 'standard',
@@ -332,6 +337,7 @@ export function UpcomingInvoicesList({
       minimumChargeTiers: invoice.minimumChargeTiers,
       portfolioDiscountTiers: invoice.portfolioDiscountTiers,
       minimumAnnualValue: invoice.minimumAnnualValue,
+      customRecurringAddons: invoice.customRecurringAddons,
       frequencyMultiplier: multiplier,
       ammpCapabilities: invoice.cachedCapabilities,
       assetBreakdown,
