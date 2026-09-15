@@ -115,6 +115,7 @@ export function UpcomingInvoicesList({
           portfolio_discount_tiers,
           minimum_annual_value,
           custom_pricing,
+          custom_recurring_addons,
           initial_mw,
           invoicing_type,
           base_monthly_price,
