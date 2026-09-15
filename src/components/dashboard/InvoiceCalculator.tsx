@@ -1344,11 +1344,13 @@ export function InvoiceCalculator({
         (result.perSiteBreakdown?.onboardingCost || 0) +
         (result.perSiteBreakdown?.annualSubscriptionCost || 0) +
         // Solcast is recurring revenue - ARR
-        solcastCost;
+        solcastCost +
+        // Custom annual fees are recurring revenue - ARR
+        customAnnualCost;
 
-      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast + trial fees + SolarAfrica one-time costs)
+      // Calculate NRR (Implementation Fees - addons EXCEPT Solcast/custom annual fees + trial fees + SolarAfrica one-time costs)
       let nrrAmount = result.addonCosts
-        .filter(ac => ac.addonId !== 'satelliteDataAPI')
+        .filter(ac => ac.addonId !== 'satelliteDataAPI' && !isCustomRecurringAddonId(ac.addonId))
         .reduce((sum, ac) => sum + ac.cost, 0);
       
       // Add trial fees to NRR
