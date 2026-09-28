@@ -96,6 +96,7 @@ export default function InvoiceHistory() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
   const [revisionInvoice, setRevisionInvoice] = useState<Invoice | null>(null);
+  const [showSuperseded, setShowSuperseded] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -105,7 +106,7 @@ export default function InvoiceHistory() {
 
   useEffect(() => {
     filterInvoices();
-  }, [searchQuery, xeroFilter, sourceFilter, dateFilter, customStartDate, customEndDate, invoices]);
+  }, [searchQuery, xeroFilter, sourceFilter, dateFilter, customStartDate, customEndDate, invoices, showSuperseded]);
 
   const fetchInvoices = async () => {
     try {
@@ -115,7 +116,8 @@ export default function InvoiceHistory() {
           *,
           customer:customers(name, nickname)
         `)
-        .order('invoice_date', { ascending: false });
+        .order('invoice_date', { ascending: false })
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setInvoices((data || []) as unknown as Invoice[]);
@@ -177,6 +179,12 @@ export default function InvoiceHistory() {
 
     if (sourceFilter !== "all") {
       filtered = filtered.filter(inv => inv.source === sourceFilter);
+    }
+
+    // Replaced invoices stay in the database for audit, but they are hidden by
+    // default so the list shows one current row per invoice.
+    if (!showSuperseded) {
+      filtered = filtered.filter(inv => !inv.superseded_by_invoice_id);
     }
 
     setFilteredInvoices(filtered);
@@ -495,6 +503,13 @@ export default function InvoiceHistory() {
                     <SelectItem value="not-sent">Not Sent</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant={showSuperseded ? "secondary" : "outline"}
+                  onClick={() => setShowSuperseded(v => !v)}
+                  title="Replaced invoices are kept for audit but hidden by default"
+                >
+                  {showSuperseded ? "Hide replaced" : "Show replaced"}
+                </Button>
               </div>
             </div>
           </CardHeader>
