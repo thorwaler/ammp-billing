@@ -115,7 +115,8 @@ export default function InvoiceHistory() {
           *,
           customer:customers(name, nickname)
         `)
-        .order('invoice_date', { ascending: false });
+        .order('invoice_date', { ascending: false })
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setInvoices((data || []) as unknown as Invoice[]);
@@ -177,6 +178,12 @@ export default function InvoiceHistory() {
 
     if (sourceFilter !== "all") {
       filtered = filtered.filter(inv => inv.source === sourceFilter);
+    }
+
+    // Replaced invoices stay in the database for audit, but they are hidden by
+    // default so the list shows one current row per invoice.
+    if (!showSuperseded) {
+      filtered = filtered.filter(inv => !inv.superseded_by_invoice_id);
     }
 
     setFilteredInvoices(filtered);
