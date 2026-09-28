@@ -313,6 +313,100 @@ export type Database = {
           },
         ]
       }
+      contract_one_off_costs: {
+        Row: {
+          account_code: string
+          amount: number
+          approved_at: string | null
+          approved_by: string | null
+          contract_id: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          customer_id: string
+          description: string | null
+          dismissed_reason: string | null
+          id: string
+          idempotency_key: string | null
+          invoice_id: string | null
+          invoiced_at: string | null
+          requested_by: string | null
+          source: string
+          source_ref: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          account_code?: string
+          amount: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          customer_id: string
+          description?: string | null
+          dismissed_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          invoice_id?: string | null
+          invoiced_at?: string | null
+          requested_by?: string | null
+          source?: string
+          source_ref?: string | null
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          account_code?: string
+          amount?: number
+          approved_at?: string | null
+          approved_by?: string | null
+          contract_id?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          customer_id?: string
+          description?: string | null
+          dismissed_reason?: string | null
+          id?: string
+          idempotency_key?: string | null
+          invoice_id?: string | null
+          invoiced_at?: string | null
+          requested_by?: string | null
+          source?: string
+          source_ref?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contract_one_off_costs_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_one_off_costs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contract_one_off_costs_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contract_types: {
         Row: {
           addons_config: Json | null

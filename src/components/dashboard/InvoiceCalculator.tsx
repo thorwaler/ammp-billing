@@ -1,5 +1,6 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useContractOneOffCosts, markOneOffCostsInvoiced } from "@/lib/oneOffCosts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -238,6 +239,18 @@ export function InvoiceCalculator({
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
   const [attachSupportDoc, setAttachSupportDoc] = useState(true);
+
+  // Pending contract one-off costs (approved, not yet invoiced) — pre-selected
+  const { costs: contractOneOffs, reload: reloadOneOffs } = useContractOneOffCosts(selectedCustomer?.contractId);
+  const pendingOneOffs = useMemo(() => contractOneOffs.filter(c => c.status === 'pending'), [contractOneOffs]);
+  const awaitingApprovalOneOffs = useMemo(() => contractOneOffs.filter(c => c.status === 'pending_approval'), [contractOneOffs]);
+  const [selectedOneOffIds, setSelectedOneOffIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSelectedOneOffIds(new Set(pendingOneOffs.map(c => c.id)));
+  }, [pendingOneOffs]);
+  const selectedOneOffTotal = pendingOneOffs
+    .filter(c => selectedOneOffIds.has(c.id))
+    .reduce((s, c) => s + Number(c.amount), 0);
   // Freeze the invoice inputs (snapshot) when creating. Defaults to the
   // contract setting, but can be overridden per invoice (useful for testing).
   const [freezeInvoice, setFreezeInvoice] = useState(true);
@@ -1384,7 +1397,23 @@ export function InvoiceCalculator({
         if (includeOnboardingFee) nrrAmount += (selectedCustomer.onboardingSetupFee || 0);
         if (includeVendorApiFee) nrrAmount += (selectedCustomer.vendorApiFee || 0);
       }
-      
+
+      // Contract one-off costs selected for this invoice
+      const includedOneOffs = pendingOneOffs.filter(c => selectedOneOffIds.has(c.id));
+      let oneOffArr = 0;
+      let oneOffNrr = 0;
+      includedOneOffs.forEach(c => {
+        const amt = Number(c.amount);
+        lineItems.push({
+          Description: `One-off: ${c.title}${c.description ? ` — ${c.description}` : ''}`,
+          Quantity: 1,
+          UnitAmount: amt,
+          AccountCode: c.account_code || '1000',
+        });
+        if (c.account_code === '1002') oneOffArr += amt; else oneOffNrr += amt;
+      });
+      const oneOffTotal = oneOffArr + oneOffNrr;
+
       const xeroInvoice = {
         Type: "ACCREC",
         Contact: { Name: selectedCustomer.name },
@@ -1531,8 +1560,8 @@ export function InvoiceCalculator({
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // Reuse the already-calculated ARR/NRR values from above
-        const storedArrAmount = arrAmount;
-        const storedNrrAmount = nrrAmount;
+        const storedArrAmount = arrAmount + oneOffArr;
+        const storedNrrAmount = nrrAmount + oneOffNrr;
 
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')
@@ -1546,7 +1575,7 @@ export function InvoiceCalculator({
             mw_managed: Number(mwManaged),
             mw_change: mwChange,
             total_mw: Number(mwManaged),
-            invoice_amount: result.totalPrice,
+            invoice_amount: result.totalPrice + oneOffTotal,
             currency: selectedCustomer.currency,
             modules_data: modules.filter(m => m.selected) as any,
             // Merge calculated addon costs into addons data - ensures pro-rata Solcast cost is stored correctly
@@ -1577,7 +1606,7 @@ export function InvoiceCalculator({
               capabilities: selectedCustomer.cachedCapabilities || selectedCustomer.ammpCapabilities,
               lineItems: lineItems as any,
               totals: {
-                invoiceAmount: result.totalPrice,
+                invoiceAmount: result.totalPrice + oneOffTotal,
                 arrAmount: storedArrAmount,
                 nrrAmount: storedNrrAmount,
                 totalMW: Number(mwManaged),
@@ -1595,6 +1624,10 @@ export function InvoiceCalculator({
         } else {
           // Store invoice ID for support document generation
           setLastCreatedInvoiceId(insertedInvoice.id);
+
+          // Mark included one-off costs as invoiced
+          await markOneOffCostsInvoiced(includedOneOffs.map(c => c.id), insertedInvoice.id);
+          reloadOneOffs();
           
           // Update customer's last_invoiced date
           await supabase
@@ -3196,11 +3229,42 @@ export function InvoiceCalculator({
               </div>
             )}
             
+            {(pendingOneOffs.length > 0 || awaitingApprovalOneOffs.length > 0) && (
+              <div className="mt-3 p-3 rounded-md border border-primary/40 bg-primary/5 space-y-2">
+                <p className="text-sm font-medium">Pending one-off costs</p>
+                {pendingOneOffs.map(c => (
+                  <div key={c.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      id={`oneoff-${c.id}`}
+                      checked={selectedOneOffIds.has(c.id)}
+                      onCheckedChange={(checked) => setSelectedOneOffIds(prev => {
+                        const next = new Set(prev);
+                        if (checked === true) next.add(c.id); else next.delete(c.id);
+                        return next;
+                      })}
+                    />
+                    <Label htmlFor={`oneoff-${c.id}`} className="flex-1 cursor-pointer">
+                      {c.title} <span className="text-muted-foreground">(acct {c.account_code})</span>
+                    </Label>
+                    <span>{formatContractCurrency(Number(c.amount))}</span>
+                  </div>
+                ))}
+                {awaitingApprovalOneOffs.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {awaitingApprovalOneOffs.length} cost(s) from the Slack agent await approval on the contract page and won't be included.
+                  </p>
+                )}
+                {pendingOneOffs.length > 0 && (
+                  <p className="text-xs text-muted-foreground">Unticked costs stay pending for a later invoice.</p>
+                )}
+              </div>
+            )}
+
             <Separator className="my-3" />
             
             <div className="flex justify-between font-medium">
               <span>Total Invoice Amount:</span>
-              <span>{formatContractCurrency(result.totalPrice)}</span>
+              <span>{formatContractCurrency(result.totalPrice + selectedOneOffTotal)}</span>
             </div>
             
             {selectedCustomer?.invoicingType === 'manual' || selectedCustomer?.invoicingType === 'automated' ? (

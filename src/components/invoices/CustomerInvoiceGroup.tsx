@@ -17,6 +17,7 @@ import {
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { differenceInDays, subDays } from "date-fns";
 import { parseDateCET, formatDateCET } from "@/lib/dateUtils";
+import { usePendingOneOffCostsByContract } from "@/lib/oneOffCosts";
 
 interface ContractInvoice {
   contractId: string;
@@ -58,6 +59,23 @@ export function CustomerInvoiceGroup({
   const [skipDialogOpen, setSkipDialogOpen] = useState(false);
   const [contractsToSkip, setContractsToSkip] = useState<ContractInvoice[]>([]);
   const { formatCurrency } = useCurrency();
+  const oneOffsByContract = usePendingOneOffCostsByContract(contracts.map(c => c.contractId));
+  const oneOffBadge = (contractId: string, small = false) => {
+    const list = oneOffsByContract[contractId];
+    if (!list?.length) return null;
+    const ready = list.filter(c => c.status === 'pending');
+    const total = ready.reduce((s, c) => s + Number(c.amount), 0);
+    const awaiting = list.length - ready.length;
+    const cur = list[0].currency || 'EUR';
+    const amt = new Intl.NumberFormat('en-GB', { style: 'currency', currency: cur }).format(total);
+    return (
+      <Badge variant="outline" className={`border-primary text-primary ${small ? 'text-xs' : ''}`} title={list.map(c => `${c.title} (${c.status === 'pending' ? 'ready' : 'needs approval'})`).join('\n')}>
+        {ready.length > 0 ? `${ready.length} one-off cost${ready.length > 1 ? 's' : ''} (+${amt})` : ''}
+        {ready.length > 0 && awaiting > 0 ? ' · ' : ''}
+        {awaiting > 0 ? `${awaiting} awaiting approval` : ''}
+      </Badge>
+    );
+  };
   
   const parsedDate = parseDateCET(invoiceDate);
   const groupLeadDays = Math.max(0, ...contracts.map(c => c.invoiceLeadDays ?? 0));
@@ -168,6 +186,7 @@ export function CustomerInvoiceGroup({
             <Badge variant="secondary">{contract.currency}</Badge>
             {contract.invoicingType === 'manual' && <Badge className="bg-orange-500">Manual</Badge>}
             {contract.invoicingType === 'automated' && <Badge className="bg-blue-500">Automated</Badge>}
+            {oneOffBadge(contract.contractId)}
           </div>
           
           <div className="flex items-center gap-2 text-lg font-semibold">
@@ -260,6 +279,7 @@ export function CustomerInvoiceGroup({
               {contract.invoicingType === 'automated' && (
                 <Badge className="bg-blue-500 text-xs">Automated</Badge>
               )}
+              {oneOffBadge(contract.contractId, true)}
             </div>
             <span className="font-semibold w-24 text-right shrink-0">
               {contract.estimatedAmount !== null 

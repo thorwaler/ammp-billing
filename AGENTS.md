@@ -1,0 +1,1 @@
+- Slack agent (Hermes) integrations go through stateless Streamable HTTP MCP edge functions with a dedicated bearer key (e.g. one-off-costs-mcp); agent writes land as pending_approval — keeps humans in the loop.
