@@ -238,6 +238,18 @@ export function InvoiceCalculator({
   const [generatingSupportDoc, setGeneratingSupportDoc] = useState(false);
   const [lastCreatedInvoiceId, setLastCreatedInvoiceId] = useState<string | null>(null);
   const [attachSupportDoc, setAttachSupportDoc] = useState(true);
+
+  // Pending contract one-off costs (approved, not yet invoiced) — pre-selected
+  const { costs: contractOneOffs, reload: reloadOneOffs } = useContractOneOffCosts(selectedCustomer?.contractId);
+  const pendingOneOffs = useMemo(() => contractOneOffs.filter(c => c.status === 'pending'), [contractOneOffs]);
+  const awaitingApprovalOneOffs = useMemo(() => contractOneOffs.filter(c => c.status === 'pending_approval'), [contractOneOffs]);
+  const [selectedOneOffIds, setSelectedOneOffIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setSelectedOneOffIds(new Set(pendingOneOffs.map(c => c.id)));
+  }, [pendingOneOffs]);
+  const selectedOneOffTotal = pendingOneOffs
+    .filter(c => selectedOneOffIds.has(c.id))
+    .reduce((s, c) => s + Number(c.amount), 0);
   // Freeze the invoice inputs (snapshot) when creating. Defaults to the
   // contract setting, but can be overridden per invoice (useful for testing).
   const [freezeInvoice, setFreezeInvoice] = useState(true);
@@ -1384,7 +1396,23 @@ export function InvoiceCalculator({
         if (includeOnboardingFee) nrrAmount += (selectedCustomer.onboardingSetupFee || 0);
         if (includeVendorApiFee) nrrAmount += (selectedCustomer.vendorApiFee || 0);
       }
-      
+
+      // Contract one-off costs selected for this invoice
+      const includedOneOffs = pendingOneOffs.filter(c => selectedOneOffIds.has(c.id));
+      let oneOffArr = 0;
+      let oneOffNrr = 0;
+      includedOneOffs.forEach(c => {
+        const amt = Number(c.amount);
+        lineItems.push({
+          Description: `One-off: ${c.title}${c.description ? ` — ${c.description}` : ''}`,
+          Quantity: 1,
+          UnitAmount: amt,
+          AccountCode: c.account_code || '1000',
+        });
+        if (c.account_code === '1002') oneOffArr += amt; else oneOffNrr += amt;
+      });
+      const oneOffTotal = oneOffArr + oneOffNrr;
+
       const xeroInvoice = {
         Type: "ACCREC",
         Contact: { Name: selectedCustomer.name },
@@ -1531,8 +1559,8 @@ export function InvoiceCalculator({
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         // Reuse the already-calculated ARR/NRR values from above
-        const storedArrAmount = arrAmount;
-        const storedNrrAmount = nrrAmount;
+        const storedArrAmount = arrAmount + oneOffArr;
+        const storedNrrAmount = nrrAmount + oneOffNrr;
 
         const { data: insertedInvoice, error: invoiceError } = await supabase
           .from('invoices')
@@ -1595,6 +1623,10 @@ export function InvoiceCalculator({
         } else {
           // Store invoice ID for support document generation
           setLastCreatedInvoiceId(insertedInvoice.id);
+
+          // Mark included one-off costs as invoiced
+          await markOneOffCostsInvoiced(includedOneOffs.map(c => c.id), insertedInvoice.id);
+          reloadOneOffs();
           
           // Update customer's last_invoiced date
           await supabase
