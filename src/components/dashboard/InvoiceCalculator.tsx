@@ -1,5 +1,6 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useContractOneOffCosts, markOneOffCostsInvoiced } from "@/lib/oneOffCosts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1574,7 +1575,7 @@ export function InvoiceCalculator({
             mw_managed: Number(mwManaged),
             mw_change: mwChange,
             total_mw: Number(mwManaged),
-            invoice_amount: result.totalPrice,
+            invoice_amount: result.totalPrice + oneOffTotal,
             currency: selectedCustomer.currency,
             modules_data: modules.filter(m => m.selected) as any,
             // Merge calculated addon costs into addons data - ensures pro-rata Solcast cost is stored correctly
@@ -1605,7 +1606,7 @@ export function InvoiceCalculator({
               capabilities: selectedCustomer.cachedCapabilities || selectedCustomer.ammpCapabilities,
               lineItems: lineItems as any,
               totals: {
-                invoiceAmount: result.totalPrice,
+                invoiceAmount: result.totalPrice + oneOffTotal,
                 arrAmount: storedArrAmount,
                 nrrAmount: storedNrrAmount,
                 totalMW: Number(mwManaged),
