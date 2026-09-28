@@ -17,6 +17,7 @@ import CustomerForm from "@/components/customers/CustomerForm";
 
 import ContractAmendments from "@/components/contracts/ContractAmendments";
 import { AssetStatusTimeline } from "@/components/contracts/AssetStatusTimeline";
+import { OneOffCostsCard } from "@/components/contracts/OneOffCostsCard";
 import { AssetDiscountDialog, DiscountBadge } from "@/components/contracts/AssetDiscountDialog";
 import { DuplicateContractDialog } from "@/components/contracts/DuplicateContractDialog";
 import { AssetHistoricDataDialog } from "@/components/contracts/AssetHistoricDataDialog";
@@ -2207,6 +2208,12 @@ const ContractDetails = () => {
             suspiciousThresholdDays={30}
           />
         )}
+
+        <OneOffCostsCard
+          contractId={contract.id}
+          customerId={contract.customer_id}
+          currency={contract.currency || "EUR"}
+        />
 
         {/* Contract Amendments Section */}
         <ContractAmendments
