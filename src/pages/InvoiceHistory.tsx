@@ -96,6 +96,7 @@ export default function InvoiceHistory() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [revisionDialogOpen, setRevisionDialogOpen] = useState(false);
   const [revisionInvoice, setRevisionInvoice] = useState<Invoice | null>(null);
+  const [showSuperseded, setShowSuperseded] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -105,7 +106,7 @@ export default function InvoiceHistory() {
 
   useEffect(() => {
     filterInvoices();
-  }, [searchQuery, xeroFilter, sourceFilter, dateFilter, customStartDate, customEndDate, invoices]);
+  }, [searchQuery, xeroFilter, sourceFilter, dateFilter, customStartDate, customEndDate, invoices, showSuperseded]);
 
   const fetchInvoices = async () => {
     try {
@@ -502,6 +503,13 @@ export default function InvoiceHistory() {
                     <SelectItem value="not-sent">Not Sent</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant={showSuperseded ? "secondary" : "outline"}
+                  onClick={() => setShowSuperseded(v => !v)}
+                  title="Replaced invoices are kept for audit but hidden by default"
+                >
+                  {showSuperseded ? "Hide replaced" : "Show replaced"}
+                </Button>
               </div>
             </div>
           </CardHeader>
