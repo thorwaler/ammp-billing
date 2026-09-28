@@ -92,6 +92,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
       setIncludeNewlyOnboarded(false);
       setReason("");
       setOverrideFidelity(false);
+      setRegenerateDocs(true);
       setXeroAction(invoice?.xero_invoice_id ? "update" : "manual");
     },
   });
@@ -507,6 +508,17 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
                     <span className="block text-xs text-muted-foreground">
                       {diff?.newlyOnboarded.length || 0} asset(s) appeared after this invoice was frozen. They stay out
                       of the revision unless you tick this.
+                    </span>
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3 text-sm cursor-pointer">
+                  <Checkbox checked={regenerateDocs} onCheckedChange={(v) => setRegenerateDocs(!!v)} />
+                  <span>
+                    Regenerate support documents
+                    <span className="block text-xs text-muted-foreground">
+                      Rebuilds the PDFs from the revised figures, replaces the attachment on the Xero invoice and
+                      uploads the new versions to SharePoint.
                     </span>
                   </span>
                 </label>
