@@ -205,7 +205,10 @@ Deno.serve(async (req) => {
     const existingInvoicesQuery = supabase
       .from('invoices')
       .select('id, xero_invoice_id, source, user_id, xero_status, xero_amount_credited, invoice_amount')
-      .not('xero_invoice_id', 'is', null);
+      .not('xero_invoice_id', 'is', null)
+      // Superseded (revised) invoices may share a Xero id with their revision;
+      // only the current record should be synced.
+      .is('superseded_at', null);
     
     const { data: existingInvoices } = await existingInvoicesQuery;
 
