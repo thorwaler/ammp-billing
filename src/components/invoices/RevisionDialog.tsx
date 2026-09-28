@@ -23,6 +23,7 @@ import {
   type CorrectionSelection,
 } from "@/lib/invoiceRevision";
 import type { InvoiceInputSnapshot } from "@/lib/invoiceSnapshot";
+import { regenerateRevisionSupportDocuments } from "@/lib/revisionSupportDocuments";
 import { useRevisionData } from "./revision/useRevisionData";
 import { useManualCorrections } from "./revision/useManualCorrections";
 import { CorrectionsList } from "./revision/CorrectionsList";
@@ -62,6 +63,7 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
   const [reason, setReason] = useState("");
   const [xeroAction, setXeroAction] = useState<XeroAction>("update");
   const [overrideFidelity, setOverrideFidelity] = useState(false);
+  const [regenerateDocs, setRegenerateDocs] = useState(true);
 
   const snapshot: InvoiceInputSnapshot | null = (invoice?.input_snapshot as InvoiceInputSnapshot) || null;
   const currencySymbol = invoice?.currency === "USD" ? "$" : "€";
@@ -239,7 +241,33 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
       if (xeroAction === "manual" && invoice.xero_invoice_id) {
         toast.warning("Xero was not updated — adjust the original invoice in Xero manually.");
       }
-      toast.info("Regenerate the support document from the revised invoice if you need an updated PDF.");
+
+      // Rebuild the support documents so the PDFs match the revised lines.
+      if (regenerateDocs) {
+        toast.info("Regenerating support documents…");
+        const docResult = await regenerateRevisionSupportDocuments({
+          revisedInvoiceId: inserted.id,
+          customerId: invoice.customer_id,
+          customerName: invoice.customer?.name || invoice.xero_contact_name || "Customer",
+          currency: invoice.currency,
+          invoiceDate: new Date(invoice.invoice_date),
+          billingFrequency: invoice.billing_frequency,
+          isMerged,
+          units,
+          computation,
+          liveByContract,
+          fallbackContract: contractRow,
+          xeroInvoiceId: newXeroInvoiceId,
+        });
+        if (docResult.generated > 0) {
+          toast.success(
+            `Support documents updated — ${docResult.generated} regenerated, ${docResult.attachedToXero} attached in Xero, ${docResult.uploadedToSharePoint} uploaded to SharePoint.`,
+          );
+        }
+        if (docResult.errors.length > 0) {
+          toast.warning(`Support document issues: ${docResult.errors.join("; ")}`);
+        }
+      }
 
       onOpenChange(false);
       onRevised?.();
