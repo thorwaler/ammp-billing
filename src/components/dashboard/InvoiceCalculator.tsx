@@ -3229,11 +3229,42 @@ export function InvoiceCalculator({
               </div>
             )}
             
+            {(pendingOneOffs.length > 0 || awaitingApprovalOneOffs.length > 0) && (
+              <div className="mt-3 p-3 rounded-md border border-primary/40 bg-primary/5 space-y-2">
+                <p className="text-sm font-medium">Pending one-off costs</p>
+                {pendingOneOffs.map(c => (
+                  <div key={c.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      id={`oneoff-${c.id}`}
+                      checked={selectedOneOffIds.has(c.id)}
+                      onCheckedChange={(checked) => setSelectedOneOffIds(prev => {
+                        const next = new Set(prev);
+                        if (checked === true) next.add(c.id); else next.delete(c.id);
+                        return next;
+                      })}
+                    />
+                    <Label htmlFor={`oneoff-${c.id}`} className="flex-1 cursor-pointer">
+                      {c.title} <span className="text-muted-foreground">(acct {c.account_code})</span>
+                    </Label>
+                    <span>{formatContractCurrency(Number(c.amount))}</span>
+                  </div>
+                ))}
+                {awaitingApprovalOneOffs.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    {awaitingApprovalOneOffs.length} cost(s) from the Slack agent await approval on the contract page and won't be included.
+                  </p>
+                )}
+                {pendingOneOffs.length > 0 && (
+                  <p className="text-xs text-muted-foreground">Unticked costs stay pending for a later invoice.</p>
+                )}
+              </div>
+            )}
+
             <Separator className="my-3" />
             
             <div className="flex justify-between font-medium">
               <span>Total Invoice Amount:</span>
-              <span>{formatContractCurrency(result.totalPrice)}</span>
+              <span>{formatContractCurrency(result.totalPrice + selectedOneOffTotal)}</span>
             </div>
             
             {selectedCustomer?.invoicingType === 'manual' || selectedCustomer?.invoicingType === 'automated' ? (
