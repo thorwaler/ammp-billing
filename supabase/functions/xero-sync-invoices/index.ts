@@ -205,7 +205,10 @@ Deno.serve(async (req) => {
     const existingInvoicesQuery = supabase
       .from('invoices')
       .select('id, xero_invoice_id, source, user_id, xero_status, xero_amount_credited, invoice_amount')
-      .not('xero_invoice_id', 'is', null);
+      .not('xero_invoice_id', 'is', null)
+      // Superseded (revised) invoices may share a Xero id with their revision;
+      // only the current record should be synced.
+      .is('superseded_at', null);
     
     const { data: existingInvoices } = await existingInvoicesQuery;
 
@@ -417,7 +420,7 @@ Deno.serve(async (req) => {
       // Insert new invoice from Xero
       const { error: insertError } = await supabase
         .from('invoices')
-        .upsert({
+        .insert({
           user_id: invoiceUserId,
           customer_id: customerMatch?.id || null,
           invoice_date: parseXeroDate(xeroInv.Date) || new Date().toISOString().split('T')[0],
@@ -440,7 +443,7 @@ Deno.serve(async (req) => {
           nrr_amount_eur: nrrAmountEur,
           xero_amount_credited: amountCredited,
           xero_amount_credited_eur: amountCreditedEur,
-        }, { onConflict: 'xero_invoice_id', ignoreDuplicates: true });
+        });
 
       if (insertError) {
         console.error('Error inserting invoice:', xeroInvoiceId, insertError);
@@ -462,6 +465,7 @@ Deno.serve(async (req) => {
         .select('id, xero_invoice_id, xero_status, invoice_amount, xero_amount_credited')
         .eq('xero_status', 'AUTHORISED')
         .not('xero_invoice_id', 'is', null)
+        .is('superseded_at', null)
         .lt('billing_period_end', fromDate);
       
       if (unpaidError) {
