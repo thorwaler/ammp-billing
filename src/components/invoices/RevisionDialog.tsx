@@ -189,6 +189,16 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
 
       const userId = (await supabase.auth.getUser()).data.user?.id as string;
 
+      // Mark the original superseded BEFORE inserting the revision: the unique
+      // index on xero_invoice_id only covers invoices that are still current,
+      // so the revision can keep pointing at the same Xero invoice.
+      const supersededAt = new Date().toISOString();
+      const { error: markError } = await supabase
+        .from("invoices")
+        .update({ superseded_at: supersededAt })
+        .eq("id", invoice.id);
+      if (markError) throw markError;
+
       const { data: inserted, error: insertError } = await supabase
         .from("invoices")
         .insert(
@@ -208,13 +218,17 @@ export function RevisionDialog({ open, onOpenChange, invoice, onRevised }: Revis
         .select("id")
         .single();
 
-      if (insertError) throw insertError;
+      if (insertError) {
+        // Roll the original back to "current" so it is not orphaned.
+        await supabase.from("invoices").update({ superseded_at: null }).eq("id", invoice.id);
+        throw insertError;
+      }
 
       const { error: supersedeError } = await supabase
         .from("invoices")
         .update({
           superseded_by_invoice_id: inserted.id,
-          superseded_at: new Date().toISOString(),
+          superseded_at: supersededAt,
         })
         .eq("id", invoice.id);
       if (supersedeError) throw supersedeError;
