@@ -961,6 +961,14 @@ export function buildRevisedInvoiceRow(args: {
     nrr_amount: lines.nrrAmount,
     nrr_amount_eur: eurRatio != null ? lines.nrrAmount * eurRatio : null,
     source: 'internal',
+    // Carry the original invoice's identity forward so the revised row keeps
+    // its Xero status, reference and merged-contract links.
+    merged_contract_ids:
+      invoice.merged_contract_ids ??
+      (computation.units.length > 1 ? computation.units.map((u) => u.contractId) : null),
+    xero_reference: invoice.xero_reference ?? null,
+    xero_status: invoice.xero_status ?? null,
+    xero_contact_name: invoice.xero_contact_name ?? null,
     xero_invoice_id: xeroInvoiceId,
     xero_line_items: lines.lineItems as any,
     prepaid_balance_delta: prepaidDelta,
