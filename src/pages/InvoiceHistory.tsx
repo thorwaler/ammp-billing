@@ -17,7 +17,7 @@ import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter } from "date-fns";
+import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter, endOfMonth } from "date-fns";
 import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon, Lock, Unlock, RotateCcw } from "lucide-react";
 import { RevisionDialog } from "@/components/invoices/RevisionDialog";
 import { daysUntilRevisionDeadline, isWithinRevisionWindow } from "@/lib/invoiceSnapshot";
