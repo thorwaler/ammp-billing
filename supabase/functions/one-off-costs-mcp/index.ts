@@ -64,7 +64,77 @@ const TOOLS = [
       required: ["contract_id", "title", "amount", "idempotency_key", "requested_by", "approved_by_human"],
     },
   },
+  {
+    name: "query_invoiced_revenue",
+    description:
+      "Query realised revenue (ARR = recurring platform fees, account 1002; NRR = one-off/implementation fees, account 1000) from invoices in a date period. Optionally filter by customer name or contract. Excludes invoices that were replaced by a revision. Amounts are reported in EUR as well as in the original invoice currency.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        start_date: { type: "string", description: "Period start, YYYY-MM-DD (inclusive)" },
+        end_date: { type: "string", description: "Period end, YYYY-MM-DD (inclusive)" },
+        customer_name: { type: "string", description: "Optional customer name or nickname fragment" },
+        contract_id: { type: "string", format: "uuid", description: "Optional contract filter" },
+        include_invoices: { type: "boolean", description: "Include the per-invoice breakdown (default true, max 100 rows)" },
+      },
+      required: ["start_date", "end_date"],
+    },
+  },
+  {
+    name: "get_current_arr_run_rate",
+    description:
+      "Current annualised recurring revenue (ARR run-rate) per contract, derived from each contract's most recent invoice: the recurring (account 1002) portion annualised by the billing frequency. Optionally filter by customer name or contract.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        customer_name: { type: "string", description: "Optional customer name or nickname fragment" },
+        contract_id: { type: "string", format: "uuid", description: "Optional contract filter" },
+      },
+    },
+  },
 ];
+
+const DateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
+
+const RevenueSchema = z.object({
+  start_date: DateStr,
+  end_date: DateStr,
+  customer_name: z.string().trim().min(2).max(120).optional(),
+  contract_id: z.string().uuid().optional(),
+  include_invoices: z.boolean().default(true),
+});
+
+const RunRateSchema = z.object({
+  customer_name: z.string().trim().min(2).max(120).optional(),
+  contract_id: z.string().uuid().optional(),
+});
+
+// Fraction of a year covered by one invoice of the given billing frequency.
+function frequencyFraction(freq: string | null): number {
+  switch (freq) {
+    case "monthly": return 1 / 12;
+    case "quarterly": return 0.25;
+    case "biannual": return 0.5;
+    case "annual": return 1;
+    default: return 1;
+  }
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+async function findCustomerIds(fragment: string): Promise<string[]> {
+  const q = fragment.replace(/[%,()]/g, "");
+  const { data } = await db.from("customers").select("id").or(`name.ilike.%${q}%,nickname.ilike.%${q}%`).limit(50);
+  return (data ?? []).map((c) => c.id);
+}
+
+function contractMatches(inv: { contract_id: string | null; merged_contract_ids: unknown }, contractId: string) {
+  if (inv.contract_id === contractId) return true;
+  const merged = inv.merged_contract_ids;
+  return Array.isArray(merged) && merged.some((m) => (typeof m === "string" ? m : (m as any)?.contractId) === contractId);
+}
+
+const eur = (eurVal: number | null, native: number | null) => eurVal ?? native ?? 0;
 
 const AddSchema = z.object({
   contract_id: z.string().uuid(),
