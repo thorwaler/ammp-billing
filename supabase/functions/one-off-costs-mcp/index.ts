@@ -300,18 +300,61 @@ async function callTool(name: string, args: Record<string, unknown>) {
         last_invoice_date: inv?.invoice_date?.slice(0, 10) ?? null,
         last_invoice_arr_eur: round2(arrPeriod),
         annualised_arr_eur: round2(fraction > 0 ? arrPeriod / fraction : 0),
-        merged_invoice: Array.isArray(inv?.merged_contract_ids) && inv.merged_contract_ids.length > 1,
+        billed_via_merged_invoice: false,
       });
     }
 
-    const totalArr = results.reduce((s, r) => s + r.annualised_arr_eur, 0);
+    // Contracts billed through merged invoices have no invoice of their own.
+    // Attribute the merged invoice once, listing the contracts it covers.
+    const contractIds = new Set((contracts as any[]).map((c) => c.id));
+    const customerIds = [...new Set((contracts as any[]).map((c) => c.customer_id))];
+    const mergedGroups: any[] = [];
+    if (customerIds.length) {
+      const { data: mergedInvs } = await db.from("invoices")
+        .select("id, invoice_date, billing_frequency, arr_amount, arr_amount_eur, merged_contract_ids, customer_id, customers(name, nickname)")
+        .is("superseded_at", null)
+        .not("merged_contract_ids", "is", null)
+        .in("customer_id", customerIds)
+        .order("invoice_date", { ascending: false })
+        .limit(200);
+      const seenCustomer = new Set<string>();
+      for (const m of (mergedInvs ?? []) as any[]) {
+        const ids = (Array.isArray(m.merged_contract_ids) ? m.merged_contract_ids : [])
+          .map((x: any) => (typeof x === "string" ? x : x?.contractId))
+          .filter((x: any) => typeof x === "string" && contractIds.has(x));
+        if (ids.length < 1) continue;
+        if (seenCustomer.has(m.customer_id)) continue; // only the most recent merged invoice per customer
+        seenCustomer.add(m.customer_id);
+        const fraction = frequencyFraction(m.billing_frequency);
+        const arrPeriod = eur(m.arr_amount_eur, m.arr_amount);
+        mergedGroups.push({
+          customer: m.customers?.nickname || m.customers?.name || "Unknown",
+          invoice_date: m.invoice_date?.slice(0, 10),
+          billing_frequency: m.billing_frequency,
+          contract_ids: ids,
+          contract_count: ids.length,
+          last_invoice_arr_eur: round2(arrPeriod),
+          annualised_arr_eur: round2(fraction > 0 ? arrPeriod / fraction : 0),
+        });
+        for (const id of ids) {
+          const r = results.find((x) => x.contract_id === id);
+          if (r) r.billed_via_merged_invoice = true;
+        }
+      }
+    }
+
+    const totalArr =
+      results.filter((r) => !r.billed_via_merged_invoice).reduce((s, r) => s + r.annualised_arr_eur, 0) +
+      mergedGroups.reduce((s, m) => s + m.annualised_arr_eur, 0);
+
     return text({
       filters: { customer_name: a.customer_name ?? null, contract_id: a.contract_id ?? null },
       currency: "EUR",
       total_annualised_arr_eur: round2(totalArr),
       contract_count: results.length,
       contracts: results.sort((x, y) => y.annualised_arr_eur - x.annualised_arr_eur),
-      note: "Run-rate is derived from each contract's latest invoice (recurring portion annualised by billing frequency). Contracts never invoiced show 0.",
+      merged_invoice_groups: mergedGroups,
+      note: "Run-rate is derived from each contract's latest invoice: the recurring (account 1002) portion annualised by billing frequency. Contracts billed on a merged invoice are reported once under merged_invoice_groups and show billed_via_merged_invoice = true. Contracts never invoiced show 0.",
     });
   }
 
