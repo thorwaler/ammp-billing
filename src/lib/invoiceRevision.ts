@@ -876,10 +876,14 @@ export function buildRevisedInvoiceRow(args: {
     invoice_date: string;
     customer_id: string;
     contract_id: string | null;
+    merged_contract_ids?: string[] | null;
     billing_frequency: string;
     currency: string;
     invoice_amount: number;
     invoice_amount_eur: number | null;
+    xero_reference?: string | null;
+    xero_status?: string | null;
+    xero_contact_name?: string | null;
   };
   snapshot: InvoiceInputSnapshot;
   units: RevisionUnit[];
