@@ -64,7 +64,77 @@ const TOOLS = [
       required: ["contract_id", "title", "amount", "idempotency_key", "requested_by", "approved_by_human"],
     },
   },
+  {
+    name: "query_invoiced_revenue",
+    description:
+      "Query realised revenue (ARR = recurring platform fees, account 1002; NRR = one-off/implementation fees, account 1000) from invoices in a date period. Optionally filter by customer name or contract. Excludes invoices that were replaced by a revision. Amounts are reported in EUR as well as in the original invoice currency.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        start_date: { type: "string", description: "Period start, YYYY-MM-DD (inclusive)" },
+        end_date: { type: "string", description: "Period end, YYYY-MM-DD (inclusive)" },
+        customer_name: { type: "string", description: "Optional customer name or nickname fragment" },
+        contract_id: { type: "string", format: "uuid", description: "Optional contract filter" },
+        include_invoices: { type: "boolean", description: "Include the per-invoice breakdown (default true, max 100 rows)" },
+      },
+      required: ["start_date", "end_date"],
+    },
+  },
+  {
+    name: "get_current_arr_run_rate",
+    description:
+      "Current annualised recurring revenue (ARR run-rate) per contract, derived from each contract's most recent invoice: the recurring (account 1002) portion annualised by the billing frequency. Optionally filter by customer name or contract.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        customer_name: { type: "string", description: "Optional customer name or nickname fragment" },
+        contract_id: { type: "string", format: "uuid", description: "Optional contract filter" },
+      },
+    },
+  },
 ];
+
+const DateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
+
+const RevenueSchema = z.object({
+  start_date: DateStr,
+  end_date: DateStr,
+  customer_name: z.string().trim().min(2).max(120).optional(),
+  contract_id: z.string().uuid().optional(),
+  include_invoices: z.boolean().default(true),
+});
+
+const RunRateSchema = z.object({
+  customer_name: z.string().trim().min(2).max(120).optional(),
+  contract_id: z.string().uuid().optional(),
+});
+
+// Fraction of a year covered by one invoice of the given billing frequency.
+function frequencyFraction(freq: string | null): number {
+  switch (freq) {
+    case "monthly": return 1 / 12;
+    case "quarterly": return 0.25;
+    case "biannual": return 0.5;
+    case "annual": return 1;
+    default: return 1;
+  }
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+async function findCustomerIds(fragment: string): Promise<string[]> {
+  const q = fragment.replace(/[%,()]/g, "");
+  const { data } = await db.from("customers").select("id").or(`name.ilike.%${q}%,nickname.ilike.%${q}%`).limit(50);
+  return (data ?? []).map((c) => c.id);
+}
+
+function contractMatches(inv: { contract_id: string | null; merged_contract_ids: unknown }, contractId: string) {
+  if (inv.contract_id === contractId) return true;
+  const merged = inv.merged_contract_ids;
+  return Array.isArray(merged) && merged.some((m) => (typeof m === "string" ? m : (m as any)?.contractId) === contractId);
+}
+
+const eur = (eurVal: number | null, native: number | null) => eurVal ?? native ?? 0;
 
 const AddSchema = z.object({
   contract_id: z.string().uuid(),
@@ -112,6 +182,180 @@ async function callTool(name: string, args: Record<string, unknown>) {
       .eq("contract_id", id.data).in("status", ["pending", "pending_approval"]);
     if (error) return text(error.message, true);
     return text(data);
+  }
+
+  if (name === "query_invoiced_revenue") {
+    const parsed = RevenueSchema.safeParse(args);
+    if (!parsed.success) return text({ error: "validation_failed", details: parsed.error.flatten().fieldErrors }, true);
+    const a = parsed.data;
+    if (a.start_date > a.end_date) return text("start_date must be on or before end_date", true);
+
+    let customerIds: string[] | null = null;
+    if (a.customer_name) {
+      customerIds = await findCustomerIds(a.customer_name);
+      if (customerIds.length === 0) return text({ error: "no_customer_match", customer_name: a.customer_name }, true);
+    }
+
+    let query = db.from("invoices")
+      .select("id, invoice_date, currency, invoice_amount, invoice_amount_eur, arr_amount, arr_amount_eur, nrr_amount, nrr_amount_eur, xero_amount_credited, xero_amount_credited_eur, xero_reference, xero_status, contract_id, merged_contract_ids, customer_id, customers(name, nickname)")
+      .is("superseded_at", null)
+      .gte("invoice_date", `${a.start_date}T00:00:00Z`)
+      .lte("invoice_date", `${a.end_date}T23:59:59Z`)
+      .order("invoice_date", { ascending: true })
+      .limit(1000);
+    if (customerIds) query = query.in("customer_id", customerIds);
+
+    const { data, error } = await query;
+    if (error) return text(error.message, true);
+    let rows = data ?? [];
+    if (a.contract_id) rows = rows.filter((r: any) => contractMatches(r, a.contract_id!));
+
+    let total = 0, arr = 0, nrr = 0, credited = 0;
+    const byCustomer = new Map<string, { customer: string; total: number; arr: number; nrr: number; invoices: number }>();
+
+    for (const r of rows as any[]) {
+      const t = eur(r.invoice_amount_eur, r.invoice_amount);
+      const ar = eur(r.arr_amount_eur, r.arr_amount);
+      const nr = eur(r.nrr_amount_eur, r.nrr_amount);
+      const cr = eur(r.xero_amount_credited_eur, r.xero_amount_credited);
+      total += t; arr += ar; nrr += nr; credited += cr;
+      const nm = r.customers?.nickname || r.customers?.name || "Unknown";
+      const acc = byCustomer.get(nm) ?? { customer: nm, total: 0, arr: 0, nrr: 0, invoices: 0 };
+      acc.total += t; acc.arr += ar; acc.nrr += nr; acc.invoices += 1;
+      byCustomer.set(nm, acc);
+    }
+
+    return text({
+      period: { start_date: a.start_date, end_date: a.end_date },
+      filters: { customer_name: a.customer_name ?? null, contract_id: a.contract_id ?? null },
+      currency: "EUR",
+      summary: {
+        invoice_count: rows.length,
+        total_invoiced: round2(total),
+        arr_total: round2(arr),
+        nrr_total: round2(nrr),
+        credited_total: round2(credited),
+        net_revenue: round2(total - credited),
+      },
+      by_customer: Array.from(byCustomer.values())
+        .map((c) => ({ ...c, total: round2(c.total), arr: round2(c.arr), nrr: round2(c.nrr) }))
+        .sort((x, y) => y.total - x.total),
+      invoices: a.include_invoices
+        ? (rows as any[]).slice(0, 100).map((r) => ({
+            invoice_id: r.id,
+            invoice_date: r.invoice_date?.slice(0, 10),
+            customer: r.customers?.nickname || r.customers?.name || "Unknown",
+            reference: r.xero_reference ?? null,
+            xero_status: r.xero_status ?? null,
+            currency: r.currency ?? "EUR",
+            amount_original: r.invoice_amount ?? 0,
+            amount_eur: round2(eur(r.invoice_amount_eur, r.invoice_amount)),
+            arr_eur: round2(eur(r.arr_amount_eur, r.arr_amount)),
+            nrr_eur: round2(eur(r.nrr_amount_eur, r.nrr_amount)),
+            merged: Array.isArray(r.merged_contract_ids) && r.merged_contract_ids.length > 1,
+          }))
+        : undefined,
+      note: "ARR = account 1002 (recurring platform fees); NRR = account 1000 (implementation / one-off). Superseded (revised) invoices are excluded.",
+    });
+  }
+
+  if (name === "get_current_arr_run_rate") {
+    const parsed = RunRateSchema.safeParse(args);
+    if (!parsed.success) return text({ error: "validation_failed", details: parsed.error.flatten().fieldErrors }, true);
+    const a = parsed.data;
+
+    let cQuery = db.from("contracts")
+      .select("id, contract_name, company_name, package, currency, billing_frequency, contract_status, customer_id, customers(name, nickname)")
+      .eq("contract_status", "active")
+      .neq("package", "poc")
+      .limit(500);
+    if (a.contract_id) cQuery = cQuery.eq("id", a.contract_id);
+    if (a.customer_name) {
+      const ids = await findCustomerIds(a.customer_name);
+      if (ids.length === 0) return text({ error: "no_customer_match", customer_name: a.customer_name }, true);
+      cQuery = cQuery.in("customer_id", ids);
+    }
+    const { data: contracts, error } = await cQuery;
+    if (error) return text(error.message, true);
+    if (!contracts?.length) return text({ contracts: [], message: "No matching active contracts" });
+
+    const results: any[] = [];
+    for (const c of contracts as any[]) {
+      const { data: invs } = await db.from("invoices")
+        .select("invoice_date, billing_frequency, currency, arr_amount, arr_amount_eur, invoice_amount, invoice_amount_eur, contract_id, merged_contract_ids")
+        .is("superseded_at", null)
+        .eq("contract_id", c.id)
+        .order("invoice_date", { ascending: false })
+        .limit(1);
+      const inv = invs?.[0] as any | undefined;
+      const fraction = frequencyFraction(inv?.billing_frequency ?? c.billing_frequency);
+      const arrPeriod = inv ? eur(inv.arr_amount_eur, inv.arr_amount) : 0;
+      results.push({
+        contract_id: c.id,
+        contract: c.contract_name ?? c.company_name,
+        customer: c.customers?.nickname || c.customers?.name || c.company_name,
+        package: c.package,
+        currency: c.currency ?? "EUR",
+        billing_frequency: inv?.billing_frequency ?? c.billing_frequency,
+        last_invoice_date: inv?.invoice_date?.slice(0, 10) ?? null,
+        last_invoice_arr_eur: round2(arrPeriod),
+        annualised_arr_eur: round2(fraction > 0 ? arrPeriod / fraction : 0),
+        billed_via_merged_invoice: false,
+      });
+    }
+
+    // Contracts billed through merged invoices have no invoice of their own.
+    // Attribute the merged invoice once, listing the contracts it covers.
+    const contractIds = new Set((contracts as any[]).map((c) => c.id));
+    const customerIds = [...new Set((contracts as any[]).map((c) => c.customer_id))];
+    const mergedGroups: any[] = [];
+    if (customerIds.length) {
+      const { data: mergedInvs } = await db.from("invoices")
+        .select("id, invoice_date, billing_frequency, arr_amount, arr_amount_eur, merged_contract_ids, customer_id, customers(name, nickname)")
+        .is("superseded_at", null)
+        .not("merged_contract_ids", "is", null)
+        .in("customer_id", customerIds)
+        .order("invoice_date", { ascending: false })
+        .limit(200);
+      const seenCustomer = new Set<string>();
+      for (const m of (mergedInvs ?? []) as any[]) {
+        const ids = (Array.isArray(m.merged_contract_ids) ? m.merged_contract_ids : [])
+          .map((x: any) => (typeof x === "string" ? x : x?.contractId))
+          .filter((x: any) => typeof x === "string" && contractIds.has(x));
+        if (ids.length < 1) continue;
+        if (seenCustomer.has(m.customer_id)) continue; // only the most recent merged invoice per customer
+        seenCustomer.add(m.customer_id);
+        const fraction = frequencyFraction(m.billing_frequency);
+        const arrPeriod = eur(m.arr_amount_eur, m.arr_amount);
+        mergedGroups.push({
+          customer: m.customers?.nickname || m.customers?.name || "Unknown",
+          invoice_date: m.invoice_date?.slice(0, 10),
+          billing_frequency: m.billing_frequency,
+          contract_ids: ids,
+          contract_count: ids.length,
+          last_invoice_arr_eur: round2(arrPeriod),
+          annualised_arr_eur: round2(fraction > 0 ? arrPeriod / fraction : 0),
+        });
+        for (const id of ids) {
+          const r = results.find((x) => x.contract_id === id);
+          if (r) r.billed_via_merged_invoice = true;
+        }
+      }
+    }
+
+    const totalArr =
+      results.filter((r) => !r.billed_via_merged_invoice).reduce((s, r) => s + r.annualised_arr_eur, 0) +
+      mergedGroups.reduce((s, m) => s + m.annualised_arr_eur, 0);
+
+    return text({
+      filters: { customer_name: a.customer_name ?? null, contract_id: a.contract_id ?? null },
+      currency: "EUR",
+      total_annualised_arr_eur: round2(totalArr),
+      contract_count: results.length,
+      contracts: results.sort((x, y) => y.annualised_arr_eur - x.annualised_arr_eur),
+      merged_invoice_groups: mergedGroups,
+      note: "Run-rate is derived from each contract's latest invoice: the recurring (account 1002) portion annualised by billing frequency. Contracts billed on a merged invoice are reported once under merged_invoice_groups and show billed_via_merged_invoice = true. Contracts never invoiced show 0.",
+    });
   }
 
   if (name === "add_one_off_cost") {
