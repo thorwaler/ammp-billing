@@ -284,7 +284,7 @@ async function callTool(name: string, args: Record<string, unknown>) {
       const { data: invs } = await db.from("invoices")
         .select("invoice_date, billing_frequency, currency, arr_amount, arr_amount_eur, invoice_amount, invoice_amount_eur, contract_id, merged_contract_ids")
         .is("superseded_at", null)
-        .or(`contract_id.eq.${c.id},merged_contract_ids.cs.["${c.id}"]`)
+        .eq("contract_id", c.id)
         .order("invoice_date", { ascending: false })
         .limit(1);
       const inv = invs?.[0] as any | undefined;
