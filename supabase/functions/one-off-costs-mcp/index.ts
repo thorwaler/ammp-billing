@@ -24,25 +24,32 @@ function safeEqual(a: string, b: string) {
   return r === 0;
 }
 
+const READ_ONLY = (title: string) => ({
+  readOnlyHint: true,
+  annotations: { title, readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+});
+
 const TOOLS = [
   {
     name: "search_contracts",
     description:
-      "Find active contracts by customer name, nickname or contract name. Use this to get the contract_id before adding a one-off cost.",
+      "Find active contracts by customer name, nickname or contract name. Use this to get the contract_id before adding a one-off cost. Read-only.",
     inputSchema: {
       type: "object",
       properties: { query: { type: "string", description: "Customer or contract name fragment" } },
       required: ["query"],
     },
+    ...READ_ONLY("Search contracts"),
   },
   {
     name: "list_pending_one_off_costs",
-    description: "List one-off costs not yet invoiced (awaiting approval or queued for the next invoice) for a contract.",
+    description: "List one-off costs not yet invoiced (awaiting approval or queued for the next invoice) for a contract. Read-only.",
     inputSchema: {
       type: "object",
       properties: { contract_id: { type: "string", format: "uuid" } },
       required: ["contract_id"],
     },
+    ...READ_ONLY("List pending one-off costs"),
   },
   {
     name: "add_one_off_cost",
@@ -63,11 +70,19 @@ const TOOLS = [
       },
       required: ["contract_id", "title", "amount", "idempotency_key", "requested_by", "approved_by_human"],
     },
+    readOnlyHint: false,
+    annotations: {
+      title: "Add one-off cost (requires human approval)",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
   },
   {
     name: "query_invoiced_revenue",
     description:
-      "Query realised revenue (ARR = recurring platform fees, account 1002; NRR = one-off/implementation fees, account 1000) from invoices in a date period. Optionally filter by customer name or contract. Excludes invoices that were replaced by a revision. Amounts are reported in EUR as well as in the original invoice currency.",
+      "Read-only. Query realised revenue (ARR = recurring platform fees, account 1002; NRR = one-off/implementation fees, account 1000) from invoices in a date period. Optionally filter by customer name or contract. Excludes invoices that were replaced by a revision. Amounts are reported in EUR as well as in the original invoice currency. This tool never writes or changes any data.",
     inputSchema: {
       type: "object",
       properties: {
@@ -79,11 +94,12 @@ const TOOLS = [
       },
       required: ["start_date", "end_date"],
     },
+    ...READ_ONLY("Query invoiced revenue (ARR/NRR)"),
   },
   {
     name: "get_current_arr_run_rate",
     description:
-      "Current annualised recurring revenue (ARR run-rate) per contract, derived from each contract's most recent invoice: the recurring (account 1002) portion annualised by the billing frequency. Optionally filter by customer name or contract.",
+      "Read-only. Current annualised recurring revenue (ARR run-rate) per contract, derived from each contract's most recent invoice: the recurring (account 1002) portion annualised by the billing frequency. Optionally filter by customer name or contract. This tool never writes or changes any data.",
     inputSchema: {
       type: "object",
       properties: {
@@ -91,8 +107,10 @@ const TOOLS = [
         contract_id: { type: "string", format: "uuid", description: "Optional contract filter" },
       },
     },
+    ...READ_ONLY("Current ARR run-rate"),
   },
 ];
+
 
 const DateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
 
