@@ -17,7 +17,7 @@ import { SupportDocumentData } from "@/lib/supportDocumentGenerator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter } from "date-fns";
+import { format, subMonths, subDays, startOfYear, startOfMonth, startOfQuarter, endOfMonth } from "date-fns";
 import { Trash2, Eye, ExternalLink, Filter, FileText, RefreshCw, CalendarIcon, Lock, Unlock, RotateCcw } from "lucide-react";
 import { RevisionDialog } from "@/components/invoices/RevisionDialog";
 import { daysUntilRevisionDeadline, isWithinRevisionWindow } from "@/lib/invoiceSnapshot";
@@ -131,17 +131,20 @@ export default function InvoiceHistory() {
 
   const getDateRange = (): { start: Date | null; end: Date | null } => {
     const now = new Date();
+    // Invoices are commonly dated on the last day of the month, so the upper
+    // bound runs to the end of the current month rather than "right now".
+    const end = endOfMonth(now);
     switch (dateFilter) {
       case "lastMonth":
-        return { start: startOfMonth(subMonths(now, 1)), end: now };
+        return { start: startOfMonth(subMonths(now, 1)), end };
       case "lastQuarter":
-        return { start: subMonths(now, 3), end: now };
+        return { start: subMonths(now, 3), end };
       case "last6months":
-        return { start: subMonths(now, 6), end: now };
+        return { start: subMonths(now, 6), end };
       case "last12months":
-        return { start: subMonths(now, 12), end: now };
+        return { start: subMonths(now, 12), end };
       case "ytd":
-        return { start: startOfYear(now), end: now };
+        return { start: startOfYear(now), end };
       case "custom":
         return { start: customStartDate || null, end: customEndDate || null };
       case "all":

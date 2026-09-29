@@ -43,6 +43,8 @@ export interface ReviseInvoice {
   invoice_amount_eur: number | null;
   xero_invoice_id: string | null;
   xero_contact_name: string | null;
+  xero_reference?: string | null;
+  xero_status?: string | null;
   prepaid_balance_delta: number | null;
   input_snapshot: any | null;
   revision_deadline: string | null;
