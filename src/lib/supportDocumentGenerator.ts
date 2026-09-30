@@ -22,6 +22,7 @@ export interface SupportDocumentData {
     period: string;
     monitoringFee: number;
     solcastFee: number;
+    fixedFees: number;
     additionalWork: number;
     total: number;
   }[];
