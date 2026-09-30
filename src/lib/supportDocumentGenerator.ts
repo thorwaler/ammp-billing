@@ -851,6 +851,7 @@ function groupInvoicesByPeriod(
         period,
         monitoringFee: 0,
         solcastFee: 0,
+        fixedFees: 0,
         additionalWork: 0,
         total: 0
       };
@@ -883,8 +884,13 @@ function groupInvoicesByPeriod(
     // already part of invoice_amount, so pull them out of the monitoring column.
     const oneOffTotal = oneOffTotalForInvoice(invoice);
 
-    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee - oneOffTotal;
+    // Fixed recurring fees (custom annual fees, other addons) and the minimum
+    // contract top-up are not monitoring; keep them in their own column.
+    const fixedFees = fixedFeesForInvoice(invoice, solcastFee);
+
+    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee - oneOffTotal - fixedFees;
     grouped[period].solcastFee += solcastFee;
+    grouped[period].fixedFees += fixedFees;
     grouped[period].additionalWork += oneOffTotal;
     grouped[period].total += Number(invoice.invoice_amount);
   });
