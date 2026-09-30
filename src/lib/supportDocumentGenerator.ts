@@ -380,7 +380,13 @@ export async function generateSupportDocumentData(
   }
 
   // Group invoices by period
-  const invoicesByPeriod = groupInvoicesByPeriod(yearInvoices || [], billingFrequency);
+  const currentPeriodLabelForGrouping = periodLabelForDate(invoiceDate, billingFrequency);
+  const invoicesByPeriod = groupInvoicesByPeriod(
+    yearInvoices || [],
+    billingFrequency,
+    currentPeriodLabelForGrouping,
+    oneOffCostsTotal
+  );
   const yearTotal = (yearInvoices || []).reduce((sum, inv) => sum + Number(inv.invoice_amount), 0);
 
   // Generate asset breakdown based on package type (Fix #1)
@@ -812,9 +818,21 @@ function periodLabelForDate(date: Date, billingFrequency: string): string {
   return date.getFullYear().toString();
 }
 
+function oneOffTotalForInvoice(invoice: any): number {
+  // Prefer the one-off charges recorded on the invoice's own support document,
+  // so historic periods split correctly between recurring and additional work.
+  const docOneOffs = invoice?.support_document_data?.oneOffCosts;
+  if (Array.isArray(docOneOffs)) {
+    return docOneOffs.reduce((sum: number, c: any) => sum + (Number(c?.amount) || 0), 0);
+  }
+  return 0;
+}
+
 function groupInvoicesByPeriod(
   invoices: any[],
-  billingFrequency: string
+  billingFrequency: string,
+  currentPeriodLabel?: string,
+  currentOneOffTotal: number = 0
 ): SupportDocumentData['yearInvoices'] {
   const grouped: { [key: string]: any } = {};
 
@@ -855,10 +873,26 @@ function groupInvoicesByPeriod(
       }
     }
 
-    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee;
+    // One-off / additional charges are billed on top of the recurring fee and are
+    // already part of invoice_amount, so pull them out of the monitoring column.
+    const oneOffTotal = oneOffTotalForInvoice(invoice);
+
+    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee - oneOffTotal;
     grouped[period].solcastFee += solcastFee;
+    grouped[period].additionalWork += oneOffTotal;
     grouped[period].total += Number(invoice.invoice_amount);
   });
+
+  // The invoice being generated is already saved but has no support document yet,
+  // so its one-off charges are not on the stored row; reassign them here.
+  if (currentPeriodLabel && currentOneOffTotal > 0) {
+    const row = grouped[currentPeriodLabel];
+    if (row && row.additionalWork < currentOneOffTotal) {
+      const delta = currentOneOffTotal - row.additionalWork;
+      row.additionalWork += delta;
+      row.monitoringFee -= delta;
+    }
+  }
 
   return Object.values(grouped);
 }
