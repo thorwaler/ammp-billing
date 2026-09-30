@@ -270,6 +270,15 @@ export interface SupportDocumentData {
     prepaidBalanceAfter: number;
   };
 
+  // One-off / additional charges included on this invoice
+  oneOffCosts?: {
+    title: string;
+    description?: string;
+    amount: number;
+    accountCode: string;
+  }[];
+  oneOffCostsTotal?: number;
+
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
@@ -286,7 +295,16 @@ export interface SupportDocumentData {
     addonsTotal: number;
     discountedAssetsTotal: number;
     fixedPackageCost: number; // For starter/capped packages with fixed annual fee
+    oneOffCostsTotal?: number;
   };
+}
+
+/** One-off charge as stored on the contract, in the shape the support doc needs. */
+export interface SupportDocumentOneOffCost {
+  title: string;
+  description?: string | null;
+  amount: number | string;
+  account_code?: string | null;
 }
 
 /**
