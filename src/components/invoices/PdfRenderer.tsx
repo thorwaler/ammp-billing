@@ -99,20 +99,21 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   autoTable(doc, {
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
-    head: [['Period', 'Monitoring Fee', 'Solcast Fee', 'Additional Work', `Total (${cur})`]],
+    head: [['Period', 'Monitoring Fee', 'Solcast Fee', 'Fixed Fees', 'Additional Work', `Total (${cur})`]],
     body: [
       ...data.yearInvoices.map(inv => [
         inv.period,
         fmt(inv.monitoringFee, cur),
         fmt(inv.solcastFee, cur),
+        fmt(inv.fixedFees || 0, cur),
         fmt(inv.additionalWork, cur),
         fmt(inv.total, cur),
       ]),
-      [{ content: 'Year Total:', colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmt(data.yearTotal, cur), styles: { fontStyle: 'bold', halign: 'right' } }],
+      [{ content: 'Year Total:', colSpan: 5, styles: { fontStyle: 'bold', halign: 'right' } }, { content: fmt(data.yearTotal, cur), styles: { fontStyle: 'bold', halign: 'right' } }],
     ],
     styles: { fontSize: 7, cellPadding: 1.5 },
     headStyles: { fillColor: [244, 244, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
-    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+    columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } },
   });
   y = (doc as any).lastAutoTable.finalY + 6;
 
