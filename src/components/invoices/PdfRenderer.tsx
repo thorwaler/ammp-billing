@@ -631,6 +631,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   if (cb.discountedAssetsTotal > 0) breakdownLines.push(['+ Discounted Assets', fmt(cb.discountedAssetsTotal, cur)]);
   if (cb.addonsTotal > 0) breakdownLines.push(['+ Addons Total', fmt(cb.addonsTotal, cur)]);
   if (cb.fixedPackageCost > 0) breakdownLines.push(['+ Fixed Package Fee', fmt(cb.fixedPackageCost, cur)]);
+  if ((cb.oneOffCostsTotal || 0) > 0) breakdownLines.push(['+ One-Off Charges', fmt(cb.oneOffCostsTotal || 0, cur)]);
   const spsU: any = (data as any).spsAnnualUpfrontBreakdown;
   if (spsU?.cycleType === 'quarterly_with_credit' && (spsU.creditApplied || 0) > 0) {
     breakdownLines.push(['- Prepaid Credit Applied', `-${fmt(spsU.creditApplied, cur)}`]);
