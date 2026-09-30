@@ -329,8 +329,18 @@ export async function generateSupportDocumentData(
   retainerHourlyRate?: number,
   retainerMinimumValue?: number,
   contractName?: string,
-  minimumAnnualValue?: number
+  minimumAnnualValue?: number,
+  oneOffCostsInput?: SupportDocumentOneOffCost[]
 ): Promise<SupportDocumentData> {
+
+  // One-off / additional charges billed on this invoice (outside the recurring calculation)
+  const oneOffCosts = (oneOffCostsInput || []).map(c => ({
+    title: c.title,
+    description: c.description || undefined,
+    amount: Number(c.amount) || 0,
+    accountCode: c.account_code || '1000',
+  }));
+  const oneOffCostsTotal = oneOffCosts.reduce((sum, c) => sum + c.amount, 0);
   
   // Fetch year-to-date invoices filtered by contract if available
   const yearStart = startOfYear(invoiceDate);
