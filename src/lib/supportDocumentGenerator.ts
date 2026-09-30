@@ -812,9 +812,21 @@ function periodLabelForDate(date: Date, billingFrequency: string): string {
   return date.getFullYear().toString();
 }
 
+function oneOffTotalForInvoice(invoice: any): number {
+  // Prefer the one-off charges recorded on the invoice's own support document,
+  // so historic periods split correctly between recurring and additional work.
+  const docOneOffs = invoice?.support_document_data?.oneOffCosts;
+  if (Array.isArray(docOneOffs)) {
+    return docOneOffs.reduce((sum: number, c: any) => sum + (Number(c?.amount) || 0), 0);
+  }
+  return 0;
+}
+
 function groupInvoicesByPeriod(
   invoices: any[],
-  billingFrequency: string
+  billingFrequency: string,
+  currentInvoiceId?: string,
+  currentOneOffTotal: number = 0
 ): SupportDocumentData['yearInvoices'] {
   const grouped: { [key: string]: any } = {};
 
