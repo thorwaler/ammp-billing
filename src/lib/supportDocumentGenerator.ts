@@ -869,15 +869,24 @@ function groupInvoicesByPeriod(
 
     // One-off / additional charges are billed on top of the recurring fee and are
     // already part of invoice_amount, so pull them out of the monitoring column.
-    const oneOffTotal = currentInvoiceId && invoice.id === currentInvoiceId
-      ? currentOneOffTotal
-      : oneOffTotalForInvoice(invoice);
+    const oneOffTotal = oneOffTotalForInvoice(invoice);
 
     grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee - oneOffTotal;
     grouped[period].solcastFee += solcastFee;
     grouped[period].additionalWork += oneOffTotal;
     grouped[period].total += Number(invoice.invoice_amount);
   });
+
+  // The invoice being generated is already saved but has no support document yet,
+  // so its one-off charges are not on the stored row; reassign them here.
+  if (currentPeriodLabel && currentOneOffTotal > 0) {
+    const row = grouped[currentPeriodLabel];
+    if (row && row.additionalWork < currentOneOffTotal) {
+      const delta = currentOneOffTotal - row.additionalWork;
+      row.additionalWork += delta;
+      row.monitoringFee -= delta;
+    }
+  }
 
   return Object.values(grouped);
 }
