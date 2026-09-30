@@ -1157,8 +1157,10 @@ function generateAssetBreakdown(
         ? breakdown.ongrid.rate 
         : breakdown.hybrid.rate;
     }
-  } else if (packageType === 'pro' || packageType === 'custom') {
+  } else if (packageType === 'pro' || packageType === 'custom' || packageType === 'ammp_os_2026') {
+    // AMMP OS 2026 prices per selected module per MWp, same as pro/custom.
     baseRatePerMWp = calculationResult.moduleCosts.reduce((sum, m) => sum + m.rate, 0);
+
   } else if (packageType === 'starter') {
     baseRatePerMWp = totalMW > 0 ? calculationResult.starterPackageCost / totalMW : 0;
   } else if (packageType === 'capped') {
