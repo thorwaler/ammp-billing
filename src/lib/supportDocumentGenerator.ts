@@ -643,7 +643,8 @@ export async function generateSupportDocumentData(
     calculationResult.retainerCost +
     discountedAssetsTotal +
     totalAddonCosts +
-    fixedPackageCost;
+    fixedPackageCost +
+    oneOffCostsTotal;
   // SPS quarterly cycle: subtract the prepaid credit so the calculated total
   // matches the net invoice amount (credit row is rendered separately in the UI).
   const spsBd: any = (calculationResult as any).spsAnnualUpfrontBreakdown;
@@ -651,7 +652,9 @@ export async function generateSupportDocumentData(
     ? (spsBd.creditApplied || 0)
     : 0;
 
-  const invoiceTotal = calculationResult.totalPrice;
+  // One-off charges are billed on top of the recurring calculation, so they are
+  // part of the invoice total the document must reconcile against.
+  const invoiceTotal = calculationResult.totalPrice + oneOffCostsTotal;
   const calculatedTotalNet = calculatedTotal - spsCreditAdjustment;
   const totalsMatch = Math.abs(calculatedTotalNet - invoiceTotal) < 0.01;
 
@@ -670,8 +673,8 @@ export async function generateSupportDocumentData(
   // been saved yet, otherwise a first invoice of the year renders an empty table.
   const currentPeriodLabel = periodLabelForDate(invoiceDate, billingFrequency);
   const ytdRows = [...invoicesByPeriod];
-  const currentAdditionalWork = calculationResult.retainerCost || 0;
-  const currentMonitoring = calculationResult.totalPrice - solcastTotal - currentAdditionalWork;
+  const currentAdditionalWork = (calculationResult.retainerCost || 0) + oneOffCostsTotal;
+  const currentMonitoring = calculationResult.totalPrice - solcastTotal - (calculationResult.retainerCost || 0);
   let ytdTotal = yearTotal;
   if (!ytdRows.some(r => r.period === currentPeriodLabel)) {
     ytdRows.push({
@@ -679,9 +682,9 @@ export async function generateSupportDocumentData(
       monitoringFee: currentMonitoring,
       solcastFee: solcastTotal,
       additionalWork: currentAdditionalWork,
-      total: calculationResult.totalPrice,
+      total: invoiceTotal,
     });
-    ytdTotal += calculationResult.totalPrice;
+    ytdTotal += invoiceTotal;
   }
 
   return {
