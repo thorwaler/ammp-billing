@@ -403,6 +403,28 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
     y = (doc as any).lastAutoTable.finalY + 6;
   }
 
+  // === ONE-OFF & ADDITIONAL CHARGES ===
+  if (data.oneOffCosts && data.oneOffCosts.length > 0) {
+    y = addSectionTitle(doc, 'One-Off & Additional Charges', y);
+    autoTable(doc, {
+      startY: y, margin: { left: MARGIN, right: MARGIN },
+      head: [['Description', `Amount (${cur})`]],
+      body: [
+        ...data.oneOffCosts.map(c => [
+          c.description ? `${c.title} — ${c.description}` : c.title,
+          fmt(c.amount, cur),
+        ]),
+        [{ content: 'Total:', styles: { fontStyle: 'bold' as const, halign: 'right' as const } }, { content: fmt(data.oneOffCostsTotal || 0, cur), styles: { fontStyle: 'bold' as const, halign: 'right' as const } }],
+      ],
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [244, 244, 245], textColor: [0, 0, 0], fontStyle: 'bold' },
+      columnStyles: { 1: { halign: 'right' } },
+    });
+    y = (doc as any).lastAutoTable.finalY + 6;
+  }
+
+
+
   // === DISCOUNTED ASSETS ===
   if (data.discountedAssetsBreakdown && data.discountedAssetsBreakdown.length > 0) {
     y = addSectionTitle(doc, 'Discounted Assets', y);
