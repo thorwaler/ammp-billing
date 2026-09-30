@@ -867,8 +867,15 @@ function groupInvoicesByPeriod(
       }
     }
 
-    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee;
+    // One-off / additional charges are billed on top of the recurring fee and are
+    // already part of invoice_amount, so pull them out of the monitoring column.
+    const oneOffTotal = currentInvoiceId && invoice.id === currentInvoiceId
+      ? currentOneOffTotal
+      : oneOffTotalForInvoice(invoice);
+
+    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee - oneOffTotal;
     grouped[period].solcastFee += solcastFee;
+    grouped[period].additionalWork += oneOffTotal;
     grouped[period].total += Number(invoice.invoice_amount);
   });
 
