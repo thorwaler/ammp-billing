@@ -686,17 +686,25 @@ export async function generateSupportDocumentData(
   const currentPeriodLabel = periodLabelForDate(invoiceDate, billingFrequency);
   const ytdRows = [...invoicesByPeriod];
   const currentAdditionalWork = (calculationResult.retainerCost || 0) + oneOffCostsTotal;
-  const currentMonitoring = calculationResult.totalPrice - solcastTotal - (calculationResult.retainerCost || 0);
+  const currentFixedFees = addonsTotal + minimumContractAdjustment;
+  const currentMonitoring = calculationResult.totalPrice - solcastTotal - (calculationResult.retainerCost || 0) - currentFixedFees;
   let ytdTotal = yearTotal;
-  if (!ytdRows.some(r => r.period === currentPeriodLabel)) {
+  const existingCurrentRow = ytdRows.find(r => r.period === currentPeriodLabel);
+  if (!existingCurrentRow) {
     ytdRows.push({
       period: `${currentPeriodLabel} (this invoice)`,
       monitoringFee: currentMonitoring,
       solcastFee: solcastTotal,
+      fixedFees: currentFixedFees,
       additionalWork: currentAdditionalWork,
       total: invoiceTotal,
     });
     ytdTotal += invoiceTotal;
+  } else if (currentFixedFees > 0 && existingCurrentRow.fixedFees <= 0) {
+    // The invoice row is saved but has no support document yet, so its fixed
+    // fees are still sitting in the monitoring column; move them across.
+    existingCurrentRow.fixedFees = currentFixedFees;
+    existingCurrentRow.monitoringFee -= currentFixedFees;
   }
 
   return {
