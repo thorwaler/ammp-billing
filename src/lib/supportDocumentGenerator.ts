@@ -777,6 +777,8 @@ export async function generateSupportDocumentData(
       creditApplied: (calculationResult as any).spsAnnualUpfrontBreakdown.creditApplied,
       prepaidBalanceAfter: (calculationResult as any).spsAnnualUpfrontBreakdown.prepaidBalanceAfter,
     } : undefined,
+    oneOffCosts: oneOffCosts.length > 0 ? oneOffCosts : undefined,
+    oneOffCostsTotal,
     calculatedTotal: calculatedTotalNet,
     invoiceTotal,
     minimumContractAdjustment,
@@ -790,7 +792,8 @@ export async function generateSupportDocumentData(
       retainerCost: calculationResult.retainerCost,
       addonsTotal: totalAddonCosts,
       discountedAssetsTotal,
-      fixedPackageCost
+      fixedPackageCost,
+      oneOffCostsTotal
     }
   };
 }
