@@ -74,3 +74,17 @@ export async function markOneOffCostsInvoiced(ids: string[], invoiceId: string |
     .in("id", ids)
     .eq("status", "pending");
 }
+
+/**
+ * Put one-off costs back in the queue when their invoice is deleted, so they
+ * reappear on the next invoice for that contract.
+ * Must be called BEFORE the invoice row is deleted (the FK nulls invoice_id).
+ */
+export async function restoreOneOffCostsForInvoice(invoiceId: string): Promise<number> {
+  const { data } = await oneOffCostsTable()
+    .update({ status: "pending", invoice_id: null, invoiced_at: null })
+    .eq("invoice_id", invoiceId)
+    .eq("status", "invoiced")
+    .select("id");
+  return (data as { id: string }[] | null)?.length ?? 0;
+}
