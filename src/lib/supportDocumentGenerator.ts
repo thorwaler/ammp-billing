@@ -825,7 +825,7 @@ function oneOffTotalForInvoice(invoice: any): number {
 function groupInvoicesByPeriod(
   invoices: any[],
   billingFrequency: string,
-  currentInvoiceId?: string,
+  currentPeriodLabel?: string,
   currentOneOffTotal: number = 0
 ): SupportDocumentData['yearInvoices'] {
   const grouped: { [key: string]: any } = {};
