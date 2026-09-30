@@ -65,6 +65,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               <th className="border border-border p-1 text-left">Period</th>
               <th className="border border-border p-1 text-right">Monitoring Fee</th>
               <th className="border border-border p-1 text-right">Solcast Fee</th>
+              <th className="border border-border p-1 text-right">Fixed Fees</th>
               <th className="border border-border p-1 text-right">Additional Work</th>
               <th className="border border-border p-1 text-right">Total ({data.currency})</th>
             </tr>
@@ -75,12 +76,13 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <td className="border border-border p-1">{inv.period}</td>
                 <td className="border border-border p-1 text-right">{formatCurrency(inv.monitoringFee)}</td>
                 <td className="border border-border p-1 text-right">{formatCurrency(inv.solcastFee)}</td>
+                <td className="border border-border p-1 text-right">{formatCurrency(inv.fixedFees || 0)}</td>
                 <td className="border border-border p-1 text-right">{formatCurrency(inv.additionalWork)}</td>
                 <td className="border border-border p-1 text-right font-medium">{formatCurrency(inv.total)}</td>
               </tr>
             ))}
             <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
-              <td className="border border-border p-1" colSpan={4}>Year Total:</td>
+              <td className="border border-border p-1" colSpan={5}>Year Total:</td>
               <td className="border border-border p-1 text-right">{formatCurrency(data.yearTotal)}</td>
             </tr>
           </tbody>

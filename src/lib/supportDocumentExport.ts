@@ -12,21 +12,22 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
 
   // Sheet 1: Year Overview
   const yearOverviewRows: any[][] = [
-    ['Period', 'Monitoring Fee', 'Solcast Fee', 'Additional Work', `Total (${data.currency})`],
+    ['Period', 'Monitoring Fee', 'Solcast Fee', 'Fixed Fees', 'Additional Work', `Total (${data.currency})`],
     ...data.yearInvoices.map(inv => [
       inv.period,
       inv.monitoringFee,
       inv.solcastFee,
+      inv.fixedFees || 0,
       inv.additionalWork,
       inv.total
     ]),
-    ['', '', '', 'Year Total:', data.yearTotal]
+    ['', '', '', '', 'Year Total:', data.yearTotal]
   ];
   
   // Bug #5: Add minimum contract adjustment row if applicable
   if (data.minimumContractAdjustment > 0) {
-    yearOverviewRows.push(['', '', '', 'Minimum Contract Adjustment (Annual):', data.minimumContractAdjustment]);
-    yearOverviewRows.push(['', '', '', 'Total with Minimum:', data.yearTotal + data.minimumContractAdjustment]);
+    yearOverviewRows.push(['', '', '', '', 'Minimum Contract Adjustment (Annual):', data.minimumContractAdjustment]);
+    yearOverviewRows.push(['', '', '', '', 'Total with Minimum:', data.yearTotal + data.minimumContractAdjustment]);
   }
   
   const wsYearOverview = XLSX.utils.aoa_to_sheet(yearOverviewRows);

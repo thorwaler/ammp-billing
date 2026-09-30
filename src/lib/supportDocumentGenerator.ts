@@ -22,6 +22,7 @@ export interface SupportDocumentData {
     period: string;
     monitoringFee: number;
     solcastFee: number;
+    fixedFees: number;
     additionalWork: number;
     total: number;
   }[];
@@ -685,17 +686,25 @@ export async function generateSupportDocumentData(
   const currentPeriodLabel = periodLabelForDate(invoiceDate, billingFrequency);
   const ytdRows = [...invoicesByPeriod];
   const currentAdditionalWork = (calculationResult.retainerCost || 0) + oneOffCostsTotal;
-  const currentMonitoring = calculationResult.totalPrice - solcastTotal - (calculationResult.retainerCost || 0);
+  const currentFixedFees = addonsTotal + minimumContractAdjustment;
+  const currentMonitoring = calculationResult.totalPrice - solcastTotal - (calculationResult.retainerCost || 0) - currentFixedFees;
   let ytdTotal = yearTotal;
-  if (!ytdRows.some(r => r.period === currentPeriodLabel)) {
+  const existingCurrentRow = ytdRows.find(r => r.period === currentPeriodLabel);
+  if (!existingCurrentRow) {
     ytdRows.push({
       period: `${currentPeriodLabel} (this invoice)`,
       monitoringFee: currentMonitoring,
       solcastFee: solcastTotal,
+      fixedFees: currentFixedFees,
       additionalWork: currentAdditionalWork,
       total: invoiceTotal,
     });
     ytdTotal += invoiceTotal;
+  } else if (currentFixedFees > 0 && existingCurrentRow.fixedFees <= 0) {
+    // The invoice row is saved but has no support document yet, so its fixed
+    // fees are still sitting in the monitoring column; move them across.
+    existingCurrentRow.fixedFees = currentFixedFees;
+    existingCurrentRow.monitoringFee -= currentFixedFees;
   }
 
   return {
@@ -833,6 +842,24 @@ function oneOffTotalForInvoice(invoice: any): number {
   return 0;
 }
 
+/**
+ * Fixed recurring fees on a stored invoice: custom annual fees / other addons
+ * (excluding Solcast) plus the minimum contract value top-up. These are billed
+ * alongside monitoring and must not inflate the monitoring column.
+ */
+function fixedFeesForInvoice(invoice: any, solcastFee: number): number {
+  const sd = invoice?.support_document_data;
+  if (!sd) return 0;
+  const addons = Number(sd.addonsTotal) || 0;
+  const minimumTopUp = Number(sd.minimumContractAdjustment) || 0;
+  // addonsTotal already excludes Solcast, but guard against legacy documents
+  // that stored it inclusive of the satellite fee.
+  const addonsExSolcast = addons >= solcastFee && solcastFee > 0 && Math.abs(addons - solcastFee) < 0.01
+    ? 0
+    : addons;
+  return addonsExSolcast + minimumTopUp;
+}
+
 function groupInvoicesByPeriod(
   invoices: any[],
   billingFrequency: string,
@@ -850,6 +877,7 @@ function groupInvoicesByPeriod(
         period,
         monitoringFee: 0,
         solcastFee: 0,
+        fixedFees: 0,
         additionalWork: 0,
         total: 0
       };
@@ -882,8 +910,13 @@ function groupInvoicesByPeriod(
     // already part of invoice_amount, so pull them out of the monitoring column.
     const oneOffTotal = oneOffTotalForInvoice(invoice);
 
-    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee - oneOffTotal;
+    // Fixed recurring fees (custom annual fees, other addons) and the minimum
+    // contract top-up are not monitoring; keep them in their own column.
+    const fixedFees = fixedFeesForInvoice(invoice, solcastFee);
+
+    grouped[period].monitoringFee += Number(invoice.invoice_amount) - solcastFee - oneOffTotal - fixedFees;
     grouped[period].solcastFee += solcastFee;
+    grouped[period].fixedFees += fixedFees;
     grouped[period].additionalWork += oneOffTotal;
     grouped[period].total += Number(invoice.invoice_amount);
   });
