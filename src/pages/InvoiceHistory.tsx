@@ -246,6 +246,16 @@ export default function InvoiceHistory() {
         .eq('id', selectedInvoice.id)
         .maybeSingle();
 
+      // Put any one-off charges billed on this invoice back in the queue.
+      // Must happen before the delete, which nulls their invoice_id.
+      let restoredOneOffs = 0;
+      try {
+        const { restoreOneOffCostsForInvoice } = await import('@/lib/oneOffCosts');
+        restoredOneOffs = await restoreOneOffCostsForInvoice(selectedInvoice.id);
+      } catch (oneOffErr) {
+        console.error('[OneOffCosts] Restore on invoice delete failed:', oneOffErr);
+      }
+
       // Delete the invoice row.
       const { error } = await supabase
         .from('invoices')
@@ -253,6 +263,12 @@ export default function InvoiceHistory() {
         .eq('id', selectedInvoice.id);
 
       if (error) throw error;
+
+      if (restoredOneOffs > 0) {
+        toast.success(
+          `${restoredOneOffs} one-off charge${restoredOneOffs > 1 ? 's' : ''} returned to the next invoice`,
+        );
+      }
 
       // Delete SharePoint support docs (non-blocking).
       try {

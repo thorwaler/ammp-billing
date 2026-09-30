@@ -105,6 +105,21 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
     XLSX.utils.book_append_sheet(workbook, wsAddons, 'Other Addons');
   }
 
+  // Sheet 5: One-Off & Additional Charges (if applicable)
+  if (data.oneOffCosts && data.oneOffCosts.length > 0) {
+    const oneOffData = [
+      ['Description', 'Account Code', `Amount (${data.currency})`],
+      ...data.oneOffCosts.map(cost => [
+        cost.description ? `${cost.title} — ${cost.description}` : cost.title,
+        cost.accountCode,
+        cost.amount
+      ]),
+      ['', 'Total:', data.oneOffCostsTotal || 0]
+    ];
+    const wsOneOff = XLSX.utils.aoa_to_sheet(oneOffData);
+    XLSX.utils.book_append_sheet(workbook, wsOneOff, 'One-Off Charges');
+  }
+
   // Export file
   XLSX.writeFile(workbook, filename);
 }

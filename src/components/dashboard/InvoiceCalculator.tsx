@@ -1706,7 +1706,13 @@ export function InvoiceCalculator({
                 selectedCustomer.retainerHourlyRate,
                 selectedCustomer.retainerMinimumValue,
                 selectedCustomer.contractName,
-                selectedCustomer.minimumAnnualValue
+                selectedCustomer.minimumAnnualValue,
+                includedOneOffs.map(c => ({
+                  title: c.title,
+                  description: c.description,
+                  amount: c.amount,
+                  account_code: c.account_code,
+                }))
               );
               
               // Store support document data on the invoice record

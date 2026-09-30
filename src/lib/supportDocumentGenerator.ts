@@ -270,6 +270,15 @@ export interface SupportDocumentData {
     prepaidBalanceAfter: number;
   };
 
+  // One-off / additional charges included on this invoice
+  oneOffCosts?: {
+    title: string;
+    description?: string;
+    amount: number;
+    accountCode: string;
+  }[];
+  oneOffCostsTotal?: number;
+
   // Validation
   calculatedTotal: number;
   invoiceTotal: number;
@@ -286,7 +295,16 @@ export interface SupportDocumentData {
     addonsTotal: number;
     discountedAssetsTotal: number;
     fixedPackageCost: number; // For starter/capped packages with fixed annual fee
+    oneOffCostsTotal?: number;
   };
+}
+
+/** One-off charge as stored on the contract, in the shape the support doc needs. */
+export interface SupportDocumentOneOffCost {
+  title: string;
+  description?: string | null;
+  amount: number | string;
+  account_code?: string | null;
 }
 
 /**
@@ -311,8 +329,18 @@ export async function generateSupportDocumentData(
   retainerHourlyRate?: number,
   retainerMinimumValue?: number,
   contractName?: string,
-  minimumAnnualValue?: number
+  minimumAnnualValue?: number,
+  oneOffCostsInput?: SupportDocumentOneOffCost[]
 ): Promise<SupportDocumentData> {
+
+  // One-off / additional charges billed on this invoice (outside the recurring calculation)
+  const oneOffCosts = (oneOffCostsInput || []).map(c => ({
+    title: c.title,
+    description: c.description || undefined,
+    amount: Number(c.amount) || 0,
+    accountCode: c.account_code || '1000',
+  }));
+  const oneOffCostsTotal = oneOffCosts.reduce((sum, c) => sum + c.amount, 0);
   
   // Fetch year-to-date invoices filtered by contract if available
   const yearStart = startOfYear(invoiceDate);
@@ -615,7 +643,8 @@ export async function generateSupportDocumentData(
     calculationResult.retainerCost +
     discountedAssetsTotal +
     totalAddonCosts +
-    fixedPackageCost;
+    fixedPackageCost +
+    oneOffCostsTotal;
   // SPS quarterly cycle: subtract the prepaid credit so the calculated total
   // matches the net invoice amount (credit row is rendered separately in the UI).
   const spsBd: any = (calculationResult as any).spsAnnualUpfrontBreakdown;
@@ -623,7 +652,9 @@ export async function generateSupportDocumentData(
     ? (spsBd.creditApplied || 0)
     : 0;
 
-  const invoiceTotal = calculationResult.totalPrice;
+  // One-off charges are billed on top of the recurring calculation, so they are
+  // part of the invoice total the document must reconcile against.
+  const invoiceTotal = calculationResult.totalPrice + oneOffCostsTotal;
   const calculatedTotalNet = calculatedTotal - spsCreditAdjustment;
   const totalsMatch = Math.abs(calculatedTotalNet - invoiceTotal) < 0.01;
 
@@ -642,8 +673,8 @@ export async function generateSupportDocumentData(
   // been saved yet, otherwise a first invoice of the year renders an empty table.
   const currentPeriodLabel = periodLabelForDate(invoiceDate, billingFrequency);
   const ytdRows = [...invoicesByPeriod];
-  const currentAdditionalWork = calculationResult.retainerCost || 0;
-  const currentMonitoring = calculationResult.totalPrice - solcastTotal - currentAdditionalWork;
+  const currentAdditionalWork = (calculationResult.retainerCost || 0) + oneOffCostsTotal;
+  const currentMonitoring = calculationResult.totalPrice - solcastTotal - (calculationResult.retainerCost || 0);
   let ytdTotal = yearTotal;
   if (!ytdRows.some(r => r.period === currentPeriodLabel)) {
     ytdRows.push({
@@ -651,9 +682,9 @@ export async function generateSupportDocumentData(
       monitoringFee: currentMonitoring,
       solcastFee: solcastTotal,
       additionalWork: currentAdditionalWork,
-      total: calculationResult.totalPrice,
+      total: invoiceTotal,
     });
-    ytdTotal += calculationResult.totalPrice;
+    ytdTotal += invoiceTotal;
   }
 
   return {
@@ -746,6 +777,8 @@ export async function generateSupportDocumentData(
       creditApplied: (calculationResult as any).spsAnnualUpfrontBreakdown.creditApplied,
       prepaidBalanceAfter: (calculationResult as any).spsAnnualUpfrontBreakdown.prepaidBalanceAfter,
     } : undefined,
+    oneOffCosts: oneOffCosts.length > 0 ? oneOffCosts : undefined,
+    oneOffCostsTotal,
     calculatedTotal: calculatedTotalNet,
     invoiceTotal,
     minimumContractAdjustment,
@@ -759,7 +792,8 @@ export async function generateSupportDocumentData(
       retainerCost: calculationResult.retainerCost,
       addonsTotal: totalAddonCosts,
       discountedAssetsTotal,
-      fixedPackageCost
+      fixedPackageCost,
+      oneOffCostsTotal
     }
   };
 }

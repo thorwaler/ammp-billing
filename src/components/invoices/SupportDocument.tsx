@@ -933,6 +933,37 @@ export function SupportDocument({ data }: SupportDocumentProps) {
         </section>
       )}
 
+      {/* One-Off & Additional Charges */}
+      {data.oneOffCosts && data.oneOffCosts.length > 0 && (
+        <section className="mt-4">
+          <h3 className="font-bold mb-1 text-xs">One-Off &amp; Additional Charges</h3>
+          <table className="w-full border-collapse" style={{ fontSize: '8px' }}>
+            <thead>
+              <tr style={{ backgroundColor: '#f4f4f5' }}>
+                <th className="border border-border px-1 py-0.5 text-left">Description</th>
+                <th className="border border-border px-1 py-0.5 text-right">Amount ({data.currency})</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.oneOffCosts.map((cost, i) => (
+                <tr key={i}>
+                  <td className="border border-border px-1 py-0.5">
+                    {cost.title}
+                    {cost.description ? <span className="text-muted-foreground"> — {cost.description}</span> : null}
+                  </td>
+                  <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(cost.amount)}</td>
+                </tr>
+              ))}
+              <tr style={{ backgroundColor: '#f4f4f5' }} className="font-bold">
+                <td className="border border-border px-1 py-0.5">Total:</td>
+                <td className="border border-border px-1 py-0.5 text-right">{formatCurrency(data.oneOffCostsTotal || 0)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+      )}
+
+
       {/* Validation Summary with Detailed Breakdown */}
       <section className="mt-6 p-3 border rounded-lg" style={{ backgroundColor: 'rgba(244, 244, 245, 0.5)' }}>
         <h3 className="font-bold mb-2 text-xs">Calculation Breakdown</h3>
@@ -1076,6 +1107,12 @@ export function SupportDocument({ data }: SupportDocumentProps) {
               <div className="flex justify-between" style={{ color: '#0891b2' }}>
                 <span>+ Fixed Package Fee:</span>
                 <span>{formatCurrency(data.calculationBreakdown.fixedPackageCost)}</span>
+              </div>
+            )}
+            {(data.calculationBreakdown.oneOffCostsTotal || 0) > 0 && (
+              <div className="flex justify-between">
+                <span>+ One-Off Charges:</span>
+                <span>{formatCurrency(data.calculationBreakdown.oneOffCostsTotal || 0)}</span>
               </div>
             )}
             {data.spsAnnualUpfrontBreakdown?.cycleType === 'quarterly_with_credit'
