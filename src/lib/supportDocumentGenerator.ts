@@ -380,7 +380,13 @@ export async function generateSupportDocumentData(
   }
 
   // Group invoices by period
-  const invoicesByPeriod = groupInvoicesByPeriod(yearInvoices || [], billingFrequency);
+  const currentPeriodLabelForGrouping = periodLabelForDate(invoiceDate, billingFrequency);
+  const invoicesByPeriod = groupInvoicesByPeriod(
+    yearInvoices || [],
+    billingFrequency,
+    currentPeriodLabelForGrouping,
+    oneOffCostsTotal
+  );
   const yearTotal = (yearInvoices || []).reduce((sum, inv) => sum + Number(inv.invoice_amount), 0);
 
   // Generate asset breakdown based on package type (Fix #1)
