@@ -834,6 +834,24 @@ function oneOffTotalForInvoice(invoice: any): number {
   return 0;
 }
 
+/**
+ * Fixed recurring fees on a stored invoice: custom annual fees / other addons
+ * (excluding Solcast) plus the minimum contract value top-up. These are billed
+ * alongside monitoring and must not inflate the monitoring column.
+ */
+function fixedFeesForInvoice(invoice: any, solcastFee: number): number {
+  const sd = invoice?.support_document_data;
+  if (!sd) return 0;
+  const addons = Number(sd.addonsTotal) || 0;
+  const minimumTopUp = Number(sd.minimumContractAdjustment) || 0;
+  // addonsTotal already excludes Solcast, but guard against legacy documents
+  // that stored it inclusive of the satellite fee.
+  const addonsExSolcast = addons >= solcastFee && solcastFee > 0 && Math.abs(addons - solcastFee) < 0.01
+    ? 0
+    : addons;
+  return addonsExSolcast + minimumTopUp;
+}
+
 function groupInvoicesByPeriod(
   invoices: any[],
   billingFrequency: string,
