@@ -573,8 +573,13 @@ export async function generateSupportDocumentData(
   if (packageType === 'per_mw_annual_upfront' && calculationResult.perMWAnnualUpfrontBreakdown) {
     const b = calculationResult.perMWAnnualUpfrontBreakdown;
     effectiveMinimumAnnualValue = b.annualFloor;
-    if (b.annualFloor > b.mwBasedFloor) {
+    // Only the annual upfront cycle tops the asset value up to the floor. On a
+    // quarterly overage cycle the floor was already invoiced upfront, so adding
+    // an adjustment here would double-count it against the invoice amount.
+    if (b.cycleType === 'annual_upfront' && b.annualFloor > b.mwBasedFloor) {
       minimumContractAdjustment = b.annualFloor - b.mwBasedFloor;
+    } else if (b.cycleType !== 'annual_upfront') {
+      minimumContractAdjustment = 0;
     }
   }
   
