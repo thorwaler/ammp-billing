@@ -1109,6 +1109,12 @@ export function SupportDocument({ data }: SupportDocumentProps) {
                 <span>{formatCurrency(data.calculationBreakdown.fixedPackageCost)}</span>
               </div>
             )}
+            {(data.calculationBreakdown.oneOffCostsTotal || 0) > 0 && (
+              <div className="flex justify-between">
+                <span>+ One-Off Charges:</span>
+                <span>{formatCurrency(data.calculationBreakdown.oneOffCostsTotal || 0)}</span>
+              </div>
+            )}
             {data.spsAnnualUpfrontBreakdown?.cycleType === 'quarterly_with_credit'
               && data.spsAnnualUpfrontBreakdown.creditApplied > 0 && (
               <div className="flex justify-between" style={{ color: '#d97706' }}>
