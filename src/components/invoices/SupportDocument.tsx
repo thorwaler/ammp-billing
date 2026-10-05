@@ -64,7 +64,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
             <tr style={{ backgroundColor: '#f4f4f5' }}>
               <th className="border border-border p-1 text-left">Period</th>
               <th className="border border-border p-1 text-right">Monitoring Fee</th>
-              <th className="border border-border p-1 text-right">Solcast Fee</th>
+              <th className="border border-border p-1 text-right">Satellite Fee</th>
               <th className="border border-border p-1 text-right">Fixed Fees</th>
               <th className="border border-border p-1 text-right">Additional Work</th>
               <th className="border border-border p-1 text-right">Total ({data.currency})</th>
@@ -671,7 +671,7 @@ export function SupportDocument({ data }: SupportDocumentProps) {
       {/* Solcast Tracking (if applicable) */}
       {data.solcastBreakdown && data.solcastBreakdown.length > 0 && (
         <section className="mb-6">
-          <h2 className="text-base font-bold mb-3">Solcast Fee Breakdown</h2>
+          <h2 className="text-base font-bold mb-3">Satellite Fee Breakdown</h2>
           <table className="w-full border-collapse border border-border text-xs">
             <thead>
               <tr style={{ backgroundColor: '#f4f4f5' }}>

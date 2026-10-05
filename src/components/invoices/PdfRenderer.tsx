@@ -99,7 +99,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
   autoTable(doc, {
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
-    head: [['Period', 'Monitoring Fee', 'Solcast Fee', 'Fixed Fees', 'Additional Work', `Total (${cur})`]],
+    head: [['Period', 'Monitoring Fee', 'Satellite Fee', 'Fixed Fees', 'Additional Work', `Total (${cur})`]],
     body: [
       ...data.yearInvoices.map(inv => [
         inv.period,
@@ -372,7 +372,7 @@ export async function renderSupportDocumentToPdf(data: SupportDocumentData): Pro
 
   // === SOLCAST ===
   if (data.solcastBreakdown && data.solcastBreakdown.length > 0) {
-    y = addSectionTitle(doc, 'Solcast Fee Breakdown', y);
+    y = addSectionTitle(doc, 'Satellite Fee Breakdown', y);
     autoTable(doc, {
       startY: y, margin: { left: MARGIN, right: MARGIN },
       head: [['Month', 'Number of Sites', `Price per Site (${cur})`, `Total (${cur})`]],

@@ -12,7 +12,7 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
 
   // Sheet 1: Year Overview
   const yearOverviewRows: any[][] = [
-    ['Period', 'Monitoring Fee', 'Solcast Fee', 'Fixed Fees', 'Additional Work', `Total (${data.currency})`],
+    ['Period', 'Monitoring Fee', 'Satellite Fee', 'Fixed Fees', 'Additional Work', `Total (${data.currency})`],
     ...data.yearInvoices.map(inv => [
       inv.period,
       inv.monitoringFee,
@@ -87,7 +87,7 @@ export function exportToExcel(data: SupportDocumentData, filename: string) {
       ['', '', 'Total:', data.solcastTotal || 0]
     ];
     const wsSolcast = XLSX.utils.aoa_to_sheet(solcastData);
-    XLSX.utils.book_append_sheet(workbook, wsSolcast, 'Solcast');
+    XLSX.utils.book_append_sheet(workbook, wsSolcast, 'Satellite');
   }
 
   // Sheet 4: Other Addons (if applicable)
