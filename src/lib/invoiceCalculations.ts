@@ -96,6 +96,10 @@ export interface CustomRecurringAddon {
   id: string;
   name: string;
   annualAmount: number;
+  /** 'split' (default) spreads the fee over every cycle; 'once' bills it in full once a year. */
+  billingSchedule?: 'split' | 'once';
+  /** For 'once': calendar month (1-12) whose invoice carries the full fee (Q4 → 12, H2 → 12). */
+  billingMonth?: number;
 }
 
 /**
@@ -106,11 +110,17 @@ export function parseCustomRecurringAddons(raw: unknown): CustomRecurringAddon[]
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((f: any) => f && typeof f === 'object')
-    .map((f: any) => ({
-      id: String(f.id ?? ''),
-      name: String(f.name ?? '').trim(),
-      annualAmount: Number(f.annualAmount) || 0,
-    }))
+    .map((f: any) => {
+      const once = f.billingSchedule === 'once';
+      const month = Number(f.billingMonth);
+      return {
+        id: String(f.id ?? ''),
+        name: String(f.name ?? '').trim(),
+        annualAmount: Number(f.annualAmount) || 0,
+        billingSchedule: once ? 'once' as const : 'split' as const,
+        ...(once ? { billingMonth: month >= 1 && month <= 12 ? month : 12 } : {}),
+      };
+    })
     .filter(f => f.id.length > 0);
 }
 
@@ -118,9 +128,9 @@ export function parseCustomRecurringAddons(raw: unknown): CustomRecurringAddon[]
 export function normalizeCustomRecurringAddonsForSave(
   fees: CustomRecurringAddon[] | undefined,
 ): CustomRecurringAddon[] {
-  return (fees || [])
-    .filter(f => f && (f.name || '').trim().length > 0 && Number(f.annualAmount) > 0)
-    .map(f => ({ id: f.id, name: f.name.trim(), annualAmount: Number(f.annualAmount) }));
+  return parseCustomRecurringAddons(
+    (fees || []).filter(f => f && (f.name || '').trim().length > 0 && Number(f.annualAmount) > 0),
+  );
 }
 
 /** Line-item id prefix used to recognise custom recurring fees downstream. */
@@ -129,21 +139,64 @@ export const CUSTOM_RECURRING_ADDON_PREFIX = 'custom_annual:';
 export const isCustomRecurringAddonId = (addonId?: string): boolean =>
   !!addonId && addonId.startsWith(CUSTOM_RECURRING_ADDON_PREFIX);
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Human label for the cycle a once-a-year fee is billed in, e.g. "Q4", "H2", "Dec". */
+export function annualFeeCycleLabel(billingMonth: number, billingFrequency?: string): string {
+  const m = Math.min(12, Math.max(1, billingMonth || 12));
+  if (billingFrequency === 'quarterly') return `Q${Math.ceil(m / 3)}`;
+  if (billingFrequency === 'biannual') return m <= 6 ? 'H1' : 'H2';
+  if (billingFrequency === 'annual') return 'annual invoice';
+  return MONTH_NAMES[m - 1];
+}
+
+/**
+ * Whether the invoice dated `invoiceDate` covers `billingMonth`. Invoice date
+ * closes the period (period_end === invoice date), so the period is the
+ * invoice month plus the preceding months of the cycle.
+ */
+function invoiceCoversMonth(invoiceDate: Date, billingFrequency: string | undefined, billingMonth: number): boolean {
+  const months = getPeriodMonthsMultiplier(billingFrequency || 'annual');
+  if (months >= 12) return true;
+  const end = invoiceDate.getUTCMonth() + 1;
+  for (let i = 0; i < months; i++) {
+    const m = ((end - 1 - i + 12) % 12) + 1;
+    if (m === billingMonth) return true;
+  }
+  return false;
+}
+
 /** Build `addonCosts` entries for the contract's custom annual fees. */
 export function calculateCustomRecurringAddonCosts(
   fees: CustomRecurringAddon[] | undefined,
   frequencyMultiplier: number,
+  invoiceDate?: Date | string,
+  billingFrequency?: string,
 ): CalculationResult['addonCosts'] {
+  const date = invoiceDate ? new Date(invoiceDate) : undefined;
   return (fees || [])
     .filter(f => f && Number(f.annualAmount) > 0 && (f.name || '').trim().length > 0)
-    .map(f => ({
-      addonId: `${CUSTOM_RECURRING_ADDON_PREFIX}${f.id}`,
-      addonName: f.name.trim(),
-      cost: Number(f.annualAmount) * frequencyMultiplier,
-      quantity: 1,
-      pricePerUnit: Number(f.annualAmount),
-    }));
+    .flatMap(f => {
+      const annual = Number(f.annualAmount);
+      const base = {
+        addonId: `${CUSTOM_RECURRING_ADDON_PREFIX}${f.id}`,
+        quantity: 1,
+        pricePerUnit: annual,
+      };
+      if (f.billingSchedule === 'once' && date && !isNaN(date.getTime())) {
+        const month = f.billingMonth || 12;
+        if (!invoiceCoversMonth(date, billingFrequency, month)) return [];
+        const isAnnualInvoice = getPeriodMonthsMultiplier(billingFrequency || 'annual') >= 12;
+        return [{
+          ...base,
+          addonName: isAnnualInvoice ? f.name.trim() : `${f.name.trim()} (annual fee)`,
+          cost: annual,
+        }];
+      }
+      return [{ ...base, addonName: f.name.trim(), cost: annual * frequencyMultiplier }];
+    });
 }
+
 
 export interface CalculationParams {
   packageType: string;
@@ -1850,7 +1903,7 @@ export function calculateInvoice(rawParams: CalculationParams): CalculationResul
   // Contract-level custom annual fees (all packages) — spread over the cycle
   result.addonCosts = [
     ...result.addonCosts,
-    ...calculateCustomRecurringAddonCosts(params.customRecurringAddons, frequencyMultiplier),
+    ...calculateCustomRecurringAddonCosts(params.customRecurringAddons, frequencyMultiplier, params.invoiceDate, params.billingFrequency),
   ];
   
   // Calculate minimum charges (with tier support) - only if not already set by site-level pricing
