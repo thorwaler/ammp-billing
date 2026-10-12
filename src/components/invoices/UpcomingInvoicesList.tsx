@@ -343,6 +343,7 @@ export function UpcomingInvoicesList({
       jubailiKvaBands: (invoice as any).orgPricingConfig?.jubailiKvaBands,
       baseMonthlyPrice: invoice.baseMonthlyPrice,
       billingFrequency: invoice.billingFrequency,
+      invoiceDate: new Date(invoice.nextInvoiceDate),
       siteChargeFrequency: invoice.siteChargeFrequency,
       retainerHours: invoice.retainerHours,
       retainerHourlyRate: invoice.retainerHourlyRate,

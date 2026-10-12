@@ -178,6 +178,7 @@ export function MergedInvoiceDialog({
       jubailiKvaBands: (contract as any).orgPricingConfig?.jubailiKvaBands,
       baseMonthlyPrice: contract.baseMonthlyPrice || 0,
       billingFrequency: contract.billingFrequency,
+      invoiceDate: new Date(contract.nextInvoiceDate || new Date()),
       siteChargeFrequency: contract.siteChargeFrequency || "annual",
       retainerHours: contract.retainerHours || 0,
       retainerHourlyRate: contract.retainerHourlyRate || 0,
