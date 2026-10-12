@@ -3091,7 +3091,7 @@ export function ContractForm({ existingCustomer, existingContract, onComplete, o
               fees={customRecurringAddons}
               onChange={setCustomRecurringAddons}
               currency={form.watch("currency")}
-              billingFrequency={form.watch("billingFrequency" as any)}
+              billingFrequency={form.watch("billingFrequency")}
             />
 
             {/* Package Selector Component - Modules & Addons (hidden for capped and poc) */}
